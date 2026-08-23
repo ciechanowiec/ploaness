@@ -1,6 +1,30 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-# Patterns are intentionally un-anchored (e.g. `node_modules/`, not `/node_modules`) so they
-# match nested packages once this becomes a monorepo. Root-only entries keep a leading slash.
+# IDE & editors
+*.iml
+.idea/*
+.vscode/
+.fleet/
+
+# OS
+.DS_Store
+Thumbs.db
+~$*.docx
+*.docx.tmp
+.~lock.*#
+
+# Logs
+*.log*
+*.logs*
+logs/
+log/
+
+# Java
+*.class
+target/
+.gradle/
+hs_err_pid*
+
+# Python
+__pycache__/
 
 # Dependencies
 node_modules/
@@ -9,26 +33,28 @@ node_modules/
 .yarn/install-state.gz
 
 # Build output & caches
-build/
 dist/
+dist-tarballs/
+build/
 out/
-.turbo/
 *.tsbuildinfo
-# Written by the type-coverage gate, which ploaness runs itself.
 .type-coverage/
+packages/ploaness/biome.json
+packages/ploaness/tsconfig.json
 
-# Next.js / Vercel
+# Next.js / Payload CMS
 .next/
-next-env.d.ts
+.turbo/
 .vercel
+next-env.d.ts
+/media
 
-# Java (monorepo)
-target/
-*.class
-.gradle/
-hs_err_pid*
+# Supabase
+.supabase/
+supabase/.branches/
+supabase/.temp/
 
-# Terraform / Cloud (monorepo)
+# Terraform / Cloud
 .terraform/
 *.tfstate
 *.tfstate.*
@@ -41,58 +67,34 @@ coverage/
 /blob-report/
 /playwright/.cache/
 
-# Environment
+# Environment & secrets
 .env
 .env*.local
+*.pem
 
 # Database
 /.postgres-backup-*.sql
 
-# Media / uploads (Payload)
-/media
-
-# Logs
-*.log*
-*.logs*
-logs/
-log/
-
-# IDE & editors
-/.idea/*
-!/.idea/runConfigurations
-*.iml
-# Share the project-level VS Code config that aligns every dev with the build; ignore the rest.
-.vscode/*
-!.vscode/extensions.json
-!.vscode/launch.json
-!.vscode/mcp.json
-!.vscode/settings.json
-.fleet/
-
-# OS
-.DS_Store
-Thumbs.db
-~$*.docx
-*.docx.tmp
-.~lock.*#
-
-# Security
-*.pem
+# Drawio
+*.drawio.png.bkp
+*.drawio.png.dtmp
 
 # Compiled documentation
 README*.pdf
 README*.html
 README*.docx
 
-# Drawio
-*.drawio.png.bkp
-*.drawio.png.dtmp
+# Derived documentation exports
+*.docx-compat.adoc
 
 # IDE / tool exports
 repo.xml
 
 # Local Claude config
-.claude/settings.local.json
 claude/settings.local.json
-.claude/scheduled_tasks.lock
+.claude/settings.local.json
 claude/scheduled_tasks.lock
+.claude/scheduled_tasks.lock
+
+# Playwright MCP browser-session artifacts
+.playwright-mcp/
