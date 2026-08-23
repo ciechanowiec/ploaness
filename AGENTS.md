@@ -69,7 +69,6 @@ each on its own named gate.
 
 ## Commit & Pull Request Guidelines
 
-Conventional commits, imperative mood, no trailing period. Pull requests explain intent, list the
-verification performed, and call out any change to a rule, a managed asset, or the published surface of a
-package. A change to `manifest.tsv` or to an `exports` map affects every consumer on upgrade and must be
-called out explicitly.
+Conventional commits, imperative mood, no trailing period. The type carries no `!` marker: the header
+pattern in `commit-message.ts` accepts a type and an optional scope, and nothing else. Pull requests
+explain intent and list the verification performed.
