@@ -24,7 +24,7 @@ harness.
 
 ploaness governs all of the following domains:
 
-- **Harness wiring:** the scripts, git hooks, CI invocation, tool-config inheritance, and test-library
+- **Harness wiring:** the scripts, CI invocation, tool-config inheritance, and test-library
   versions through which the project installs ploaness. A project that rewrites `verify`, appends rules
   after the harness ESLint config, redeclares a Biome section, overrides a compiler option, or drops
   extended verification out of CI fails this domain rather than passing quietly.

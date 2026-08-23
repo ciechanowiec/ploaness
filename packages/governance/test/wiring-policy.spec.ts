@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { extractLiteralSourcePaths } from '../src/config-references.js'
 import {
   findWiringViolations,
-  REQUIRED_HOOKS,
   REQUIRED_SCRIPTS,
   REQUIRED_TSCONFIG_PATHS,
   requiredBiomeFiles,
@@ -13,7 +12,6 @@ const BIOME_FILES = requiredBiomeFiles(['src', 'tests', 'scripts'])
 const WIRED_PACKAGE_JSON = {
   devDependencies: { ploaness: '1.0.0', vitest: '4.1.11' },
   scripts: { ...REQUIRED_SCRIPTS },
-  'simple-git-hooks': { ...REQUIRED_HOOKS },
 }
 
 const wiredInputs = (overrides: Record<string, unknown> = {}) => ({
@@ -54,15 +52,6 @@ describe('script tampering', () => {
     delete scripts['verify:full']
     expect(locations(wiredInputs({ packageJson: { ...WIRED_PACKAGE_JSON, scripts } }))).toContain(
       'package.json scripts.verify:full',
-    )
-  })
-
-  it('catches a removed git hook', () => {
-    const hooks = { ...REQUIRED_HOOKS } as Record<string, string>
-    delete hooks['pre-push']
-    const packageJson = { ...WIRED_PACKAGE_JSON, 'simple-git-hooks': hooks }
-    expect(locations(wiredInputs({ packageJson }))).toContain(
-      'package.json simple-git-hooks.pre-push',
     )
   })
 })

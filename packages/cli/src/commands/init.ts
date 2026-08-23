@@ -1,11 +1,10 @@
-// `ploaness init`: write the wiring a consumer needs, so adopting the harness is four commands rather
+// `ploaness init`: write the wiring a consumer needs, so adopting the harness is two commands rather
 // than a page of copied configuration. Nothing here is magic: every file it writes is one the wiring
 // gate will afterwards require, and it never overwrites a file that already exists.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   REQUIRED_BIOME_EXTENDS,
-  REQUIRED_HOOKS,
   REQUIRED_SCRIPTS,
   REQUIRED_TSCONFIG_EXTENDS,
   REQUIRED_TSCONFIG_PATHS,
@@ -53,7 +52,7 @@ const stubs = (context: Context): Readonly<Record<string, string>> => ({
 const patchPackageJson = (context: Context): readonly string[] => {
   const file: string = path.join(context.root, 'package.json')
   if (!existsSync(file)) {
-    return ['package.json is missing, so the scripts and hooks were not written']
+    return ['package.json is missing, so the scripts were not written']
   }
   const parsed: Record<string, unknown> = JSON.parse(readFileSync(file, 'utf8')) as Record<
     string,
@@ -63,13 +62,9 @@ const patchPackageJson = (context: Context): readonly string[] => {
     ...(parsed['scripts'] as Record<string, unknown> | undefined),
     ...REQUIRED_SCRIPTS,
   }
-  const updated: Record<string, unknown> = {
-    ...parsed,
-    scripts,
-    'simple-git-hooks': { ...REQUIRED_HOOKS },
-  }
+  const updated: Record<string, unknown> = { ...parsed, scripts }
   writeFileSync(file, `${JSON.stringify(updated, null, 2)}\n`)
-  return ['package.json: wrote the ploaness scripts and git hooks']
+  return ['package.json: wrote the ploaness scripts']
 }
 
 /** Scaffold the consumer-side wiring and materialise the managed files. */

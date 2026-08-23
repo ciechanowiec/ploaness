@@ -1,6 +1,6 @@
 #!/usr/bin/env node
+import { commitMessage } from './commands/commit-message.js'
 import { format } from './commands/format.js'
-import { commitMessage, precommit } from './commands/hooks.js'
 import { init } from './commands/init.js'
 import { sync } from './commands/sync.js'
 import { verify, verifyOne } from './commands/verify.js'
@@ -18,8 +18,7 @@ const USAGE: string = `ploaness, the quality harness for Payload CMS projects
   ploaness init                                    scaffold the consumer wiring
   ploaness gate <id>                               run one gate, for debugging
   ploaness gates                                   list the gates in run order
-  ploaness precommit                               the pre-commit hook entry point
-  ploaness commit-message <file|--range R|--all>   the commit-message entry point
+  ploaness commit-message <file|--range R|--all>   check one message, a range, or the history
 
 Report-only mode (--enforce=false) prints findings and exits 0. It is not a pass.`
 
@@ -65,9 +64,6 @@ const main = async (): Promise<number> => {
         return 1
       }
       return await verifyOne(context, gate)
-    }
-    case 'precommit': {
-      return precommit(context)
     }
     case 'commit-message': {
       return commitMessage(context, rest[0], rest[1])

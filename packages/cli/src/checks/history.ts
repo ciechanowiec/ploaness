@@ -61,7 +61,7 @@ export const commitHistory = (
     : passed(`${shas.length} commit message(s) conform`)
 }
 
-/** Validate one pending message, used by the commit-msg hook. */
+/** Validate one pending message, from a message file the author points at. */
 export const commitMessageProblems = (context: Context, raw: string): readonly string[] => {
   const requireBody: boolean = isNonTrivial(
     parseNumstat(git(context, ['diff', '--cached', '--numstat'])),

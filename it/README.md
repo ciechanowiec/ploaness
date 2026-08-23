@@ -37,7 +37,7 @@ matter: a drifted block must fail, ambiguous markers must fail *differently* (sy
 advising sync would send the project round a loop), and project prose below the block must not fail at all.
 A gate that could not tell the third case from the first would make the disposition useless.
 
-The `pass` fixture carries no `scripts` and no `simple-git-hooks` of its own: `ploaness init` writes them.
+The `pass` fixture carries no `scripts` of its own: `ploaness init` writes them.
 That makes the pass case double as the regression test that the scaffolder and the wiring rule agree about
 what correct wiring looks like - the two read the same exported constants, and this is what proves it. Both
 defects that shipped in the first draft of the wiring gate were of exactly that kind.

@@ -62,13 +62,6 @@ export const REQUIRED_BIOME_EXTENDS: string = 'ploaness/biome'
  */
 export const REQUIRED_TSCONFIG_EXTENDS: string = 'ploaness/tsconfig.json'
 
-/** The git hooks ploaness owns, as simple-git-hooks entries. */
-export const REQUIRED_HOOKS: Readonly<Record<string, string>> = {
-  'pre-commit': 'ploaness precommit',
-  'commit-msg': 'ploaness commit-message $1',
-  'pre-push': 'ploaness verify',
-}
-
 /**
  * The `files` block a consumer's biome.json must carry verbatim.
  *
@@ -282,7 +275,7 @@ const checkWorkflows = (workflows: readonly WorkflowFile[]): readonly WiringViol
         {
           location: '.github/workflows',
           reason:
-            'no workflow runs extended verification; local git hooks are bypassable, so CI is the only backstop',
+            'no workflow runs extended verification; ploaness enforces no local git hooks, so CI is the only backstop',
         },
       ]
 
@@ -331,11 +324,6 @@ export const findWiringViolations = (inputs: WiringInputs): readonly WiringViola
       asStringRecord(packageJson['scripts']),
       REQUIRED_SCRIPTS,
       'package.json scripts',
-    ),
-    ...checkExactEntries(
-      asStringRecord(packageJson['simple-git-hooks']),
-      REQUIRED_HOOKS,
-      'package.json simple-git-hooks',
     ),
     ...checkTestLibraries(packageJson, inputs.expectedTestLibraries),
     ...checkEslint(inputs.eslintConfig),

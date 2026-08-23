@@ -75,7 +75,7 @@ endif::[]
 pnpm add -D ploaness
 pnpm exec ploaness init
 ----
-. The `ploaness init` command writes the `verify`, `verify:full`, and `format` scripts into `package.json`, registers the git hooks under the `simple-git-hooks` key, and creates the xref:#project-files[project files]. It then writes the xref:#managed-files[managed files]. It never overwrites a file that already exists.
+. The `ploaness init` command writes the `verify`, `verify:full`, and `format` scripts into `package.json` and creates the xref:#project-files[project files]. It then writes the xref:#managed-files[managed files]. It never overwrites a file that already exists.
 . Review and commit the changes.
 
 [[project-files]]
@@ -132,11 +132,8 @@ pnpm exec ploaness init
 | `ploaness gates`
 | Prints every gate in run order.
 
-| `ploaness precommit`
-| The `pre-commit` hook. It checks the staged files with Biome, then type-checks the project.
-
 | `ploaness commit-message <file>`
-| The `commit-msg` hook. It also reads `--range <base>..<head>` or `--all` instead of a file.
+| Checks one commit message. It reads `--range <base>..<head>` or `--all` in place of a file.
 |===
 . [[verification-commands,verification commands]]The two verification commands are xref:#default-verification[] and xref:#extended-verification[]. Both read one flag, [[report-only-mode,report-only mode]]`--enforce=false`, which prints the findings and exits with status `0`. That flag enables no further check, and the status it exits with isn't a pass.
 . For example, `ploaness verify --extended --enforce=false` runs xref:#extended-verification[] in xref:#report-only-mode[report-only mode].
@@ -159,7 +156,7 @@ pnpm exec ploaness init
 | The project declares `payload` and runs on Node 26 or newer.
 
 | [[wiring-gate,the wiring gate]]`wiring`
-| The scripts, git hooks, settings files, and workflows that arm the harness are intact.
+| The scripts, settings files, and workflows that arm the harness are intact.
 
 | `assets`
 | The xref:#managed-files[managed files] match what _ploaness_ ships.
