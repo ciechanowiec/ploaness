@@ -26,7 +26,9 @@ export interface BundleReport {
 // bytes at gzip level 9) with headroom for the Payload admin bundle to grow as collections are added.
 // This is a CONSCIOUS ceiling: raise it deliberately (in a reviewed commit) when a real feature needs
 // the room, the same way the license allowlist is widened on purpose - never to silence a regression.
-export const BUNDLE_BUDGET_BYTES: number = 900 * 1024
+const BYTES_PER_KIB: number = 1024
+const BUDGET_KIB: number = 900
+export const BUNDLE_BUDGET_BYTES: number = BUDGET_KIB * BYTES_PER_KIB
 
 /** Sum the gzipped sizes of the built assets and compare the total against the budget. */
 export const evaluateBundle = (files: readonly BundleFile[], budgetBytes: number): BundleReport => {

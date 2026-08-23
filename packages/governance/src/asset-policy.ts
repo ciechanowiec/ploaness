@@ -30,8 +30,8 @@ export interface AssetViolation {
 
 /** The working-tree facts the policy needs, injected so the core stays free of filesystem access. */
 export interface AssetState {
-  /** Whether the path exists in the consumer working tree. */
-  readonly exists: boolean
+  /** Whether the path is present in the consumer working tree. */
+  readonly isPresent: boolean
   /** The working-tree content, or undefined when the path is absent. */
   readonly actual: string | undefined
   /** The content ploaness ships for the path, or undefined for a FORBIDDEN entry. */
@@ -50,6 +50,9 @@ const DISPOSITIONS: ReadonlySet<string> = new Set<string>([
   'FORBIDDEN',
   'SECTION',
 ])
+
+// A manifest row is a path and a disposition, and nothing else.
+const MANIFEST_COLUMNS: number = 2
 
 /** Opens the block ploaness owns inside a SECTION file. */
 export const SECTION_BEGIN: string = '<!-- BEGIN PLOANESS MANAGED INSTRUCTIONS -->'
@@ -123,6 +126,27 @@ export const applyManagedSection = (content: string, block: string): string | un
   return content.trim().length === 0 ? `${block}\n` : `${block}\n\n${content.replace(/^\n+/, '')}`
 }
 
+/** One manifest row, read into either a catalogue entry or the reason it could not become one. */
+interface ParsedRow {
+  readonly asset: ManagedAsset | undefined
+  readonly problem: string | undefined
+}
+
+const readManifestRow = (index: number, line: string): ParsedRow => {
+  const trimmed: string = line.trim()
+  if (trimmed.length === 0 || trimmed.startsWith('#')) {
+    return { asset: undefined, problem: undefined }
+  }
+  const [path, disposition] = trimmed.split('\t', MANIFEST_COLUMNS)
+  if (path === undefined || disposition === undefined || !DISPOSITIONS.has(disposition)) {
+    return {
+      asset: undefined,
+      problem: `manifest line ${String(index + 1)}: expected "<path>", a tab, then PINNED, SEED, FORBIDDEN, or SECTION`,
+    }
+  }
+  return { asset: { path, disposition: disposition as Disposition }, problem: undefined }
+}
+
 /**
  * Parse a manifest into catalogue entries. Blank lines and `#` comments are ignored; a row is a
  * repo-relative path, a tab, and a disposition. A malformed row is reported rather than silently
@@ -131,23 +155,19 @@ export const applyManagedSection = (content: string, block: string): string | un
  * @returns the parsed entries and any malformed rows.
  */
 export const parseManifest = (manifest: string): ParsedManifest => {
-  const assets: ManagedAsset[] = []
-  const problems: string[] = []
-  for (const [index, line] of manifest.split('\n').entries()) {
-    const trimmed: string = line.trim()
-    if (trimmed.length === 0 || trimmed.startsWith('#')) {
-      continue
-    }
-    const [path, disposition] = trimmed.split('\t')
-    if (path === undefined || disposition === undefined || !DISPOSITIONS.has(disposition)) {
-      problems.push(
-        `manifest line ${index + 1}: expected "<path>", a tab, then PINNED, SEED, FORBIDDEN, or SECTION`,
-      )
-      continue
-    }
-    assets.push({ path, disposition: disposition as Disposition })
+  // Each row is read once into an outcome, then the outcomes are partitioned. A row that is neither an
+  // entry nor a problem is a comment or a blank line, and simply yields nothing.
+  const rows: readonly ParsedRow[] = [...manifest.split('\n').entries()]
+    .map(([index, line]: readonly [number, string]): ParsedRow => readManifestRow(index, line))
+    .filter((row: ParsedRow): boolean => row.asset !== undefined || row.problem !== undefined)
+  return {
+    assets: rows.flatMap((row: ParsedRow): readonly ManagedAsset[] =>
+      row.asset === undefined ? [] : [row.asset],
+    ),
+    problems: rows.flatMap((row: ParsedRow): readonly string[] =>
+      row.problem === undefined ? [] : [row.problem],
+    ),
   }
-  return { assets, problems }
 }
 
 /**
@@ -185,7 +205,7 @@ const checkSection = (asset: ManagedAsset, state: AssetState): AssetViolation | 
  */
 export const checkAsset = (asset: ManagedAsset, state: AssetState): AssetViolation | undefined => {
   if (asset.disposition === 'FORBIDDEN') {
-    return state.exists
+    return state.isPresent
       ? {
           path: asset.path,
           reason:
@@ -193,7 +213,7 @@ export const checkAsset = (asset: ManagedAsset, state: AssetState): AssetViolati
         }
       : undefined
   }
-  if (!state.exists) {
+  if (!state.isPresent) {
     return { path: asset.path, reason: 'managed file is missing; run `ploaness sync`' }
   }
   if (asset.disposition === 'SEED') {
@@ -240,15 +260,15 @@ export type SyncAction = 'write' | 'delete' | 'skip' | 'splice'
  * file is written only when absent, so the project's own edits survive; a FORBIDDEN file is deleted; a
  * SECTION file has only its marked block replaced.
  * @param asset the catalogue entry.
- * @param exists whether the path currently exists in the working tree.
+ * @param isPresent whether the path is currently present in the working tree.
  * @returns the action `ploaness sync` performs.
  */
-export const syncAction = (asset: ManagedAsset, exists: boolean): SyncAction => {
+export const syncAction = (asset: ManagedAsset, isPresent: boolean): SyncAction => {
   if (asset.disposition === 'FORBIDDEN') {
-    return exists ? 'delete' : 'skip'
+    return isPresent ? 'delete' : 'skip'
   }
   if (asset.disposition === 'SEED') {
-    return exists ? 'skip' : 'write'
+    return isPresent ? 'skip' : 'write'
   }
   // A SECTION file is never overwritten, even when absent: the project text below the block is the
   // project's, and creating the file wholesale would be ploaness writing that text on its behalf.

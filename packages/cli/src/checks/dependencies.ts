@@ -3,12 +3,15 @@
 // "a newer version exists" is not a property of your change, but "the version I declared is two majors
 // behind" is, and that is a real liability.
 import {
+  type Advisory,
   type DependencyStatus,
   type FreshnessFinding,
   type FreshnessReport,
   findFreshnessViolations,
   findLicenseViolations,
+  judgeVulnerabilities,
   type LicensedPackage,
+  type VulnerabilityReport,
 } from '@ploaness/governance'
 import type { Context } from '../context.js'
 import { failed, type GateResult, passed, type RunResult, run } from '../exec.js'
@@ -19,16 +22,25 @@ interface PnpmLicenseEntry {
 }
 
 /** Every dependency license must sit inside the allowlist. */
+// Report enough of a tool's raw output to diagnose it, without pasting a whole log into a finding.
+const MAX_REPORTED_CHARS: number = 2000
+const MAX_REPORTED_LINES: number = 5
+const MAX_LISTED_NAMES: number = 10
+// The registry answers with this status for a package it has never published.
+const NOT_FOUND: number = 404
+
 export const licenses = (context: Context): GateResult => {
   const result: RunResult = run('pnpm', ['licenses', 'list', '--json'], { cwd: context.root })
   if (result.code !== 0) {
     return failed('the license inventory could not be produced', [result.output])
   }
-  let grouped: Record<string, readonly PnpmLicenseEntry[]>
-  try {
-    grouped = JSON.parse(result.output) as Record<string, readonly PnpmLicenseEntry[]>
-  } catch {
-    return failed('the license inventory was not valid JSON', [result.output.slice(0, 2000)])
+  const grouped: Record<string, readonly PnpmLicenseEntry[]> | undefined = parseLicenseInventory(
+    result.output,
+  )
+  if (grouped === undefined) {
+    return failed('the license inventory was not valid JSON', [
+      result.output.slice(0, MAX_REPORTED_CHARS),
+    ])
   }
   const packages: readonly LicensedPackage[] = Object.values(grouped)
     .flat()
@@ -41,10 +53,10 @@ export const licenses = (context: Context): GateResult => {
   const violations: readonly LicensedPackage[] = findLicenseViolations(packages)
   return violations.length > 0
     ? failed(
-        `${violations.length} dependency license(s) outside policy`,
+        `${String(violations.length)} dependency license(s) outside policy`,
         violations.map((entry: LicensedPackage): string => `${entry.name}: ${entry.license}`),
       )
-    : passed(`all ${packages.length} dependency licenses are within policy`)
+    : passed(`all ${String(packages.length)} dependency licenses are within policy`)
 }
 
 const asRecord = (raw: unknown): Record<string, unknown> =>
@@ -56,13 +68,11 @@ const declaredDependencies = (packageJson: unknown): Record<string, string> => {
     ...asRecord(root['dependencies']),
     ...asRecord(root['devDependencies']),
   }
-  const result: Record<string, string> = {}
-  for (const [name, version] of Object.entries(merged)) {
-    if (typeof version === 'string') {
-      result[name] = version
-    }
-  }
-  return result
+  return Object.fromEntries(
+    Object.entries(merged).filter(
+      ([, version]: readonly [string, unknown]): boolean => typeof version === 'string',
+    ),
+  ) as Record<string, string>
 }
 
 // The registry exposes two documents per package: the packument root and, per version, a version
@@ -86,12 +96,28 @@ type Lookup =
   | { readonly kind: 'absent' }
   | { readonly kind: 'unreachable' }
 
-/** One registry attempt: an answer, or undefined when the attempt was inconclusive and may be retried. */
-const attemptLookup = async (name: string): Promise<Lookup | undefined> => {
-  let response: Response
+const parseLicenseInventory = (
+  output: string,
+): Record<string, readonly PnpmLicenseEntry[]> | undefined => {
   try {
-    response = await fetch(versionDocumentUrl(name), { headers: { accept: 'application/json' } })
+    return JSON.parse(output) as Record<string, readonly PnpmLicenseEntry[]>
   } catch {
+    return undefined
+  }
+}
+
+/** One registry attempt: an answer, or undefined when the attempt was inconclusive and may be retried. */
+const fetchOrUndefined = async (name: string): Promise<Response | undefined> => {
+  try {
+    return await fetch(versionDocumentUrl(name), { headers: { accept: 'application/json' } })
+  } catch {
+    return undefined
+  }
+}
+
+const attemptLookup = async (name: string): Promise<Lookup | undefined> => {
+  const response: Response | undefined = await fetchOrUndefined(name)
+  if (response === undefined) {
     return undefined
   }
   if (response.ok) {
@@ -100,17 +126,18 @@ const attemptLookup = async (name: string): Promise<Lookup | undefined> => {
     return typeof version === 'string' ? { kind: 'version', version } : { kind: 'absent' }
   }
   // A 404 is a real answer, and retrying cannot change it.
-  return response.status === 404 ? { kind: 'absent' } : undefined
+  return response.status === NOT_FOUND ? { kind: 'absent' } : undefined
 }
 
-const latestVersion = async (name: string): Promise<Lookup> => {
-  for (let attempt: number = 1; attempt <= REGISTRY_ATTEMPTS; attempt += 1) {
-    const lookup: Lookup | undefined = await attemptLookup(name)
-    if (lookup !== undefined) {
-      return lookup
-    }
+const latestVersion = async (
+  name: string,
+  attemptsLeft: number = REGISTRY_ATTEMPTS,
+): Promise<Lookup> => {
+  if (attemptsLeft <= 0) {
+    return { kind: 'unreachable' }
   }
-  return { kind: 'unreachable' }
+  const lookup: Lookup | undefined = await attemptLookup(name)
+  return lookup ?? (await latestVersion(name, attemptsLeft - 1))
 }
 
 /** The three ways a registry lookup can land, kept apart so the report can speak about each. */
@@ -124,25 +151,25 @@ const sortLookups = (
   declared: Record<string, string>,
   results: readonly (readonly [string, Lookup])[],
 ): Sorted => {
-  const statuses: DependencyStatus[] = []
-  const unreachable: string[] = []
-  const unpublished: string[] = []
-  for (const [name, lookup] of results) {
-    if (lookup.kind === 'unreachable') {
-      unreachable.push(name)
-    } else if (lookup.kind === 'absent') {
-      unpublished.push(name)
-    } else {
-      statuses.push({
-        name,
-        owner: 'package.json',
-        current: declared[name] ?? '',
-        latest: lookup.version,
-      })
-    }
+  const namesWhere = (kind: Lookup['kind']): readonly string[] =>
+    results
+      .filter(([, lookup]: readonly [string, Lookup]): boolean => lookup.kind === kind)
+      .map(([name]: readonly [string, Lookup]): string => name)
+  const statuses: readonly DependencyStatus[] = results.flatMap(
+    ([name, lookup]: readonly [string, Lookup]): readonly DependencyStatus[] =>
+      lookup.kind === 'version'
+        ? [{ name, owner: 'package.json', current: declared[name] ?? '', latest: lookup.version }]
+        : [],
+  )
+  return {
+    statuses,
+    unreachable: namesWhere('unreachable'),
+    unpublished: namesWhere('absent'),
   }
-  return { statuses, unreachable, unpublished }
 }
+
+const describeFinding = (finding: FreshnessFinding): string =>
+  `${finding.name}: declared ${finding.current}, latest ${finding.latest}`
 
 /**
  * Fail when a declared dependency is two or more majors behind its latest release; warn on any lesser
@@ -166,7 +193,7 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
   const { statuses, unreachable, unpublished }: Sorted = sortLookups(declared, results)
   if (unreachable.length > 0) {
     return failed('the npm registry was unreachable, so freshness cannot be proven', [
-      `no "latest" resolved for: ${unreachable.slice(0, 10).join(', ')}`,
+      `no "latest" resolved for: ${unreachable.slice(0, MAX_LISTED_NAMES).join(', ')}`,
       'this gate is fail-closed by design; retry with network access',
     ])
   }
@@ -175,22 +202,108 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
       `note ${name} is not on the public registry, so freshness is not measurable`,
   )
   const report: FreshnessReport = findFreshnessViolations(statuses)
-  const describe = (finding: FreshnessFinding): string =>
-    `${finding.name}: declared ${finding.current}, latest ${finding.latest}`
   if (report.failures.length > 0) {
     return failed(
-      `${report.failures.length} dependency/dependencies are two or more majors behind`,
+      `${String(report.failures.length)} dependency/dependencies are two or more majors behind`,
       [
-        ...report.failures.map(describe),
+        ...report.failures.map((finding: FreshnessFinding): string => describeFinding(finding)),
         ...report.warnings.map(
-          (finding: FreshnessFinding): string => `warning ${describe(finding)}`,
+          (finding: FreshnessFinding): string => `warning ${describeFinding(finding)}`,
         ),
         ...notes,
       ],
     )
   }
-  return passed(`${statuses.length} declared dependencies are within the freshness bound`, [
-    ...report.warnings.map((finding: FreshnessFinding): string => `warning ${describe(finding)}`),
+  return passed(`${String(statuses.length)} declared dependencies are within the freshness bound`, [
+    ...report.warnings.map(
+      (finding: FreshnessFinding): string => `warning ${describeFinding(finding)}`,
+    ),
     ...notes,
   ])
+}
+
+// The npm-v6 audit shape `pnpm audit --json` emits: advisories keyed by id, each carrying the module,
+// the severity, the advisory URL, and the alternative identifiers it is also known by.
+// Read as an untyped record rather than a named interface: these keys are npm's own vocabulary, not
+// names this codebase chose, and declaring them as properties would ask the naming rule to bless a
+// foreign convention.
+type AuditAdvisory = Record<string, unknown>
+
+const asStrings = (raw: unknown): readonly string[] =>
+  Array.isArray(raw)
+    ? raw.filter((entry: unknown): entry is string => typeof entry === 'string')
+    : []
+
+const asText = (raw: AuditAdvisory, key: string, fallback: string): string =>
+  typeof raw[key] === 'string' ? raw[key] : fallback
+
+const asAdvisory = (key: string, raw: AuditAdvisory): Advisory => ({
+  id: asText(raw, 'github_advisory_id', key),
+  packageName: asText(raw, 'module_name', 'unknown'),
+  severity: asText(raw, 'severity', 'info'),
+  title: asText(raw, 'title', 'no title reported'),
+  aliases: asStrings(raw['cves']),
+})
+
+// `pnpm audit` exits non-zero whenever it finds anything, so the exit code carries no information the
+// JSON does not. The verdict comes from the payload; only an unparseable payload means the database was
+// unreachable, and that is a failure like any other - a check that cannot run is a fail.
+const parseAudit = (output: string): readonly Advisory[] | undefined => {
+  try {
+    const parsed: unknown = JSON.parse(output)
+    if (typeof parsed !== 'object' || parsed === null) {
+      return undefined
+    }
+    const record: Record<string, unknown> = parsed as Record<string, unknown>
+    if (typeof record['metadata'] !== 'object' || record['metadata'] === null) {
+      return undefined
+    }
+    const advisories: Record<string, AuditAdvisory> =
+      typeof record['advisories'] === 'object' && record['advisories'] !== null
+        ? (record['advisories'] as Record<string, AuditAdvisory>)
+        : {}
+    return Object.entries(advisories).map(
+      ([key, raw]: readonly [string, AuditAdvisory]): Advisory => asAdvisory(key, raw),
+    )
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Read every package in the resolved set against the public advisory database.
+ * @param context the resolved project environment.
+ * @returns a failure for any finding at or above the declared severity, or for a stale exception.
+ */
+export const vulnerabilities = (context: Context): GateResult => {
+  // No `--prod` filter: the standard is explicit that build and test packages count, because a build
+  // tool runs with build privileges and its vulnerability is reachable by anyone who can change the repo.
+  const result: RunResult = run('pnpm', ['audit', '--json'], { cwd: context.root })
+  const advisories: readonly Advisory[] | undefined = parseAudit(result.output)
+  if (advisories === undefined) {
+    return failed('the advisory database was unreachable, so vulnerabilities cannot be proven', [
+      result.output.split('\n').slice(0, MAX_REPORTED_LINES).join('\n'),
+      'this gate is fail-closed by design; retry with network access',
+    ])
+  }
+  const report: VulnerabilityReport = judgeVulnerabilities(
+    advisories,
+    context.settings.vulnerabilityAllowlist,
+    context.settings.vulnerabilitySeverity,
+  )
+  const findings: readonly string[] = [
+    ...report.unsuppressed.map(
+      (advisory: Advisory): string =>
+        `${advisory.severity} ${advisory.id} in ${advisory.packageName}: ${advisory.title}`,
+    ),
+    ...report.deadEntries,
+  ]
+  return findings.length > 0
+    ? failed(
+        `${String(findings.length)} vulnerability finding(s) at or above ${report.threshold}`,
+        findings,
+      )
+    : passed(
+        `no vulnerability at or above ${report.threshold} across ${String(advisories.length)} advisory record(s)`,
+      )
 }

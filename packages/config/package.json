@@ -13,16 +13,18 @@
     "./stylelint": "./stylelint.json",
     "./dependency-cruiser": "./dependency-cruiser.json",
     "./knip": "./knip.json",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./eslint-core": "./eslint-core.js"
   },
   "files": [
-    "eslint.js",
-    "vitest.js",
     "biome.json",
-    "tsconfig.json",
-    "stylelint.json",
     "dependency-cruiser.json",
-    "knip.json"
+    "eslint-core.js",
+    "eslint.js",
+    "knip.json",
+    "stylelint.json",
+    "tsconfig.json",
+    "vitest.js"
   ],
   "scripts": {
     "build": "node --version > /dev/null"

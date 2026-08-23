@@ -1,5 +1,15 @@
 # Repository Guidelines
 
+## Repository Contract
+
+Follow the repository contract from general to specific:
+
+1. Follow `README-guideline-software-project.adoc`.
+2. Follow the project-owned instructions in this file.
+
+Both layers are binding. The project-owned instructions may strengthen but never weaken the software-project
+guideline.
+
 ## Project Structure & Module Organization
 
 ploaness is a pnpm workspace publishing five packages that together form an external quality harness for
@@ -21,10 +31,14 @@ CLI holding nothing but `readFileSync` and a call.
 
 ## Build, Test, and Development Commands
 
-- `pnpm run verify` - build, typecheck, lint, and the unit suite with coverage. Run this before finishing.
-- `pnpm run it` - packs the five tarballs and runs the consumer fixtures. Run this whenever a rule, the
-  scaffolder, or the packaging changes.
+- `pnpm run verify` - the verification command: `scripts/verify.sh`. Run this before finishing.
+- `pnpm run verify:fast` - build, typecheck, lint, and the unit suite only. A declared subset for
+  everyday work; it is not a verdict.
+- `pnpm run it` - runs the consumer fixtures against the packed tarballs. Run this whenever a rule, the
+  scaffolder, or the packaging changes. Run `pnpm run pack:local` first.
 - `pnpm run pack:local` - packs the tarballs into `dist-tarballs/` without running the fixtures.
+- `pnpm run format` - applies the formatting `pnpm run lint` judges.
+- `pnpm run lint:eslint` - the type-aware pass, part of `pnpm run verify`.
 
 ## Self-governance
 
@@ -32,9 +46,50 @@ ploaness cannot run `ploaness verify` on itself: the `preflight` gate hard-requi
 dependency, and ploaness is not a Payload project. That is a deliberate consequence of the Payload-only
 scope, not an oversight, and it must not be worked around by weakening `preflight`.
 
-What substitutes for it is stricter in the places that matter: `pnpm run verify` for the harness's own
-source, `pnpm run it` for its behaviour as an installed package, and a real consumer project for the gates
-that shell out to a toolchain. All three are required before a change is finished.
+What substitutes for it reimplements no rule. `ploaness gate <id>` builds its context from the working
+directory and never runs `preflight`, so every gate whose rule is about a repository's shape rather than
+about Payload runs here unchanged. `scripts/verify.sh` is that list, and `pnpm run verify` runs it:
+`conventions`, `config-refs`, `docs`, `skills`, `image-assets`, `licenses`, `deps`, `actions`, `secrets`,
+`require-full-history`, `commit-history`, and `linear-history`, around the build, the type check, the
+lint, and the unit suite. A gate that ploaness cannot turn on itself is a gate this repository is not
+held to, so prefer adding one here over asserting that it cannot apply.
+
+A tracked-tree fingerprint brackets the whole run. A verification that rewrote a source file would
+describe a tree nobody committed, so `build` regenerating a stale asset body is reported as a failure to
+commit rather than silently repaired.
+
+Three legs are required before a change is finished: `pnpm run verify` for the harness's own source,
+`pnpm run it` for its behaviour as an installed package, and a real consumer project for the gates that
+shell out to a toolchain.
+
+### The repository is linted by the config it publishes
+
+`packages/config/eslint.js` carries every cap and ban the governing standard states, and for a long
+time this repository never ran it on itself. The framework-neutral half now lives in
+`packages/config/eslint-core.js`, shared by the shipped config and by the root `eslint.config.mjs`, so
+neither restates a rule; only the globs differ, which is the one genuinely repository-shaped part.
+`tsconfig.lint.json` puts the specs in a project, so a type-aware pass can read them and the compiler
+checks them too.
+
+Turning it on reported 495 findings and clearing them changed real code: the character scanners became
+folds and recursions, the imperative accumulators became `flatMap`, every bare number acquired a name,
+and the two configuration rules that proposed methods the `lib` target does not carry were turned off
+rather than obeyed. Three of those findings were defects rather than style - a suppression comment
+wrapped onto a second line had silently disarmed itself, a boolean-returning function was named as
+though it returned data, and `.filter(fn)` over `git ls-files` crashed on a symlink.
+
+Do not clear a new finding with a suppression while the budget is the thing standing between this
+repository and the ceiling. `ploaness gate suppressions` reports where it stands.
+
+### Roles this repository declares
+
+The `ploaness` key of `package.json` carries two exclusions, each a role rather than a convenience:
+
+- `.vale/styles/**` is exempt from the typography ban because those files are Vale detector definitions
+  whose content *is* the banned character. It is the same self-reference `banned-typography.ts` solves
+  by naming characters as code points.
+- The JavaScript allowlist covers the analyzer configs and package entry shims. An ESLint flat config
+  and a `bin` shim are loaded as JavaScript by the tools that read them and cannot be TypeScript.
 
 ## Coding Style & Naming Conventions
 
@@ -58,17 +113,28 @@ out of `requiredBiomeFiles()`, so adding a carve-out cannot create a contradicti
 ## Testing Guidelines
 
 Vitest. Specs live in `packages/*/test/*.spec.ts` and are named for the behaviour, for example
-`rejectsATrailingPeriod`. Coverage thresholds are per-file at 80%, measured over `governance` only -
-the CLI is I/O and is covered by `it/` instead.
+`rejectsATrailingPeriod`. Coverage thresholds are per-file at 80%, measured over `governance` only.
+That exclusion is a **file role**, not a convenience: `packages/cli` is the I/O adapter layer, every
+module of which exists to read a file or start a process and hand the result to a pure rule, and it is
+exercised as an installed package by `it/`. A rule that could live in `governance` and was put in the
+CLI to escape measurement is a defect, not an exclusion.
+
+A test fails when the behaviour its name states is removed from the code under test. No check verifies
+this reliably, so it is stated here and an inspection decides it. The same is true of the ban on
+attributing a commit to an AI agent: the check knows the markers it knows, and a marker it does not yet
+know is still a violation.
 
 Test the joint, not the value. A spec asserting that a constant equals its own literal proves nothing; a
 spec asserting that two modules still agree about that constant catches the drift that actually happens.
 
-Do not treat a failing fixture under `it/` as a broken build: five of the six fixtures are supposed to fail,
-each on its own named gate.
+Do not treat a failing fixture under `it/` as a broken build: most fixtures are supposed to fail, each on
+its own named gate. `it/README.md` holds the table, beside the script that defines them.
 
 ## Commit & Pull Request Guidelines
 
 Conventional commits, imperative mood, no trailing period. The type carries no `!` marker: the header
-pattern in `commit-message.ts` accepts a type and an optional scope, and nothing else. Pull requests
+pattern in `commit-message.ts` accepts a type and an optional scope, and nothing else. There is no
+`revert` type - the governing standard does not list one, so a revert is described by what it does. A
+junk word (`wip`, `tmp`, `temp`, `misc`, `stuff`, `asdf`, `fixup`) is rejected anywhere in the subject,
+not only as its first word. Pull requests
 explain intent and list the verification performed.

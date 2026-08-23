@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs'
 import { commitHistory, commitMessageProblems } from '../checks/history.js'
 import type { Context } from '../context.js'
+import type { GateResult } from '../exec.js'
 
 /**
  * The commit-message entry point, in three modes: a message file, a revision range, or the whole
@@ -20,7 +21,7 @@ const reportProblems = (findings: readonly string[], summary: string): number =>
 
 /** Check the messages already in the history, either a range or all of it. */
 const checkHistory = (context: Context, revisions: readonly string[]): number => {
-  const result = commitHistory(context, revisions)
+  const result: GateResult = commitHistory(context, revisions)
   if (!result.ok) {
     return reportProblems(result.findings, result.summary)
   }
@@ -32,7 +33,7 @@ const checkHistory = (context: Context, revisions: readonly string[]): number =>
 const checkPending = (context: Context, file: string): number => {
   const problems: readonly string[] = commitMessageProblems(context, readFileSync(file, 'utf8'))
   return problems.length > 0
-    ? reportProblems(problems, `${problems.length} commit-message problem(s)`)
+    ? reportProblems(problems, `${String(problems.length)} commit-message problem(s)`)
     : 0
 }
 

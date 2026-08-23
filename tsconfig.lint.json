@@ -1,0 +1,20 @@
+{
+  // The solution file compiles the published packages, whose tsconfigs include `src` alone. The specs
+  // were therefore in no project at all, so a type-aware lint had nothing to read them with and the
+  // compiler never checked them. This project exists to give both the whole tree.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "types": ["node"]
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/test/**/*.ts",
+    "scripts/**/*.ts",
+    "vitest.config.mts"
+  ]
+}

@@ -7,7 +7,11 @@ import { fileURLToPath } from 'node:url'
 import { readSettings, type Settings } from '@ploaness/governance'
 
 const nodeRequire: NodeJS.Require = createRequire(import.meta.url)
-const MAX_OUTPUT_BYTES: number = 64 * 1024 * 1024
+const BYTES_PER_KIB: number = 1024
+const KIB_PER_MIB: number = 1024
+// Large enough that no analyzer's output is truncated before it can be reported.
+const MAX_OUTPUT_MIB: number = 64
+const MAX_OUTPUT_BYTES: number = MAX_OUTPUT_MIB * KIB_PER_MIB * BYTES_PER_KIB
 
 /** The resolved environment of one ploaness run. */
 export interface Context {
@@ -18,7 +22,7 @@ export interface Context {
   /** The effective settings the project declared. */
   readonly settings: Settings
   /** False in report-only mode, where findings print but the run still exits 0. */
-  readonly enforce: boolean
+  readonly isEnforced: boolean
 }
 
 /** Read a JSON file, returning undefined when it is absent or unparseable. */
@@ -38,29 +42,28 @@ export const readText = (file: string): string | undefined =>
   existsSync(file) ? readFileSync(file, 'utf8') : undefined
 
 /** Build the run context for a project root. */
-export const createContext = (root: string, enforce: boolean): Context => {
+export const createContext = (root: string, isEnforced: boolean): Context => {
   const packageJson: unknown = readJson(path.join(root, 'package.json'))
-  return { root, packageJson, settings: readSettings(packageJson), enforce }
+  return { root, packageJson, settings: readSettings(packageJson), isEnforced }
 }
 
 // Locating a tool is harder than it looks. A package may restrict its `exports` so `pkg/package.json` is
 // not addressable (dependency-cruiser), and it may publish an `import` condition only, so CJS resolution
 // of its entry point fails too. Three routes are tried in turn, and the last one is the one that always
 // works: find the entry point through ESM resolution and walk up to the manifest beside it.
-const manifestBeside = (entry: string): string => {
-  let directory: string = path.dirname(entry)
-  for (;;) {
-    const candidate: string = path.join(directory, 'package.json')
-    if (existsSync(candidate)) {
-      return candidate
-    }
-    const parent: string = path.dirname(directory)
-    if (parent === directory) {
-      throw new Error(`no package.json found above ${entry}`)
-    }
-    directory = parent
+const manifestFrom = (directory: string): string => {
+  const candidate: string = path.join(directory, 'package.json')
+  if (existsSync(candidate)) {
+    return candidate
   }
+  const parent: string = path.dirname(directory)
+  if (parent === directory) {
+    throw new Error(`no package.json found above ${directory}`)
+  }
+  return manifestFrom(parent)
 }
+
+const manifestBeside = (entry: string): string => manifestFrom(path.dirname(entry))
 
 const manifestOf = (packageName: string, resolveFrom: NodeJS.Require): string => {
   try {
@@ -76,11 +79,7 @@ const manifestOf = (packageName: string, resolveFrom: NodeJS.Require): string =>
   try {
     return manifestBeside(fileURLToPath(import.meta.resolve(packageName)))
   } catch (error: unknown) {
-    throw new Error(
-      `ploaness could not locate the manifest of ${packageName}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    )
+    throw new Error(`ploaness could not locate the manifest of ${packageName}`, { cause: error })
   }
 }
 

@@ -10,6 +10,11 @@ import { verify, verifyOne } from './commands/verify.js'
 import { type Context, createContext } from './context.js'
 import { ALL_GATES, type Gate, gateById } from './gates.js'
 
+// argv begins with the node binary and the script path; the command follows them.
+const ARGV_COMMAND_OFFSET: number = 2
+// Wide enough for the longest gate identifier, so the listing stays aligned.
+const GATE_ID_COLUMN: number = 22
+
 const USAGE: string = `ploaness, the quality harness for Payload CMS projects
 
   ploaness verify [--extended] [--enforce=false]   run Default or Extended verification
@@ -22,61 +27,59 @@ const USAGE: string = `ploaness, the quality harness for Payload CMS projects
 
 Report-only mode (--enforce=false) prints findings and exits 0. It is not a pass.`
 
-// The complexity here is the length of the command list, one case per command. Splitting the switch
-// into a dispatch table would move the same branching behind a lookup and cost the reader the one
-// place that shows every command the binary accepts.
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one case per command
-const main = async (): Promise<number> => {
-  const argv: readonly string[] = process.argv.slice(2)
-  const [command, ...rest] = argv
-  const enforce: boolean = !argv.includes('--enforce=false')
-  const context: Context = createContext(process.cwd(), enforce)
+const HELP_COMMANDS: ReadonlySet<string> = new Set<string>(['--help', '-h', 'help'])
 
-  switch (command) {
-    case undefined:
-    case '--help':
-    case '-h':
-    case 'help': {
-      console.info(USAGE)
-      return 0
-    }
-    case 'verify': {
-      return await verify(context, rest.includes('--extended'))
-    }
-    case 'format': {
-      return format(context)
-    }
-    case 'sync': {
-      return sync(context)
-    }
-    case 'init': {
-      return init(context)
-    }
-    case 'gates': {
-      for (const gate of ALL_GATES) {
-        console.info(
-          `${gate.extended ? 'extended' : 'default '}  ${gate.id.padEnd(22)} ${gate.title}`,
-        )
-      }
-      return 0
-    }
-    case 'gate': {
-      const id: string | undefined = rest[0]
-      const gate: Gate | undefined = id === undefined ? undefined : gateById(id)
-      if (gate === undefined) {
-        console.error(`unknown gate "${id ?? ''}". Run \`ploaness gates\` to list them.`)
-        return 1
-      }
-      return await verifyOne(context, gate)
-    }
-    case 'commit-message': {
-      return commitMessage(context, rest[0], rest[1])
-    }
-    default: {
-      console.error(`unknown command "${command}"\n\n${USAGE}`)
-      return 1
-    }
+const listGates = (): number => {
+  for (const gate of ALL_GATES) {
+    const scope: string = gate.isExtended ? 'extended' : 'default '
+    console.info(`${scope}  ${gate.id.padEnd(GATE_ID_COLUMN)} ${gate.title}`)
   }
+  return 0
 }
 
+const runOneGate = async (context: Context, id: string | undefined): Promise<number> => {
+  const gate: Gate | undefined = id === undefined ? undefined : gateById(id)
+  if (gate === undefined) {
+    console.error(`unknown gate "${id ?? ''}". Run \`ploaness gates\` to list them.`)
+    return 1
+  }
+  return await verifyOne(context, gate)
+}
+
+// One entry per command. The table is the list of commands the binary accepts, and each handler is
+// small enough to read on its own - which the switch it replaced no longer was.
+type CommandRunner = (context: Context, rest: readonly string[]) => number | Promise<number>
+
+const COMMANDS: Readonly<Record<string, CommandRunner>> = {
+  verify: async (context: Context, rest: readonly string[]): Promise<number> =>
+    await verify(context, rest.includes('--extended')),
+  format: (context: Context): number => format(context),
+  sync: (context: Context): number => sync(context),
+  init: (context: Context): number => init(context),
+  gates: (): number => listGates(),
+  gate: async (context: Context, rest: readonly string[]): Promise<number> =>
+    await runOneGate(context, rest[0]),
+  'commit-message': (context: Context, rest: readonly string[]): number =>
+    commitMessage(context, rest[0], rest[1]),
+}
+
+const main = async (): Promise<number> => {
+  const argv: readonly string[] = process.argv.slice(ARGV_COMMAND_OFFSET)
+  const [command, ...rest] = argv
+  if (command === undefined || HELP_COMMANDS.has(command)) {
+    console.info(USAGE)
+    return 0
+  }
+  const runCommand: CommandRunner | undefined = COMMANDS[command]
+  if (runCommand === undefined) {
+    console.error(`unknown command "${command}"\n\n${USAGE}`)
+    return 1
+  }
+  const isEnforce: boolean = !argv.includes('--enforce=false')
+  return await runCommand(createContext(process.cwd(), isEnforce), rest)
+}
+
+// Setting the exit code is how Node reports a verdict while still flushing stdout. `process.exit()`
+// would truncate the report the gates just wrote.
+// eslint-disable-next-line functional/immutable-data -- process.exit() would truncate the report
 process.exitCode = await main()

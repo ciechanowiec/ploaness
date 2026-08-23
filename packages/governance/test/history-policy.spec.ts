@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { type CommitShape, findMergeCommits } from '../src/history-policy.js'
+import { type CommitShape, findMergeCommits, type HistoryViolation } from '../src/history-policy.js'
 
 const commit = (overrides: Partial<CommitShape> = {}): CommitShape => ({
   sha: 'abcdef1234',
@@ -18,7 +18,9 @@ describe('findMergeCommits', () => {
   })
 
   it('flags a merge commit by its parent count, not its subject', () => {
-    const found = findMergeCommits([commit({ parentCount: 2, subject: 'chore: routine work' })])
+    const found: readonly HistoryViolation[] = findMergeCommits([
+      commit({ parentCount: 2, subject: 'chore: routine work' }),
+    ])
     expect(found).toHaveLength(1)
     expect(found[0]?.reason).toContain('2 parents')
   })

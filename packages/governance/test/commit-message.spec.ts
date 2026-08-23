@@ -1,17 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { isNonTrivial, parseMessage, parseNumstat, validateMessage } from '../src/commit-message.js'
+import {
+  isNonTrivial,
+  type ParsedMessage,
+  parseMessage,
+  parseNumstat,
+  validateMessage,
+} from '../src/commit-message.js'
 
-const ELLIPSIS = String.fromCodePoint(0x2026)
-const SCISSORS = '# ------------------------ >8 ------------------------'
+const ELLIPSIS: string = String.fromCodePoint(0x2026)
+const SCISSORS: string = '# ------------------------ >8 ------------------------'
 
 describe('parseMessage', () => {
   it('extracts header and body, dropping git comment lines', () => {
-    const parsed = parseMessage('feat(x): do a real thing\n\nBecause reasons.\n# a git comment')
+    const parsed: ParsedMessage = parseMessage(
+      'feat(x): do a real thing\n\nBecause reasons.\n# a git comment',
+    )
     expect(parsed).toEqual({ header: 'feat(x): do a real thing', body: 'Because reasons.' })
   })
 
   it('ignores the verbose-diff section below the scissors marker', () => {
-    const raw = `fix: something real here\n\nWhy it matters.\n${SCISSORS}\ndiff --git a b`
+    const raw: string = `fix: something real here\n\nWhy it matters.\n${SCISSORS}\ndiff --git a b`
     expect(parseMessage(raw).body).toBe('Why it matters.')
   })
 
@@ -27,9 +35,9 @@ describe('parseMessage', () => {
   })
 })
 
-describe('validateMessage', () => {
-  const good = 'feat(template): add the commit message gate'
+const good: string = 'feat(template): add the commit message gate'
 
+describe('validateMessage', () => {
   it('accepts a well-formed trivial commit', () => {
     expect(validateMessage({ header: good, body: '' }, false)).toEqual([])
   })
@@ -39,53 +47,115 @@ describe('validateMessage', () => {
     ['git-generated revert', 'Revert "feat: earlier change"'],
     ['autosquash', 'fixup! feat: earlier change'],
   ])('rejects a %s subject', (_kind, header) => {
-    const problems = validateMessage({ header, body: '' }, true)
+    const problems: readonly string[] = validateMessage({ header, body: '' }, true)
     expect(problems.some((problem) => problem.includes('invalid header'))).toBe(true)
   })
 
   it('holds a dependency-bump subject to the body and length rules', () => {
-    const header = 'build(deps): bump @typescript-eslint/eslint-plugin to 8.62.0 in the lint group'
-    const problems = validateMessage({ header, body: '' }, true)
+    const header: string =
+      'build(deps): bump @typescript-eslint/eslint-plugin to 8.62.0 in the lint group'
+    const problems: readonly string[] = validateMessage({ header, body: '' }, true)
     expect(problems.some((problem) => problem.includes('chars'))).toBe(true)
     expect(problems.some((problem) => problem.includes('explaining WHY'))).toBe(true)
   })
 
-  it('accepts a hand-written revert that uses the revert type', () => {
+  // This spec was inverted. It previously asserted that `revert:` was accepted, which pinned a
+  // divergence from the governing standard in place: the standard's type list does not carry `revert`,
+  // so a spec asserting the opposite made the gate agree with itself rather than with the standard.
+})
+
+// The type list is the one the governing standard publishes, and it has drifted from it once.
+describe('the commit type', () => {
+  it('rejects the revert type, which the governing standard does not list', () => {
+    const problems: readonly string[] = validateMessage(
+      { header: 'revert: restore the previous gate', body: 'The bump broke the build.' },
+      true,
+    )
+    expect(problems.some((problem) => problem.includes('invalid header'))).toBe(true)
+  })
+
+  it('rejects a junk word anywhere in the subject, not only as its first word', () => {
+    const problems: readonly string[] = validateMessage(
+      { header: 'fix: clear the tmp directory', body: '' },
+      false,
+    )
+    expect(problems.some((problem) => problem.includes('low-effort'))).toBe(true)
+  })
+
+  it('accepts a subject whose word merely contains a junk word as a substring', () => {
     expect(
-      validateMessage(
-        { header: 'revert: restore the previous gate', body: 'The bump broke the build.' },
-        true,
-      ),
+      validateMessage({ header: 'feat(template): render the template file', body: '' }, false),
     ).toEqual([])
   })
 
+  it('accepts a subject that says update, which the standard does not ban', () => {
+    expect(
+      validateMessage({ header: 'chore(deps): update the pinned biome version', body: '' }, false),
+    ).toEqual([])
+  })
+
+  it('accepts every type the governing standard lists', () => {
+    const types: string[] = [
+      'build',
+      'chore',
+      'ci',
+      'docs',
+      'feat',
+      'fix',
+      'perf',
+      'refactor',
+      'test',
+    ]
+    const rejected: string[] = types.filter((type) =>
+      validateMessage({ header: `${type}: describe the real change`, body: '' }, false).some(
+        (problem) => problem.includes('invalid header'),
+      ),
+    )
+    expect(rejected).toEqual([])
+  })
+})
+
+describe('subject quality', () => {
   it('rejects a non-conventional header', () => {
-    const problems = validateMessage({ header: 'add some stuff to the repo', body: '' }, false)
+    const problems: readonly string[] = validateMessage(
+      { header: 'add some stuff to the repo', body: '' },
+      false,
+    )
     expect(problems.some((problem) => problem.includes('invalid header'))).toBe(true)
   })
 
   it('rejects an over-long header', () => {
-    const header = `feat(template): ${'x'.repeat(80)}`
-    expect(validateMessage({ header, body: '' }, false).some((p) => p.includes('chars'))).toBe(true)
+    const header: string = `feat(template): ${'x'.repeat(80)}`
+    expect(
+      validateMessage({ header, body: '' }, false).some((problem) => problem.includes('chars')),
+    ).toBe(true)
   })
 
   it('rejects a trailing period', () => {
-    const problems = validateMessage({ header: 'feat: add the new commit gate.', body: '' }, false)
+    const problems: readonly string[] = validateMessage(
+      { header: 'feat: add the new commit gate.', body: '' },
+      false,
+    )
     expect(problems.some((problem) => problem.includes('period'))).toBe(true)
   })
 
   it('rejects a too-short description', () => {
-    const problems = validateMessage({ header: 'fix: tweak', body: '' }, false)
+    const problems: readonly string[] = validateMessage({ header: 'fix: tweak', body: '' }, false)
     expect(problems.some((problem) => problem.includes('too short'))).toBe(true)
   })
 
   it('rejects a low-effort junk description', () => {
-    const problems = validateMessage({ header: 'chore: wip on the thing', body: '' }, false)
+    const problems: readonly string[] = validateMessage(
+      { header: 'chore: wip on the thing', body: '' },
+      false,
+    )
     expect(problems.some((problem) => problem.includes('low-effort'))).toBe(true)
   })
+})
 
+describe('what a commit message may not contain', () => {
   it('flags banned typography in the message', () => {
-    const problems = validateMessage(
+    const problems: readonly string[] = validateMessage(
       { header: `feat: tidy the gate ${ELLIPSIS} soon`, body: '' },
       false,
     )
@@ -93,7 +163,7 @@ describe('validateMessage', () => {
   })
 
   it('flags a commit that attributes the change to an AI agent', () => {
-    const problems = validateMessage(
+    const problems: readonly string[] = validateMessage(
       { header: good, body: 'Co-Authored-By: Claude <noreply@anthropic.com>' },
       false,
     )
@@ -101,7 +171,10 @@ describe('validateMessage', () => {
   })
 
   it('flags an agent session identifier in the body', () => {
-    const problems = validateMessage({ header: good, body: 'Claude-Session: abc-123' }, false)
+    const problems: readonly string[] = validateMessage(
+      { header: good, body: 'Claude-Session: abc-123' },
+      false,
+    )
     expect(problems.some((problem) => problem.includes('session'))).toBe(true)
   })
 
@@ -115,7 +188,7 @@ describe('validateMessage', () => {
   })
 
   it('requires a body for non-trivial changes', () => {
-    const problems = validateMessage({ header: good, body: '' }, true)
+    const problems: readonly string[] = validateMessage({ header: good, body: '' }, true)
     expect(problems.some((problem) => problem.includes('explaining WHY'))).toBe(true)
   })
 

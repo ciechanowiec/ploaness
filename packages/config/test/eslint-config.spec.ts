@@ -9,43 +9,49 @@ import { fileURLToPath } from 'node:url'
 import { Linter } from 'eslint'
 import { describe, expect, it } from 'vitest'
 
-const SELECTOR = 'ArrowFunctionExpression, FunctionExpression'
+// Taken from the public surface of the linter this spec already imports, rather than reached for
+// inside the dependency tree.
+type LintMessage = ReturnType<Linter['verify']>[number]
 
-const linter = new Linter()
+const SELECTOR: string = 'ArrowFunctionExpression, FunctionExpression'
 
-const lintConfigSnippet = (code: string) =>
+const specDirectory: string = path.dirname(fileURLToPath(import.meta.url))
+const linter: Linter = new Linter()
+
+const lintConfigSnippet = (code: string): readonly LintMessage[] =>
   linter.verify(code, {
     languageOptions: { ecmaVersion: 2024, sourceType: 'module' },
     rules: { 'no-restricted-syntax': ['error', { selector: SELECTOR }] },
   })
 
 const shippedConfig = (): string =>
-  readFileSync(
-    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'eslint.js'),
-    'utf8',
-  )
+  readFileSync(path.join(specDirectory, '..', 'eslint.js'), 'utf8')
 
 describe('no-inline-config-logic gate', () => {
   it('rejects an arrow function inlined as a config value', () => {
-    const messages = lintConfigSnippet('const Users = { access: { read: () => true } }')
+    const messages: readonly LintMessage[] = lintConfigSnippet(
+      'const Users = { access: { read: () => true } }',
+    )
     expect(messages).toHaveLength(1)
     expect(messages[0]?.ruleId).toBe('no-restricted-syntax')
   })
 
   it('rejects an inline function expression as a config value', () => {
-    const messages = lintConfigSnippet(
+    const messages: readonly LintMessage[] = lintConfigSnippet(
       'const C = { access: { read: function () { return true } } }',
     )
     expect(messages).toHaveLength(1)
   })
 
   it('accepts behavior referenced by an imported identifier (the extracted form)', () => {
-    const messages = lintConfigSnippet('const C = { access: { read: anyone, create: admins } }')
+    const messages: readonly LintMessage[] = lintConfigSnippet(
+      'const C = { access: { read: anyone, create: admins } }',
+    )
     expect(messages).toHaveLength(0)
   })
 
   it('stays wired into the shipped ESLint config for the collection-config directories', () => {
-    const config = shippedConfig()
+    const config: string = shippedConfig()
     expect(config).toContain(SELECTOR)
     expect(config).toContain("'src/collections/**/*.ts'")
   })
@@ -58,7 +64,7 @@ describe('no-inline-config-logic gate', () => {
 // really describing lives in ploaness.
 describe('process.env access gate', () => {
   it('exempts exactly one module from the process.env ban', () => {
-    const config = shippedConfig()
+    const config: string = shippedConfig()
     expect(config).toContain("property: 'env'")
     expect(config).toContain("ignores: ['src/lib/environment.ts']")
   })

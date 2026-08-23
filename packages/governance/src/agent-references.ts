@@ -14,8 +14,11 @@ interface AgentReferencePattern {
 // Named automated coding agents and their vendors, as one alternation fragment reused across patterns.
 // The set is the "known ones" the ban targets; extend it as new agents appear (no pattern can know them
 // all, so the guideline also states the rule in prose for an inspector to apply).
-const AGENT_NAMES: string =
-  'claude|anthropic|copilot|cursor|codex|chatgpt|openai|gpt(?:[- ][0-9a-z.]+)?|devin|aider|windsurf|opencode|gemini|bard|codeium|tabnine|sourcegraph|cody'
+const AGENT_NAMES: string = [
+  'claude|anthropic|copilot|cursor|codex|chatgpt|openai',
+  'gpt(?:[- ][0-9a-z.]+)?|devin|aider|windsurf|opencode',
+  'gemini|bard|codeium|tabnine|sourcegraph|cody',
+].join('|')
 
 const AGENT_REFERENCE_PATTERNS: readonly AgentReferencePattern[] = [
   {
@@ -53,7 +56,7 @@ export interface AgentReferenceMatch {
   readonly label: string
 }
 
-const matchesInLine = (line: string, lineNumber: number): readonly AgentReferenceMatch[] =>
+const findMatchesInLine = (line: string, lineNumber: number): readonly AgentReferenceMatch[] =>
   AGENT_REFERENCE_PATTERNS.flatMap(
     (entry: AgentReferencePattern): readonly AgentReferenceMatch[] =>
       entry.pattern.test(line) ? [{ line: lineNumber, label: entry.label }] : [],
@@ -69,5 +72,5 @@ export const findAgentReferences = (text: string): readonly AgentReferenceMatch[
   text
     .split('\n')
     .flatMap((line: string, index: number): readonly AgentReferenceMatch[] =>
-      matchesInLine(line, index + 1),
+      findMatchesInLine(line, index + 1),
     )

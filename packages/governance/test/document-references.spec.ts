@@ -4,14 +4,14 @@ import {
   findDocumentReferenceViolations,
 } from '../src/document-references.js'
 
-// A real (not mocked) fileExists backed by a set of known paths - the pure core takes it as a value,
+// A real (not mocked) isExistingFile backed by a set of known paths - the pure core takes it as a value,
 // which is exactly why no test double is needed (see AGENTS.md "no mocks").
-const existsFrom =
+const existenceCheckOver =
   (paths: readonly string[]) =>
   (candidate: string): boolean =>
     paths.includes(candidate)
 
-const scripts = new Set(['verify', 'lint:arch', 'test:int'])
+const scripts: ReadonlySet<string> = new Set<string>(['verify', 'lint:arch', 'test:int'])
 
 const run = (
   markdown: string,
@@ -20,7 +20,7 @@ const run = (
   findDocumentReferenceViolations({
     markdown,
     scriptNames: scripts,
-    fileExists: existsFrom(existingFiles),
+    isExistingFile: existenceCheckOver(existingFiles),
     reservedWords: new Set<string>(),
   })
 
@@ -30,7 +30,7 @@ describe('findDocumentReferenceViolations - scripts', () => {
   })
 
   it('flags a backticked script token that is absent from package.json', () => {
-    const violations = run('We renamed it to `lint:archaeology`.')
+    const violations: readonly DocumentViolation[] = run('We renamed it to `lint:archaeology`.')
     expect(violations).toEqual([
       {
         reference: 'lint:archaeology',
@@ -41,7 +41,7 @@ describe('findDocumentReferenceViolations - scripts', () => {
   })
 
   it('flags a `pnpm run <name>` invocation whose script does not exist', () => {
-    const violations = run('Just `pnpm run deploy` it.')
+    const violations: readonly DocumentViolation[] = run('Just `pnpm run deploy` it.')
     expect(violations).toHaveLength(1)
     expect(violations[0]?.reference).toBe('deploy')
   })
@@ -63,7 +63,7 @@ describe('findDocumentReferenceViolations - paths', () => {
   })
 
   it('flags a full-path file that does not exist', () => {
-    const violations = run('See `scripts/gone.ts`.', [])
+    const violations: readonly DocumentViolation[] = run('See `scripts/gone.ts`.', [])
     expect(violations).toEqual([
       { reference: 'scripts/gone.ts', kind: 'path', reason: 'referenced file does not exist' },
     ])
@@ -90,20 +90,20 @@ describe('findDocumentReferenceViolations - paths', () => {
 
 describe('reserved words', () => {
   it('does not flag a word that names a gate rather than a script', () => {
-    const found = findDocumentReferenceViolations({
+    const found: readonly DocumentViolation[] = findDocumentReferenceViolations({
       markdown: 'The `knip` gate reports dead code.',
       scriptNames: new Set<string>(),
-      fileExists: () => true,
+      isExistingFile: () => true,
       reservedWords: new Set(['knip']),
     })
     expect(found).toEqual([])
   })
 
   it('still flags the same word when it is not reserved', () => {
-    const found = findDocumentReferenceViolations({
+    const found: readonly DocumentViolation[] = findDocumentReferenceViolations({
       markdown: 'Run `knip` to find dead code.',
       scriptNames: new Set<string>(),
-      fileExists: () => true,
+      isExistingFile: () => true,
       reservedWords: new Set<string>(),
     })
     expect(found).toHaveLength(1)

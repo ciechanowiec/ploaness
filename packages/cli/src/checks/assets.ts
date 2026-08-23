@@ -26,8 +26,9 @@ import { failed, type GateResult, passed } from '../exec.js'
 
 const assetsRoot = (): string => shippedDirectory('@ploaness/assets')
 
-const catalogue = (): ParsedManifest =>
-  parseManifest(readFileSync(path.join(assetsRoot(), 'manifest.tsv'), 'utf8'))
+const readManifestText = (): string => readFileSync(path.join(assetsRoot(), 'manifest.tsv'), 'utf8')
+
+const catalogue = (): ParsedManifest => parseManifest(readManifestText())
 
 // Shipped bodies carry a `.asset` suffix because npm rewrites or strips certain dotfiles when it packs a
 // tarball: a shipped `.npmrc` is dropped outright and a shipped `.gitignore` is renamed. Suffixing every
@@ -60,11 +61,11 @@ const stateOf =
   (root: string) =>
   (assetPath: string): AssetState => {
     const target: string = path.join(root, assetPath)
-    const exists: boolean = existsSync(target)
+    const isExists: boolean = existsSync(target)
     // A FORBIDDEN entry may name a directory, so only read a regular file.
     const actual: string | undefined =
-      exists && statSync(target).isFile() ? readFileSync(target, 'utf8') : undefined
-    return { exists, actual, expected: shippedBody(assetPath) }
+      isExists && statSync(target).isFile() ? readFileSync(target, 'utf8') : undefined
+    return { isPresent: isExists, actual, expected: shippedBody(assetPath) }
   }
 
 /** Verify the working tree matches the managed-file catalogue. */
@@ -87,12 +88,12 @@ export const assets = (context: Context): GateResult => {
   )
   return violations.length > 0
     ? failed(
-        `${violations.length} managed-file defect(s)`,
+        `${String(violations.length)} managed-file defect(s)`,
         violations.map(
           (violation: AssetViolation): string => `${violation.path}: ${violation.reason}`,
         ),
       )
-    : passed(`${parsed.assets.length} managed path(s) match the catalogue`)
+    : passed(`${String(parsed.assets.length)} managed path(s) match the catalogue`)
 }
 
 /** One change `ploaness sync` made to the working tree. */
@@ -159,7 +160,7 @@ export const syncAssets = (context: Context): readonly SyncChange[] => {
 }
 
 /** Write a managed file only when the path is absent, used by `ploaness init`. */
-export const seedIfMissing = (context: Context, assetPath: string, body: string): boolean => {
+export const hasSeededFile = (context: Context, assetPath: string, body: string): boolean => {
   const target: string = path.join(context.root, assetPath)
   if (existsSync(target)) {
     return false

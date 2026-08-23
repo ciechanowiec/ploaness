@@ -28,6 +28,9 @@ export const biome = (context: Context): GateResult =>
 export const biomeWrite = (context: Context): RunResult =>
   runNode(resolveTool('@biomejs/biome', 'biome'), ['check', '--write', '.'], { cwd: context.root })
 
+const versionOf = (manifest: Record<string, unknown>): string =>
+  typeof manifest['version'] === 'string' ? manifest['version'] : ''
+
 const SCHEMA_PATTERN: RegExp = /biomejs\.dev\/schemas\/(\d+\.\d+\.\d+)\/schema\.json/
 
 // Biome reports a schema mismatch only as a non-failing information notice, so without this gate a Biome
@@ -36,7 +39,7 @@ export const biomeSchema = (): GateResult => {
   const manifest: unknown = readJson(path.join(shippedDirectory('@biomejs/biome'), 'package.json'))
   const installed: string =
     typeof manifest === 'object' && manifest !== null
-      ? String((manifest as Record<string, unknown>)['version'] ?? '')
+      ? versionOf(manifest as Record<string, unknown>)
       : ''
   const declared: string | undefined = SCHEMA_PATTERN.exec(
     readFileSync(configFile('biome.json'), 'utf8'),
@@ -58,12 +61,24 @@ export const biomeSchema = (): GateResult => {
 export const eslint = (context: Context): GateResult =>
   fromRun(runNode(resolveTool('eslint'), ['.'], { cwd: context.root }), 'ESLint reports no defect')
 
+// `--max-warnings=0` because the shipped config asks Stylelint to report a descriptionless, needless, or
+// wrongly scoped disable, and Stylelint reports those at warning severity. A warning severity does not
+// exist here: any finding is a failure.
+const stylesheetGlobs = (context: Context): readonly string[] =>
+  context.settings.sourceRoots.map((sourceRoot: string): string => `${sourceRoot}/**/*.css`)
+
 /** Style sheets. Biome remains the formatter, so Stylelint is lint-only. */
 export const css = (context: Context): GateResult =>
   fromRun(
     runNode(
       resolveTool('stylelint'),
-      ['--config', configFile('stylelint.json'), 'src/**/*.css', '--allow-empty-input'],
+      [
+        '--config',
+        configFile('stylelint.json'),
+        ...stylesheetGlobs(context),
+        '--allow-empty-input',
+        '--max-warnings=0',
+      ],
       { cwd: context.root },
     ),
     'style sheets pass Stylelint',
@@ -74,7 +89,9 @@ export const architecture = (context: Context): GateResult =>
   fromRun(
     runNode(
       resolveTool('dependency-cruiser', 'depcruise'),
-      ['src', '--config', configFile('dependency-cruiser.json')],
+      // Every declared source root, not `src` alone: the acyclic-dependency rule is about the
+      // repository's dependency units, and a cycle through `scripts` or `tests` is still a cycle.
+      [...context.settings.sourceRoots, '--config', configFile('dependency-cruiser.json')],
       { cwd: context.root },
     ),
     'module architecture holds',
@@ -89,7 +106,6 @@ const TYPE_COVERAGE_IGNORE: readonly string[] = [
   'src/payload.config.ts',
   'src/payload-types.ts',
   'src/seed/**',
-  'tests/**',
   '*.config.ts',
   '*.config.mts',
   '*.config.mjs',

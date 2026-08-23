@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  deepmerge-ts: ^8.0.2
+
 importers:
 
   .:
@@ -11,6 +14,9 @@ importers:
       '@biomejs/biome':
         specifier: 2.5.9
         version: 2.5.9
+      '@ploaness/config':
+        specifier: workspace:*
+        version: link:packages/config
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
@@ -30,7 +36,11 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/assets: {}
+  packages/assets:
+    devDependencies:
+      '@ploaness/governance':
+        specifier: 1.0.0
+        version: link:../governance
 
   packages/cli:
     dependencies:
@@ -1161,9 +1171,9 @@ packages:
   deep-is@0.1.4:
     resolution: {integrity: sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ==}
 
-  deepmerge-ts@7.1.6:
-    resolution: {integrity: sha512-gQhL1ksGBLQbHeAo47YU6cs2ahd3Pv+8PFYoWogNZbQnNwQyOh9Ad5kbeHFiWwbKdeWQJ5Z7Y7mwb9ew2hXBLw==}
-    engines: {node: '>=16.0.0'}
+  deepmerge-ts@8.0.2:
+    resolution: {integrity: sha512-uqbvqLUMrc6p0MO+WBRtTxY55hmyh94WRwI5a++PZe54X+bfVh59FSN7uWCBCW1CCVjzjnrwzfI8zidE2obMMw==}
+    engines: {node: '>=16.9.0'}
 
   define-data-property@1.1.4:
     resolution: {integrity: sha512-rBMvIzlpA8v6E+SJZoo++HAYqsLrkg7MSfIinMPFhmkorw7X+dOXVJQs+QT69zGkzMyfDnIMN2Wid1+NbL3T+A==}
@@ -3518,7 +3528,7 @@ snapshots:
 
   deep-is@0.1.4: {}
 
-  deepmerge-ts@7.1.6: {}
+  deepmerge-ts@8.0.2: {}
 
   define-data-property@1.1.4:
     dependencies:
@@ -3689,7 +3699,7 @@ snapshots:
   eslint-plugin-functional@10.0.0(eslint@10.8.1(jiti@2.7.0))(typescript@6.0.3):
     dependencies:
       '@typescript-eslint/utils': 8.67.0(eslint@10.8.1(jiti@2.7.0))(typescript@6.0.3)
-      deepmerge-ts: 7.1.6
+      deepmerge-ts: 8.0.2
       escape-string-regexp: 5.0.0
       eslint: 10.8.1(jiti@2.7.0)
       is-immutable-type: 5.0.4(eslint@10.8.1(jiti@2.7.0))(typescript@6.0.3)

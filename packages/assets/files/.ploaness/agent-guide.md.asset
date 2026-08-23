@@ -31,13 +31,19 @@ ploaness governs all of the following domains:
 - **Repository files:** managed, seeded, and forbidden paths, and an unchanged committable tree during
   verification.
 - **Source:** formatting, fast lint, type-aware lint, strict type checking, type coverage, typography,
-  source conventions, style sheets, and module architecture.
+  source conventions, committed whitespace and encoding, style sheets, and module architecture. Test
+  code is source code and passes the same checks.
 - **Payload usage:** bounded Local API reads, explicit access control on every collection, no
   access-control override, and no parent-relative imports.
 - **Generated output:** the Payload types and admin import map must match the configuration that
   produces them.
-- **Dependencies:** licenses, available stable updates, the maximum permitted freshness gap, dead code,
-  and unused dependencies.
+- **Dependencies:** licenses, known vulnerabilities, available stable updates, the maximum permitted
+  freshness gap, dead code, and unused dependencies. A vulnerability is resolved by upgrading the
+  package. Record an exception only when no upgrade exists, and record it in full: the advisory, why
+  the project cannot reach it, and the date it was added. An exception that suppresses nothing fails.
+- **Suppressions:** the suppression count is capped against the size of the source. Every run reports
+  the count and the distance left. When the ceiling is reached, the way to spend a suppression is to
+  remove another one - not to raise the ceiling, which no setting can do.
 - **Assets and documentation:** image integrity, documentation references, config references, and
   the agent skill manifest.
 - **Repository assurance:** secret scanning, container and workflow linting, test execution with
@@ -55,24 +61,27 @@ satisfies the policy only while writing the message, so the policy is declared h
 | Rule | Value |
 | --- | --- |
 | Header | `type(scope): subject` |
-| Type | one of `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert` |
+| Type | one of `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `test` |
 | Scope | optional, and when present drawn from `a-z`, `0-9`, and `-` |
 | Subject | 15 characters or more, with the whole header at most 72 characters |
 | Subject ending | no trailing period |
-| Junk words | `wip`, `fixup`, `misc`, `stuff`, `tmp`, `temp`, `update`, `updates`, `change`, `changes`, `asdf`, as the leading word of the subject |
+| Junk words | `wip`, `tmp`, `temp`, `misc`, `stuff`, `asdf`, `fixup`, anywhere in the subject |
 | Body | required when the commit changes more than 2 files or more than 50 added plus deleted lines |
 | Body separator | one blank line after the header, since the body is everything after the first blank line |
 | Typography | plain ASCII only: no em dash, en dash, one-character ellipsis, or curly quotation mark |
 | Attribution | no marker naming an AI agent or an agent session, in any commit |
 
 There are no exemptions. Every commit is held to every rule, including the ones git writes for you: a
-merge, a revert, or an autosquash commit must be given a conforming subject by hand.
+merge, a revert, or an autosquash commit must be given a conforming subject by hand. There is no
+`revert` type - a revert is described by what it does, like any other change.
 
-Four traps account for most failures:
+Five traps account for most failures:
 
 - The 15-character floor rejects a short subject such as `fix typo`.
 - The body threshold counts added and deleted lines together, so a routine change crosses it quickly.
 - An explanation written without a blank line after the header does not count as a body.
+- A junk word is rejected anywhere in the subject, not only as its first word, so `fix: clear the tmp
+  directory` fails. Name the thing in full.
 - The attribution ban binds in prose as well as by pattern: a marker that no pattern yet knows is still
   a violation.
 
@@ -113,4 +122,34 @@ verdict.
 - There is no setting that turns a gate off. If a gate is wrong for the project, that is a ploaness bug
   to be fixed in ploaness, not a local override.
 - For a source suppression, use the analyzer's exact rule identifier and put the reason on the same
-  line. A bare suppression without a stated reason is itself a finding.
+  line. A bare suppression without a stated reason is itself a finding, and every suppression counts
+  against the ceiling.
+
+## Layer 6: Rules No Check Verifies
+
+A rule that no automated check can verify reliably binds with the same force as one that a gate
+enforces. These are decided by reading the code against the wording below, not by a passing run.
+
+- A test fails when the behavior its name states is removed from the code under test. A test that keeps
+  passing after its subject is deleted is measuring nothing, however green the suite is.
+- A test verifies one behavior and states that behavior in its name.
+- An assertion whose verdict does not depend on the code under test is banned. The gate catches the
+  literal form, such as an assertion that a constant is true. It cannot catch the same mistake made
+  through a variable, and that is still the same mistake.
+- A component's name decides nothing about whether it is real. An in-memory library component that
+  implements a protocol is real; a class inside the test tree whose answers a test sets is a
+  substitute, whatever it is called. The bans on the known mocking libraries cover the named cases, not
+  a hand-rolled fake.
+- A test reaches no network beyond the machine it runs on, and every wait it performs is bounded by a
+  timeout sized so that its expiry signals a defect of the code rather than the speed of the machine.
+- A callable does not return null, and does not accept null, where an optional or result type says the
+  same thing. A callable that cannot do its job fails immediately with an error that says what went
+  wrong, rather than falling back silently to a default.
+- One concept has one name everywhere in the project, and a name consists of full words. An
+  abbreviation appears only where it is more recognizable than the full form.
+- A dependency cycle is broken by moving the shared concept into a unit both sides depend on, or by
+  inverting one direction behind an abstraction. A cycle is never declared acceptable.
+- A coverage exclusion is justified by the role a file plays, never by the convenience of not testing
+  it. The same is true of a typography exclusion and of the JavaScript allowlist.
+- The attribution ban binds in prose as well as by pattern: a marker naming an AI agent that no pattern
+  yet knows is still a violation.

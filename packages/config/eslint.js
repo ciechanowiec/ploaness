@@ -11,60 +11,31 @@
 // Philosophy: maximum-explicit. The build should be hard to satisfy by accident, so that code which
 // passes is verbose, explicit and readable by construction.
 
-import comments from '@eslint-community/eslint-plugin-eslint-comments/configs'
-import js from '@eslint/js'
 import vitest from '@vitest/eslint-plugin'
-import prettier from 'eslint-config-prettier'
-import functional from 'eslint-plugin-functional'
-import jsdoc from 'eslint-plugin-jsdoc'
+//
+// The framework-neutral half - the caps, the explicitness rules, the naming ban, the suppression
+// discipline, the mock ban - lives in ./eslint-core.js and is shared with the ploaness repository's own
+// lint run. What stays here is what is genuinely about Payload and Next: the generated mount, the
+// collection configs, the environment module, the a11y layer, and the test-integrity block.
 import jsxA11y from 'eslint-plugin-jsx-a11y'
-import regexp from 'eslint-plugin-regexp'
-import sonarjs from 'eslint-plugin-sonarjs'
 import testingLibrary from 'eslint-plugin-testing-library'
-import unicorn from 'eslint-plugin-unicorn'
-import tseslint from 'typescript-eslint'
+import {
+  baseLayers,
+  compose,
+  guidelineRules,
+  immutabilityBlock,
+  NO_INHERITANCE,
+  NO_LITERAL_ASSERTIONS,
+  prettierLast,
+  typeAwareParsing,
+} from './eslint-core.js'
 
-const COMPLEXITY_MAX = 8
-const MAX_PARAMS = 4
-const MAX_DEPTH = 3
-const MAX_LINES_PER_FILE = 500
-const MAX_LINES_PER_FUNCTION = 50
-
-// No mocks. Tests run against real objects and real services (a real Payload instance, a real
-// database, real in-process servers) - never test doubles. These are the Vitest entry points that
-// create mocks/stubs/spies, plus the third-party mocking libraries, all banned build-wide.
-const NO_MOCKS_MESSAGE =
-  'No mocks/stubs/spies. Test against real objects and real services instead (see AGENTS.md).'
-const MOCKING_VI_METHODS = [
-  'fn',
-  'mock',
-  'doMock',
-  'unmock',
-  'mocked',
-  'spyOn',
-  'stubGlobal',
-  'stubEnv',
-  'importMock',
-]
-const MOCKING_PACKAGES = [
-  'sinon',
-  'testdouble',
-  'jest-mock',
-  '@jest/globals',
-  'proxyquire',
-  'nock',
-  'msw',
-]
-
-// Collection/global/field/block configs are declarative wiring: importing one already satisfies its
-// coverage, so a function inlined there has no unit-test seam and can sit untested. This rule bans
-// inline functions in those files, forcing extraction into the unit-tested src/access and src/lib
-// modules, then reference by name. Identifier references (`read: anyone`) pass; inline functions do not.
 const NO_INLINE_CONFIG_FUNCTIONS_SELECTOR = 'ArrowFunctionExpression, FunctionExpression'
 const NO_INLINE_CONFIG_FUNCTIONS_MESSAGE =
-  'No inline functions in collection/global/field/block configs. Define behavior (access, hooks, validate) in src/access or src/lib so it is unit-tested, then import it by reference.'
+  'No inline functions in collection/global/field/block configs. Define behavior (access, hooks, ' +
+  'validate) in src/access or src/lib so it is unit-tested, then import it by reference.'
 
-export default tseslint.config(
+export default compose(
   // ── What is never linted ────────────────────────────────────────────────────────────────────
   {
     ignores: [
@@ -86,138 +57,29 @@ export default tseslint.config(
     ],
   },
 
-  // ── Base layers ─────────────────────────────────────────────────────────────────────────────
-  js.configs.recommended,
-  ...tseslint.configs.strictTypeChecked,
-  ...tseslint.configs.stylisticTypeChecked,
-  sonarjs.configs.recommended,
-  unicorn.configs.recommended,
-  jsdoc.configs['flat/recommended-typescript'],
-  comments.recommended, // disciplined eslint-disable comments (scoped + justified)
-  regexp.configs['flat/recommended'], // regex correctness and safety
+  ...baseLayers,
 
-  // ── Type-aware parsing + the maximum-explicit rule set ──────────────────────────────────────
-  {
-    languageOptions: {
-      parserOptions: {
-        projectService: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
-    },
-    rules: {
-      // Explicitness - types must be written, not just inferred at boundaries.
-      '@typescript-eslint/explicit-function-return-type': 'error',
-      '@typescript-eslint/explicit-module-boundary-types': 'error',
-      // Require an explicit type annotation on every `const`/`let` (not just boundaries), so the
-      // declared type is written rather than left to inference. Arrow-function consts are exempt -
-      // their signature is already covered by explicit-function-return-type.
-      '@typescript-eslint/typedef': [
-        'error',
-        { variableDeclaration: true, variableDeclarationIgnoreFunction: true },
-      ],
-      // Conflicts with the explicit philosophy: typedef requires annotations, this rule would strip
-      // the "trivially inferable" ones (e.g. `const x: string = '...'`). We want them written.
-      '@typescript-eslint/no-inferrable-types': 'off',
-      '@typescript-eslint/no-non-null-assertion': 'error',
-      '@typescript-eslint/strict-boolean-expressions': 'error',
-      '@typescript-eslint/switch-exhaustiveness-check': 'error',
-      '@typescript-eslint/no-unnecessary-condition': 'error',
-      // Defect patterns - bugs the type-checker can prove.
-      '@typescript-eslint/no-floating-promises': 'error',
-      '@typescript-eslint/no-misused-promises': 'error',
-      '@typescript-eslint/default-param-last': 'error',
-      '@typescript-eslint/require-array-sort-compare': ['error', { ignoreStringArrays: true }],
-      // Ban calls into APIs marked `@deprecated` - yours or a framework's (Payload/Next/React). The
-      // type-checker reads the JSDoc tag and fails the build at the call site, so deprecated usage is
-      // caught statically rather than at runtime. (AI models especially reach for deprecated APIs from
-      // stale training data; this stops that at the gate.)
-      '@typescript-eslint/no-deprecated': 'error',
-      // Naming - ban the "plumbing" type-name suffixes (`Service`/`Manager`/`Handler`/`Provider`/
-      // `Util`): a type is a noun of the domain, or the operation belongs to the domain type that owns
-      // it (mask on `MaskedToken`, not a `TokenMasker`). Scoped to type declarations, so a domain
-      // property like `packageManager` or a framework import like `NextIntlClientProvider` is untouched.
-      '@typescript-eslint/naming-convention': [
-        'error',
-        {
-          selector: ['class', 'interface', 'typeAlias', 'enum'],
-          format: null,
-          custom: { regex: '(Service|Manager|Handler|Provider|Util)$', match: false },
-        },
-      ],
+  // Type-aware parsing against the consuming project's own tsconfig, plus the shared rule set.
+  typeAwareParsing({ projectService: true }),
+  { rules: guidelineRules },
 
-      // Suppressions must be deliberate: every eslint-disable needs a reason, and dead ones fail.
-      '@eslint-community/eslint-comments/require-description': ['error', { ignore: [] }],
-      '@eslint-community/eslint-comments/no-unused-disable': 'error',
-
-      // Complexity caps - keep every unit small, flat and testable.
-      complexity: ['error', COMPLEXITY_MAX],
-      'sonarjs/cognitive-complexity': ['error', COMPLEXITY_MAX],
-      'max-params': ['error', MAX_PARAMS],
-      'max-depth': ['error', MAX_DEPTH],
-      'max-lines': ['error', { max: MAX_LINES_PER_FILE, skipBlankLines: true, skipComments: true }],
-      'max-lines-per-function': [
-        'error',
-        { max: MAX_LINES_PER_FUNCTION, skipBlankLines: true, skipComments: true },
-      ],
-
-      // Control-flow clarity.
-      eqeqeq: ['error', 'always'],
-      curly: ['error', 'all'],
-      'default-case': 'error',
-      'no-else-return': ['error', { allowElseIf: false }],
-
-      // Unicorn tuned for the Payload/Next reality.
-      'unicorn/prevent-abbreviations': 'off', // req/params/props/config are intentional here.
-      // Keep the sibling name-replacements rule ON (it catches genuine abbreviations like refs/dev), but
-      // exempt the words the frameworks mandate verbatim: `params` (the Next.js App Router route prop and
-      // its `generateStaticParams` export) and `req`/`doc` (Payload's fixed hook/endpoint argument names -
-      // every Payload hook, access function, and endpoint handler receives `req`, and change/read hooks
-      // receive `doc`). `: false` removes only those replacements; every other abbreviation is still reported.
-      'unicorn/name-replacements': ['error', { replacements: { params: false, req: false, doc: false } }],
-      'unicorn/no-null': 'off', // React and Payload use `null` deliberately.
-      'unicorn/no-keyword-prefix': 'off',
-      // New in unicorn 73. It would expand every concise one-line `/** ... */` export doc into a
-      // three-line block, and would also rewrite the `GENERATED AUTOMATICALLY BY PAYLOAD` /
-      // `DO NOT MODIFY` headers that Payload writes into the `src/app/(payload)` scaffolding.
-      'unicorn/single-line-block-comment-style': 'off',
-      'unicorn/filename-case': [
-        'error',
-        { cases: { camelCase: true, pascalCase: true, kebabCase: true } },
-      ],
-
-      // JSDoc: require a doc *block* on public helpers (below), but never the per-`@param root0`
-      // ceremony that destructured arrow signatures produce. Keep the correctness checks on.
-      'jsdoc/require-jsdoc': 'off',
-      'jsdoc/require-param': 'off',
-      'jsdoc/require-returns': 'off',
-
-      // No mocks - ban the mocking entry points and libraries build-wide.
-      'no-restricted-properties': [
-        'error',
-        ...MOCKING_VI_METHODS.map((property) => ({
-          object: 'vi',
-          property,
-          message: NO_MOCKS_MESSAGE,
-        })),
-      ],
-      'no-restricted-imports': [
-        'error',
-        { paths: MOCKING_PACKAGES.map((name) => ({ name, message: NO_MOCKS_MESSAGE })) },
-      ],
-    },
-  },
+  // Immutability: every hand-written TypeScript, with the generated Payload files exempt by role.
+  immutabilityBlock(
+    ['**/*.ts', '**/*.tsx'],
+    [
+      'src/app/(payload)/**',
+      'src/payload.config.ts',
+      'src/payload-types.ts',
+      'src/payload-generated-schema.ts',
+    ],
+  ),
 
   // ── Documenting comment blocks on hand-written modules. Default-safe: every src/ TypeScript module
   //    is in scope, with only the app/route layer, scripts, and generated files exempted (they carry
   //    no reusable API). A new logic directory is therefore held to the rule the moment it exists. ──
   {
     files: ['src/**/*.ts'],
-    ignores: [
-      'src/app/**',
-      'src/seed/**',
-      'src/payload.config.ts',
-      'src/payload-types.ts',
-    ],
+    ignores: ['src/app/**', 'src/seed/**', 'src/payload.config.ts', 'src/payload-types.ts'],
     rules: {
       'jsdoc/require-jsdoc': [
         'error',
@@ -236,35 +98,12 @@ export default tseslint.config(
     },
   },
 
-  // ── Immutability by default: no `let`, no in-place mutation. Default-safe: every src/ TypeScript
-  //    module is in scope, with the app/route layer, scripts, and generated files exempted (they
-  //    mutate legitimately). React views are .tsx and fall outside the .ts glob automatically. ──
-  {
-    files: ['src/**/*.ts'],
-    ignores: [
-      'src/app/**',
-      'src/seed/**',
-      'src/payload.config.ts',
-      'src/payload-types.ts',
-    ],
-    plugins: { functional },
-    rules: {
-      'functional/no-let': 'error',
-      'functional/immutable-data': 'error',
-    },
-  },
-
   // ── React components: return-type/boundary annotations add noise, not safety ─────────────────
   {
     files: ['**/*.tsx'],
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
-      // A component's JSX return is mostly declarative markup, so the 50-line function cap (meant for
-      // imperative logic) misfires on it. The complexity, cognitive-complexity, param, and nesting
-      // caps stay ON for .tsx, so genuine logic in a component is still bounded - only raw line count,
-      // which JSX legitimately inflates, is exempt. Extract real logic into .ts where the cap holds.
-      'max-lines-per-function': 'off',
     },
   },
 
@@ -324,7 +163,7 @@ export default tseslint.config(
     ],
     rules: {
       'no-restricted-syntax': [
-        'error',
+        ...NO_INHERITANCE,
         {
           selector: NO_INLINE_CONFIG_FUNCTIONS_SELECTOR,
           message: NO_INLINE_CONFIG_FUNCTIONS_MESSAGE,
@@ -347,7 +186,8 @@ export default tseslint.config(
           object: 'process',
           property: 'env',
           message:
-            'Read environment variables only in src/lib/environment.ts (validated there) and consume the typed values; other src modules must not access process.env directly.',
+            'Read environment variables only in src/lib/environment.ts (validated there) and ' +
+            'consume the typed values; other src modules must not access process.env directly.',
         },
       ],
     },
@@ -361,8 +201,10 @@ export default tseslint.config(
       'sonarjs/no-os-command-from-path': 'off', // invoking `git` by name is intended here.
       'unicorn/numeric-separators-style': 'off', // codepoint literals (0x2014) read better ungrouped.
       'unicorn/consistent-boolean-name': 'off',
-      '@typescript-eslint/restrict-template-expressions': 'off', // line/column numbers in messages.
-      'max-depth': 'off', // nested scan loops (file -> line -> char) are inherent.
+      // `max-depth` and `restrict-template-expressions` were off here. Both carry rules of the
+      // governing standard - the nesting cap, and "conversions between types are spelled out" - and a
+      // cap is never raised. A scan loop that needs four levels is a scan loop that wants a named
+      // helper for its inner pass.
     },
   },
 
@@ -370,14 +212,17 @@ export default tseslint.config(
   {
     files: ['tests/**'],
     rules: {
-      '@typescript-eslint/explicit-function-return-type': 'off',
-      '@typescript-eslint/typedef': 'off', // test locals often hold framework return types that are noisy to spell out.
-      '@typescript-eslint/no-non-null-assertion': 'off',
-      '@typescript-eslint/no-unsafe-assignment': 'off',
-      '@typescript-eslint/no-unsafe-argument': 'off',
-      'max-lines-per-function': 'off',
-      'sonarjs/no-duplicate-string': 'off',
-      'jsdoc/require-jsdoc': 'off',
+      // Only framework idiom is relaxed here. Every rule that carries a rule of the governing standard -
+      // the size caps, the explicitness rules, the ban on a non-null assertion, the unsafe-any family -
+      // stays ON, because the standard says test code passes the same static-analysis checks as
+      // production code. A relaxation that made a test easier to write by making it less checked would
+      // exempt the suite from the contract it exists to enforce.
+      // A test's expected value IS its specification. Naming it moves the specification away from the
+      // assertion that reads it, which makes the test harder to check by eye rather than easier - the
+      // opposite of what the bare-number ban exists to achieve. This is a role distinction, not a
+      // convenience: production code names its constants, and a spec states its literals.
+      '@typescript-eslint/no-magic-numbers': 'off',
+      'sonarjs/no-duplicate-string': 'off', // fixture data repeats by nature; naming each is noise.
       'unicorn/no-top-level-assignment-in-function': 'off', // standard vitest beforeAll pattern.
       'unicorn/max-nested-calls': 'off', // expect(fn(arg(value))) assertions are idiomatic.
       'unicorn/numeric-separators-style': 'off', // fixtures use Unicode code points (0x2026); ungrouped reads better.
@@ -400,7 +245,8 @@ export default tseslint.config(
       'vitest/no-focused-tests': 'error', // ban `.only` - it skips the rest of the suite.
       'vitest/no-disabled-tests': 'error', // ban `.skip` / `xit` / `xdescribe`.
       'vitest/no-commented-out-tests': 'error', // a commented-out test is a deleted test that looks present.
-      'vitest/expect-expect': ['error', { assertFunctionNames: ['expect', 'fc.assert'] }], // a fast-check fc.assert property counts as the assertion too.
+      // a fast-check fc.assert property counts as the assertion too.
+      'vitest/expect-expect': ['error', { assertFunctionNames: ['expect', 'fc.assert'] }],
       // vitest/expect-expect (above) is the assertion-presence gate here and understands fc.assert.
       // sonarjs/assertions-in-tests is a less-configurable duplicate that does not, so it defers in
       // this scope (it stays on for tests/unit, which has no fast-check property tests).
@@ -418,10 +264,12 @@ export default tseslint.config(
       // Property tests must stay deterministic: the fixed global seed (vitest.setup.ts) is the only
       // seed. Forbid per-call `seed` overrides, which would reintroduce a volatile gate.
       'no-restricted-syntax': [
-        'error',
+        ...NO_INHERITANCE,
+        ...NO_LITERAL_ASSERTIONS,
         {
           selector:
-            "CallExpression[callee.object.name='fc'][callee.property.name='assert'] > ObjectExpression > Property[key.name='seed']",
+            "CallExpression[callee.object.name='fc'][callee.property.name='assert'] > " +
+            "ObjectExpression > Property[key.name='seed']",
           message:
             'Do not set a per-call fast-check seed. Property tests use the fixed global seed in vitest.setup.ts.',
         },
@@ -443,5 +291,5 @@ export default tseslint.config(
   },
 
   // ── Formatting is Biome's job - disable every conflicting stylistic rule (must stay last) ────
-  prettier,
+  prettierLast,
 )

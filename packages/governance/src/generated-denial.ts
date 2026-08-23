@@ -1,0 +1,85 @@
+// Write denial for generated files.
+//
+// A generated file changes only as the output of its generator, and the regeneration check already
+// fails on a hand edit. That check reports the damage after the fact; the denial stops the edit from
+// being made, which is the difference between a build that fails and work that was never wasted.
+//
+// The standard scopes this to "where the runtime used by AI agents supports the denial", so a rule here
+// binds one runtime and cannot bind them all. That is conformance rather than a shortfall, and the gate
+// says so rather than implying a guarantee it does not have.
+
+/** The artefacts Payload derives from the configuration. Declared once and consumed by every rule. */
+export const GENERATED_ARTEFACTS: readonly string[] = [
+  'src/payload-types.ts',
+  'src/app/(payload)/admin/importMap.js',
+  'src/payload-generated-schema.ts',
+]
+
+/** The deny rules a runtime must carry for the artefacts above. */
+export const requiredDenyRules = (): readonly string[] =>
+  GENERATED_ARTEFACTS.flatMap((artefact: string): readonly string[] => [
+    `Edit(${artefact})`,
+    `Write(${artefact})`,
+  ])
+
+const stringsAt = (settings: unknown, section: string, key: string): readonly string[] => {
+  if (typeof settings !== 'object' || settings === null) {
+    return []
+  }
+  const outer: unknown = (settings as Record<string, unknown>)[section]
+  if (typeof outer !== 'object' || outer === null) {
+    return []
+  }
+  const inner: unknown = (outer as Record<string, unknown>)[key]
+  return Array.isArray(inner)
+    ? inner.filter((entry: unknown): entry is string => typeof entry === 'string')
+    : []
+}
+
+/**
+ * Merge the required deny rules into an existing runtime settings object.
+ * @param existing the parsed settings, or undefined when the file does not exist.
+ * @returns the settings to write, preserving every key the project owns.
+ */
+export const applyDenyRules = (existing: unknown): Record<string, unknown> => {
+  const base: Record<string, unknown> =
+    typeof existing === 'object' && existing !== null
+      ? { ...(existing as Record<string, unknown>) }
+      : {}
+  const permissions: Record<string, unknown> =
+    typeof base['permissions'] === 'object' && base['permissions'] !== null
+      ? { ...(base['permissions'] as Record<string, unknown>) }
+      : {}
+  const deny: readonly string[] = stringsAt(base, 'permissions', 'deny')
+  const merged: readonly string[] = [
+    ...deny,
+    ...requiredDenyRules().filter((rule: string): boolean => !deny.includes(rule)),
+  ]
+  return { ...base, permissions: { ...permissions, deny: merged } }
+}
+
+/**
+ * Report every required denial the runtime settings do not carry, and every re-permission of one.
+ * @param settings the parsed runtime settings, or undefined when absent.
+ * @param localSettings the parsed machine-local overrides, or undefined when absent.
+ * @returns one message per missing denial or re-permitted artefact.
+ */
+export const findDenialViolations = (
+  settings: unknown,
+  localSettings: unknown,
+): readonly string[] => {
+  const deny: readonly string[] = stringsAt(settings, 'permissions', 'deny')
+  const missing: readonly string[] = requiredDenyRules()
+    .filter((rule: string): boolean => !deny.includes(rule))
+    .map((rule: string): string => `no write denial for ${rule}; run \`ploaness sync\` to add it`)
+  // A local override that re-permits a denied artefact undoes the denial on the one machine where it
+  // matters most, and it is untracked, so nothing else would ever report it.
+  const allowed: readonly string[] = stringsAt(localSettings, 'permissions', 'allow')
+  const rePermitted: readonly string[] = allowed
+    .filter((rule: string): boolean => requiredDenyRules().includes(rule))
+    .map(
+      (rule: string): string =>
+        `local settings re-permit ${rule}, which the project denies; remove the local allow entry`,
+    )
+  return [...missing, ...rePermitted]
+}

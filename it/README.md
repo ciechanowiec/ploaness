@@ -21,7 +21,7 @@ needle from the rule name - `no-unbounded-find`, not merely `payload-rules`.
 
 | Case | Mutation | Must fail on |
 | --- | --- | --- |
-| `pass` | none | nothing; nine gates PASS |
+| `pass` | none | nothing; twelve gates PASS |
 | `fail-wiring` | `scripts.verify` rewritten to `echo ok` | `wiring`, naming `scripts.verify` |
 | `fail-unbounded-find` | `depth` and `limit` dropped from a `payload.find` | `payload-rules`, naming `no-unbounded-find` |
 | `fail-collection-access` | `access` dropped from a collection | `payload-rules`, naming `require-collection-access` |
@@ -29,7 +29,18 @@ needle from the rule name - `no-unbounded-find`, not merely `payload-rules`.
 | `fail-asset-drift` | an edit to the PINNED `.editorconfig` | `assets`, naming `.editorconfig` |
 | `fail-section-drift` | an edit inside the managed block of `AGENTS.md` | `assets`, naming the drifted block |
 | `fail-section-duplicated` | a second copy of the managed block | `assets`, asking for a hand repair |
+| `fail-commit-junk-word` | a junk word later in the subject, not first | `commit-history`, naming `low-effort` |
+| `fail-commit-revert-type` | a `revert:` header | `commit-history`, naming `invalid header` |
+| `fail-editorconfig` | trailing whitespace in a source file | `editorconfig`, naming `trailing whitespace` |
+| `fail-typography-css` | an em dash in a stylesheet | `conventions`, naming `em dash` |
+| `fail-suppressions` | `maxSuppressions: 0` plus one suppression | `suppressions`, naming `ceiling` |
+| `fail-generated-denial` | the write denial removed from `.claude/settings.json` | `generated-denial`, naming `no write denial` |
 | `pass-section-project-text` | project prose added below the managed block | nothing; the project owns that text |
+
+The two `commit-` cases named above exist because both rules diverged from the governing standard once:
+`revert` was an accepted type the standard does not list, and a junk word was rejected only as the first
+word of a subject the standard says must not contain one anywhere. A fixture pins each corrected rule so
+the divergence cannot return quietly.
 
 The three `section` cases exist because the SECTION disposition is the only one where ploaness and the
 project write the same file, so a single "it fails" assertion would not distinguish the three outcomes that
@@ -57,8 +68,9 @@ the tools ploaness *runs*.
 
 `verify.sh` builds one template project under `$HOME`, installs the tarballs into it once, and runs
 `ploaness init`. Every case is then a copy of that template with `node_modules` symlinked rather than
-copied, so nine fixtures cost one install. Node resolves through a symlinked `node_modules` normally, which
-is what makes this safe.
+copied, so every fixture costs one install. Node resolves through a symlinked `node_modules` normally,
+which is what makes this safe - and the symlink is also why a gate that reads tracked files must skip a
+path that is not a regular file. Three gates crashed on exactly that until these cases caught it.
 
 The scratch directory lives under `$HOME` rather than `/tmp` because a container mount of the repository
 does not extend to the system temporary directory, so a fixture built there is invisible to the gates that

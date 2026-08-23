@@ -6,22 +6,36 @@
 import { type AgentReferenceMatch, findAgentReferences } from './agent-references.js'
 import { findTypographyViolations, type TypographyViolation } from './banned-typography.js'
 
+// The governing standard's own list, in its own order. `revert` is deliberately absent: git writes a
+// revert commit with a `Revert "..."` subject, and the standard requires that subject be replaced by a
+// conforming one by hand rather than given a type of its own.
 const TYPES: readonly string[] = [
+  'build',
+  'chore',
+  'ci',
+  'docs',
   'feat',
   'fix',
-  'docs',
-  'refactor',
   'perf',
+  'refactor',
   'test',
-  'build',
-  'ci',
-  'chore',
-  'revert',
 ]
 const TYPES_LABEL: string = TYPES.join(', ')
-const HEADER_PATTERN: RegExp =
-  /^(?:feat|fix|docs|refactor|perf|test|build|ci|chore|revert)(?:\([a-z0-9-]+\))?: .+$/
-const JUNK_DESCRIPTION: RegExp = /^(?:wip|fixup|misc|stuff|tmp|temp|updates?|changes?|asdf)\b/i
+// Built from TYPES rather than written out again. The two were separate literals, and they drifted:
+// the alternation is what actually decided a verdict, so a type removed from the list above stayed
+// accepted here. A pattern derived from the list cannot disagree with it.
+const HEADER_PATTERN: RegExp = new RegExp(
+  String.raw`^(?:${TYPES.join('|')})(?:\([a-z0-9-]+\))?: .+$`,
+)
+// The standard says the subject "contains none of these words", so the match is unanchored. It was
+// anchored to the first word, which accepted `fix: clear the tmp directory` - a subject the standard
+// rejects. The list is the standard's own; `update` and `change` are not on it and are not added,
+// because unanchored they would reject a legitimate `chore(deps): update the pinned biome version`.
+const JUNK_DESCRIPTION: RegExp = /\b(?:wip|tmp|temp|misc|stuff|asdf|fixup)\b/i
+// What separates the type (and optional scope) from the subject.
+const HEADER_SEPARATOR: string = ': '
+// A numstat row reports added and deleted counts before the path.
+const NUMSTAT_COLUMNS: number = 2
 const MAX_HEADER_LENGTH: number = 72
 const MIN_DESCRIPTION_LENGTH: number = 15
 const MAX_TRIVIAL_FILES: number = 2
@@ -62,8 +76,8 @@ export const parseMessage = (raw: string): ParsedMessage => {
 }
 
 const descriptionOf = (header: string): string => {
-  const marker: number = header.indexOf(': ')
-  return marker === -1 ? header : header.slice(marker + 2)
+  const marker: number = header.indexOf(HEADER_SEPARATOR)
+  return marker === -1 ? header : header.slice(marker + HEADER_SEPARATOR.length)
 }
 
 const validateHeaderFormat = (header: string): readonly string[] =>
@@ -73,43 +87,54 @@ const validateHeaderFormat = (header: string): readonly string[] =>
         `invalid header "${header}": expected "<type>(<scope>): <description>", type one of ${TYPES_LABEL}`,
       ]
 
+// One predicate per rule, each returning the problem it found or nothing. The alternative - pushing
+// into a mutable list - reads the same but hides how many rules there are behind a wall of ifs.
+type SubjectRule = (header: string, description: string) => string | undefined
+
+const SUBJECT_RULES: readonly SubjectRule[] = [
+  (header: string): string | undefined =>
+    header.length > MAX_HEADER_LENGTH
+      ? `header is ${String(header.length)} chars; keep it at most ${String(MAX_HEADER_LENGTH)}`
+      : undefined,
+  (header: string): string | undefined =>
+    header.endsWith('.') ? 'header must not end with a period' : undefined,
+  (_header: string, description: string): string | undefined =>
+    description.length < MIN_DESCRIPTION_LENGTH
+      ? `description "${description}" is too short; be specific (>= ${String(MIN_DESCRIPTION_LENGTH)} chars)`
+      : undefined,
+  (_header: string, description: string): string | undefined =>
+    JUNK_DESCRIPTION.test(description)
+      ? `description "${description}" looks low-effort; describe the actual change`
+      : undefined,
+]
+
 const validateSubjectQuality = (header: string): readonly string[] => {
   const description: string = descriptionOf(header)
-  const problems: string[] = []
-  if (header.length > MAX_HEADER_LENGTH) {
-    problems.push(`header is ${header.length} chars; keep it at most ${MAX_HEADER_LENGTH}`)
-  }
-  if (header.endsWith('.')) {
-    problems.push('header must not end with a period')
-  }
-  if (description.length < MIN_DESCRIPTION_LENGTH) {
-    problems.push(
-      `description "${description}" is too short; be specific (>= ${MIN_DESCRIPTION_LENGTH} chars)`,
-    )
-  }
-  if (JUNK_DESCRIPTION.test(description)) {
-    problems.push(`description "${description}" looks low-effort; describe the actual change`)
-  }
-  return problems
+  return SUBJECT_RULES.flatMap((rule: SubjectRule): readonly string[] => {
+    const problem: string | undefined = rule(header, description)
+    return problem === undefined ? [] : [problem]
+  })
 }
 
-const validateBody = (body: string, requireBody: boolean): readonly string[] =>
-  requireBody && body.length === 0
+const validateBody = (body: string, isBodyRequired: boolean): readonly string[] =>
+  isBodyRequired && body.length === 0
     ? [
-        `change touches >${MAX_TRIVIAL_FILES} files or >${MAX_TRIVIAL_LINES} lines; add a body (blank line then prose) explaining WHY`,
+        `change touches >${String(MAX_TRIVIAL_FILES)} files or >${String(MAX_TRIVIAL_LINES)} lines; ` +
+          'add a body (blank line then prose) explaining WHY',
       ]
     : []
 
 const typographyProblems = (message: ParsedMessage): readonly string[] =>
   findTypographyViolations(`${message.header}\n${message.body}`).map(
     (found: TypographyViolation): string =>
-      `banned ${found.label} (line ${found.line}); use ${found.replacement}`,
+      `banned ${found.label} (line ${String(found.line)}); use ${found.replacement}`,
   )
 
 const agentReferenceProblems = (message: ParsedMessage): readonly string[] =>
   findAgentReferences(`${message.header}\n${message.body}`).map(
     (found: AgentReferenceMatch): string =>
-      `references an AI agent or its session (${found.label}, line ${found.line}); a commit must not attribute the change to an agent, so remove the trailer/signature`,
+      `references an AI agent or its session (${found.label}, line ${String(found.line)}); a commit must ` +
+      'not attribute the change to an agent, so remove the trailer/signature',
   )
 
 /**
@@ -117,16 +142,16 @@ const agentReferenceProblems = (message: ParsedMessage): readonly string[] =>
  * commit is held to every rule: there is no exemption list, so a git-generated merge, revert, or
  * autosquash subject must be rewritten by hand to conform.
  * @param message the header/body pair from {@link parseMessage}.
- * @param requireBody whether the change is non-trivial and therefore must carry an explanatory body.
+ * @param isBodyRequired whether the change is non-trivial and therefore must carry an explanatory body.
  * @returns an empty array when the message passes.
  */
 export const validateMessage = (
   message: ParsedMessage,
-  requireBody: boolean,
+  isBodyRequired: boolean,
 ): readonly string[] => [
   ...validateHeaderFormat(message.header),
   ...validateSubjectQuality(message.header),
-  ...validateBody(message.body, requireBody),
+  ...validateBody(message.body, isBodyRequired),
   ...typographyProblems(message),
   ...agentReferenceProblems(message),
 ]
@@ -145,11 +170,10 @@ export const parseNumstat = (numstat: string): DiffStat => {
   const rows: readonly string[] = numstat
     .split('\n')
     .filter((row: string): boolean => row.length > 0)
-  let lines: number = 0
-  for (const row of rows) {
-    const [added, deleted] = row.split('\t', 2)
-    lines += toCount(added) + toCount(deleted)
-  }
+  const lines: number = rows.reduce((total: number, row: string): number => {
+    const [added, deleted] = row.split('\t', NUMSTAT_COLUMNS)
+    return total + toCount(added) + toCount(deleted)
+  }, 0)
   return { files: rows.length, lines }
 }
 

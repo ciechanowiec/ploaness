@@ -10,8 +10,9 @@
 // honour a package exports map, so `extends: "ploaness/tsconfig"` fails there even though `tsc` is happy.
 // Inlining fixes both halves at once - the file is self-contained, and it is addressed by a real path
 // (`ploaness/tsconfig.json`) that classic resolution can find without an exports map.
-import { createRequire } from 'node:module'
+
 import { readFileSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -22,10 +23,11 @@ const shared = JSON.parse(readFileSync(nodeRequire.resolve('@ploaness/config/bio
 const generated = {
   ...shared,
   // A generated file: edit packages/config/biome.json instead.
+  // biome-ignore lint/style/useNamingConvention: a JSON Schema keyword, dictated by the format
   $schema: shared.$schema,
 }
 writeFileSync(path.join(here, 'biome.json'), `${JSON.stringify(generated, null, 2)}\n`)
-console.log(`ploaness: inlined biome.json (${Object.keys(generated).length} sections)`)
+console.info(`ploaness: inlined biome.json (${Object.keys(generated).length} sections)`)
 
 const sharedTsconfig = JSON.parse(
   readFileSync(nodeRequire.resolve('@ploaness/config/tsconfig'), 'utf8'),
@@ -36,10 +38,7 @@ const sharedTsconfig = JSON.parse(
 if (typeof sharedTsconfig.extends === 'string') {
   throw new Error('the shared tsconfig gained an `extends`; inline its parent here before shipping')
 }
-writeFileSync(
-  path.join(here, 'tsconfig.json'),
-  `${JSON.stringify(sharedTsconfig, null, 2)}\n`,
-)
-console.log(
+writeFileSync(path.join(here, 'tsconfig.json'), `${JSON.stringify(sharedTsconfig, null, 2)}\n`)
+console.info(
   `ploaness: inlined tsconfig.json (${Object.keys(sharedTsconfig.compilerOptions ?? {}).length} compiler options)`,
 )

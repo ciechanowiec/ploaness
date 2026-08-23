@@ -9,10 +9,11 @@ import {
 const fromBase64 = (base64: string): Buffer => Buffer.from(base64, 'base64')
 
 // A real, valid 1x1 transparent PNG and the ORIGINAL corrupt one (valid header, truncated IDAT stream).
-const VALID_PNG = fromBase64(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNgYGBgAAAABQABh6FO1AAAAABJRU5ErkJggg==',
+const VALID_PNG: Buffer = fromBase64(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1Jr' +
+    'AAAADUlEQVQImWNgYGBgAAAABQABh6FO1AAAAABJRU5ErkJggg==',
 )
-const CORRUPT_PNG = fromBase64(
+const CORRUPT_PNG: Buffer = fromBase64(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
 )
 
@@ -23,11 +24,11 @@ const concat = (...parts: Uint8Array[]): Uint8Array =>
 
 // Build a PNG chunk (length, type, data, CRC); the validator ignores CRC, so it is left zero.
 const pngChunk = (type: string, data: Uint8Array): Uint8Array => {
-  const length = new Uint8Array(4)
+  const length: Uint8Array<ArrayBuffer> = new Uint8Array(4)
   new DataView(length.buffer).setUint32(0, data.length)
   return concat(length, ascii(type), data, bytes(0, 0, 0, 0))
 }
-const PNG_SIG = bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
+const PNG_SIG: Uint8Array = bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
 
 interface IcoShape {
   readonly length: number
@@ -38,8 +39,8 @@ interface IcoShape {
 }
 
 const ico = (shape: IcoShape): Uint8Array => {
-  const buffer = new Uint8Array(shape.length)
-  const view = new DataView(buffer.buffer)
+  const buffer: Uint8Array<ArrayBuffer> = new Uint8Array(shape.length)
+  const view: DataView<ArrayBuffer> = new DataView<ArrayBuffer>(buffer.buffer)
   view.setUint16(2, shape.type ?? 1, true)
   view.setUint16(4, shape.count, true)
   if (shape.length >= 22) {
@@ -61,7 +62,7 @@ describe('validateImageBytes - PNG (real zlib decode)', () => {
   })
 
   it('rejects a structurally valid PNG whose IDAT is not a valid zlib stream', () => {
-    const badZlib = concat(
+    const badZlib: Uint8Array = concat(
       PNG_SIG,
       pngChunk('IHDR', new Uint8Array(13)),
       pngChunk('IDAT', bytes(0x00, 0x00, 0x00, 0x00)),
@@ -77,7 +78,7 @@ describe('validateImageBytes - PNG (real zlib decode)', () => {
   })
 
   it('rejects a PNG missing its IEND chunk', () => {
-    const noIend = concat(
+    const noIend: Uint8Array = concat(
       PNG_SIG,
       pngChunk('IHDR', new Uint8Array(13)),
       pngChunk('IDAT', bytes(1, 2, 3)),
@@ -86,14 +87,18 @@ describe('validateImageBytes - PNG (real zlib decode)', () => {
   })
 
   it('rejects a PNG whose chunk length runs past the end of file', () => {
-    const declaredLength = new Uint8Array(4)
+    const declaredLength: Uint8Array<ArrayBuffer> = new Uint8Array(4)
     new DataView(declaredLength.buffer).setUint32(0, 100)
-    const overrun = concat(PNG_SIG, declaredLength, ascii('IDAT'), new Uint8Array(8))
+    const overrun: Uint8Array = concat(PNG_SIG, declaredLength, ascii('IDAT'), new Uint8Array(8))
     expect(validateImageBytes('x.png', overrun)).toContain('runs past end of file')
   })
 
   it('rejects a PNG with no IDAT image data', () => {
-    const noIdat = concat(PNG_SIG, pngChunk('IHDR', new Uint8Array(13)), pngChunk('IEND', bytes()))
+    const noIdat: Uint8Array = concat(
+      PNG_SIG,
+      pngChunk('IHDR', new Uint8Array(13)),
+      pngChunk('IEND', bytes()),
+    )
     expect(validateImageBytes('x.png', noIdat)).toBe('invalid PNG (no IDAT image data)')
   })
 })
@@ -110,28 +115,25 @@ describe('validateImageBytes - JPEG / GIF / WebP', () => {
   })
 
   it('accepts and rejects GIF by its header and trailer', () => {
-    expect(validateImageBytes('a.gif', concat(ascii('GIF89a'), bytes(0x00, 0x3b)))).toBeNull()
-    expect(validateImageBytes('a.gif', concat(ascii('XXXXXX'), bytes(0x3b)))).toBe(
-      'not a valid GIF (bad header)',
-    )
-    expect(validateImageBytes('a.gif', concat(ascii('GIF89a'), bytes(0x00)))).toBe(
-      'truncated GIF (missing trailer byte)',
-    )
+    const wellFormed: Uint8Array = concat(ascii('GIF89a'), bytes(0x00, 0x3b))
+    const badHeader: Uint8Array = concat(ascii('XXXXXX'), bytes(0x3b))
+    const noTrailer: Uint8Array = concat(ascii('GIF89a'), bytes(0x00))
+    expect(validateImageBytes('a.gif', wellFormed)).toBeNull()
+    expect(validateImageBytes('a.gif', badHeader)).toBe('not a valid GIF (bad header)')
+    expect(validateImageBytes('a.gif', noTrailer)).toBe('truncated GIF (missing trailer byte)')
   })
 
   it('accepts and rejects WebP by its RIFF/WEBP header and size', () => {
-    expect(
-      validateImageBytes('a.webp', concat(ascii('RIFF'), bytes(4, 0, 0, 0), ascii('WEBP'))),
-    ).toBeNull()
-    expect(
-      validateImageBytes('a.webp', concat(ascii('XXXX'), bytes(4, 0, 0, 0), ascii('WEBP'))),
-    ).toBe('not a valid WebP (bad RIFF/WEBP header)')
-    expect(
-      validateImageBytes(
-        'a.webp',
-        concat(ascii('RIFF'), bytes(0xff, 0xff, 0xff, 0xff), ascii('WEBP')),
-      ),
-    ).toBe('truncated WebP (RIFF size exceeds file length)')
+    const declaredSize: Uint8Array = bytes(4, 0, 0, 0)
+    const oversizedDeclaration: Uint8Array = bytes(0xff, 0xff, 0xff, 0xff)
+    const wellFormed: Uint8Array = concat(ascii('RIFF'), declaredSize, ascii('WEBP'))
+    const badTag: Uint8Array = concat(ascii('XXXX'), declaredSize, ascii('WEBP'))
+    const oversized: Uint8Array = concat(ascii('RIFF'), oversizedDeclaration, ascii('WEBP'))
+    expect(validateImageBytes('a.webp', wellFormed)).toBeNull()
+    expect(validateImageBytes('a.webp', badTag)).toBe('not a valid WebP (bad RIFF/WEBP header)')
+    expect(validateImageBytes('a.webp', oversized)).toBe(
+      'truncated WebP (RIFF size exceeds file length)',
+    )
   })
 })
 

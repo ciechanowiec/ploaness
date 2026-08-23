@@ -53,15 +53,7 @@ const VALUE_POSITION: ReadonlySet<string> = new Set([
   '^',
 ])
 
-const lastMeaningful = (text: string): string => {
-  for (let index: number = text.length - 1; index >= 0; index -= 1) {
-    const character: string = text[index] ?? ''
-    if (!/\s/.test(character)) {
-      return character
-    }
-  }
-  return ''
-}
+const lastMeaningful = (text: string): string => text.trimEnd().at(LAST_CHARACTER) ?? ''
 
 // Each scanner below answers one question: where does the construct that starts at `index` end? Keeping
 // them apart is what lets stripComments read as the dispatch it is rather than as four interleaved
@@ -75,25 +67,24 @@ const endOfLineComment = (source: string, index: number): number => {
 }
 
 const endOfBlockComment = (source: string, index: number): number => {
-  const end: number = source.indexOf('*/', index + 2)
-  return end === -1 ? source.length : end + 2
+  const end: number = source.indexOf(BLOCK_COMMENT_END, index + BLOCK_COMMENT_DELIMITER)
+  return end === -1 ? source.length : end + BLOCK_COMMENT_DELIMITER
+}
+
+const scanStringLiteral = (source: string, quote: string, cursor: number): number => {
+  if (cursor >= source.length) {
+    return cursor
+  }
+  const inner: string = source[cursor] ?? ''
+  if (inner === '\\') {
+    return scanStringLiteral(source, quote, cursor + BLOCK_COMMENT_DELIMITER)
+  }
+  return inner === quote ? cursor + 1 : scanStringLiteral(source, quote, cursor + 1)
 }
 
 const endOfStringLiteral = (source: string, index: number): number => {
   const quote: string = source[index] ?? ''
-  let cursor: number = index + 1
-  while (cursor < source.length) {
-    const inner: string = source[cursor] ?? ''
-    if (inner === '\\') {
-      cursor += 2
-      continue
-    }
-    cursor += 1
-    if (inner === quote) {
-      break
-    }
-  }
-  return cursor
+  return scanStringLiteral(source, quote, index + 1)
 }
 
 // A regex literal ends at the first unescaped slash outside a character class, and never spans a line.
@@ -101,29 +92,39 @@ const endOfStringLiteral = (source: string, index: number): number => {
 // the three apart would hide the single cursor they share behind three functions that each need the
 // others' state.
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one cursor, three interacting rules
-const endOfRegexLiteral = (source: string, index: number): number => {
-  let cursor: number = index + 1
-  let inClass: boolean = false
-  while (cursor < source.length) {
-    const inner: string = source[cursor] ?? ''
-    if (inner === '\\') {
-      cursor += 2
-      continue
-    }
-    if (inner === '\n') {
-      break
-    }
-    if (inner === '[') {
-      inClass = true
-    } else if (inner === ']') {
-      inClass = false
-    } else if (inner === '/' && !inClass) {
-      cursor += 1
-      break
-    }
-    cursor += 1
+// Whether the next character sits inside a character class, which is what decides if `/` closes the
+// literal or is just a slash the class contains.
+const isInClassAfter = (character: string, isInClass: boolean): boolean => {
+  if (character === '[') {
+    return true
   }
-  return cursor
+  return character === ']' ? false : isInClass
+}
+
+const scanRegexLiteral = (source: string, cursor: number, isInClass: boolean): number => {
+  if (cursor >= source.length) {
+    return cursor
+  }
+  const inner: string = source[cursor] ?? ''
+  if (inner === '\\') {
+    return scanRegexLiteral(source, cursor + BLOCK_COMMENT_DELIMITER, isInClass)
+  }
+  if (inner === '\n') {
+    return cursor
+  }
+  if (inner === '/' && !isInClass) {
+    return cursor + 1
+  }
+  return scanRegexLiteral(source, cursor + 1, isInClassAfter(inner, isInClass))
+}
+
+const endOfRegexLiteral = (source: string, index: number): number =>
+  scanRegexLiteral(source, index + 1, false)
+
+/** What a fold step produced, and whether the walk should stop there. */
+interface Folded<State> {
+  readonly state: State
+  readonly stop: boolean
 }
 
 /** One comment, string, or regex literal: where it ends, and whether it is erased rather than kept. */
@@ -132,20 +133,27 @@ interface Skipped {
   readonly erased: boolean
 }
 
-// A string literal is kept because its contents are the only place a banned construct can legitimately
-// appear as data. Everything else here is erased, so prose naming a construct is never read as one.
-// Four guard clauses, one per construct. The count is the number of constructs, and collapsing them
-// into a table would trade a readable list for a lookup that says less.
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one guard per construct
-const constructAt = (source: string, index: number, output: string): Skipped | undefined => {
-  const character: string = source[index] ?? ''
+// A line or block comment, if one opens at `index`. Split out of the construct dispatch below so each
+// reads as the single question it asks.
+const commentAt = (source: string, index: number): Skipped | undefined => {
+  if (source[index] !== '/') {
+    return undefined
+  }
   const next: string = source[index + 1] ?? ''
-  if (character === '/' && next === '/') {
+  if (next === '/') {
     return { stop: endOfLineComment(source, index), erased: true }
   }
-  if (character === '/' && next === '*') {
-    return { stop: endOfBlockComment(source, index), erased: true }
+  return next === '*' ? { stop: endOfBlockComment(source, index), erased: true } : undefined
+}
+
+// A string literal is kept because its contents are the only place a banned construct can legitimately
+// appear as data. Everything else here is erased, so prose naming a construct is never read as one.
+const constructAt = (source: string, index: number, output: string): Skipped | undefined => {
+  const comment: Skipped | undefined = commentAt(source, index)
+  if (comment !== undefined) {
+    return comment
   }
+  const character: string = source[index] ?? ''
   if (QUOTES.has(character)) {
     return { stop: endOfStringLiteral(source, index), erased: false }
   }
@@ -154,6 +162,16 @@ const constructAt = (source: string, index: number, output: string): Skipped | u
   }
   return undefined
 }
+
+// `/*`, `*/`, and `//` are each two characters wide.
+const LAST_CHARACTER: number = -1
+const BLOCK_COMMENT_DELIMITER: number = 2
+
+// The needles are literal call expressions such as `payload.find(`, so the dot and the parenthesis must
+// not be read as pattern syntax.
+const escapeForSearch = (needle: string): string =>
+  needle.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
+const BLOCK_COMMENT_END: string = '*/'
 
 /**
  * Blank every comment and regular-expression literal to spaces, leaving newlines intact so reported line
@@ -164,8 +182,11 @@ const constructAt = (source: string, index: number, output: string): Skipped | u
  * @returns the source with comments and regex literals replaced by spaces of equal length.
  */
 export const stripComments = (source: string): string => {
+  /* eslint-disable functional/no-let -- a whole source file is walked here, so recursion would risk
+     the stack; the cursor and the output it builds are confined to this loop and escape as a value */
   let output: string = ''
   let index: number = 0
+  /* eslint-enable functional/no-let -- the walk above is the only place this file mutates */
   while (index < source.length) {
     const skipped: Skipped | undefined = constructAt(source, index, output)
     if (skipped === undefined) {
@@ -187,39 +208,54 @@ interface ScanStep {
   readonly depth: number
 }
 
+const depthAfter = (character: string, depth: number): number => {
+  if (OPENERS.has(character)) {
+    return depth + 1
+  }
+  return CLOSERS.has(character) ? depth - 1 : depth
+}
+
 /**
  * Walk `source` from `start`, tracking string literals and bracket nesting so that a bracket or a quote
  * inside a string cannot unbalance the scan. Both readers below need exactly this bookkeeping and differ
  * only in what they do with each character, so it lives here once rather than in each of them.
  * @param source the text to walk.
  * @param start the index to begin at.
- * @param visit called for every character outside a string literal; return false to stop the walk.
+ * @param fold called for every character outside a string literal; return stop to end the walk.
+ * @param initial the state the fold begins with.
  */
-// One cursor carrying depth across a character walk. Every split of this loop has to pass that cursor
-// back and forth, which is harder to review than the loop, and this is the code the unbounded-call
-// rules are decided by.
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one cursor shared by the whole walk
-const scanDelimited = (source: string, start: number, visit: (step: ScanStep) => boolean): void => {
-  let depth: number = 0
-  let index: number = start
-  while (index < source.length) {
-    const character: string = source[index] ?? ''
+const scanDelimited = <State>(
+  source: string,
+  start: number,
+  fold: (state: State, step: ScanStep) => Folded<State>,
+  initial: State,
+): State => {
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one cursor shared by the whole walk
+  // One cursor carries depth across a character walk. Every split of this loop has to pass that cursor
+  // back and forth, which is harder to review than the loop, and this is the code the unbounded-call
+  // rules are decided by.
+  // eslint-disable-next-line functional/no-let -- one cursor shared by the whole walk
+  let cursor: { readonly index: number; readonly depth: number; readonly state: State } = {
+    index: start,
+    depth: 0,
+    state: initial,
+  }
+  while (cursor.index < source.length) {
+    const character: string = source[cursor.index] ?? ''
     // A string literal is jumped over whole rather than tracked character by character, so a bracket or
     // a quote inside it can never reach the depth count.
     if (QUOTES.has(character)) {
-      index = endOfStringLiteral(source, index)
+      cursor = { ...cursor, index: endOfStringLiteral(source, cursor.index) }
       continue
     }
-    index += 1
-    if (OPENERS.has(character)) {
-      depth += 1
-    } else if (CLOSERS.has(character)) {
-      depth -= 1
+    const depth: number = depthAfter(character, cursor.depth)
+    const folded: Folded<State> = fold(cursor.state, { character, index: cursor.index, depth })
+    if (folded.stop) {
+      return folded.state
     }
-    if (!visit({ character, index: index - 1, depth })) {
-      return
-    }
+    cursor = { index: cursor.index + 1, depth, state: folded.state }
   }
+  return cursor.state
 }
 
 /**
@@ -229,14 +265,15 @@ const scanDelimited = (source: string, start: number, visit: (step: ScanStep) =>
  * @returns the argument text, or undefined when the call is unterminated (a parse error another gate reports).
  */
 export const balancedArguments = (source: string, open: number): string | undefined => {
-  let close: number | undefined
-  scanDelimited(source, open, (step: ScanStep): boolean => {
-    if (CLOSERS.has(step.character) && step.depth === 0) {
-      close = step.index
-      return false
-    }
-    return true
-  })
+  const close: number | undefined = scanDelimited<number | undefined>(
+    source,
+    open,
+    (found: number | undefined, step: ScanStep): Folded<number | undefined> =>
+      CLOSERS.has(step.character) && step.depth === 0
+        ? { state: step.index, stop: true }
+        : { state: found, stop: false },
+    undefined,
+  )
   return close === undefined ? undefined : source.slice(open + 1, close)
 }
 
@@ -246,19 +283,22 @@ export const balancedArguments = (source: string, open: number): string | undefi
  * @param argumentText the text between a call's parentheses.
  * @returns the depth-one characters, with nested structures elided.
  */
-export const topLevelSlice = (argumentText: string): string => {
-  let collected: string = ''
-  scanDelimited(argumentText, 0, (step: ScanStep): boolean => {
-    if (OPENERS.has(step.character)) {
-      // A nested structure collapses to one space, so the keys inside it cannot be read as top level.
-      collected += step.depth === 1 ? ' ' : ''
-    } else if (!CLOSERS.has(step.character) && step.depth === 1) {
-      collected += step.character
-    }
-    return true
-  })
-  return collected
-}
+export const topLevelSlice = (argumentText: string): string =>
+  scanDelimited<string>(
+    argumentText,
+    0,
+    (collected: string, step: ScanStep): Folded<string> => {
+      if (OPENERS.has(step.character)) {
+        // A nested structure collapses to one space, so its keys cannot be read as top level.
+        return { state: collected + (step.depth === 1 ? ' ' : ''), stop: false }
+      }
+      if (!CLOSERS.has(step.character) && step.depth === 1) {
+        return { state: collected + step.character, stop: false }
+      }
+      return { state: collected, stop: false }
+    },
+    '',
+  )
 
 interface BoundedCallRule {
   readonly call: string
@@ -320,18 +360,10 @@ const unboundedCallAt = (
   return { line: lineOf(source, found), rule: rule.rule, reason: rule.reason }
 }
 
-const occurrences = (source: string, needle: string): readonly number[] => {
-  const found: number[] = []
-  let searchFrom: number = 0
-  for (;;) {
-    const at: number = source.indexOf(needle, searchFrom)
-    if (at === -1) {
-      return found
-    }
-    found.push(at)
-    searchFrom = at + needle.length
-  }
-}
+const occurrences = (source: string, needle: string): readonly number[] =>
+  [...source.matchAll(new RegExp(escapeForSearch(needle), 'g'))].map(
+    (match: RegExpExecArray): number => match.index,
+  )
 
 const findUnboundedCalls = (source: string): readonly PayloadViolation[] =>
   BOUNDED_CALLS.flatMap((rule: BoundedCallRule): readonly PayloadViolation[] =>
@@ -355,7 +387,8 @@ const findOverrideAccess = (source: string): readonly PayloadViolation[] =>
     }),
   )
 
-const RELATIVE_IMPORT: RegExp = /(?:^|\n)\s*(?:import|export)[^\n;]*?from\s+['"](\.\.\/[^'"]*)['"]/g
+const RELATIVE_IMPORT: RegExp =
+  /(?:^|\n)[^\S\n]*(?:import|export)[^\n;]*from[^\S\n]+['"](\.\.\/[^'"]*)['"]/g
 // Test helpers live outside the `@/` alias root, and the Payload admin import map is generated.
 const RELATIVE_IMPORT_EXEMPT: RegExp = /\.\.\/(?:helpers|importMap)/
 
@@ -378,12 +411,12 @@ const findDeepRelativeImports = (source: string): readonly PayloadViolation[] =>
 // A collection that declares no `access` inherits Payload's defaults, which for a non-auth collection
 // means public read. That is a security decision, so ploaness requires it to be written down rather than
 // arrived at by omission.
-const COLLECTION_CONFIG: RegExp = /:\s*CollectionConfig\s*(?!\[)(?=[=,)\s]|$)/
-const DECLARES_ACCESS: RegExp = /(^|[\s,{])access\s*:/
+const COLLECTION_CONFIG: RegExp = /:\s*CollectionConfig(?=[=,)\s]|$)/
+const ACCESS_DECLARATION: RegExp = /(?:^|[\s,{])access\s*:/
 
 const findUndeclaredAccess = (source: string): readonly PayloadViolation[] => {
   const marker: number = source.search(COLLECTION_CONFIG)
-  if (marker === -1 || DECLARES_ACCESS.test(source)) {
+  if (marker === -1 || ACCESS_DECLARATION.test(source)) {
     return []
   }
   return [
@@ -391,7 +424,8 @@ const findUndeclaredAccess = (source: string): readonly PayloadViolation[] => {
       line: lineOf(source, marker),
       rule: 'require-collection-access',
       reason:
-        'a CollectionConfig must declare access explicitly; omitting it inherits Payload defaults, which allow public read',
+        'a CollectionConfig must declare access explicitly; omitting it inherits Payload ' +
+        'defaults, which allow public read',
     },
   ]
 }

@@ -10,14 +10,20 @@
     "./files/": "./files/",
     "./package.json": "./package.json"
   },
-  "files": ["manifest.tsv", "files"],
+  "files": [
+    "manifest.tsv",
+    "files"
+  ],
   "scripts": {
-    "build": "node --version > /dev/null"
+    "build": "node build.mjs"
   },
   "engines": {
     "node": ">=26"
   },
   "publishConfig": {
     "access": "public"
+  },
+  "devDependencies": {
+    "@ploaness/governance": "1.0.0"
   }
 }

@@ -8,7 +8,7 @@ const frontmatter = (body: string): string => `---\n${body}\n---\n\n# Heading\n\
 const run = (content: string, directoryName = 'payload'): readonly SkillViolation[] =>
   findSkillManifestViolations({ content, directoryName })
 
-const valid = frontmatter(
+const valid: string = frontmatter(
   'name: payload\ndescription: Use this skill when working with Payload CMS projects.',
 )
 
@@ -18,7 +18,7 @@ describe('findSkillManifestViolations - frontmatter presence', () => {
   })
 
   it('flags a file that does not open with frontmatter', () => {
-    const violations = run('# Just a heading\n\nNo frontmatter here.\n')
+    const violations: readonly SkillViolation[] = run('# Just a heading\n\nNo frontmatter here.\n')
     expect(violations).toEqual([
       { rule: 'frontmatter', reason: 'file must open with valid "---" frontmatter' },
     ])
@@ -27,12 +27,14 @@ describe('findSkillManifestViolations - frontmatter presence', () => {
 
 describe('findSkillManifestViolations - name', () => {
   it('flags a missing name key', () => {
-    const violations = run(frontmatter('description: Use when working on things.'))
+    const violations: readonly SkillViolation[] = run(
+      frontmatter('description: Use when working on things.'),
+    )
     expect(violations).toContainEqual({ rule: 'name', reason: 'frontmatter has no "name" key' })
   })
 
   it('flags a non-kebab-case name', () => {
-    const violations = run(
+    const violations: readonly SkillViolation[] = run(
       frontmatter('name: Payload_Skill\ndescription: Use when editing.'),
       'Payload_Skill',
     )
@@ -43,7 +45,7 @@ describe('findSkillManifestViolations - name', () => {
   })
 
   it('flags a name that does not match its parent directory', () => {
-    const violations = run(
+    const violations: readonly SkillViolation[] = run(
       frontmatter('name: payload\ndescription: Use when editing.'),
       'payload-cms',
     )
@@ -56,7 +58,7 @@ describe('findSkillManifestViolations - name', () => {
 
 describe('findSkillManifestViolations - description', () => {
   it('flags a missing description key', () => {
-    const violations = run(frontmatter('name: payload'))
+    const violations: readonly SkillViolation[] = run(frontmatter('name: payload'))
     expect(violations).toContainEqual({
       rule: 'description',
       reason: 'frontmatter has no "description" key',
@@ -64,7 +66,7 @@ describe('findSkillManifestViolations - description', () => {
   })
 
   it('flags an empty description value', () => {
-    const violations = run(frontmatter('name: payload\ndescription:'))
+    const violations: readonly SkillViolation[] = run(frontmatter('name: payload\ndescription:'))
     expect(violations).toContainEqual({
       rule: 'description',
       reason: 'frontmatter has no "description" key',
@@ -72,7 +74,9 @@ describe('findSkillManifestViolations - description', () => {
   })
 
   it('flags a description with no when-to-use clause', () => {
-    const violations = run(frontmatter('name: payload\ndescription: Helps with Payload stuff.'))
+    const violations: readonly SkillViolation[] = run(
+      frontmatter('name: payload\ndescription: Helps with Payload stuff.'),
+    )
     expect(violations).toContainEqual({
       rule: 'description',
       reason: 'description must say when to use the skill ("when ..." clause)',
@@ -82,21 +86,23 @@ describe('findSkillManifestViolations - description', () => {
 
 describe('findSkillManifestViolations - keys', () => {
   it('accepts the recognised optional keys', () => {
-    const content = frontmatter(
+    const content: string = frontmatter(
       'name: payload\ndescription: Use when editing.\nlicense: MIT\nallowed-tools: Read',
     )
     expect(run(content)).toEqual([])
   })
 
   it('ignores keys nested under a top-level key such as metadata', () => {
-    const content = frontmatter(
+    const content: string = frontmatter(
       'name: payload\ndescription: Use when editing.\nmetadata:\n  type: reference',
     )
     expect(run(content)).toEqual([])
   })
 
   it('flags an unknown top-level frontmatter key', () => {
-    const content = frontmatter('name: payload\ndescription: Use when editing.\nauthor: someone')
+    const content: string = frontmatter(
+      'name: payload\ndescription: Use when editing.\nauthor: someone',
+    )
     expect(run(content)).toContainEqual({
       rule: 'keys',
       reason: 'unknown frontmatter key "author"',

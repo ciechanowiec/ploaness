@@ -16,11 +16,11 @@ export interface DocumentViolation {
   readonly reason: string
 }
 
-/** Inputs for {@link findDocumentReferenceViolations}, with `fileExists` injected so the core stays pure. */
+/** Inputs for {@link findDocumentReferenceViolations}, with `isExistingFile` injected so the core stays pure. */
 interface DocumentReferenceInputs {
   readonly markdown: string
   readonly scriptNames: ReadonlySet<string>
-  readonly fileExists: (relativePath: string) => boolean
+  readonly isExistingFile: (relativePath: string) => boolean
   /**
    * Words that look like a script name but are not one, so a mention of them is not rot. Under ploaness
    * the gate identifiers (`knip`, `tests`, `build`) share a vocabulary with the old npm scripts they
@@ -83,7 +83,7 @@ export const findDocumentReferenceViolations = (
     )
 
   const pathViolations: readonly DocumentViolation[] = [...extractPathReferences(inputs.markdown)]
-    .filter((path: string): boolean => !inputs.fileExists(path))
+    .filter((path: string): boolean => !inputs.isExistingFile(path))
     .map(
       (path: string): DocumentViolation => ({
         reference: path,

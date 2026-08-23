@@ -37,30 +37,40 @@ const timeGate = async (gate: Gate, context: Context): Promise<GateOutcome> => {
 const identifierWidth = (gates: readonly Gate[]): number =>
   gates.reduce((widest: number, gate: Gate): number => Math.max(widest, gate.id.length), 0)
 
+// The run stops at a failing preflight, so it is a sequence with an exit rather than a plain map: the
+// preflight gate decides whether ploaness may judge this project at all, and continuing past a failure
+// there would produce a page of findings about a contract the project never agreed to.
+const runGates = async (
+  gates: readonly Gate[],
+  context: Context,
+  width: number,
+): Promise<readonly GateOutcome[]> => {
+  const [gate, ...rest] = gates
+  if (gate === undefined) {
+    return []
+  }
+  beginGate(gate, width)
+  const outcome: GateOutcome = await timeGate(gate, context)
+  reportGate(outcome, width)
+  if (gate.id === 'preflight' && !outcome.result.ok) {
+    return [outcome]
+  }
+  return [outcome, ...(await runGates(rest, context, width))]
+}
+
 /**
  * Run Default or Extended verification.
  * @param context the resolved project environment.
- * @param extended whether to include the history, build, bundle, and end-to-end gates.
+ * @param isExtended whether to include the history, build, bundle, and end-to-end gates.
  * @returns the process exit code.
  */
-export const verify = async (context: Context, extended: boolean): Promise<number> => {
-  const gates: readonly Gate[] = gatesFor(extended)
+export const verify = async (context: Context, isExtended: boolean): Promise<number> => {
+  const gates: readonly Gate[] = gatesFor(isExtended)
   const width: number = identifierWidth(gates)
-  reportHeader(extended, gates.length)
-  const outcomes: GateOutcome[] = []
-  for (const gate of gates) {
-    beginGate(gate, width)
-    const outcome: GateOutcome = await timeGate(gate, context)
-    outcomes.push(outcome)
-    reportGate(outcome, width)
-    // The preflight gate decides whether ploaness may judge this project at all. Continuing past a
-    // failure there would produce a page of findings about a contract the project never agreed to.
-    if (gate.id === 'preflight' && !outcome.result.ok) {
-      break
-    }
-  }
+  reportHeader(isExtended, gates.length)
+  const outcomes: readonly GateOutcome[] = await runGates(gates, context, width)
   reportFindings(outcomes)
-  return reportVerdict(outcomes, extended, context.enforce)
+  return reportVerdict(outcomes, isExtended, context.isEnforced)
 }
 
 /** Run one gate by identifier. A single gate is a debugging aid, never a verdict. */
@@ -69,5 +79,5 @@ export const verifyOne = async (context: Context, gate: Gate): Promise<number> =
   reportGate(outcome, gate.id.length)
   reportFindings([outcome])
   reportNote('A single gate is a debugging aid. Run `ploaness verify` for a verdict.')
-  return outcome.result.ok || !context.enforce ? 0 : 1
+  return outcome.result.ok || !context.isEnforced ? 0 : 1
 }

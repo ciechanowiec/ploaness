@@ -10,8 +10,8 @@
 // gate rather than being invisible.
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import react from '@vitejs/plugin-react'
 import { readSettings } from '@ploaness/governance'
+import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 
 const projectRoot = process.cwd()

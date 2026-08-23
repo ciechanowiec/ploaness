@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   classifyFreshness,
   type DependencyStatus,
+  type FreshnessReport,
+  type FreshnessVerdict,
   findFreshnessViolations,
   MAJOR_FAIL_THRESHOLD,
   parseVersion,
@@ -93,7 +95,7 @@ describe('classifyFreshness', () => {
 
 describe('findFreshnessViolations', () => {
   it('partitions failures and warnings and drops ok statuses', () => {
-    const report = findFreshnessViolations([
+    const report: FreshnessReport = findFreshnessViolations([
       makeStatus('graphql', '16.14.2', '17.0.1'),
       makeStatus('old', '17.0.0', '19.0.0'),
       makeStatus('fresh', '2.5.2', '2.5.2'),
@@ -107,7 +109,7 @@ describe('findFreshnessViolations', () => {
   })
 
   it('returns empty groups for a fully fresh set', () => {
-    const report = findFreshnessViolations([makeStatus('fresh', '1.0.0', '1.0.0')])
+    const report: FreshnessReport = findFreshnessViolations([makeStatus('fresh', '1.0.0', '1.0.0')])
     expect(report).toEqual({ failures: [], warnings: [] })
   })
 })
@@ -116,13 +118,13 @@ describe('findFreshnessViolations', () => {
 // the enumerated examples. The fixed global seed (vitest.setup.ts) keeps them deterministic; each `it`
 // carries a concrete assertion first, since the unit scope's rule does not recognise `fc.assert`.
 describe('dependency-freshness properties (fast-check)', () => {
-  const smallInt = fc.integer({ min: 0, max: 40 })
+  const smallInt: fc.Arbitrary<number> = fc.integer({ min: 0, max: 40 })
 
   it('fails exactly when the major gap reaches the threshold', () => {
     expect(classifyFreshness('1.0.0', '3.0.0')).toBe('fail')
     fc.assert(
       fc.property(smallInt, smallInt, (currentMajor: number, latestMajor: number): boolean => {
-        const verdict = classifyFreshness(
+        const verdict: FreshnessVerdict = classifyFreshness(
           `${String(currentMajor)}.0.0`,
           `${String(latestMajor)}.0.0`,
         )
@@ -141,7 +143,7 @@ describe('dependency-freshness properties (fast-check)', () => {
         smallInt,
         fc.constantFrom('', '^', '~', '>=', 'v'),
         (major: number, minor: number, patch: number, prefix: string): boolean => {
-          const core = `${String(major)}.${String(minor)}.${String(patch)}`
+          const core: string = `${String(major)}.${String(minor)}.${String(patch)}`
           return (
             JSON.stringify(parseVersion(`${prefix}${core}`)) === JSON.stringify(parseVersion(core))
           )

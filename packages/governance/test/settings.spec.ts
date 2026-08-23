@@ -3,7 +3,7 @@ import { readSettings, type Settings } from '../src/settings.js'
 
 describe('readSettings', () => {
   it('returns the strict defaults for a project that declares nothing', () => {
-    const settings = readSettings({})
+    const settings: Settings = readSettings({})
     expect(settings.sourceRoots).toEqual(['src', 'tests', 'scripts'])
     expect(settings.bundleBudgetBytes).toBe(900 * 1024)
     expect(settings.unmanagedAssets).toEqual([])
@@ -11,13 +11,13 @@ describe('readSettings', () => {
   })
 
   it('adds project exclusions to the defaults rather than replacing them', () => {
-    const settings = readSettings({ ploaness: { typographyExclusions: ['^vendor/'] } })
+    const settings: Settings = readSettings({ ploaness: { typographyExclusions: ['^vendor/'] } })
     expect(settings.typographyExclusions).toContain('^vendor/')
     expect(settings.typographyExclusions).toContain(String.raw`^src/payload-types\.ts$`)
   })
 
   it('ignores an unmanaged entry that records no reason', () => {
-    const settings = readSettings({
+    const settings: Settings = readSettings({
       ploaness: {
         unmanagedAssets: [
           { path: 'CLAUDE.md' },
@@ -49,6 +49,9 @@ describe('readSettings', () => {
   // process.env at module scope. Payload's own two variables are supplied by default; a project may add
   // to them but must not be able to erase them, or the gate would die on the very configuration the
   // default was written to satisfy.
+})
+
+describe('analysisEnv', () => {
   it("supplies Payload's required variables by default", () => {
     const settings: Settings = readSettings({})
     expect(settings.analysisEnv['PAYLOAD_SECRET']).toBeDefined()
@@ -76,5 +79,122 @@ describe('readSettings', () => {
     expect(
       readSettings({ ploaness: { analysisEnv: 'nope' } }).analysisEnv['PAYLOAD_SECRET'],
     ).toBeDefined()
+  })
+})
+
+describe('maxSuppressions', () => {
+  it('accepts no declaration, leaving the earned ceiling in force', () => {
+    expect(readSettings({}).maxSuppressions).toBeUndefined()
+  })
+
+  it('accepts zero, which states that no suppression is permitted', () => {
+    expect(readSettings({ ploaness: { maxSuppressions: 0 } }).maxSuppressions).toBe(0)
+  })
+
+  it('accepts a stricter positive cap', () => {
+    expect(readSettings({ ploaness: { maxSuppressions: 3 } }).maxSuppressions).toBe(3)
+  })
+
+  it('drops a negative cap rather than honouring it', () => {
+    expect(readSettings({ ploaness: { maxSuppressions: -1 } }).maxSuppressions).toBeUndefined()
+  })
+
+  it('drops a non-integer cap', () => {
+    expect(readSettings({ ploaness: { maxSuppressions: 2.5 } }).maxSuppressions).toBeUndefined()
+  })
+})
+
+describe('vulnerability settings', () => {
+  const entry: Record<string, unknown> = {
+    advisory: 'GHSA-93q8-gq69-wqmw',
+    reason: 'reachable only through the dev server',
+    addedOn: '2026-08-23',
+  }
+
+  it('reads a fully recorded exception', () => {
+    const settings: Settings = readSettings({ ploaness: { vulnerabilityAllowlist: [entry] } })
+    expect(settings.vulnerabilityAllowlist).toEqual([entry])
+  })
+
+  // An unexplained or undated exception is one nobody can review, so it is dropped and the finding
+  // returns rather than being quietly excused.
+  it('drops an exception with no reason', () => {
+    const { reason: _reason, ...rest } = entry
+    expect(
+      readSettings({ ploaness: { vulnerabilityAllowlist: [rest] } }).vulnerabilityAllowlist,
+    ).toEqual([])
+  })
+
+  it('drops an exception with no addition date', () => {
+    const { addedOn: _addedOn, ...rest } = entry
+    expect(
+      readSettings({ ploaness: { vulnerabilityAllowlist: [rest] } }).vulnerabilityAllowlist,
+    ).toEqual([])
+  })
+
+  it('drops an exception whose date is not a date', () => {
+    const malformed: Record<string, unknown> = { ...entry, addedOn: 'last tuesday' }
+    expect(
+      readSettings({ ploaness: { vulnerabilityAllowlist: [malformed] } }).vulnerabilityAllowlist,
+    ).toEqual([])
+  })
+
+  it('drops an entry that is not an object', () => {
+    expect(
+      readSettings({ ploaness: { vulnerabilityAllowlist: ['GHSA-1'] } }).vulnerabilityAllowlist,
+    ).toEqual([])
+  })
+
+  it('drops a whole allowlist that is not a list', () => {
+    expect(
+      readSettings({ ploaness: { vulnerabilityAllowlist: 'GHSA-1' } }).vulnerabilityAllowlist,
+    ).toEqual([])
+  })
+
+  it('reads a declared severity', () => {
+    expect(readSettings({ ploaness: { vulnerabilitySeverity: 'low' } }).vulnerabilitySeverity).toBe(
+      'low',
+    )
+  })
+
+  it('leaves the severity undeclared when it is not a string', () => {
+    expect(
+      readSettings({ ploaness: { vulnerabilitySeverity: 3 } }).vulnerabilitySeverity,
+    ).toBeUndefined()
+  })
+})
+
+describe('secretAllowlist', () => {
+  const entry: Record<string, unknown> = {
+    path: 'tests/fixtures/key.json',
+    reason: 'fake test key asserted on by a fixture',
+  }
+
+  it('reads a fully recorded exception', () => {
+    expect(readSettings({ ploaness: { secretAllowlist: [entry] } }).secretAllowlist).toEqual([
+      entry,
+    ])
+  })
+
+  it('drops an exception with no reason, so a typo re-exposes the finding', () => {
+    const { reason: _reason, ...rest } = entry
+    expect(readSettings({ ploaness: { secretAllowlist: [rest] } }).secretAllowlist).toEqual([])
+  })
+
+  it('drops an exception with an empty reason', () => {
+    const blank: Record<string, unknown> = { ...entry, reason: ' '.repeat(3) }
+    expect(readSettings({ ploaness: { secretAllowlist: [blank] } }).secretAllowlist).toEqual([])
+  })
+
+  it('drops an entry that is not an object', () => {
+    expect(readSettings({ ploaness: { secretAllowlist: ['a.json'] } }).secretAllowlist).toEqual([])
+  })
+
+  it('drops a whole allowlist that is not a list', () => {
+    expect(readSettings({ ploaness: { secretAllowlist: 'a.json' } }).secretAllowlist).toEqual([])
+  })
+
+  it('defaults to excusing nothing', () => {
+    expect(readSettings({}).secretAllowlist).toEqual([])
   })
 })

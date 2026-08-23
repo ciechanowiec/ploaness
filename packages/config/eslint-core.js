@@ -1,0 +1,344 @@
+// The framework-neutral half of the ploaness ESLint contract.
+//
+// It was extracted because ploaness never ran ESLint on itself. The rules below carry every size cap,
+// explicitness rule, naming ban, and suppression discipline the governing standard states - and the
+// harness that publishes them was not measured by them. Sharing only the five cap NUMBERS would have
+// left roughly seventy rule declarations to drift; the blocks are shared instead, and the globs are the
+// caller's, because the globs are the only genuinely project-shaped part.
+//
+// `packages/config/eslint.js` composes these with the Payload-specific blocks. The ploaness repository
+// composes them with its own workspace layout. Neither restates a rule.
+import js from '@eslint/js'
+import comments from '@eslint-community/eslint-plugin-eslint-comments/configs'
+import prettier from 'eslint-config-prettier'
+import functional from 'eslint-plugin-functional'
+import jsdoc from 'eslint-plugin-jsdoc'
+import regexp from 'eslint-plugin-regexp'
+import sonarjs from 'eslint-plugin-sonarjs'
+import unicorn from 'eslint-plugin-unicorn'
+import tseslint from 'typescript-eslint'
+
+const COMPLEXITY_MAX = 8
+const MAX_PARAMS = 4
+const MAX_DEPTH = 3
+const MAX_LINES_PER_FILE = 500
+const MAX_LINES_PER_FUNCTION = 50
+const MIN_NAME_LENGTH = 2
+// The governing standard's "short structural-value allowlist".
+const STRUCTURAL_NUMBERS = [-1, 0, 1]
+
+// No mocks. Tests run against real objects and real services (a real Payload instance, a real
+// database, real in-process servers) - never test doubles. These are the Vitest entry points that
+// create mocks/stubs/spies, plus the third-party mocking libraries, all banned build-wide.
+const NO_MOCKS_MESSAGE =
+  'No mocks/stubs/spies. Test against real objects and real services instead (see AGENTS.md).'
+const MOCKING_VI_METHODS = [
+  'fn',
+  'mock',
+  'doMock',
+  'unmock',
+  'mocked',
+  'spyOn',
+  'stubGlobal',
+  'stubEnv',
+  'importMock',
+]
+const MOCKING_PACKAGES = [
+  'sinon',
+  'testdouble',
+  'jest-mock',
+  '@jest/globals',
+  'proxyquire',
+  'nock',
+  'msw',
+]
+
+// Collection/global/field/block configs are declarative wiring: importing one already satisfies its
+// coverage, so a function inlined there has no unit-test seam and can sit untested. This rule bans
+// inline functions in those files, forcing extraction into the unit-tested src/access and src/lib
+// modules, then reference by name. Identifier references (`read: anyone`) pass; inline functions do not.
+// A flat-config block that sets `no-restricted-syntax` REPLACES the setting rather than adding to it, so
+// a scoped block would silently drop these. Spread into every such array instead of restating them.
+const INHERITANCE_MESSAGE =
+  'Add behavior by composing objects, not by inheriting. Inherit only from a base the ' +
+  'language or a dependency requires.'
+const NO_INHERITANCE = [
+  'error',
+  {
+    selector: 'ClassDeclaration[superClass]:not([superClass.name="Error"])',
+    message: INHERITANCE_MESSAGE,
+  },
+  {
+    selector: 'ClassExpression[superClass]:not([superClass.name="Error"])',
+    message: INHERITANCE_MESSAGE,
+  },
+]
+
+// An assertion whose operands are literals alone cannot fail when the code under test changes, so it
+// reports as passing while judging nothing. This catches the exact form the standard names; the general
+// rule is not statically decidable and is stated in the agent guide instead.
+const LITERAL_ASSERTION_MESSAGE =
+  'An assertion over a literal cannot fail when the code under test changes. Assert an observable outcome.'
+const NO_LITERAL_ASSERTIONS = [
+  {
+    selector: "CallExpression[callee.name='expect'] > Literal",
+    message: LITERAL_ASSERTION_MESSAGE,
+  },
+  {
+    selector: "CallExpression[callee.name='expect'] > TemplateLiteral[expressions.length=0]",
+    message: LITERAL_ASSERTION_MESSAGE,
+  },
+  {
+    selector: "CallExpression[callee.name='expect'] > UnaryExpression[operator='-'] > Literal",
+    message: LITERAL_ASSERTION_MESSAGE,
+  },
+]
+
+/** The caps the governing standard states, in one place both configs read. */
+export const CAPS = Object.freeze({
+  maxLinesPerFile: MAX_LINES_PER_FILE,
+  maxLinesPerCallable: MAX_LINES_PER_FUNCTION,
+  maxParameters: MAX_PARAMS,
+  maxComplexity: COMPLEXITY_MAX,
+  maxDepth: MAX_DEPTH,
+  minNameLength: MIN_NAME_LENGTH,
+})
+
+/** Re-exported so a caller declares no plugin version of its own. */
+export const compose = tseslint.config
+
+/** Formatting is Biome's job; this disables every conflicting stylistic rule and must stay last. */
+export const prettierLast = prettier
+
+/** The preset layers every ploaness-governed project runs. */
+export const baseLayers = [
+  js.configs.recommended,
+  ...tseslint.configs.strictTypeChecked,
+  ...tseslint.configs.stylisticTypeChecked,
+  sonarjs.configs.recommended,
+  unicorn.configs.recommended,
+  jsdoc.configs['flat/recommended-typescript'],
+  comments.recommended, // disciplined eslint-disable comments (scoped + justified)
+  regexp.configs['flat/recommended'], // regex correctness and safety
+]
+
+/**
+ * Type-aware parsing, with the caller supplying the parser options its layout needs.
+ * @param parserOptions the typescript-eslint parser options.
+ * @returns a flat-config block.
+ */
+export const typeAwareParsing = (parserOptions) => ({ languageOptions: { parserOptions } })
+
+/** The maximum-explicit rule set: the caps, the explicitness rules, the bans, the mock ban. */
+export const guidelineRules = {
+  // Explicitness - types must be written, not just inferred at boundaries.
+  '@typescript-eslint/explicit-function-return-type': 'error',
+  '@typescript-eslint/explicit-module-boundary-types': 'error',
+  // Require an explicit type annotation on every `const`/`let` (not just boundaries), so the
+  // declared type is written rather than left to inference. Arrow-function consts are exempt -
+  // their signature is already covered by explicit-function-return-type.
+  '@typescript-eslint/typedef': [
+    'error',
+    { variableDeclaration: true, variableDeclarationIgnoreFunction: true },
+  ],
+  // Conflicts with the explicit philosophy: typedef requires annotations, this rule would strip
+  // the "trivially inferable" ones (e.g. `const x: string = '...'`). We want them written.
+  '@typescript-eslint/no-inferrable-types': 'off',
+  '@typescript-eslint/no-non-null-assertion': 'error',
+  '@typescript-eslint/strict-boolean-expressions': 'error',
+  '@typescript-eslint/switch-exhaustiveness-check': 'error',
+  '@typescript-eslint/no-unnecessary-condition': 'error',
+  // Defect patterns - bugs the type-checker can prove.
+  '@typescript-eslint/no-floating-promises': 'error',
+  '@typescript-eslint/no-misused-promises': 'error',
+  '@typescript-eslint/default-param-last': 'error',
+  '@typescript-eslint/require-array-sort-compare': ['error', { ignoreStringArrays: true }],
+  // Ban calls into APIs marked `@deprecated` - yours or a framework's (Payload/Next/React). The
+  // type-checker reads the JSDoc tag and fails the build at the call site, so deprecated usage is
+  // caught statically rather than at runtime. (AI models especially reach for deprecated APIs from
+  // stale training data; this stops that at the gate.)
+  '@typescript-eslint/no-deprecated': 'error',
+  // Naming - ban the "plumbing" type-name suffixes (`Service`/`Manager`/`Handler`/`Provider`/
+  // `Util`): a type is a noun of the domain, or the operation belongs to the domain type that owns
+  // it (mask on `MaskedToken`, not a `TokenMasker`). Scoped to type declarations, so a domain
+  // property like `packageManager` or a framework import like `NextIntlClientProvider` is untouched.
+  '@typescript-eslint/naming-convention': [
+    'error',
+    {
+      selector: ['class', 'interface', 'typeAlias', 'enum'],
+      format: null,
+      custom: { regex: '(Service|Manager|Handler|Provider|Util)$', match: false },
+    },
+  ],
+
+  // Suppressions must be deliberate: every eslint-disable needs a reason, and dead ones fail.
+  '@eslint-community/eslint-comments/require-description': ['error', { ignore: [] }],
+  '@eslint-community/eslint-comments/no-unused-disable': 'error',
+
+  // Complexity caps - keep every unit small, flat and testable.
+  complexity: ['error', COMPLEXITY_MAX],
+  'sonarjs/cognitive-complexity': ['error', COMPLEXITY_MAX],
+  'max-params': ['error', MAX_PARAMS],
+  'max-depth': ['error', MAX_DEPTH],
+  'max-lines': ['error', { max: MAX_LINES_PER_FILE, skipBlankLines: true, skipComments: true }],
+  'max-lines-per-function': [
+    'error',
+    { max: MAX_LINES_PER_FUNCTION, skipBlankLines: true, skipComments: true },
+  ],
+
+  // Bare numbers. The governing standard bans a number outside the declaration of a named constant,
+  // and allows "a short structural-value allowlist, such as 0 and 1". -1 earns its place beside them
+  // as the indexOf/findIndex sentinel, which is a structural value rather than a magic one.
+  // The @typescript-eslint variant, not the base rule: only it understands enums, numeric literal
+  // types, and type indexes, all of which a Payload project has. Biome's noMagicNumbers is
+  // deliberately NOT enabled alongside it - that rule has no allowlist option, so it cannot express
+  // the carve-out the standard grants, and it would double-report every finding across two gates.
+  '@typescript-eslint/no-magic-numbers': [
+    'error',
+    {
+      ignore: STRUCTURAL_NUMBERS,
+      ignoreArrayIndexes: true,
+      ignoreDefaultValues: true,
+      ignoreClassFieldInitialValues: true,
+      ignoreEnums: true,
+      ignoreNumericLiteralTypes: true,
+      ignoreReadonlyClassProperties: true,
+      ignoreTypeIndexes: true,
+      enforceConst: true,
+      detectObjects: false,
+    },
+  ],
+
+  // One-character names. `maskedToken` says what `m` hides. `_` is exempt because it is the
+  // placeholder the language reserves for an unused value, which TypeScript's noUnusedParameters
+  // already honours. Object properties are exempt because a key is frequently an external API's
+  // vocabulary rather than a name anyone chose.
+  'id-length': ['error', { min: MIN_NAME_LENGTH, properties: 'never', exceptions: ['_'] }],
+
+  // TODO and FIXME are banned outright. `unicorn/expiring-todo-comments` arrives ON from the
+  // recommended preset and contradicts that: its whole premise is that a TODO is acceptable when it
+  // carries an expiry date. The ban has no such exception, so the rule is turned off rather than
+  // left to license what this one forbids.
+  'no-warning-comments': ['error', { terms: ['todo', 'fixme'], location: 'anywhere' }],
+  'unicorn/expiring-todo-comments': 'off',
+
+  // Composition over inheritance. A type inherits only from a base the language or a dependency
+  // requires, and the error base is the one such base that appears in ordinary code.
+  'no-restricted-syntax': [...NO_INHERITANCE],
+
+  // Control-flow clarity.
+  eqeqeq: ['error', 'always'],
+  curly: ['error', 'all'],
+  'default-case': 'error',
+  'no-else-return': ['error', { allowElseIf: false }],
+
+  // Unicorn tuned for the Payload/Next reality.
+  'unicorn/prevent-abbreviations': 'off', // req/params/props/config are intentional here.
+  // Keep the sibling name-replacements rule ON (it catches genuine abbreviations like refs/dev), but
+  // exempt the words the frameworks mandate verbatim: `params` (the Next.js App Router route prop and
+  // its `generateStaticParams` export) and `req`/`doc` (Payload's fixed hook/endpoint argument names -
+  // every Payload hook, access function, and endpoint handler receives `req`, and change/read hooks
+  // receive `doc`). `: false` removes only those replacements; every other abbreviation is still reported.
+  'unicorn/name-replacements': [
+    'error',
+    { replacements: { params: false, req: false, doc: false } },
+  ],
+  // A predicate named as a third-person verb - `matchesAny`, `reachesThreshold`, `declaresKey` -
+  // already says plainly what it does, which is what the naming rule asks for. Rewriting those as
+  // `isMatchingAny` would make them read worse, so the verb forms are allowed alongside the default
+  // prefixes. Every other boolean still has to announce itself as one.
+  'unicorn/consistent-boolean-name': [
+    'error',
+    {
+      prefixes: {
+        matches: true,
+        reaches: true,
+        opens: true,
+        declares: true,
+        ends: true,
+        exists: true,
+        contains: true,
+        starts: true,
+        carries: true,
+        covers: true,
+      },
+    },
+  ],
+  // These three propose methods that the declared `lib` target does not carry: Iterator#toArray,
+  // Array#toSorted, and Set#union are all newer than the platform this contract compiles against. Their
+  // autofixes produce code that does not compile, which is worse than the pattern they replace. None of
+  // them carries a rule of the governing standard - they are style preferences about newer syntax.
+  // `reduce` is how a fold is written without a mutable accumulator, which is precisely what the
+  // immutability rule above requires. Banning it would leave no way to satisfy both, and the governing
+  // standard says nothing about which array method expresses a fold.
+  // Omitting a key by destructuring binds a name precisely so it can be dropped; that binding is
+  // deliberately unused and is the idiomatic alternative to `delete`, which mutates.
+  '@typescript-eslint/no-unused-vars': [
+    'error',
+    {
+      ignoreRestSiblings: true,
+      varsIgnorePattern: '^_',
+      argsIgnorePattern: '^_',
+      caughtErrorsIgnorePattern: '^_',
+    },
+  ],
+  'sonarjs/no-unused-vars': 'off', // the typed rule above decides this, with the project's options.
+  // ploaness exists to invoke analyzers, and it invokes them by name so the project's own installed
+  // version is the one that runs. Resolving each to an absolute path would pin the harness to one
+  // layout and defeat that. The governing standard says nothing about PATH.
+  'sonarjs/no-os-command-from-path': 'off',
+  'unicorn/no-array-reduce': 'off',
+  'unicorn/prefer-iterator-to-array': 'off',
+  'unicorn/no-array-sort': 'off',
+  'unicorn/prefer-set-methods': 'off',
+  'unicorn/no-null': 'off', // React and Payload use `null` deliberately.
+  'unicorn/no-keyword-prefix': 'off',
+  // New in unicorn 73. It would expand every concise one-line `/** ... */` export doc into a
+  // three-line block, and would also rewrite the `GENERATED AUTOMATICALLY BY PAYLOAD` /
+  // `DO NOT MODIFY` headers that Payload writes into the `src/app/(payload)` scaffolding.
+  'unicorn/single-line-block-comment-style': 'off',
+  'unicorn/filename-case': [
+    'error',
+    { cases: { camelCase: true, pascalCase: true, kebabCase: true } },
+  ],
+
+  // JSDoc: require a doc *block* on public helpers (below), but never the per-`@param root0`
+  // ceremony that destructured arrow signatures produce. Keep the correctness checks on.
+  'jsdoc/require-jsdoc': 'off',
+  'jsdoc/require-param': 'off',
+  'jsdoc/require-returns': 'off',
+
+  // No mocks - ban the mocking entry points and libraries build-wide.
+  'no-restricted-properties': [
+    'error',
+    ...MOCKING_VI_METHODS.map((property) => ({
+      object: 'vi',
+      property,
+      message: NO_MOCKS_MESSAGE,
+    })),
+  ],
+  'no-restricted-imports': [
+    'error',
+    { paths: MOCKING_PACKAGES.map((name) => ({ name, message: NO_MOCKS_MESSAGE })) },
+  ],
+}
+
+/** No `let`, no in-place mutation. The caller supplies the files and the generated-role exemptions. */
+export const immutabilityBlock = (files, ignores) => ({
+  files,
+  ignores,
+  plugins: { functional },
+  rules: {
+    'functional/no-let': 'error',
+    'functional/immutable-data': 'error',
+  },
+})
+
+/** The shared selectors, re-exported so a scoped block can spread rather than restate them. */
+export {
+  MOCKING_PACKAGES,
+  MOCKING_VI_METHODS,
+  NO_INHERITANCE,
+  NO_LITERAL_ASSERTIONS,
+  NO_MOCKS_MESSAGE,
+}

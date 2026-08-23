@@ -134,13 +134,11 @@ const asRecord = (raw: unknown): Record<string, unknown> =>
   typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
 
 const asStringRecord = (raw: unknown): Record<string, string> => {
-  const result: Record<string, string> = {}
-  for (const [key, value] of Object.entries(asRecord(raw))) {
-    if (typeof value === 'string') {
-      result[key] = value
-    }
-  }
-  return result
+  return Object.fromEntries(
+    Object.entries(asRecord(raw)).filter(
+      ([, value]: readonly [string, unknown]): boolean => typeof value === 'string',
+    ),
+  ) as Record<string, string>
 }
 
 const declaredDependencies = (packageJson: Record<string, unknown>): Record<string, string> => ({
@@ -158,6 +156,9 @@ const checkDependency = (packageJson: Record<string, unknown>): readonly WiringV
         },
       ]
 
+const describeFound = (found: string | undefined): string =>
+  found === undefined ? 'missing' : `"${found}"`
+
 const checkExactEntries = (
   actual: Record<string, string>,
   required: Readonly<Record<string, string>>,
@@ -172,7 +173,7 @@ const checkExactEntries = (
       return [
         {
           location: `${locationPrefix}.${name}`,
-          reason: `is ${found === undefined ? 'missing' : `"${found}"`} but ploaness requires "${body}"`,
+          reason: `is ${describeFound(found)} but ploaness requires "${body}"`,
         },
       ]
     },
@@ -181,20 +182,31 @@ const checkExactEntries = (
 // A flat ESLint config is an array, so a consumer can append a block that switches rules back off after
 // the harness config has been spread in. Requiring the file to be a bare re-export makes any addition
 // surface as a wiring violation instead of a silent downgrade.
+// Comments and blank lines are dropped first, so the pattern below describes only the two statements
+// the file may contain. Expressing the preamble inside the pattern made it backtrack on a long file.
+const COMMENT_OR_BLANK: RegExp = /^\s*(?:\/\/.*)?$/
 const ESLINT_REEXPORT: RegExp =
-  /^(?:\s*\/\/[^\n]*\n|\s)*import\s+(\w+)\s+from\s+['"]ploaness\/eslint['"];?\s*export\s+default\s+\1;?\s*$/
+  /^import\s+(\w+)\s+from\s+['"]ploaness\/eslint['"];?\s*export\s+default\s+\1;?$/
+
+const withoutPreamble = (config: string): string =>
+  config
+    .split('\n')
+    .filter((line: string): boolean => !COMMENT_OR_BLANK.test(line))
+    .join('\n')
+    .trim()
 
 const checkEslint = (config: string | undefined): readonly WiringViolation[] => {
   if (config === undefined) {
     return [{ location: 'eslint.config.mjs', reason: 'missing; must re-export ploaness/eslint' }]
   }
-  return ESLINT_REEXPORT.test(config)
+  return ESLINT_REEXPORT.test(withoutPreamble(config))
     ? []
     : [
         {
           location: 'eslint.config.mjs',
           reason:
-            'must contain nothing but an import of ploaness/eslint and its default re-export; a local block would override the harness rules',
+            'must contain nothing but an import of ploaness/eslint and its default re-export; ' +
+            'a local block would override the harness rules',
         },
       ]
 }
@@ -208,29 +220,34 @@ const checkBiome = (
   }
   const parsed: Record<string, unknown> = asRecord(JSON.parse(config))
   const extendsValue: unknown = parsed['extends']
-  const violations: WiringViolation[] = []
-  if (!(Array.isArray(extendsValue) && extendsValue.includes(REQUIRED_BIOME_EXTENDS))) {
-    violations.push({
-      location: 'biome.json',
-      reason: `must declare "extends": ["${REQUIRED_BIOME_EXTENDS}"]`,
-    })
-  }
-  for (const section of OWNED_BIOME_SECTIONS) {
-    if (Object.hasOwn(parsed, section)) {
-      violations.push({
-        location: `biome.json ${section}`,
-        reason: 'ploaness owns this section; remove the local override',
-      })
-    }
-  }
-  if (JSON.stringify(parsed['files']) !== JSON.stringify(requiredFiles)) {
-    violations.push({
-      location: 'biome.json files',
-      reason:
-        'must declare the ploaness file-selection block verbatim; run `ploaness init` to write it',
-    })
-  }
-  return violations
+  const missingExtends: readonly WiringViolation[] =
+    Array.isArray(extendsValue) && extendsValue.includes(REQUIRED_BIOME_EXTENDS)
+      ? []
+      : [
+          {
+            location: 'biome.json',
+            reason: `must declare "extends": ["${REQUIRED_BIOME_EXTENDS}"]`,
+          },
+        ]
+  const overriddenSections: readonly WiringViolation[] = OWNED_BIOME_SECTIONS.filter(
+    (section: string): boolean => Object.hasOwn(parsed, section),
+  ).map(
+    (section: string): WiringViolation => ({
+      location: `biome.json ${section}`,
+      reason: 'ploaness owns this section; remove the local override',
+    }),
+  )
+  const wrongFiles: readonly WiringViolation[] =
+    JSON.stringify(parsed['files']) === JSON.stringify(requiredFiles)
+      ? []
+      : [
+          {
+            location: 'biome.json files',
+            reason:
+              'must declare the ploaness file-selection block verbatim; run `ploaness init` to write it',
+          },
+        ]
+  return [...missingExtends, ...overriddenSections, ...wrongFiles]
 }
 
 const checkTsconfig = (config: string | undefined): readonly WiringViolation[] => {
@@ -240,30 +257,37 @@ const checkTsconfig = (config: string | undefined): readonly WiringViolation[] =
     ]
   }
   const parsed: Record<string, unknown> = asRecord(JSON.parse(config))
-  const violations: WiringViolation[] = []
-  if (parsed['extends'] !== REQUIRED_TSCONFIG_EXTENDS) {
-    violations.push({
-      location: 'tsconfig.json',
-      reason: `must declare "extends": "${REQUIRED_TSCONFIG_EXTENDS}"`,
-    })
-  }
-  for (const key of Object.keys(asRecord(parsed['compilerOptions']))) {
-    if (!ALLOWED_TSCONFIG_COMPILER_OPTIONS.has(key)) {
-      violations.push({
+  const wrongExtends: readonly WiringViolation[] =
+    parsed['extends'] === REQUIRED_TSCONFIG_EXTENDS
+      ? []
+      : [
+          {
+            location: 'tsconfig.json',
+            reason: `must declare "extends": "${REQUIRED_TSCONFIG_EXTENDS}"`,
+          },
+        ]
+  const overriddenOptions: readonly WiringViolation[] = Object.keys(
+    asRecord(parsed['compilerOptions']),
+  )
+    .filter((key: string): boolean => !ALLOWED_TSCONFIG_COMPILER_OPTIONS.has(key))
+    .map(
+      (key: string): WiringViolation => ({
         location: `tsconfig.json compilerOptions.${key}`,
         reason: 'ploaness owns this compiler option; remove the local override',
-      })
-    }
-  }
-  for (const [key, value] of Object.entries(REQUIRED_TSCONFIG_PATHS)) {
-    if (JSON.stringify(parsed[key]) !== JSON.stringify(value)) {
-      violations.push({
+      }),
+    )
+  const wrongPaths: readonly WiringViolation[] = Object.entries(REQUIRED_TSCONFIG_PATHS)
+    .filter(
+      ([key, value]: readonly [string, unknown]): boolean =>
+        JSON.stringify(parsed[key]) !== JSON.stringify(value),
+    )
+    .map(
+      ([key]: readonly [string, unknown]): WiringViolation => ({
         location: `tsconfig.json ${key}`,
         reason: 'must declare the ploaness value verbatim; run `ploaness init` to write it',
-      })
-    }
-  }
-  return violations
+      }),
+    )
+  return [...wrongExtends, ...overriddenOptions, ...wrongPaths]
 }
 
 const checkWorkflows = (workflows: readonly WorkflowFile[]): readonly WiringViolation[] =>

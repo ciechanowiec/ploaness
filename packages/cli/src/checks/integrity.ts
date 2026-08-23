@@ -19,19 +19,16 @@ export const imageAssets = (context: Context): GateResult => {
   const images: readonly string[] = trackedFiles(context.root)
     .filter(isSupportedImagePath)
     .filter((file: string): boolean => existsSync(path.join(context.root, file)))
-  const findings: string[] = []
-  for (const file of images) {
+  const findings: readonly string[] = images.flatMap((file: string): readonly string[] => {
     const reason: string | null = validateImageBytes(
       file,
       readFileSync(path.join(context.root, file)),
     )
-    if (reason !== null) {
-      findings.push(`${file}: ${reason}`)
-    }
-  }
+    return reason === null ? [] : [`${file}: ${reason}`]
+  })
   return findings.length > 0
-    ? failed(`${findings.length} corrupt or truncated image asset(s)`, findings)
-    : passed(`all ${images.length} tracked image asset(s) decode`)
+    ? failed(`${String(findings.length)} corrupt or truncated image asset(s)`, findings)
+    : passed(`all ${String(images.length)} tracked image asset(s) decode`)
 }
 
 const collectJavaScript = (directory: string): readonly string[] =>
@@ -43,7 +40,9 @@ const collectJavaScript = (directory: string): readonly string[] =>
     return entry.name.endsWith('.js') ? [full] : []
   })
 
-const asKiB = (bytes: number): string => `${(bytes / 1024).toFixed(1)} KiB`
+const BYTES_PER_KIB: number = 1024
+const KIB_DECIMALS: number = 1
+const asKiB = (bytes: number): string => `${(bytes / BYTES_PER_KIB).toFixed(KIB_DECIMALS)} KiB`
 
 /**
  * Measure the total gzipped client JavaScript against the budget. Gzipped byte counts of built output are
@@ -64,7 +63,9 @@ export const bundle = (context: Context): GateResult => {
     }),
   )
   const report: BundleReport = evaluateBundle(files, context.settings.bundleBudgetBytes)
-  const summary: string = `client JS ${asKiB(report.totalGzipBytes)} gzip across ${report.fileCount} files (budget ${asKiB(report.budgetBytes)})`
+  const summary: string =
+    `client JS ${asKiB(report.totalGzipBytes)} gzip across ${String(report.fileCount)} files ` +
+    `(budget ${asKiB(report.budgetBytes)})`
   return report.isWithinBudget
     ? passed(summary)
     : failed(`${summary} and is over budget`, [

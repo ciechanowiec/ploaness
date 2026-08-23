@@ -21,6 +21,12 @@ const DOC_FILES: readonly string[] = ['AGENTS.md', 'CLAUDE.md']
 const asRecord = (raw: unknown): Record<string, unknown> =>
   typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
 
+const declaredScripts = (context: Context): Record<string, unknown> =>
+  asRecord(asRecord(context.packageJson)['scripts'])
+
+const biomeFilesJson = (context: Context): string =>
+  JSON.stringify(requiredBiomeFiles(context.settings.sourceRoots))
+
 /**
  * Every npm script and full-path file the agent docs name must still exist.
  * @param context the resolved project environment.
@@ -31,34 +37,27 @@ export const documentation = (
   context: Context,
   reservedWords: ReadonlySet<string> = new Set<string>(),
 ): GateResult => {
-  const scriptNames: ReadonlySet<string> = new Set(
-    Object.keys(asRecord(asRecord(context.packageJson)['scripts'])),
-  )
-  const fileExists = (relativePath: string): boolean =>
+  const scriptNames: ReadonlySet<string> = new Set(Object.keys(declaredScripts(context)))
+  const isExistingFile = (relativePath: string): boolean =>
     existsSync(path.join(context.root, relativePath))
-  const findings: string[] = []
-  let scanned: number = 0
-  for (const documentFile of DOC_FILES) {
-    const full: string = path.join(context.root, documentFile)
-    if (!existsSync(full)) {
-      continue
-    }
-    scanned += 1
-    const violations: readonly DocumentViolation[] = findDocumentReferenceViolations({
-      markdown: readFileSync(full, 'utf8'),
+  const present: readonly string[] = DOC_FILES.filter((documentFile: string): boolean =>
+    existsSync(path.join(context.root, documentFile)),
+  )
+  const findings: readonly string[] = present.flatMap((documentFile: string): readonly string[] =>
+    findDocumentReferenceViolations({
+      markdown: readFileSync(path.join(context.root, documentFile), 'utf8'),
       scriptNames,
-      fileExists,
+      isExistingFile,
       reservedWords,
-    })
-    for (const violation of violations) {
-      findings.push(
+    }).map(
+      (violation: DocumentViolation): string =>
         `${documentFile}: ${violation.reference} (${violation.kind}) ${violation.reason}`,
-      )
-    }
-  }
+    ),
+  )
+  const scanned: number = present.length
   return findings.length > 0
-    ? failed(`${findings.length} stale reference(s) in the agent docs`, findings)
-    : passed(`references in ${scanned} agent doc(s) resolve`)
+    ? failed(`${String(findings.length)} stale reference(s) in the agent docs`, findings)
+    : passed(`references in ${String(scanned)} agent doc(s) resolve`)
 }
 
 // Both the ploaness-owned configs and any the project still holds are scanned. A carve-out in the
@@ -80,50 +79,45 @@ const configTargets = (context: Context): readonly string[] => {
 // another gate, which is what a Payload project that has not generated its types yet would hit on its
 // first run. Whether those generated artefacts are correct is the payload-generated gate's question.
 const mandatedReferences = (context: Context): ReadonlySet<string> =>
-  new Set(
-    extractLiteralSourcePaths(JSON.stringify(requiredBiomeFiles(context.settings.sourceRoots))),
-  )
+  new Set(extractLiteralSourcePaths(biomeFilesJson(context)))
 
 /** A concrete source file carved out of a tool config must still exist on disk. */
 export const configReferences = (context: Context): GateResult => {
-  const fileExists = (relativePath: string): boolean =>
+  const isExistingFile = (relativePath: string): boolean =>
     existsSync(path.join(context.root, relativePath))
   const mandated: ReadonlySet<string> = mandatedReferences(context)
-  const findings: string[] = []
-  for (const configPath of configTargets(context)) {
-    const paths: readonly string[] = extractLiteralSourcePaths(readFileSync(configPath, 'utf8'))
-    const violations: readonly ConfigReferenceViolation[] = findMissingConfigReferences(
-      paths,
-      fileExists,
-    )
-    for (const violation of violations) {
-      if (mandated.has(violation.path)) {
-        continue
-      }
-      findings.push(`${path.basename(configPath)}: ${violation.path} (${violation.reason})`)
-    }
-  }
+  const findings: readonly string[] = configTargets(context).flatMap(
+    (configPath: string): readonly string[] =>
+      findMissingConfigReferences(
+        extractLiteralSourcePaths(readFileSync(configPath, 'utf8')),
+        isExistingFile,
+      )
+        .filter((violation: ConfigReferenceViolation): boolean => !mandated.has(violation.path))
+        .map(
+          (violation: ConfigReferenceViolation): string =>
+            `${path.basename(configPath)}: ${violation.path} (${violation.reason})`,
+        ),
+  )
   return findings.length > 0
-    ? failed(`${findings.length} dangling config reference(s)`, findings)
+    ? failed(`${String(findings.length)} dangling config reference(s)`, findings)
     : passed('every source file carved out of a tool config exists')
 }
 
 /** The frontmatter an agent uses to discover and invoke a skill must be well formed. */
 export const skills = (context: Context): GateResult => {
   const found: readonly string[] = globSync('.claude/skills/**/SKILL.md', { cwd: context.root })
-  const findings: string[] = []
-  for (const relativePath of [...found].sort((a: string, b: string): number =>
-    a.localeCompare(b),
-  )) {
-    const violations: readonly SkillViolation[] = findSkillManifestViolations({
-      content: readFileSync(path.join(context.root, relativePath), 'utf8'),
-      directoryName: path.basename(path.dirname(relativePath)),
-    })
-    for (const violation of violations) {
-      findings.push(`${relativePath} [${violation.rule}] ${violation.reason}`)
-    }
-  }
+  const findings: readonly string[] = [...found]
+    .sort((left: string, right: string): number => left.localeCompare(right))
+    .flatMap((relativePath: string): readonly string[] =>
+      findSkillManifestViolations({
+        content: readFileSync(path.join(context.root, relativePath), 'utf8'),
+        directoryName: path.basename(path.dirname(relativePath)),
+      }).map(
+        (violation: SkillViolation): string =>
+          `${relativePath} [${violation.rule}] ${violation.reason}`,
+      ),
+    )
   return findings.length > 0
-    ? failed(`${findings.length} skill frontmatter violation(s)`, findings)
-    : passed(`${found.length} skill manifest(s) are well formed`)
+    ? failed(`${String(findings.length)} skill frontmatter violation(s)`, findings)
+    : passed(`${String(found.length)} skill manifest(s) are well formed`)
 }

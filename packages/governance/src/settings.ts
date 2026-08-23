@@ -7,6 +7,9 @@
 // bundle may grow. There is no field that turns a gate off, because "do not disable the failing check"
 // is the contract rather than a preference.
 
+import type { SecretException } from './secret-policy.js'
+import type { VulnerabilityException } from './vulnerability-policy.js'
+
 /** A managed path a project has taken over from the catalogue, with the reason it did so. */
 export interface UnmanagedAsset {
   readonly path: string
@@ -27,6 +30,14 @@ export interface Settings {
   readonly coverageExclude: readonly string[]
   /** Ceiling for total gzipped client JavaScript, in bytes. */
   readonly bundleBudgetBytes: number
+  /** A stricter suppression ceiling than the earned one, or undefined to accept the earned ceiling. */
+  readonly maxSuppressions: number | undefined
+  /** A stricter advisory severity than the shipped one, or undefined to accept the shipped one. */
+  readonly vulnerabilitySeverity: string | undefined
+  /** Recorded exceptions for advisories the project cannot reach. */
+  readonly vulnerabilityAllowlist: readonly VulnerabilityException[]
+  /** Committed fake credentials the secret scan excuses, each with the reason it is committed. */
+  readonly secretAllowlist: readonly SecretException[]
   /**
    * A command run once before the test and end-to-end gates, as argv. A Payload project needs a database
    * before its suite can boot, and how it obtains one (a compose service, a managed instance, an
@@ -46,7 +57,9 @@ export interface Settings {
   readonly analysisEnv: Readonly<Record<string, string>>
 }
 
-const DEFAULT_BUNDLE_BUDGET_BYTES: number = 900 * 1024
+const BYTES_PER_KIB: number = 1024
+const DEFAULT_BUDGET_KIB: number = 900
+const DEFAULT_BUNDLE_BUDGET_BYTES: number = DEFAULT_BUDGET_KIB * BYTES_PER_KIB
 
 // The two variables Payload itself requires of every project. They are defaults rather than a hard-coded
 // environment, so a project whose config demands more can add to them, but no project has to restate what
@@ -89,7 +102,13 @@ const asStringArray = (raw: unknown, fallback: readonly string[]): readonly stri
     : fallback
 
 const asPositiveInteger = (raw: unknown, fallback: number): number =>
-  typeof raw === 'number' && Number.isInteger(raw) && raw > 0 ? raw : fallback
+  typeof raw === 'number' && Number.isSafeInteger(raw) && raw > 0 ? raw : fallback
+
+// Zero is a meaningful value here, not a missing one: "no suppression is permitted" is a position a
+// project may take, so this cannot reuse asPositiveInteger. Undefined means the project declares no
+// cap of its own and the earned ceiling applies.
+const asNonNegativeInteger = (raw: unknown): number | undefined =>
+  typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0 ? raw : undefined
 
 // An entry without a non-empty reason is dropped rather than honoured: taking over a managed path is a
 // decision the project must record, so an unexplained entry must not weaken the asset gate.
@@ -110,18 +129,67 @@ const asUnmanagedAssets = (raw: unknown): readonly UnmanagedAsset[] => {
   })
 }
 
+// An advisory date must be recorded as a date. An entry whose reason or date is missing or malformed is
+// dropped rather than honoured, so a typo re-exposes the finding instead of quietly excusing it.
+const ISO_DATE: RegExp = /^\d{4}-\d{2}-\d{2}$/
+
+const isNonEmptyText = (raw: unknown): boolean => typeof raw === 'string' && raw.trim().length > 0
+
+const isRecordedDate = (raw: unknown): boolean => typeof raw === 'string' && ISO_DATE.test(raw)
+
+const asVulnerabilityAllowlist = (raw: unknown): readonly VulnerabilityException[] => {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  return raw.flatMap((entry: unknown): readonly VulnerabilityException[] => {
+    if (typeof entry !== 'object' || entry === null) {
+      return []
+    }
+    const record: Record<string, unknown> = entry as Record<string, unknown>
+    const advisory: unknown = record['advisory']
+    const reason: unknown = record['reason']
+    const addedOn: unknown = record['addedOn']
+    const isRecorded: boolean =
+      isNonEmptyText(advisory) && isNonEmptyText(reason) && isRecordedDate(addedOn)
+    return isRecorded
+      ? [{ advisory: advisory as string, reason: reason as string, addedOn: addedOn as string }]
+      : []
+  })
+}
+
+// An unexplained exception is dropped, exactly as an unexplained managed-path takeover is: a fixture
+// credential is a decision the project must record, and a typo must re-expose the finding rather than
+// quietly widen the scan.
+const asSecretAllowlist = (raw: unknown): readonly SecretException[] => {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  return raw.flatMap((entry: unknown): readonly SecretException[] => {
+    if (typeof entry !== 'object' || entry === null) {
+      return []
+    }
+    const record: Record<string, unknown> = entry as Record<string, unknown>
+    const filePath: unknown = record['path']
+    const reason: unknown = record['reason']
+    const isRecorded: boolean =
+      typeof filePath === 'string' &&
+      typeof reason === 'string' &&
+      filePath.trim().length > 0 &&
+      reason.trim().length > 0
+    return isRecorded ? [{ path: filePath as string, reason: reason as string }] : []
+  })
+}
+
 const asRecord = (raw: unknown): Record<string, unknown> =>
   typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
 
 // Only string-valued entries survive: a non-string would reach `spawn` as a malformed environment.
 const asStringRecord = (raw: unknown): Readonly<Record<string, string>> => {
-  const result: Record<string, string> = {}
-  for (const [key, value] of Object.entries(asRecord(raw))) {
-    if (typeof value === 'string') {
-      result[key] = value
-    }
-  }
-  return result
+  return Object.fromEntries(
+    Object.entries(asRecord(raw)).filter(
+      ([, value]: readonly [string, unknown]): boolean => typeof value === 'string',
+    ),
+  ) as Record<string, string>
 }
 
 /**
@@ -145,6 +213,11 @@ export const readSettings = (packageJson: unknown): Settings => {
     ],
     coverageExclude: [...DEFAULT_COVERAGE_EXCLUDE, ...asStringArray(raw['coverageExclude'], [])],
     bundleBudgetBytes: asPositiveInteger(raw['bundleBudgetBytes'], DEFAULT_BUNDLE_BUDGET_BYTES),
+    maxSuppressions: asNonNegativeInteger(raw['maxSuppressions']),
+    vulnerabilitySeverity:
+      typeof raw['vulnerabilitySeverity'] === 'string' ? raw['vulnerabilitySeverity'] : undefined,
+    vulnerabilityAllowlist: asVulnerabilityAllowlist(raw['vulnerabilityAllowlist']),
+    secretAllowlist: asSecretAllowlist(raw['secretAllowlist']),
     pretest: asStringArray(raw['pretest'], []),
     testWrapper: asStringArray(raw['testWrapper'], []),
     analysisEnv: { ...DEFAULT_ANALYSIS_ENV, ...asStringRecord(raw['analysisEnv']) },

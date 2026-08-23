@@ -30,6 +30,8 @@ export const findMergeCommits = (commits: readonly CommitShape[]): readonly Hist
     .map(
       (commit: CommitShape): HistoryViolation => ({
         sha: commit.sha,
-        reason: `merge commit with ${commit.parentCount} parents ("${commit.subject}"); rebase or cherry-pick instead`,
+        reason:
+          `merge commit with ${String(commit.parentCount)} parents ` +
+          `("${commit.subject}"); rebase or cherry-pick instead`,
       }),
     )

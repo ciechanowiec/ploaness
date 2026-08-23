@@ -2,8 +2,12 @@
 // evaluator - lives here so it is unit-tested; the CLI that shells out to pnpm and exits is in
 // scripts/check-licenses.ts.
 
+// The two groups are arrays rather than sets so the allowlist can be assembled with a single
+// constructor call. Merging two sets would want `Set.prototype.union`, which the ES2023 lib target does
+// not carry, and a lint fix that reaches for it produces code that does not compile.
+
 // Permissive licenses: no copyleft obligations, safe for an MIT-licensed template.
-const PERMISSIVE: ReadonlySet<string> = new Set([
+const PERMISSIVE: readonly string[] = [
   '0BSD',
   'Apache-2.0',
   'BSD-2-Clause',
@@ -18,19 +22,14 @@ const PERMISSIVE: ReadonlySet<string> = new Set([
   'Python-2.0',
   'Unlicense',
   'WTFPL',
-])
+]
 
 // Weak copyleft, permitted only as UNMODIFIED dependencies: the file-level (MPL) and dynamic-linking
 // (LGPL) copyleft does not reach this project's own source. Each id is listed explicitly so it stays
 // a conscious decision. Strong copyleft (GPL, AGPL) is deliberately absent and therefore rejected.
-const WEAK_COPYLEFT: ReadonlySet<string> = new Set([
-  'LGPL-3.0-only',
-  'LGPL-3.0-or-later',
-  'MPL-2.0',
-])
+const WEAK_COPYLEFT: readonly string[] = ['LGPL-3.0-only', 'LGPL-3.0-or-later', 'MPL-2.0']
 
-// eslint-disable-next-line unicorn/prefer-set-methods -- Set.prototype.union is not in this project's TS lib target, so the two sets are merged by spreading.
-const ALLOWED: ReadonlySet<string> = new Set([...PERMISSIVE, ...WEAK_COPYLEFT])
+const ALLOWED: ReadonlySet<string> = new Set<string>([...PERMISSIVE, ...WEAK_COPYLEFT])
 
 const isAllowedId = (id: string): boolean => ALLOWED.has(id.trim())
 

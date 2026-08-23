@@ -20,6 +20,9 @@ const shasOf = (context: Context, revisionArguments: readonly string[]): readonl
   nonEmptyLines(git(context, ['rev-list', ...revisionArguments]))
 
 /** Extended verification walks every commit, so a shallow clone is rejected up front. */
+// Enough of a commit hash to identify it in a report without filling the line.
+const SHORT_SHA_LENGTH: number = 9
+
 export const requireFullHistory = (context: Context): GateResult => {
   try {
     return git(context, ['rev-parse', '--is-shallow-repository']) === 'true'
@@ -41,32 +44,31 @@ export const commitHistory = (
   revisionArguments: readonly string[] = ['HEAD'],
 ): GateResult => {
   const shas: readonly string[] = shasOf(context, revisionArguments)
-  const findings: string[] = []
-  for (const sha of shas) {
+  const findings: readonly string[] = shas.flatMap((sha: string): readonly string[] => {
     const message: ParsedMessage = parseMessage(
       git(context, ['log', '--format=%B', '-n', '1', sha]),
     )
-    const requireBody: boolean = isNonTrivial(
+    const isBodyRequired: boolean = isNonTrivial(
       parseNumstat(git(context, ['show', '--numstat', '--format=', sha])),
     )
-    for (const problem of validateMessage(message, requireBody)) {
-      findings.push(`${sha.slice(0, 9)} ${problem}`)
-    }
-  }
+    return validateMessage(message, isBodyRequired).map(
+      (problem: string): string => `${sha.slice(0, SHORT_SHA_LENGTH)} ${problem}`,
+    )
+  })
   return findings.length > 0
     ? failed(
-        `${findings.length} commit-message problem(s) across ${shas.length} commit(s)`,
+        `${String(findings.length)} commit-message problem(s) across ${String(shas.length)} commit(s)`,
         findings,
       )
-    : passed(`${shas.length} commit message(s) conform`)
+    : passed(`${String(shas.length)} commit message(s) conform`)
 }
 
 /** Validate one pending message, from a message file the author points at. */
 export const commitMessageProblems = (context: Context, raw: string): readonly string[] => {
-  const requireBody: boolean = isNonTrivial(
+  const isRequireBody: boolean = isNonTrivial(
     parseNumstat(git(context, ['diff', '--cached', '--numstat'])),
   )
-  return validateMessage(parseMessage(raw), requireBody)
+  return validateMessage(parseMessage(raw), isRequireBody)
 }
 
 // One line per commit: the commit hash followed by its parent hashes, all space separated. Counting the
@@ -97,11 +99,11 @@ export const linearHistory = (context: Context): GateResult => {
   )
   return violations.length > 0
     ? failed(
-        `${violations.length} merge commit(s) in the history`,
+        `${String(violations.length)} merge commit(s) in the history`,
         violations.map(
           (violation: HistoryViolation): string =>
-            `${violation.sha.slice(0, 9)} ${violation.reason}`,
+            `${violation.sha.slice(0, SHORT_SHA_LENGTH)} ${violation.reason}`,
         ),
       )
-    : passed(`${commits.length} commit(s) form a linear history`)
+    : passed(`${String(commits.length)} commit(s) form a linear history`)
 }

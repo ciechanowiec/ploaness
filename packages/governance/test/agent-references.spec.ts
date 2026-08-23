@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findAgentReferences } from '../src/agent-references.js'
+import { type AgentReferenceMatch, findAgentReferences } from '../src/agent-references.js'
 
 describe('findAgentReferences', () => {
   it('returns no matches for a plain commit message', () => {
@@ -14,18 +14,24 @@ describe('findAgentReferences', () => {
   })
 
   it('flags a Co-Authored-By trailer naming an agent, case-insensitively', () => {
-    const matches = findAgentReferences('fix: something\n\nCo-Authored-By: Claude <x@y.com>')
+    const matches: readonly AgentReferenceMatch[] = findAgentReferences(
+      'fix: something\n\nCo-Authored-By: Claude <x@y.com>',
+    )
     expect(matches).toEqual([{ line: 3, label: 'agent co-authorship trailer' }])
   })
 
   it('flags a co-author trailer for other known agents', () => {
     for (const agent of ['Copilot', 'Cursor', 'Codex', 'Devin', 'Aider']) {
       expect(
-        findAgentReferences(`Co-authored-by: ${agent} <bot@example.com>`).map((m) => m.label),
+        findAgentReferences(`Co-authored-by: ${agent} <bot@example.com>`).map(
+          (match) => match.label,
+        ),
       ).toContain('agent co-authorship trailer')
     }
   })
+})
 
+describe('a signature or identifier that names an agent', () => {
   it('flags an agent vendor sign-off email', () => {
     expect(
       findAgentReferences('Co-authored-by: A B <noreply@anthropic.com>').length,
@@ -51,7 +57,7 @@ describe('findAgentReferences', () => {
   })
 
   it('flags the robot-emoji generated-with signature line', () => {
-    const line = `${String.fromCodePoint(0x1f916)} Generated with Claude Code`
+    const line: string = `${String.fromCodePoint(0x1f916)} Generated with Claude Code`
     expect(findAgentReferences(line)[0]?.label).toBe('agent generation signature')
   })
 
@@ -62,7 +68,9 @@ describe('findAgentReferences', () => {
   })
 
   it('reports the 1-based line of each match', () => {
-    const matches = findAgentReferences('feat: x\nbody\nCo-authored-by: Cursor <a@b.com>')
+    const matches: readonly AgentReferenceMatch[] = findAgentReferences(
+      'feat: x\nbody\nCo-authored-by: Cursor <a@b.com>',
+    )
     expect(matches[0]?.line).toBe(3)
   })
 })

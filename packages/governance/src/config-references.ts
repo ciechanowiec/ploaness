@@ -26,15 +26,14 @@ const METACHARACTER: RegExp = /[*?[\]{}()|^$\\+]/
  * and non-source tokens are excluded.
  */
 export const extractLiteralSourcePaths = (content: string): readonly string[] => {
-  const paths: Set<string> = new Set<string>()
-  for (const match of content.matchAll(LITERAL_SOURCE_PATH)) {
-    const token: string = match[2] ?? ''
-    const candidate: string = token.startsWith('!') ? token.slice(1) : token
-    if (!METACHARACTER.test(candidate)) {
-      paths.add(candidate)
-    }
-  }
-  // eslint-disable-next-line unicorn/no-array-sort -- toSorted is unavailable on the ES2022 lib target.
+  const candidates: readonly string[] = [...content.matchAll(LITERAL_SOURCE_PATH)]
+    // The second group is the quoted body, which the pattern always captures when it matches. The
+    // conversion is written out rather than guarded, because a guard here would describe a case that
+    // cannot occur and would report as an untested branch forever.
+    .map((match: RegExpExecArray): string => String(match[2]))
+    .map((token: string): string => (token.startsWith('!') ? token.slice(1) : token))
+    .filter((candidate: string): boolean => !METACHARACTER.test(candidate))
+  const paths: ReadonlySet<string> = new Set<string>(candidates)
   return [...paths].sort((left: string, right: string): number => left.localeCompare(right))
 }
 
@@ -45,15 +44,15 @@ export interface ConfigReferenceViolation {
 }
 
 /**
- * Return every extracted path that does not exist, with `fileExists` injected so the core stays pure. An
+ * Return every extracted path that does not exist, with `isExistingFile` injected so the core stays pure. An
  * empty array means every source file the config carves out is still present.
  */
 export const findMissingConfigReferences = (
   paths: readonly string[],
-  fileExists: (relativePath: string) => boolean,
+  isExistingFile: (relativePath: string) => boolean,
 ): readonly ConfigReferenceViolation[] =>
   paths
-    .filter((path: string): boolean => !fileExists(path))
+    .filter((path: string): boolean => !isExistingFile(path))
     .map(
       (path: string): ConfigReferenceViolation => ({
         path,

@@ -10,7 +10,8 @@ import {
   REQUIRED_TSCONFIG_PATHS,
   requiredBiomeFiles,
 } from '@ploaness/governance'
-import { seedIfMissing } from '../checks/assets.js'
+import { hasSeededFile } from '../checks/assets.js'
+import { hasWrittenDenyRules } from '../checks/generated.js'
 import type { Context } from '../context.js'
 import { sync } from './sync.js'
 
@@ -20,12 +21,15 @@ export default ploaness
 `
 
 // Biome resolves a relative glob against the config that declares it, so the file-selection block has to
+// The indent every JSON file ploaness writes uses, matching the shipped formatter setting.
+const JSON_INDENT: number = 2
+
 // sit at the project root even though ploaness owns its contents. The wiring gate enforces it verbatim.
 const biomeStub = (sourceRoots: readonly string[]): string =>
   `${JSON.stringify(
     { extends: [REQUIRED_BIOME_EXTENDS], files: requiredBiomeFiles(sourceRoots) },
     null,
-    2,
+    JSON_INDENT,
   )}\n`
 
 const TSCONFIG_STUB: string = `${JSON.stringify(
@@ -37,7 +41,7 @@ const TSCONFIG_STUB: string = `${JSON.stringify(
     ...REQUIRED_TSCONFIG_PATHS,
   },
   null,
-  2,
+  JSON_INDENT,
 )}\n`
 
 const VITEST_STUB: string = `import ploaness from 'ploaness/vitest'\n\nexport default ploaness\n`
@@ -63,26 +67,32 @@ const patchPackageJson = (context: Context): readonly string[] => {
     ...REQUIRED_SCRIPTS,
   }
   const updated: Record<string, unknown> = { ...parsed, scripts }
-  writeFileSync(file, `${JSON.stringify(updated, null, 2)}\n`)
+  writeFileSync(file, `${JSON.stringify(updated, null, JSON_INDENT)}\n`)
   return ['package.json: wrote the ploaness scripts']
 }
 
 /** Scaffold the consumer-side wiring and materialise the managed files. */
 export const init = (context: Context): number => {
-  const notes: string[] = [...patchPackageJson(context)]
-  for (const [file, body] of Object.entries(stubs(context))) {
-    notes.push(
-      seedIfMissing(context, file, body)
+  const notes: readonly string[] = [
+    ...patchPackageJson(context),
+    ...Object.entries(stubs(context)).map(([file, body]: readonly [string, string]): string =>
+      hasSeededFile(context, file, body)
         ? `${file}: written`
         : `${file}: left alone because it already exists`,
-    )
-  }
+    ),
+  ]
   for (const note of notes) {
     console.info(`  ${note}`)
   }
+  // The runtime settings file is merged, never managed: a project legitimately owns hooks, env, and
+  // model keys in it, and JSON carries no comment syntax for a managed-section marker.
+  if (hasWrittenDenyRules(context)) {
+    console.info('  wrote .claude/settings.json (write denial for the generated Payload artefacts)')
+  }
   sync(context)
   console.info(
-    '\nReview every change, then run `pnpm install` followed by `ploaness verify`. A pre-existing\nconfig was not overwritten: replace its contents with the ploaness stub yourself.',
+    '\nReview every change, then run `pnpm install` followed by `ploaness verify`. A pre-existing' +
+      '\nconfig was not overwritten: replace its contents with the ploaness stub yourself.',
   )
   return 0
 }

@@ -58,16 +58,14 @@ const declaredBy = (packageName: string): Record<string, unknown> => {
 const expectedTestLibraries = (): Readonly<Record<string, string>> => {
   const declared: Record<string, unknown> = Object.assign(
     {},
-    ...VERSION_SOURCES.map(declaredBy),
+    ...VERSION_SOURCES.map((source: string): Record<string, unknown> => declaredBy(source)),
   ) as Record<string, unknown>
-  const expected: Record<string, string> = {}
-  for (const name of TEST_LIBRARY_NAMES) {
-    const version: unknown = declared[name]
-    if (typeof version === 'string') {
-      expected[name] = version
-    }
-  }
-  return expected
+  return Object.fromEntries(
+    TEST_LIBRARY_NAMES.map((name: string): readonly [string, unknown] => [
+      name,
+      declared[name],
+    ]).filter(([, version]: readonly [string, unknown]): boolean => typeof version === 'string'),
+  ) as Record<string, string>
 }
 
 /** Verify the project has installed ploaness exactly as ploaness dictates. */
@@ -83,7 +81,7 @@ export const wiring = (context: Context): GateResult => {
   })
   return violations.length > 0
     ? failed(
-        `${violations.length} wiring defect(s); the harness is not installed as ploaness requires`,
+        `${String(violations.length)} wiring defect(s); the harness is not installed as ploaness requires`,
         violations.map(
           (violation: WiringViolation): string => `${violation.location}: ${violation.reason}`,
         ),

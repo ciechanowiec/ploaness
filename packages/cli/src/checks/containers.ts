@@ -1,8 +1,11 @@
 // The gates that run their tool inside Docker. A Payload project already needs Docker for its database,
 // so this costs nothing extra and makes the gates behave identically on every machine: no local install
 // of gitleaks, hadolint, or actionlint, and no version skew between developers and CI.
-import { existsSync } from 'node:fs'
+
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import path from 'node:path'
+import { CONTAINER_IMAGES, renderGitleaksConfig } from '@ploaness/governance'
 import { type Context, trackedFiles } from '../context.js'
 import {
   asFindings,
@@ -14,41 +17,88 @@ import {
   run,
 } from '../exec.js'
 
-const GITLEAKS_IMAGE: string = 'zricethezav/gitleaks:latest'
-const HADOLINT_IMAGE: string = 'hadolint/hadolint:latest'
-const ACTIONLINT_IMAGE: string = 'rhysd/actionlint:latest'
+// Pinned by digest in the governance layer, where a spec rejects a mutable reference. These were three
+// `:latest` literals, which let an upstream release change a verdict without the repository changing.
+const GITLEAKS_IMAGE: string = CONTAINER_IMAGES.gitleaks
+const HADOLINT_IMAGE: string = CONTAINER_IMAGES.hadolint
+const ACTIONLINT_IMAGE: string = CONTAINER_IMAGES.actionlint
 
-const dockerMissing = (result: RunResult): boolean =>
-  result.code === 127 || result.output.includes('ENOENT')
+// The exit status a shell reports when the command itself could not be found.
+const COMMAND_NOT_FOUND: number = 127
+
+const isDockerMissing = (result: RunResult): boolean =>
+  result.code === COMMAND_NOT_FOUND || result.output.includes('ENOENT')
 
 const requireDocker = (result: RunResult, gate: string): GateResult | undefined =>
-  dockerMissing(result)
+  isDockerMissing(result)
     ? failed(`${gate} needs Docker, which is not available`, [
         'Docker is already required for the Payload test database; start it and retry',
       ])
     : undefined
 
-/** Scan git-tracked content for committed secrets. */
-export const secrets = (context: Context): GateResult => {
-  const result: RunResult = run(
+// The scanner's configuration is rendered outside the working tree and mounted read-only. A copy in the
+// tree is a forbidden path, because it could shadow or weaken the tool's own rules; rendering it here
+// means the project supplies data - which fixture credential, and why - while ploaness keeps the rules.
+//
+// Rendered under the home directory rather than the system temporary directory: a macOS Docker daemon
+// shares the home directory and need not share /tmp, and an unshared source mounts as an empty
+// directory rather than as an error. `it/verify.sh` records the same constraint for the same reason.
+const withRenderedConfig = <Value>(
+  context: Context,
+  use: (configDirectory: string) => Value,
+): Value => {
+  const directory: string = mkdtempSync(path.join(homedir(), '.ploaness-secrets-'))
+  try {
+    writeFileSync(
+      path.join(directory, 'gitleaks.toml'),
+      renderGitleaksConfig(context.settings.secretAllowlist),
+    )
+    return use(directory)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+}
+
+const scanSecrets = (context: Context, configDirectory: string, target: string): RunResult =>
+  run(
     'docker',
     [
       'run',
       '--rm',
       '-v',
       `${context.root}:/repo`,
+      '-v',
+      `${configDirectory}:/ploaness:ro`,
       GITLEAKS_IMAGE,
-      'git',
+      target,
       '/repo',
+      '--config',
+      '/ploaness/gitleaks.toml',
       '--no-banner',
       '--redact',
     ],
     { cwd: context.root },
   )
-  return (
-    requireDocker(result, 'the secret scan') ?? fromRun(result, 'no secret found in git history')
-  )
-}
+
+/** Scan the commit history and the tracked content for committed secrets. */
+export const secrets = (context: Context): GateResult =>
+  withRenderedConfig(context, (configDirectory: string): GateResult => {
+    // The standard asks for the tracked content AND the commit history. `git` walks commits; `dir`
+    // reads the tree, which is what catches a credential that is staged but not yet committed.
+    const history: RunResult = scanSecrets(context, configDirectory, 'git')
+    const docker: GateResult | undefined = requireDocker(history, 'the secret scan')
+    if (docker !== undefined) {
+      return docker
+    }
+    const tree: RunResult = scanSecrets(context, configDirectory, 'dir')
+    const combined: RunResult = {
+      code: history.code === 0 ? tree.code : history.code,
+      output: [history.output, tree.output]
+        .filter((part: string): boolean => part.length > 0)
+        .join('\n'),
+    }
+    return fromRun(combined, 'no secret found in the history or the tracked tree')
+  })
 
 // Discovered from the tracked tree rather than from a fixed list: a project may keep a Dockerfile in any
 // directory, and a hard-coded path would silently skip the ones it did not anticipate.
@@ -58,7 +108,9 @@ const isDockerfile = (file: string): boolean => {
 }
 
 const dockerfiles = (context: Context): readonly string[] =>
-  trackedFiles(context.root).filter(isDockerfile).toSorted()
+  trackedFiles(context.root)
+    .filter((file: string): boolean => isDockerfile(file))
+    .toSorted((left: string, right: string): number => left.localeCompare(right))
 
 // Compose ships both as a `docker` subcommand and as a standalone binary, and which one a machine has is
 // not a property of the project. Try the modern form first and accept the legacy one, failing only when
@@ -89,31 +141,46 @@ const composeFindings = (context: Context): readonly string[] => {
   return compose.code === 0 ? [] : [`${composeFile}:`, ...asFindings(compose.output)]
 }
 
+interface LintedDockerfile {
+  readonly target: string
+  readonly result: RunResult
+}
+
 /** Lint every Dockerfile and validate the compose file. */
 export const containers = (context: Context): GateResult => {
   const targets: readonly string[] = dockerfiles(context)
   if (targets.length === 0) {
     return passed('the project ships no Dockerfile')
   }
-  const findings: string[] = []
-  for (const target of targets) {
-    const result: RunResult = run(
-      'sh',
-      ['-c', `docker run --rm -i ${HADOLINT_IMAGE} < ${JSON.stringify(target)}`],
-      { cwd: context.root },
+  // Lint every Dockerfile first, then judge. A missing daemon is reported as itself rather than as a
+  // pile of findings about files no tool could read.
+  const linted: readonly LintedDockerfile[] = targets.map(
+    (target: string): LintedDockerfile => ({
+      target,
+      result: run(
+        'sh',
+        ['-c', `docker run --rm -i ${HADOLINT_IMAGE} < ${JSON.stringify(target)}`],
+        { cwd: context.root },
+      ),
+    }),
+  )
+  const missing: GateResult | undefined = linted
+    .map((entry: LintedDockerfile): GateResult | undefined =>
+      requireDocker(entry.result, 'the container gate'),
     )
-    const missing: GateResult | undefined = requireDocker(result, 'the container gate')
-    if (missing !== undefined) {
-      return missing
-    }
-    if (result.code !== 0) {
-      findings.push(`${target}:`, ...asFindings(result.output))
-    }
+    .find((entry: GateResult | undefined): boolean => entry !== undefined)
+  if (missing !== undefined) {
+    return missing
   }
-  findings.push(...composeFindings(context))
+  const findings: readonly string[] = [
+    ...linted.flatMap((entry: LintedDockerfile): readonly string[] =>
+      entry.result.code === 0 ? [] : [`${entry.target}:`, ...asFindings(entry.result.output)],
+    ),
+    ...composeFindings(context),
+  ]
   return findings.length > 0
     ? failed('container definitions have defects', findings)
-    : passed(`${targets.length} Dockerfile(s) and the compose file are valid`)
+    : passed(`${String(targets.length)} Dockerfile(s) and the compose file are valid`)
 }
 
 /** Lint the GitHub Actions workflows. */

@@ -9,15 +9,18 @@
   "scripts": {
     "build": "pnpm -r --filter './packages/**' run build",
     "test": "vitest run --coverage",
-    "typecheck": "tsc --build --force",
-    "lint": "biome check packages/governance packages/cli scripts it",
-    "format": "biome check --write packages/governance packages/cli scripts it",
-    "verify": "pnpm run build && pnpm run typecheck && pnpm run lint && pnpm run test",
+    "typecheck": "tsc --build --force && tsc -p tsconfig.lint.json",
+    "lint": "biome check .",
+    "format": "biome check --write . && eslint . --fix",
+    "verify": "sh scripts/verify.sh",
     "pack:local": "sh scripts/pack-local.sh",
-    "it": "sh it/verify.sh"
+    "it": "sh it/verify.sh",
+    "verify:fast": "pnpm run build && pnpm run typecheck && pnpm run lint && pnpm run lint:eslint && pnpm run test",
+    "lint:eslint": "eslint ."
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.9",
+    "@ploaness/config": "workspace:*",
     "@types/node": "26.2.0",
     "@vitest/coverage-v8": "4.1.11",
     "eslint": "10.8.1",
@@ -29,5 +32,20 @@
     "node": ">=26",
     "pnpm": ">=11"
   },
-  "packageManager": "pnpm@11.9.0"
+  "packageManager": "pnpm@11.9.0",
+  "ploaness": {
+    "sourceRoots": [
+      "packages",
+      "scripts",
+      "it"
+    ],
+    "typographyExclusions": [
+      "^\\.vale/styles/"
+    ],
+    "javascriptAllowlist": [
+      "^packages/config/(eslint|eslint-core|vitest)\\.js$",
+      "^packages/ploaness/(bin|eslint|vitest)\\.js$",
+      "^packages/(ploaness|assets)/build\\.mjs$"
+    ]
+  }
 }

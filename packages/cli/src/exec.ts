@@ -37,7 +37,11 @@ export interface RunResult {
   readonly output: string
 }
 
-const MAX_OUTPUT_BYTES: number = 64 * 1024 * 1024
+const BYTES_PER_KIB: number = 1024
+const KIB_PER_MIB: number = 1024
+// Large enough that no analyzer's output is truncated before it can be reported.
+const MAX_OUTPUT_MIB: number = 64
+const MAX_OUTPUT_BYTES: number = MAX_OUTPUT_MIB * KIB_PER_MIB * BYTES_PER_KIB
 
 /** Run a command, capturing stdout and stderr together. A missing binary reports code 127. */
 export const run = (
@@ -56,7 +60,7 @@ export const run = (
   }
   return {
     code: result.status ?? 1,
-    output: `${result.stdout ?? ''}${result.stderr ?? ''}`.trim(),
+    output: `${result.stdout}${result.stderr}`.trim(),
   }
 }
 

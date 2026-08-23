@@ -1,14 +1,13 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.9/schema.json",
-  "extends": [
-    "./packages/config/biome.json"
-  ],
+  "extends": ["./packages/config/biome.json"],
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "files": {
     "ignoreUnknown": false,
-    "includes": [
-      "**",
-      "!**/dist",
-      "!**/node_modules"
-    ]
+    "includes": ["**", "!**/node_modules", "!packages/assets/files"]
   }
 }

@@ -15,20 +15,30 @@ const declaredDependencies = (packageJson: unknown): Record<string, unknown> => 
   return { ...asRecord(root['dependencies']), ...asRecord(root['devDependencies']) }
 }
 
+// The two questions preflight asks about the project itself, separated from the runtime question so
+// neither has to accumulate into a shared list.
+const projectProblems = (context: Context): readonly string[] => {
+  if (context.packageJson === undefined) {
+    return ['no package.json found; run ploaness from the repository root']
+  }
+  return Object.hasOwn(declaredDependencies(context.packageJson), 'payload')
+    ? []
+    : [
+        'this project does not declare "payload"; ploaness governs Payload CMS projects ' +
+          'and will not judge another kind',
+      ]
+}
+
 /** Verify the project is a Payload application on a supported runtime. */
 export const preflight = (context: Context): GateResult => {
-  const findings: string[] = []
-  if (context.packageJson === undefined) {
-    findings.push('no package.json found; run ploaness from the repository root')
-  } else if (!Object.hasOwn(declaredDependencies(context.packageJson), 'payload')) {
-    findings.push(
-      'this project does not declare "payload"; ploaness governs Payload CMS projects and will not judge another kind',
-    )
-  }
-  const nodeMajor: number = Number(process.versions.node.split('.')[0] ?? '0')
-  if (nodeMajor < MINIMUM_NODE_MAJOR) {
-    findings.push(`Node ${process.versions.node} is below the required ${MINIMUM_NODE_MAJOR}`)
-  }
+  const projectFindings: readonly string[] = projectProblems(context)
+  const nodeMajor: number = Number(process.versions.node.split('.', 1)[0] ?? '0')
+  const findings: readonly string[] = [
+    ...projectFindings,
+    ...(nodeMajor < MINIMUM_NODE_MAJOR
+      ? [`Node ${process.versions.node} is below the required ${String(MINIMUM_NODE_MAJOR)}`]
+      : []),
+  ]
   return findings.length > 0
     ? failed('project is not a supported Payload application', findings)
     : passed(`Payload project on Node ${process.versions.node}`)

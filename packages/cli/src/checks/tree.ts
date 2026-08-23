@@ -23,12 +23,20 @@ const fingerprint = (context: Context): string => {
   return hash.digest('hex')
 }
 
+// The fingerprint is taken by one gate and compared by another, so it must outlive both calls, and
+// there is no channel between gates to carry it as a value.
+// eslint-disable-next-line functional/no-let -- must outlive two separate gate invocations
 let snapshot: string | undefined
 
 /** Record the tree state before the gates that could modify it run. */
+// Enough of the fingerprint to compare by eye; the full value is never the useful part of a report.
+const FINGERPRINT_PREVIEW: number = 12
+
 export const treeSnapshot = (context: Context): GateResult => {
+  // Recording state the later tree-verify gate reads is this gate's whole purpose.
+  // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- see the binding above
   snapshot = fingerprint(context)
-  return passed(`tree fingerprint recorded (${snapshot.slice(0, 12)})`)
+  return passed(`tree fingerprint recorded (${snapshot.slice(0, FINGERPRINT_PREVIEW)})`)
 }
 
 /** Verify no gate modified a tracked file during verification. */
@@ -41,7 +49,7 @@ export const treeVerify = (context: Context): GateResult => {
     ? passed('the working tree is unchanged since verification began')
     : failed('a gate modified a tracked file during verification', [
         'run `ploaness format`, review the result, and commit it before verifying',
-        `expected ${snapshot.slice(0, 12)} but found ${current.slice(0, 12)}`,
+        `expected ${snapshot.slice(0, FINGERPRINT_PREVIEW)} but found ${current.slice(0, FINGERPRINT_PREVIEW)}`,
         'git status will show which files changed',
       ])
 }

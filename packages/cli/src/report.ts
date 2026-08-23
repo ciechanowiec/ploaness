@@ -25,7 +25,9 @@ export interface GateOutcome {
   readonly durationMs: number
 }
 
-const CSI: string = `${String.fromCodePoint(0x1b)}[`
+// The control sequence introducer, named rather than written as a bare number at its use.
+const ESCAPE: number = 0x1b
+const CSI: string = `${String.fromCodePoint(ESCAPE)}[`
 const RESET: string = `${CSI}0m`
 const BOLD: string = `${CSI}1m`
 const DIM: string = `${CSI}2m`
@@ -36,8 +38,10 @@ const CLEAR_LINE: string = `\r${CSI}2K`
 
 // Referenced by code point for the same reason the typography ban is: a source file that spells the
 // character out invites a tool to normalise it into something the terminal renders differently.
-const CHECK_MARK: string = String.fromCodePoint(0x2713)
-const BALLOT_X: string = String.fromCodePoint(0x2717)
+const HEAVY_CHECK_MARK: number = 0x27_13
+const BALLOT_X_MARK: number = 0x27_17
+const CHECK_MARK: string = String.fromCodePoint(HEAVY_CHECK_MARK)
+const BALLOT_X: string = String.fromCodePoint(BALLOT_X_MARK)
 
 const SYMBOLS: Readonly<Record<string, string>> = {
   [PASS]: CHECK_MARK,
@@ -53,22 +57,22 @@ const COLOURS: Readonly<Record<string, string>> = {
 
 // NO_COLOR and FORCE_COLOR are the conventions every other tool in the pipeline already honours, so a
 // project that has set one does not have to set a ploaness-specific variable as well.
-const richOutput = (): boolean => {
+const hasRichOutput = (): boolean => {
   if (process.env['NO_COLOR'] !== undefined) {
     return false
   }
   if (process.env['FORCE_COLOR'] !== undefined) {
     return true
   }
-  return process.env['TERM'] !== 'dumb' && process.stdout.isTTY === true
+  return process.env['TERM'] !== 'dumb' && process.stdout.isTTY
 }
 
-const RICH: boolean = richOutput()
+const IS_RICH: boolean = hasRichOutput()
 
 // Overwriting a line in place needs a real terminal, which is a narrower condition than colour: a caller
 // that sets FORCE_COLOR while piping wants the colours, and would otherwise collect a stray erase
 // sequence at the head of every line.
-const INTERACTIVE: boolean = RICH && process.stdout.isTTY === true
+const IS_INTERACTIVE: boolean = IS_RICH && process.stdout.isTTY
 
 const write = (text: string): void => {
   process.stdout.write(text)
@@ -78,7 +82,8 @@ const line = (text: string): void => {
   write(`${text}\n`)
 }
 
-const paint = (text: string, colour: string): string => (RICH ? `${colour}${text}${RESET}` : text)
+const paint = (text: string, colour: string): string =>
+  IS_RICH ? `${colour}${text}${RESET}` : text
 
 const verdictOf = (result: GateResult): string => {
   if (!result.ok) {
@@ -99,25 +104,25 @@ const COLUMN_GAP: number = 2
 
 /** Lay out a line with its duration at the right margin, falling back to a plain gap when narrow. */
 const spread = (left: string, right: string, decoratedLeft: string): string => {
-  const columns: number = process.stdout.columns ?? 0
+  const columns: number = process.stdout.columns
   const gap: number = columns - left.length - right.length
-  if (!RICH || columns < MINIMUM_COLUMNS || gap < COLUMN_GAP) {
+  if (!IS_RICH || columns < MINIMUM_COLUMNS || gap < COLUMN_GAP) {
     return `${decoratedLeft}${' '.repeat(COLUMN_GAP)}${paint(right, DIM)}`
   }
   return `${decoratedLeft}${' '.repeat(gap)}${paint(right, DIM)}`
 }
 
 /** Print the run header naming the mode and how many gates it covers. */
-export const reportHeader = (extended: boolean, gateCount: number): void => {
-  const mode: string = extended ? 'extended verification' : 'default verification'
+export const reportHeader = (isExtended: boolean, gateCount: number): void => {
+  const mode: string = isExtended ? 'extended verification' : 'default verification'
   line('')
-  line(`  ${paint('ploaness', BOLD)} ${paint(mode, DIM)}  ${gateCount} gates`)
+  line(`  ${paint('ploaness', BOLD)} ${paint(mode, DIM)}  ${String(gateCount)} gates`)
   line('')
 }
 
 /** Show that a gate has started, so a slow gate is visibly running rather than apparently hung. */
 export const beginGate = (gate: Gate, width: number): void => {
-  if (!INTERACTIVE) {
+  if (!IS_INTERACTIVE) {
     return
   }
   write(`  ${paint('.', DIM)} ${gate.id.padEnd(width)}  ${paint('running', DIM)}`)
@@ -127,10 +132,10 @@ export const beginGate = (gate: Gate, width: number): void => {
 export const reportGate = (outcome: GateOutcome, width: number): void => {
   const verdict: string = verdictOf(outcome.result)
   const identifier: string = outcome.gate.id.padEnd(width)
-  const marker: string = RICH ? (SYMBOLS[verdict] ?? '?') : `[${verdict}]`
+  const marker: string = IS_RICH ? (SYMBOLS[verdict] ?? '?') : `[${verdict}]`
   const plain: string = `  ${marker} ${identifier}  ${outcome.result.summary}`
   const decorated: string = `  ${paint(marker, COLOURS[verdict] ?? RESET)} ${identifier}  ${outcome.result.summary}`
-  if (INTERACTIVE) {
+  if (IS_INTERACTIVE) {
     write(CLEAR_LINE)
   }
   line(spread(plain, elapsed(outcome.durationMs), decorated))
@@ -165,8 +170,8 @@ const tally = (outcomes: readonly GateOutcome[], verdict: string): number =>
 /** Print the closing verdict and return the process exit code. */
 export const reportVerdict = (
   outcomes: readonly GateOutcome[],
-  extended: boolean,
-  enforce: boolean,
+  isExtended: boolean,
+  isEnforced: boolean,
 ): number => {
   const failures: readonly GateOutcome[] = outcomes.filter(
     (outcome: GateOutcome): boolean => !outcome.result.ok,
@@ -176,20 +181,22 @@ export const reportVerdict = (
     0,
   )
   const counts: string = [
-    `${tally(outcomes, PASS)} passed`,
-    `${tally(outcomes, WARN)} warned`,
-    `${failures.length} failed`,
+    `${String(tally(outcomes, PASS))} passed`,
+    `${String(tally(outcomes, WARN))} warned`,
+    `${String(failures.length)} failed`,
   ].join('  ')
-  const mode: string = extended ? 'Extended verification' : 'Default verification'
+  const mode: string = isExtended ? 'Extended verification' : 'Default verification'
   line('')
   line(spread(`  ${counts}`, elapsed(total), `  ${paint(counts, DIM)}`))
   if (failures.length === 0) {
-    line(`  ${paint(`${mode} passed.`, GREEN)}`)
+    const passedText: string = `${mode} passed.`
+    line(`  ${paint(passedText, GREEN)}`)
     return 0
   }
   const names: string = failures.map((outcome: GateOutcome): string => outcome.gate.id).join(', ')
-  line(`  ${paint(`${mode} failed: ${names}.`, RED)}`)
-  if (!enforce) {
+  const failedText: string = `${mode} failed: ${names}.`
+  line(`  ${paint(failedText, RED)}`)
+  if (!isEnforced) {
     line(
       `  ${paint('Report-only mode is active, so the exit code is 0. This is not a pass.', DIM)}`,
     )

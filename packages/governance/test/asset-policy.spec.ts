@@ -5,6 +5,7 @@ import {
   checkAsset,
   findAssetViolations,
   type ManagedAsset,
+  type ParsedManifest,
   parseManifest,
   readManagedSection,
   SECTION_BEGIN,
@@ -13,7 +14,7 @@ import {
 } from '../src/asset-policy.js'
 
 const state = (overrides: Partial<AssetState> = {}): AssetState => ({
-  exists: true,
+  isPresent: true,
   actual: 'body',
   expected: 'body',
   ...overrides,
@@ -21,7 +22,9 @@ const state = (overrides: Partial<AssetState> = {}): AssetState => ({
 
 describe('parseManifest', () => {
   it('reads entries and ignores comments and blank lines', () => {
-    const parsed = parseManifest('# a comment\n\nCLAUDE.md\tPINNED\n.gitignore\tSEED\n')
+    const parsed: ParsedManifest = parseManifest(
+      '# a comment\n\nCLAUDE.md\tPINNED\n.gitignore\tSEED\n',
+    )
     expect(parsed.assets).toEqual([
       { path: 'CLAUDE.md', disposition: 'PINNED' },
       { path: '.gitignore', disposition: 'SEED' },
@@ -30,7 +33,7 @@ describe('parseManifest', () => {
   })
 
   it('reports a malformed row rather than dropping it silently', () => {
-    const parsed = parseManifest('CLAUDE.md\tMAYBE\n')
+    const parsed: ParsedManifest = parseManifest('CLAUDE.md\tMAYBE\n')
     expect(parsed.assets).toEqual([])
     expect(parsed.problems).toHaveLength(1)
   })
@@ -50,7 +53,7 @@ describe('checkAsset', () => {
   })
 
   it('rejects a missing managed file', () => {
-    expect(checkAsset(pinned, state({ exists: false, actual: undefined }))?.reason).toContain(
+    expect(checkAsset(pinned, state({ isPresent: false, actual: undefined }))?.reason).toContain(
       'missing',
     )
   })
@@ -64,14 +67,16 @@ describe('checkAsset', () => {
   })
 
   it('accepts a forbidden path that is absent', () => {
-    expect(checkAsset(forbidden, state({ exists: false }))).toBeUndefined()
+    expect(checkAsset(forbidden, state({ isPresent: false }))).toBeUndefined()
   })
 })
+
+const agents: ManagedAsset = { path: 'AGENTS.md', disposition: 'SECTION' }
+const drifted = (): AssetState => state({ actual: 'edited' })
 
 describe('findAssetViolations', () => {
   it('skips a path the project has taken over', () => {
     const assets: readonly ManagedAsset[] = [{ path: 'CLAUDE.md', disposition: 'PINNED' }]
-    const drifted = (): AssetState => state({ actual: 'edited' })
     expect(findAssetViolations(assets, [], drifted)).toHaveLength(1)
     expect(findAssetViolations(assets, ['CLAUDE.md'], drifted)).toEqual([])
   })
@@ -99,7 +104,6 @@ describe('syncAction', () => {
 // touching a line the project wrote?
 describe('a managed section', () => {
   const block: string = `${SECTION_BEGIN}\ncontract v1\n${SECTION_END}`
-  const agents: ManagedAsset = { path: 'AGENTS.md', disposition: 'SECTION' }
 
   describe('readManagedSection', () => {
     it('reads the block back with its markers', () => {
@@ -139,6 +143,12 @@ describe('a managed section', () => {
       expect(readManagedSection(`# Agent guide\n\n${block}\n`).kind).toBe('malformed')
     })
   })
+})
+
+// Splicing is the other half of the same question: the block is replaced without touching a line the
+// project wrote.
+describe('splicing a managed section', () => {
+  const block: string = `${SECTION_BEGIN}\ncontract v1\n${SECTION_END}`
 
   describe('applyManagedSection', () => {
     it('replaces an outdated block and keeps the project text', () => {

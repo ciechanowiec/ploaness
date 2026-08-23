@@ -67,11 +67,11 @@ const checkName = (name: string | undefined, directoryName: string): readonly Sk
   const kebab: readonly SkillViolation[] = KEBAB_CASE.test(name)
     ? []
     : [{ rule: 'name', reason: `name "${name}" must be kebab-case` }]
-  const matchesDirectory: readonly SkillViolation[] =
+  const directoryViolations: readonly SkillViolation[] =
     name === directoryName
       ? []
       : [{ rule: 'name', reason: `name "${name}" must equal parent directory "${directoryName}"` }]
-  return [...kebab, ...matchesDirectory]
+  return [...kebab, ...directoryViolations]
 }
 
 const checkDescription = (description: string | undefined): readonly SkillViolation[] => {

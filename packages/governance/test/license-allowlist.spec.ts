@@ -1,6 +1,10 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import { findLicenseViolations, isLicenseAllowed } from '../src/license-allowlist.js'
+import {
+  findLicenseViolations,
+  isLicenseAllowed,
+  type LicensedPackage,
+} from '../src/license-allowlist.js'
 
 describe('license allowlist', () => {
   it('permits permissive licenses', () => {
@@ -32,7 +36,7 @@ describe('license allowlist', () => {
   })
 
   it('returns only the disallowed packages', () => {
-    const violations = findLicenseViolations([
+    const violations: readonly LicensedPackage[] = findLicenseViolations([
       { name: 'good', license: 'MIT' },
       { name: 'bad', license: 'GPL-3.0-only' },
     ])
@@ -45,9 +49,11 @@ describe('license allowlist', () => {
 // them deterministic. (Each `it` also carries a concrete example assertion, since the unit scope's
 // assertions-in-tests rule - unlike the integration scope - does not recognise `fc.assert`.)
 describe('license allowlist properties (fast-check)', () => {
-  const allowedId = fc.constantFrom('MIT', 'Apache-2.0', 'ISC', 'MPL-2.0', 'LGPL-3.0-only')
-  const deniedId = fc.constantFrom('GPL-3.0-only', 'AGPL-3.0', 'UNKNOWN', 'BUSL-1.1')
-  const anyId = fc.oneof(allowedId, deniedId)
+  const allowedId: fc.Arbitrary<'MIT' | 'Apache-2.0' | 'ISC' | 'MPL-2.0' | 'LGPL-3.0-only'> =
+    fc.constantFrom('MIT', 'Apache-2.0', 'ISC', 'MPL-2.0', 'LGPL-3.0-only')
+  const deniedId: fc.Arbitrary<'GPL-3.0-only' | 'AGPL-3.0' | 'UNKNOWN' | 'BUSL-1.1'> =
+    fc.constantFrom('GPL-3.0-only', 'AGPL-3.0', 'UNKNOWN', 'BUSL-1.1')
+  const anyId: fc.Arbitrary<string> = fc.oneof(allowedId, deniedId)
   const Allowed: ReadonlySet<string> = new Set([
     'MIT',
     'Apache-2.0',

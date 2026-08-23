@@ -127,16 +127,23 @@ export interface FreshnessReport {
  * @param statuses the declared dependencies (and `$schema` pseudo-dependencies) to classify.
  * @returns the grouped findings; both arrays are empty when every status is fresh.
  */
+interface JudgedStatus {
+  readonly status: DependencyStatus
+  readonly verdict: FreshnessVerdict
+}
+
 export const findFreshnessViolations = (statuses: readonly DependencyStatus[]): FreshnessReport => {
-  const failures: FreshnessFinding[] = []
-  const warnings: FreshnessFinding[] = []
-  for (const status of statuses) {
-    const verdict: FreshnessVerdict = classifyFreshness(status.current, status.latest)
-    if (verdict === 'fail') {
-      failures.push({ ...status, verdict })
-    } else if (verdict === 'warn') {
-      warnings.push({ ...status, verdict })
-    }
-  }
-  return { failures, warnings }
+  // The verdict is computed once per status; the two reported groups are then filters over it rather
+  // than two lists filled in the same pass.
+  const judged: readonly JudgedStatus[] = statuses.map(
+    (status: DependencyStatus): JudgedStatus => ({
+      status,
+      verdict: classifyFreshness(status.current, status.latest),
+    }),
+  )
+  const withVerdict = (verdict: 'fail' | 'warn'): readonly FreshnessFinding[] =>
+    judged
+      .filter((entry: JudgedStatus): boolean => entry.verdict === verdict)
+      .map((entry: JudgedStatus): FreshnessFinding => ({ ...entry.status, verdict }))
+  return { failures: withVerdict('fail'), warnings: withVerdict('warn') }
 }

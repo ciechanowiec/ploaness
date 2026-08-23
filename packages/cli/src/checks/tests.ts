@@ -48,13 +48,26 @@ const withPretest = (context: Context, gate: () => GateResult): GateResult => {
   return gate()
 }
 
+// Resolution failure is an answer, not an exception to catch three times over.
+const resolveProjectToolOrUndefined = (
+  context: Context,
+  tool: string,
+  binary?: string,
+): string | undefined => {
+  try {
+    return binary === undefined
+      ? resolveProjectTool(context, tool)
+      : resolveProjectTool(context, tool, binary)
+  } catch {
+    return undefined
+  }
+}
+
 /** Run the unit and integration suite with coverage, at the ploaness thresholds. */
 export const tests = (context: Context): GateResult =>
   withPretest(context, (): GateResult => {
-    let vitest: string
-    try {
-      vitest = resolveProjectTool(context, 'vitest')
-    } catch {
+    const vitest: string | undefined = resolveProjectToolOrUndefined(context, 'vitest')
+    if (vitest === undefined) {
       return failed('vitest could not be resolved from the project', [
         'the project must declare vitest itself, because its specs import it directly',
       ])
@@ -75,10 +88,12 @@ export const endToEnd = (context: Context): GateResult => {
     return passed('the project declares no Playwright suite')
   }
   return withPretest(context, (): GateResult => {
-    let playwright: string
-    try {
-      playwright = resolveProjectTool(context, '@playwright/test', 'playwright')
-    } catch {
+    const playwright: string | undefined = resolveProjectToolOrUndefined(
+      context,
+      '@playwright/test',
+      'playwright',
+    )
+    if (playwright === undefined) {
       return failed('@playwright/test could not be resolved from the project', [
         'the project must declare @playwright/test itself, because its specs import it directly',
       ])
@@ -101,10 +116,8 @@ export const endToEnd = (context: Context): GateResult => {
 /** Produce the production build, which the bundle gate then measures. */
 export const build = (context: Context): GateResult =>
   withPretest(context, (): GateResult => {
-    let next: string
-    try {
-      next = resolveProjectTool(context, 'next')
-    } catch {
+    const next: string | undefined = resolveProjectToolOrUndefined(context, 'next')
+    if (next === undefined) {
       return failed('next could not be resolved from the project', [
         'a Payload application builds through Next, which the project must declare',
       ])

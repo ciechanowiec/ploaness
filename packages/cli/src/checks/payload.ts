@@ -2,23 +2,32 @@
 // and the Local API must be used in a way that neither over-fetches nor skips access control.
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { findPayloadViolations, type PayloadViolation } from '@ploaness/governance'
+import {
+  findPayloadViolations,
+  GENERATED_ARTEFACTS,
+  type PayloadViolation,
+} from '@ploaness/governance'
 import { type Context, git, resolveProjectTool, trackedFiles } from '../context.js'
 import { asFindings, failed, type GateResult, passed, type RunResult, runNode } from '../exec.js'
 
-// The two artefacts Payload derives from the configuration. Committed drift means the admin panel and
-// the type surface disagree with the collections that produced them.
-const GENERATED_PATHS: readonly string[] = [
-  'src/payload-types.ts',
-  'src/app/(payload)/admin/importMap.js',
-]
+// Declared once in governance, so the regeneration gate and the write-denial gate cannot disagree
+// about which artefacts are generated. They did: the schema file was denied by neither and diffed by
+// neither, so a hand edit to it passed.
+const GENERATED_PATHS: readonly string[] = GENERATED_ARTEFACTS
+
+// Resolution failure is an answer rather than an exception the caller must catch.
+const resolveProjectToolOrUndefined = (context: Context, tool: string): string | undefined => {
+  try {
+    return resolveProjectTool(context, tool)
+  } catch {
+    return undefined
+  }
+}
 
 /** Regenerate the Payload types and admin import map, then fail on any drift. */
 export const payloadGenerated = (context: Context): GateResult => {
-  let payloadCli: string
-  try {
-    payloadCli = resolveProjectTool(context, 'payload')
-  } catch {
+  const payloadCli: string | undefined = resolveProjectToolOrUndefined(context, 'payload')
+  if (payloadCli === undefined) {
     return failed('the payload CLI could not be resolved from the project', [
       'ploaness governs Payload projects, so "payload" must be installed in the project itself',
     ])
@@ -62,16 +71,15 @@ export const payloadRules = (context: Context): GateResult => {
       !file.endsWith('payload-types.ts') &&
       existsSync(path.join(context.root, file)),
   )
-  const findings: string[] = []
-  for (const file of candidates) {
-    const source: string = readFileSync(path.join(context.root, file), 'utf8')
-    for (const violation of findPayloadViolations(source)) {
-      findings.push(`${file}:${violation.line} [${violation.rule}] ${violation.reason}`)
-    }
-  }
+  const findings: readonly string[] = candidates.flatMap((file: string): readonly string[] =>
+    findPayloadViolations(readFileSync(path.join(context.root, file), 'utf8')).map(
+      (violation: PayloadViolation): string =>
+        `${file}:${String(violation.line)} [${violation.rule}] ${violation.reason}`,
+    ),
+  )
   return findings.length > 0
-    ? failed(`${findings.length} Payload usage violation(s)`, findings)
-    : passed(`${candidates.length} source file(s) use Payload within the rules`)
+    ? failed(`${String(findings.length)} Payload usage violation(s)`, findings)
+    : passed(`${String(candidates.length)} source file(s) use Payload within the rules`)
 }
 
 /** Expose the pure rule for the single-file case, so a fixture can assert on one source. */

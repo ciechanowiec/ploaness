@@ -63,7 +63,8 @@ endif::[]
 
 . _ploaness_ runs on Node 26 or newer.
 . The https://payloadcms.com[Payload CMS^] project declares the https://www.npmjs.com/package/payload[`payload` package^] among its dependencies. Every rule _ploaness_ applies is a rule about https://payloadcms.com[Payload CMS^].
-. Three xref:#gates[gates] run their analyzer in a container: xref:#secrets-gate[`secrets`], xref:#docker-gate[`docker`], and xref:#actions-gate[`actions`]. Each analyzer needs a reachable Docker daemon.
+. Three xref:#gates[gates] run their analyzer in a container: xref:#secrets-gate[`secrets`], xref:#docker-gate[`docker`], and xref:#actions-gate[`actions`]. Each analyzer needs a reachable Docker daemon, and each image is pinned by digest so an upstream release can't change a verdict.
+. Two xref:#gates[gates] read a public service by design and fail when it's unreachable: xref:#vulnerabilities-gate[`vulnerabilities`] reads the advisory database, and `deps` reads the package registry.
 
 [[installation]]
 === Installation
@@ -112,7 +113,7 @@ pnpm exec ploaness init
 | Command | Behavior
 
 | [[default-verification,default verification]]`ploaness verify`
-| Runs the xref:#default-gates[26 default verification gates].
+| Runs the xref:#default-gates[30 default verification gates].
 
 | [[extended-verification,extended verification]]`ploaness verify --extended`
 | Runs xref:#default-verification[] and the xref:#extended-gates[6 extended verification gates] as well.
@@ -148,7 +149,7 @@ pnpm exec ploaness init
 [[default-gates]]
 === Default Verification Gates
 
-xref:#default-verification[] runs the following 26 gates.
+xref:#default-verification[] runs the following 30 gates.
 
 [cols="2,5"]
 |===
@@ -179,7 +180,13 @@ xref:#default-verification[] runs the following 26 gates.
 | The type-aware lint pass.
 
 | `conventions`
-| The ban on typographic characters and on hand-written JavaScript.
+| The ban on typographic characters and on hand-written JavaScript, across every tracked text file.
+
+| [[editorconfig-gate]]`editorconfig`
+| Every tracked text file matches the pinned `.editorconfig`, and no code line passes 120 characters.
+
+| [[suppressions-gate]]`suppressions`
+| The suppression count against xref:#suppression-ceiling[the suppression ceiling].
 
 | `css`
 | Stylelint.
@@ -191,7 +198,10 @@ xref:#default-verification[] runs the following 26 gates.
 | Type coverage of 100% over hand-written TypeScript.
 
 | `payload-generated`
-| `payload-types.ts` and `importMap.js` are current.
+| The generated https://payloadcms.com[Payload CMS^] artefacts are current.
+
+| [[generated-denial-gate]]`generated-denial`
+| The agent runtime is denied write access to every generated artefact.
 
 | [[payload-rules-gate]]`payload-rules`
 | The six xref:#payload-cms-usage-rules[].
@@ -200,10 +210,15 @@ xref:#default-verification[] runs the following 26 gates.
 | No analyzer setting carves out a path that no longer exists.
 
 | [[secrets-gate]]`secrets`
-| gitleaks over the git history, on the tool's own rules.
+| gitleaks over the git history and the tracked tree, on the tool's own rules plus the declared
+  `secretAllowlist`.
 
 | `licenses`
 | The license of every dependency sits inside the allowlist.
+
+| [[vulnerabilities-gate]]`vulnerabilities`
+| No package in the resolved set carries a known vulnerability at or above the declared severity. The
+  advisory database must be reachable.
 
 | `deps`
 | No dependency is two or more major versions behind. The registry must be reachable.
@@ -336,6 +351,14 @@ xref:#extended-verification[] adds the following six gates to xref:#default-veri
     "javascriptAllowlist": ["^scripts/legacy\\.js$"],
     "coverageExclude": ["src/migrations/**"],
     "bundleBudgetBytes": 921600,
+    "maxSuppressions": 12,
+    "vulnerabilitySeverity": "low",
+    "vulnerabilityAllowlist": [
+      { "advisory": "GHSA-93q8-gq69-wqmw", "reason": "reachable only through the dev server", "addedOn": "2026-08-23" }
+    ],
+    "secretAllowlist": [
+      { "path": "tests/fixtures/stripe-webhook.json", "reason": "fake test key the checkout fixture asserts on" }
+    ],
     "pretest": ["pnpm", "run", "db:ensure"],
     "testWrapper": ["pnpm", "run", "db:scratch", "--"],
     "analysisEnv": { "STRIPE_KEY": "placeholder" }
@@ -372,6 +395,28 @@ xref:#extended-verification[] adds the following six gates to xref:#default-veri
 | `921600`
 | The ceiling on total gzipped client JavaScript, in bytes.
 
+| [[max-suppressions]]`maxSuppressions`
+| unset
+| A xref:#suppression-ceiling[suppression ceiling] stricter than the earned one. `0` states that no
+  suppression is permitted. A value looser than the earned ceiling is ignored.
+
+| `vulnerabilitySeverity`
+| `moderate`
+| The severity at which the xref:#vulnerabilities-gate[`vulnerabilities` gate] fails. Only a stricter
+  value is honoured.
+
+| `vulnerabilityAllowlist`
+| empty
+| Advisories the https://payloadcms.com[Payload CMS^] project can't reach. Each entry records the
+  `advisory`, the `reason`, and the `addedOn` date. An entry missing any of the three is dropped, and an
+  entry that suppresses nothing fails the gate.
+
+| `secretAllowlist`
+| empty
+| Fake credentials committed as test fixtures. Each entry records the `path` and the `reason`. _ploaness_
+  renders the scanner's configuration from these entries outside the working tree, so an entry can only
+  add a named exception and never replaces the scanner's own rules. An entry without a reason is dropped.
+
 | [[pretest]]`pretest`
 | empty
 | A command run once before the xref:#tests-gate[`tests`], xref:#build-gate[`build`], and xref:#e2e-gate[`e2e`] gates, given as an argument list.
@@ -386,6 +431,12 @@ xref:#extended-verification[] adds the following six gates to xref:#default-veri
 |===
 . xref:#pretest[`pretest`] and xref:#test-wrapper[`testWrapper`] exist because a https://payloadcms.com[Payload CMS^] project can need a database before a xref:#gates[gate] can run. How the https://payloadcms.com[Payload CMS^] project reaches that database is a fact _ploaness_ can't know. Declaring either key changes only the route to the database, never a gate or a threshold.
 . xref:#analysis-env[`analysisEnv`] exists because a https://payloadcms.com[Payload CMS^] configuration module reads `process.env` as soon as the module loads, which a reader that only inspects the source files can't satisfy in a bare shell. The values are placeholders, and a xref:#gates[gate] that runs the application, such as xref:#build-gate[`build`], xref:#tests-gate[`tests`], or xref:#e2e-gate[`e2e`], uses the real environment instead.
+. [[suppression-ceiling,the suppression ceiling]]The _suppression ceiling_ is `2` plus one for every
+`500` non-blank lines of the https://payloadcms.com[Payload CMS^] project's own source. It is a density
+rather than a bare count, so it neither strangles a small project nor loosens as a large one grows.
+_ploaness_ owns the formula; xref:#max-suppressions[`maxSuppressions`] can only lower the result. The
+xref:#suppressions-gate[`suppressions` gate] reports the count and the distance left on every run,
+whether it passes or fails, so the trend is readable before the ceiling is reached.
 . No key turns a xref:#gates[gate] off. A failing gate produces a xref:#finding[finding] to repair.
 
 == About the Guide

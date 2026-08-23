@@ -9,7 +9,7 @@ export const sync = (context: Context): number => {
     console.info('ploaness sync: every managed path already matches the catalogue.')
     return 0
   }
-  console.info(`ploaness sync: ${changes.length} change(s)`)
+  console.info(`ploaness sync: ${String(changes.length)} change(s)`)
   for (const change of changes) {
     console.info(`  ${change.action} ${change.path}`)
   }
@@ -18,7 +18,8 @@ export const sync = (context: Context): number => {
   )
   if (refused.length > 0) {
     console.error(
-      `\n${refused.length} file(s) carry duplicate, out-of-order, or non-leading ploaness markers.\nRepair the markers by hand, then run \`ploaness sync\` again.`,
+      `\n${String(refused.length)} file(s) carry duplicate, out-of-order, or non-leading ploaness markers.` +
+        '\nRepair the markers by hand, then run `ploaness sync` again.',
     )
     return 1
   }

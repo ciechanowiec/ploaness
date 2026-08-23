@@ -13,26 +13,36 @@ interface BannedCharacter {
 const STRAIGHT_DOUBLE_QUOTE: string = 'a straight double quote'
 const PLAIN_HYPHEN: string = 'a hyphen "-"'
 
+// The code points are named rather than written at each use, because a bare number in the table below
+// would be exactly the unexplained literal the standard bans - and this module cannot spell the
+// characters out, since its own source is scanned by the rule it implements.
+const EM_DASH: number = 0x20_14
+const EN_DASH: number = 0x20_13
+const ELLIPSIS: number = 0x20_26
+const LEFT_DOUBLE_QUOTE: number = 0x20_1c
+const RIGHT_DOUBLE_QUOTE: number = 0x20_1d
+const LOW_DOUBLE_QUOTE: number = 0x20_1e
+
 const BANNED_CHARACTERS: readonly BannedCharacter[] = [
-  { char: String.fromCodePoint(0x2014), label: 'em dash (U+2014)', replacement: PLAIN_HYPHEN },
-  { char: String.fromCodePoint(0x2013), label: 'en dash (U+2013)', replacement: PLAIN_HYPHEN },
+  { char: String.fromCodePoint(EM_DASH), label: 'em dash (U+2014)', replacement: PLAIN_HYPHEN },
+  { char: String.fromCodePoint(EN_DASH), label: 'en dash (U+2013)', replacement: PLAIN_HYPHEN },
   {
-    char: String.fromCodePoint(0x2026),
+    char: String.fromCodePoint(ELLIPSIS),
     label: 'ellipsis (U+2026)',
     replacement: 'three dots "..."',
   },
   {
-    char: String.fromCodePoint(0x201c),
+    char: String.fromCodePoint(LEFT_DOUBLE_QUOTE),
     label: 'left double quote (U+201C)',
     replacement: STRAIGHT_DOUBLE_QUOTE,
   },
   {
-    char: String.fromCodePoint(0x201d),
+    char: String.fromCodePoint(RIGHT_DOUBLE_QUOTE),
     label: 'right double quote (U+201D)',
     replacement: STRAIGHT_DOUBLE_QUOTE,
   },
   {
-    char: String.fromCodePoint(0x201e),
+    char: String.fromCodePoint(LOW_DOUBLE_QUOTE),
     label: 'low double quote (U+201E)',
     replacement: STRAIGHT_DOUBLE_QUOTE,
   },

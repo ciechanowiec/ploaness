@@ -103,8 +103,17 @@ edit_json() {
       const parsed = JSON.parse(readFileSync(file, "utf8"))
       const keys = pointer.split(".")
       let cursor = parsed
-      for (const key of keys.slice(0, -1)) { cursor = cursor[key] }
-      cursor[keys.at(-1)] = value
+      // Create a missing parent rather than crashing: a case that sets `ploaness.maxSuppressions` on a
+      // fixture that declares no `ploaness` key is setting it for the first time, which is the point.
+      for (const key of keys.slice(0, -1)) {
+        if (typeof cursor[key] !== "object" || cursor[key] === null) { cursor[key] = {} }
+        cursor = cursor[key]
+      }
+      // argv is text. A value that parses as JSON is stored as JSON, so a numeric ceiling of 0 is
+      // written as 0 and not as "0", which the settings reader would drop as malformed.
+      let parsedValue = value
+      try { parsedValue = JSON.parse(value) } catch { parsedValue = value }
+      cursor[keys.at(-1)] = parsedValue
       writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`)
     ' "$@"
 }
@@ -117,6 +126,25 @@ duplicate_file() {
       const [file] = process.argv.slice(1)
       const text = readFileSync(file, "utf8")
       writeFileSync(file, `${text}\n${text}`)
+    ' "$@"
+}
+
+# Reads one non-blank line out of the managed body ploaness ships. A fixture that restated the managed
+# text in its own words is a second copy of a value ploaness owns, and it degrades into a silent no-op
+# the moment ploaness rewords the block - which is exactly the defect this suite exists to catch.
+managed_line() {
+    node -e '
+      const { readFileSync } = require("node:fs")
+      const [file, index] = process.argv.slice(1)
+      const lines = readFileSync(file, "utf8")
+        .split("\n")
+        .filter((line) => line.trim().length > 0)
+      const line = lines[Number(index)]
+      if (line === undefined) {
+        console.error(`the managed body has no non-blank line ${index}`)
+        process.exit(1)
+      }
+      process.stdout.write(line)
     ' "$@"
 }
 
@@ -139,8 +167,8 @@ only arrangement that resolves the way a published install does.'
 # The pass case: the untouched scaffold must satisfy every gate that judges a project's own shape.
 new_case pass
 commit_case pass 'feat(fixture): add the ploaness integration consumer' "$CONFORMING_BODY"
-for gate in preflight wiring assets conventions payload-rules config-refs \
-            require-full-history commit-history linear-history; do
+for gate in preflight wiring assets conventions editorconfig suppressions generated-denial \
+            payload-rules config-refs require-full-history commit-history linear-history; do
     expect pass "$gate" PASS
 done
 
@@ -179,7 +207,7 @@ expect fail-asset-drift assets FAIL .editorconfig
 # other: the section is spliced rather than rewritten, and only the marked block is judged.
 new_case fail-section-drift
 drop_text "$scratch/fail-section-drift/AGENTS.md" \
-    '2. Follow the complete ploaness contract in `.ploaness/agent-guide.md`.'
+    "$(managed_line "$root/packages/assets/files/AGENTS.md.asset" 4)"
 commit_case fail-section-drift 'feat(fixture): edit the managed section' "$CONFORMING_BODY"
 expect fail-section-drift assets FAIL 'managed block drifted'
 
@@ -189,6 +217,48 @@ new_case fail-section-duplicated
 duplicate_file "$scratch/fail-section-duplicated/AGENTS.md"
 commit_case fail-section-duplicated 'feat(fixture): duplicate the managed section' "$CONFORMING_BODY"
 expect fail-section-duplicated assets FAIL 'repair the markers by hand'
+
+# A junk word is rejected anywhere in the subject, not only as its first word. The gate accepted
+# `fix: clear the tmp directory` until the anchor came off, so this case pins the unanchored form.
+new_case fail-commit-junk-word
+commit_case fail-commit-junk-word 'fix: clear the tmp directory' ''
+expect fail-commit-junk-word commit-history FAIL 'low-effort'
+
+# `revert` is not a type the governing standard lists. A spec once asserted the opposite, so the
+# fixture proves the gate and the standard now agree.
+new_case fail-commit-revert-type
+commit_case fail-commit-revert-type 'revert: restore the previous gate' "$CONFORMING_BODY"
+expect fail-commit-revert-type commit-history FAIL 'invalid header'
+
+# The committed .editorconfig is pinned, and until now nothing checked a file against it.
+new_case fail-editorconfig
+printf 'const trailing = 1   \n' >> "$scratch/fail-editorconfig/src/lib/reads.ts"
+commit_case fail-editorconfig 'feat(fixture): add trailing whitespace to a source file' "$CONFORMING_BODY"
+expect fail-editorconfig editorconfig FAIL 'trailing whitespace'
+
+# The typography ban reads every tracked text file, not an allowlist of extensions. A stylesheet was
+# outside that allowlist, so this case proves the widened scope rather than the rule.
+new_case fail-typography-css
+printf '/* an em %s dash in a stylesheet */\n' "$(printf '\342\200\224')" \
+    > "$scratch/fail-typography-css/src/app.css"
+commit_case fail-typography-css 'feat(fixture): add a stylesheet with banned typography' "$CONFORMING_BODY"
+expect fail-typography-css conventions FAIL 'em dash'
+
+# A project may declare a stricter ceiling and never a looser one. Zero states that no suppression is
+# permitted, which is the cheapest way to prove the gate binds.
+new_case fail-suppressions
+edit_json "$scratch/fail-suppressions/package.json" ploaness.maxSuppressions 0
+printf '// @ts-expect-error the fixture needs one suppression to exceed a ceiling of zero\nexport const unused: number = "text"\n' \
+    > "$scratch/fail-suppressions/src/lib/suppressed.ts"
+commit_case fail-suppressions 'feat(fixture): exceed a declared suppression ceiling' "$CONFORMING_BODY"
+expect fail-suppressions suppressions FAIL 'ceiling'
+
+# `init` writes the write denial for the generated Payload artefacts. Removing it must fail the gate
+# that requires it, which is what proves the scaffolder and that gate still agree.
+new_case fail-generated-denial
+edit_json "$scratch/fail-generated-denial/.claude/settings.json" permissions.deny '[]'
+commit_case fail-generated-denial 'feat(fixture): drop the generated-file write denial' "$CONFORMING_BODY"
+expect fail-generated-denial generated-denial FAIL 'no write denial'
 
 # Text the project owns below the block is not ploaness's to judge, so adding some must not fail.
 new_case pass-section-project-text

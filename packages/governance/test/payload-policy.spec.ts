@@ -29,9 +29,12 @@ describe('no-unbounded-find', () => {
   })
 
   it('reads a bound across several lines', () => {
-    const source = ['await payload.find({', "  collection: 'posts',", '  depth: 1,', '})'].join(
-      '\n',
-    )
+    const source: string = [
+      'await payload.find({',
+      "  collection: 'posts',",
+      '  depth: 1,',
+      '})',
+    ].join('\n')
     expect(rulesOf(source)).toEqual([])
   })
 
@@ -111,12 +114,12 @@ describe('no-deep-relative-imports', () => {
 
 describe('require-collection-access', () => {
   it('flags a collection that declares no access', () => {
-    const source = "export const Posts: CollectionConfig = { slug: 'posts', fields: [] }"
+    const source: string = "export const Posts: CollectionConfig = { slug: 'posts', fields: [] }"
     expect(rulesOf(source)).toEqual(['require-collection-access'])
   })
 
   it('accepts a collection that declares access', () => {
-    const source =
+    const source: string =
       "export const Posts: CollectionConfig = { slug: 'posts', access: { read: () => true }, fields: [] }"
     expect(rulesOf(source)).toEqual([])
   })
@@ -128,24 +131,25 @@ describe('require-collection-access', () => {
 
 describe('prose is never mistaken for code', () => {
   it('ignores a banned construct named in a line comment', () => {
-    const source = '// no banned `overrideAccess: true` flag is needed here\nexport const x = 1'
+    const source: string =
+      '// no banned `overrideAccess: true` flag is needed here\nexport const x = 1'
     expect(rulesOf(source)).toEqual([])
   })
 
   it('ignores a banned construct named in a block comment', () => {
-    const source =
+    const source: string =
       "/*\n * Never write payload.find({ collection: 'p' }) unbounded.\n */\nexport const x = 1"
     expect(rulesOf(source)).toEqual([])
   })
 
   it('still reports the construct when it is real code beside the comment', () => {
-    const source =
+    const source: string =
       "// explaining overrideAccess\nawait payload.find({ collection: 'p', depth: 0, overrideAccess: true })"
     expect(rulesOf(source)).toEqual(['no-override-access'])
   })
 
   it('reports the line of the code, not of the comment', () => {
-    const source = [
+    const source: string = [
       '// a preamble',
       '// another line',
       "await payload.find({ collection: 'p' })",
@@ -154,26 +158,26 @@ describe('prose is never mistaken for code', () => {
   })
 
   it('does not treat escaped slashes in a regex literal as a comment', () => {
-    const source = "const pattern = /https:\\/\\//\nawait payload.find({ collection: 'p' })"
+    const source: string = "const pattern = /https:\\/\\//\nawait payload.find({ collection: 'p' })"
     expect(rulesOf(source)).toEqual(['no-unbounded-find'])
   })
 })
 
 describe('require-collection-access precision', () => {
   it('ignores an array of already-defined collections', () => {
-    const source = 'export const collections: CollectionConfig[] = [Users, Media]'
+    const source: string = 'export const collections: CollectionConfig[] = [Users, Media]'
     expect(rulesOf(source)).toEqual([])
   })
 
   it('still flags a real collection definition', () => {
-    const source = "export const Users: CollectionConfig = { slug: 'users', fields: [] }"
+    const source: string = "export const Users: CollectionConfig = { slug: 'users', fields: [] }"
     expect(rulesOf(source)).toEqual(['require-collection-access'])
   })
 })
 
 describe('stripComments', () => {
   it('preserves line count so reported positions stay accurate', () => {
-    const source = '/* a\n block\n comment */\ncode'
+    const source: string = '/* a\n block\n comment */\ncode'
     expect(stripComments(source).split('\n')).toHaveLength(4)
   })
 

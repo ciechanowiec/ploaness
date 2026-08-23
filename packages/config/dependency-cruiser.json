@@ -56,7 +56,10 @@
       "from": {},
       "to": {
         "dependencyTypes": ["core"],
-        "path": ["^(v8/tools/codemap)$", "^(node:)?(_(linklist|stream_wrap)|sys|constants|domain|punycode)$"]
+        "path": [
+          "^(v8/tools/codemap)$",
+          "^(node:)?(_(linklist|stream_wrap)|sys|constants|domain|punycode)$"
+        ]
       }
     }
   ],
