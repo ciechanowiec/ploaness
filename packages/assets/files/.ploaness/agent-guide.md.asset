@@ -38,7 +38,7 @@ ploaness governs all of the following domains:
   produces them.
 - **Dependencies:** licenses, available stable updates, the maximum permitted freshness gap, dead code,
   and unused dependencies.
-- **Assets and documentation:** image integrity, documentation references, config references, prose, and
+- **Assets and documentation:** image integrity, documentation references, config references, and
   the agent skill manifest.
 - **Repository assurance:** secret scanning, container and workflow linting, test execution with
   per-file coverage, commit-message policy, commit typography, and linear history.

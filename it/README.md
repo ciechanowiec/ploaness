@@ -45,7 +45,7 @@ defects that shipped in the first draft of the wiring gate were of exactly that 
 ## What the suite does not prove
 
 The gates that shell out to a toolchain: `types`, `biome`, `eslint`, `css`, `arch`, `type-coverage`, `knip`,
-`tests`, `build`, `bundle`, `e2e`, and the two that need Docker (`secrets`, `prose`). Those need a real
+`tests`, `build`, `bundle`, `e2e`, and the one that needs Docker (`secrets`). Those need a real
 Payload application - a database, a Next.js build, a browser - and a fixture large enough to exercise them
 honestly would be a second product to maintain. They are proven end to end by a consumer project instead.
 `payload_blank` is that consumer, and its `pnpm run verify:full` is the other half of this suite.

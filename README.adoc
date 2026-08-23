@@ -45,15 +45,15 @@ endif::[]
 
 [cols=">.^1,<.^1"]
 |===
-| *Document last modified:* | {docdatetime}
-| *Document generated:* | {localdatetime}
+| *Guide last modified:* | {docdatetime}
+| *Guide generated:* | {localdatetime}
 |===
 
 [[overview]]
 == Overview
 
-. _ploaness_ is a quality harness for Payload CMS projects. A project declares one dependency on the `ploaness` package and receives from it the analyzer settings, the xref:#managed-files[managed files], the commit rules, the xref:#payload-usage-rules[], and the checks that run over the code.
-. This guide is written for an engineer who adds _ploaness_ version `{ploaness-version}` to a Payload project and then runs its checks. It assumes working knowledge of pnpm, TypeScript, and Payload. It explains xref:#quick-start[how to add the harness], xref:#commands[how to run it], xref:#gates[what it checks], and xref:#configuration[how to configure it]. It doesn't cover the packages that _ploaness_ is built from.
+. _ploaness_ is a quality harness for Payload CMS projects. A Payload CMS project declares one dependency on the `ploaness` package and receives from it the analyzer settings, the xref:#managed-files[managed files], the commit rules, the xref:#payload-usage-rules[], and the xref:#gates[gates] that inspect it.
+. This guide is written for an engineer who adds _ploaness_ version `{ploaness-version}` to a Payload CMS project and then runs its xref:#verification-commands[verification commands]. It explains xref:#quick-start[how to add _ploaness_], xref:#commands[how to run it], xref:#gates[what each gate verifies], and xref:#configuration[how to configure it]. It doesn't cover the packages that _ploaness_ is built from.
 
 [[quick-start]]
 == Quick Start
@@ -61,27 +61,27 @@ endif::[]
 [[requirements]]
 === Requirements
 
-. _ploaness_ runs on Node 26 or newer. The xref:#preflight-gate[`preflight` gate] stops the run on an older version.
-. The project declares `payload` among its dependencies. _ploaness_ judges Payload CMS projects and refuses to judge a project of another kind.
-. Four gates run their analyzer in a container: `secrets`, `prose`, `docker`, and `actions`. Each of them needs a reachable Docker daemon and fails without one.
+. _ploaness_ runs on Node 26 or newer.
+. The Payload CMS project declares `payload` among its dependencies. Every rule _ploaness_ applies is a rule about Payload.
+. Three xref:#gates[gates] run their analyzer in a container: xref:#secrets-gate[`secrets`], xref:#docker-gate[`docker`], and xref:#actions-gate[`actions`]. Each analyzer needs a reachable Docker daemon.
 
 [[installation]]
 === Installation
 
-. Add the dependency and write the wiring:
+. Add and xref:#init-command[initialize] _ploaness_:
 +
 [source,shell]
 ----
 pnpm add -D ploaness
 pnpm exec ploaness init
 ----
-. The `ploaness init` command writes the `verify`, `verify:full`, and `format` scripts into `package.json` and creates the xref:#project-files[project files]. It then writes the xref:#managed-files[managed files]. It never overwrites a file that already exists.
+. The xref:#init-command[`ploaness init` command] writes three [[project-scripts,project scripts]]_project scripts_ into `package.json`: `verify`, `verify:full`, and `format`. It then creates the xref:#project-files[project files] and writes the xref:#managed-files[managed files]. It never overwrites a file that already exists.
 . Review and commit the changes.
 
 [[project-files]]
 === Project Files
 
-. A project keeps four settings files of its own in the working tree. Each one points at the shipped settings and adds only what the tool has to read from the project root:
+. A Payload CMS project keeps four project files of its own in the working tree. Each project file points at the shipped analyzer settings and adds only what the analyzer has to read from the repository root:
 +
 [cols="2,5"]
 |===
@@ -91,7 +91,7 @@ pnpm exec ploaness init
 | `{ "extends": ["ploaness/biome"] }` and the `files` block that selects what Biome reads.
 
 | `tsconfig.json`
-| `{ "extends": "ploaness/tsconfig.json" }`, the project's own `paths`, and the `include` and `exclude` globs.
+| `{ "extends": "ploaness/tsconfig.json" }`, the Payload CMS project's own `paths`, and the `include` and `exclude` globs.
 
 | `eslint.config.mjs`
 | An import of `ploaness/eslint` and its default re-export.
@@ -99,69 +99,69 @@ pnpm exec ploaness init
 | `vitest.config.mts`
 | A re-export of `ploaness/vitest`.
 |===
-. Biome and TypeScript resolve a relative glob against the directory of the file that declares it. A glob left inside `node_modules` matches nothing in the project, which is why the two blocks sit at the project root. _ploaness_ still owns their text, and the xref:#wiring-gate[`wiring` gate] compares them character for character.
-. A project never names an `@ploaness/...` package. Under the `node_modules` layout that pnpm creates, a consumer can't resolve a package it doesn't depend on directly, so every entry point a project needs is re-exported through `ploaness` itself.
+. Biome and TypeScript resolve a relative glob against the directory of the file that declares it. A glob left inside `node_modules` matches no file in the working tree, which is why the two blocks sit at the repository root. _ploaness_ still owns their text, and the xref:#wiring-gate[`wiring` gate] compares them character for character.
+. A Payload CMS project never names an `@ploaness/...` package. Under the `node_modules` layout that pnpm creates, a Payload CMS project can't resolve a package it doesn't depend on directly, so every entry point it needs is re-exported through `ploaness` itself.
 
 [[commands]]
 == Commands
 
-. Every command runs through the `ploaness` executable. The xref:#init-command[`ploaness init`] command writes three of them into `package.json`, so `pnpm run verify` reaches the same code as `pnpm exec ploaness verify`:
+. Every command runs through the `ploaness` executable. The xref:#init-command[`ploaness init`] command writes the three xref:#project-scripts[project scripts] into `package.json`, so xref:#default-verification[`pnpm run verify`] invokes the same implementation as `pnpm exec ploaness verify`:
 +
 [cols="3,5"]
 |===
 | Command | Behavior
 
 | [[default-verification,default verification]]`ploaness verify`
-| Runs the xref:#default-gates[27 default gates].
+| Runs the xref:#default-gates[26 default verification gates].
 
 | [[extended-verification,extended verification]]`ploaness verify --extended`
-| Runs xref:#default-verification[] and the xref:#extended-gates[6 extended gates] as well.
+| Runs xref:#default-verification[] and the xref:#extended-gates[6 extended verification gates] as well.
 
 | `ploaness format`
-| Rewrites the sources with Biome and applies the fixes ESLint can make on its own.
+| Rewrites the files selected by Biome and applies the fixes ESLint can make on its own.
 
 | [[sync-command,the sync command]]`ploaness sync`
 | Writes the xref:#managed-files[managed files] and names the ones it refuses to overwrite.
 
 | [[init-command]]`ploaness init`
-| Writes the wiring into a project that doesn't carry it yet.
+| Writes the xref:#project-scripts[project scripts], xref:#project-files[project files], and xref:#managed-files[managed files].
 
 | `ploaness gate <id>`
-| Runs one gate, for debugging.
+| Runs one xref:#gates[gate], for debugging.
 
 | `ploaness gates`
-| Prints every gate in run order.
+| Prints every xref:#gates[gate] in run order.
 
 | `ploaness commit-message <file>`
-| Checks one commit message. It reads `--range <base>..<head>` or `--all` in place of a file.
+| Verifies one commit message. It reads `--range <base>..<head>` or `--all` in place of a file.
 |===
-. [[verification-commands,verification commands]]The two verification commands are xref:#default-verification[] and xref:#extended-verification[]. Both read one flag, [[report-only-mode,report-only mode]]`--enforce=false`, which prints the findings and exits with status `0`. That flag enables no further check, and the status it exits with isn't a pass.
-. For example, `ploaness verify --extended --enforce=false` runs xref:#extended-verification[] in xref:#report-only-mode[report-only mode].
+. [[verification-commands,verification commands]]The two verification commands are xref:#default-verification[] and xref:#extended-verification[]. Both read one flag, [[report-only-mode,report-only mode]]`--enforce=false`, which prints the xref:#finding[findings] and exits with status `0`. That flag enables no further xref:#gates[gate], and the status it exits with isn't a pass.
+. For example, xref:#extended-verification[`ploaness verify --extended --enforce=false`] runs the xref:#default-gates[default verification gates] and xref:#extended-gates[extended verification gates] in xref:#report-only-mode[report-only mode].
 
 [[gates]]
 == Gates
 
-. A _gate_ is one named check that a xref:#verification-commands[verification command] runs. A failing gate doesn't stop the run, and every gate reports, so one run names everything that's wrong rather than the first thing only.
-. The order is fixed. The structural checks that catch a mis-wired project run before the analyzers whose output would be harder to read, and the fingerprint of the working tree is taken before any gate can rewrite a file.
-. The `prose` gate is the one check whose rules the project owns. _ploaness_ ships no house style, because voice, terminology, and audience are the project's decisions. The gate runs Vale against the `.vale.ini` at the repository root and requires a report with no alert at all for `README.adoc`. A project that keeps no `.vale.ini` has declared no prose rules, and the gate passes.
+. A _gate_ is one named verification operation that a xref:#verification-commands[verification command] runs. A failing gate doesn't stop the run.
+. A [[finding]]_finding_ is one problem reported by a gate. Every gate completes, so one run reports every finding rather than the first finding only. An analyzer's native output has its own name and becomes a finding only when a gate reports it.
+. The order is fixed. The structural gates that catch a mis-wired Payload CMS project run before the analyzers whose output would be harder to read, and the xref:#tree-snapshot-gate[fingerprint of the working tree] is taken before any gate can rewrite a file.
 
 [[default-gates]]
 === Default Verification Gates
 
 [cols="2,5"]
 |===
-| Gate | Check
+| Gate | Behavior
 
-| [[preflight-gate,the preflight gate]]`preflight`
-| The project declares `payload` and runs on Node 26 or newer.
+| `preflight`
+| The Payload CMS project meets the xref:#requirements[].
 
 | [[wiring-gate,the wiring gate]]`wiring`
-| The scripts, settings files, and workflows that arm the harness are intact.
+| The xref:#project-scripts[project scripts], xref:#project-files[project files], and workflows that arm _ploaness_ are intact.
 
-| `assets`
+| [[assets-gate]]`assets`
 | The xref:#managed-files[managed files] match what _ploaness_ ships.
 
-| `tree-snapshot`
+| [[tree-snapshot-gate]]`tree-snapshot`
 | Records a fingerprint of the working tree.
 
 | `types`
@@ -186,52 +186,49 @@ pnpm exec ploaness init
 | dependency-cruiser.
 
 | `type-coverage`
-| Type coverage of 100% over hand-written code, so no `any` survives.
+| Type coverage of 100% over hand-written TypeScript.
 
 | `payload-generated`
 | `payload-types.ts` and `importMap.js` are current.
 
-| `payload-rules`
+| [[payload-rules-gate]]`payload-rules`
 | The six xref:#payload-usage-rules[].
 
 | `config-refs`
 | No analyzer setting carves out a path that no longer exists.
 
-| `secrets`
+| [[secrets-gate]]`secrets`
 | gitleaks over the git history, on the tool's own rules.
 
 | `licenses`
 | The license of every dependency sits inside the allowlist.
 
 | `deps`
-| No dependency is two or more major versions behind. The gate reads the registry and fails when it can't.
+| No dependency is two or more major versions behind. The registry must be reachable.
 
 | `image-assets`
 | Every tracked image decodes as the format its bytes claim.
 
 | `docs`
-| The agent documentation names no script and no file that has gone.
-
-| `prose`
-| Vale over `README.adoc`.
+| The agent documentation names no xref:#project-scripts[project script] and no file that has gone.
 
 | `skills`
 | The metadata header of every `SKILL.md`.
 
-| `docker`
+| [[docker-gate]]`docker`
 | hadolint over every Dockerfile, and `docker compose config`.
 
-| `actions`
+| [[actions-gate]]`actions`
 | actionlint over every workflow.
 
 | `knip`
 | Dead code, unused files, and unused dependencies.
 
-| `tests`
+| [[tests-gate]]`tests`
 | The test suite and its coverage thresholds.
 
 | `tree-verify`
-| The working tree is unchanged since `tree-snapshot` ran.
+| The working tree is unchanged since the xref:#tree-snapshot-gate[`tree-snapshot` gate] ran.
 |===
 
 [[extended-gates]]
@@ -239,31 +236,31 @@ pnpm exec ploaness init
 
 [cols="2,5"]
 |===
-| Gate | Check
+| Gate | Behavior
 
 | `require-full-history`
-| The clone carries the whole history rather than a truncated one.
+| The clone carries the whole history.
 
 | `commit-history`
-| Every commit message in the history, not the newest one only.
+| Every commit message in the history.
 
 | `linear-history`
 | No merge commit anywhere in the history.
 
-| `build`
+| [[build-gate]]`build`
 | The production build.
 
 | `bundle`
 | The gzipped client JavaScript stays under xref:#bundle-budget[the bundle budget].
 
-| `e2e`
+| [[e2e-gate]]`e2e`
 | The end-to-end suite.
 |===
 
 [[payload-usage-rules]]
 === Payload Usage Rules
 
-. The `payload-rules` gate reads the project's TypeScript sources and reports these six rules:
+. The xref:#payload-rules-gate[`payload-rules` gate] reads the Payload CMS project's TypeScript source files and reports these rules:
 +
 [cols="3,5"]
 |===
@@ -284,16 +281,16 @@ pnpm exec ploaness init
 | `no-deep-relative-imports`
 | An import uses the `@/` alias rather than a parent-relative `../` path.
 
-| `require-collection-access`
+| [[require-collection-access-rule]]`require-collection-access`
 | A `CollectionConfig` declares `access` of its own.
 |===
-. `require-collection-access` guards a security decision rather than a matter of style. A collection that omits `access` inherits the Payload defaults, which grant public read. A collection meant to be readable by anyone says so, instead of becoming readable because nobody wrote anything down.
-. The gate reads a call by scanning for its matching bracket and skipping over string literals, so a call spread across several lines or nested inside another one still reads correctly. Only a call on `payload`, `req.payload`, or `this.payload` counts, and an unrelated `array.find(...)` never does.
+. The xref:#require-collection-access-rule[`require-collection-access` rule] guards a security decision rather than a matter of style. A collection that omits `access` inherits the Payload defaults, which grant public read. A collection meant to be readable by anyone declares that in writing.
+. The xref:#payload-rules-gate[`payload-rules` gate] reads a call by scanning for its matching bracket and skipping over string literals, so a call spread across several lines or nested inside another one still reads correctly. Only a call on `payload`, `req.payload`, or `this.payload` counts, which is what leaves an unrelated `array.find(...)` alone.
 
 [[managed-files]]
 == Managed Files
 
-. Git, editors, and coding agents read their settings from the working tree rather than from `node_modules`. _ploaness_ manages the files those tools read, and the xref:#sync-command[] writes them:
+. Git, editors, and coding agents read their configuration and instructions from the working tree rather than from `node_modules`. _ploaness_ manages the files that carry those inputs, and the xref:#sync-command[] writes them:
 +
 [cols="2,3,5"]
 |===
@@ -301,29 +298,29 @@ pnpm exec ploaness init
 
 | [[managed-section,managed section]]Managed section
 | `AGENTS.md`
-| _ploaness_ owns the marked block at the top. The project owns the text below it.
+| _ploaness_ owns the xref:#managed-section[managed section] at the top. The Payload CMS project owns the text below it.
 
-| [[pinned-file,pinned file]]Pinned
+| [[pinned-file,pinned file]]Pinned file
 | `README-guideline-software-project.adoc`, `.ploaness/agent-guide.md`, `CLAUDE.md`, `.editorconfig`, `.gitattributes`, `.nvmrc`, `.npmrc`
-| The file exists and matches what the active _ploaness_ version ships, character for character.
+| The xref:#pinned-file[pinned file] exists and matches what the active _ploaness_ version ships, character for character.
 
-| [[seed-file,seed file]]Seed
+| [[seed-file,seed file]]Seed file
 | `.gitignore`
-| The xref:#sync-command[] creates the file once when it's absent. The project owns it afterwards.
+| The xref:#sync-command[] creates the xref:#seed-file[seed file] once when it's absent. The Payload CMS project owns the seed file afterwards.
 
-| [[forbidden-file,forbidden file]]Forbidden
+| [[forbidden-file,forbidden file]]Forbidden file
 | `.stylelintrc.json`, `.dependency-cruiser.json`, `knip.json`, `.gitleaks.toml`, `plugins`
-| _ploaness_ supplies these settings itself. The path must not exist, because a copy in the tree could only shadow or weaken them.
+| _ploaness_ supplies the analyzer settings for each xref:#forbidden-file[forbidden file]. A forbidden file must not exist, because a copy in the working tree could only shadow or weaken those settings.
 |===
-. `README-guideline-software-project.adoc` states the rules the project is held to, in a form that names no tool. `.ploaness/agent-guide.md` maps those rules onto this harness. Both are xref:#pinned-file[pinned], so raising the _ploaness_ version updates them in every project at once.
-. The xref:#managed-section[] in `AGENTS.md` is enclosed by `BEGIN PLOANESS MANAGED INSTRUCTIONS` and `END PLOANESS MANAGED INSTRUCTIONS`. It leads the file and appears exactly once. A block that an agent reaches only after the project's own text no longer governs what comes before it, and a second copy would let one block go stale while the gate still reported the other as current.
-. The xref:#sync-command[] creates `AGENTS.md` or refreshes its xref:#managed-section[], carrying the text below the block through unchanged. It refuses a file whose markers are duplicated, incomplete, or no longer leading, because every edit it could make there would either duplicate the block or swallow text the project owns. The `assets` gate names such a file on its own and asks for a repair by hand.
-. To let the project own a xref:#pinned-file[], a xref:#seed-file[], or a xref:#forbidden-file[], list its path under xref:#unmanaged-assets[`unmanagedAssets`] together with the reason. _ploaness_ then leaves that path alone. An entry without a reason is dropped, and the path stays managed.
+. `README-guideline-software-project.adoc` states the rules the Payload CMS project is held to, in a form that names no tool. `.ploaness/agent-guide.md` maps those rules onto _ploaness_. Both are xref:#pinned-file[pinned], so raising the _ploaness_ version updates them in every Payload CMS project at once.
+. The xref:#managed-section[] in `AGENTS.md` is enclosed by `BEGIN PLOANESS MANAGED INSTRUCTIONS` and `END PLOANESS MANAGED INSTRUCTIONS`. It leads the file and appears exactly once. A managed section that an agent reaches only after the Payload CMS project's own text no longer governs what comes before it, and a second copy would let one managed section go stale while the xref:#assets-gate[`assets` gate] still reported the other as current.
+. The xref:#sync-command[] creates `AGENTS.md` or refreshes its xref:#managed-section[], carrying the text below the managed section through unchanged. It refuses a file whose markers are duplicated, incomplete, or no longer leading, because every edit it could make there would either duplicate the managed section or swallow text the Payload CMS project owns. The xref:#assets-gate[`assets` gate] names such a file on its own and asks for a repair by hand.
+. To let the Payload CMS project own a xref:#pinned-file[], a xref:#seed-file[], or a xref:#forbidden-file[], list its path under xref:#unmanaged-assets[`unmanagedAssets`] together with the reason. _ploaness_ then leaves that path alone. An entry without a reason is dropped, so _ploaness_ continues to apply the file's policy.
 
 [[configuration]]
 == Configuration
 
-. Settings live under the `ploaness` key of `package.json`. Every key is optional, and a project that declares none still receives the whole contract:
+. _ploaness_ configuration lives under the `ploaness` key of `package.json`. Every key is optional, and a Payload CMS project that declares none still receives the whole contract:
 +
 [source,json]
 ----
@@ -341,7 +338,7 @@ pnpm exec ploaness init
   }
 }
 ----
-. Every list key adds to the shipped default rather than replacing it, so a declared value can widen a set but never shrink one:
+. Every list key adds to the shipped default rather than replacing it:
 +
 [cols="3,3,5"]
 |===
@@ -349,11 +346,11 @@ pnpm exec ploaness init
 
 | `sourceRoots`
 | `src`, `tests`, `scripts`
-| The directories that hold the project's own source, read by the file-selection and coverage gates.
+| The directories that hold the Payload CMS project's own source files, read by the xref:#gates[gates] that select files and measure coverage.
 
 | [[unmanaged-assets,unmanagedAssets]]`unmanagedAssets`
 | empty
-| Managed paths the project takes over, each with the reason. The section xref:#managed-files[] names the paths this key accepts.
+| xref:#managed-files[Managed files] the Payload CMS project takes over.
 
 | `typographyExclusions`
 | the generated Payload files
@@ -371,31 +368,31 @@ pnpm exec ploaness init
 | `921600`
 | The ceiling on total gzipped client JavaScript, in bytes.
 
-| `pretest`
+| [[pretest]]`pretest`
 | empty
-| A command run once before the `tests` and `e2e` gates, given as an argument list.
+| A command run once before the xref:#tests-gate[`tests`], xref:#build-gate[`build`], and xref:#e2e-gate[`e2e`] gates, given as an argument list.
 
-| `testWrapper`
+| [[test-wrapper]]`testWrapper`
 | empty
-| An argument list wrapping the test runner, for a project that runs its suite against a scratch database.
+| An argument list wrapping the process run by the xref:#tests-gate[`tests`], xref:#build-gate[`build`], and xref:#e2e-gate[`e2e`] gates, for a Payload CMS project that uses a scratch database.
 
-| `analysisEnv`
+| [[analysis-env]]`analysisEnv`
 | `PAYLOAD_SECRET`, `DATABASE_URL`
-| Placeholder environment variables for the gates that import the project to read it.
+| Placeholder environment variables for the xref:#gates[gates] that import the Payload CMS project to read it.
 |===
-. `pretest` and `testWrapper` exist because a Payload suite needs a database before it can start, and how a project reaches one is a fact _ploaness_ can't know. Declaring either one weakens no rule. The gates and their thresholds don't change, and only the route to the database does.
-. `analysisEnv` exists because a Payload configuration reads `process.env` as soon as the module loads, which a reader that only inspects the code can't satisfy in a bare shell. The values are placeholders. Nothing connects to them, and a gate that runs the application, such as `build`, `tests`, or `e2e`, uses the real environment instead.
-. No key turns a gate off. A failing check is a finding to repair rather than a setting to change.
+. xref:#pretest[`pretest`] and xref:#test-wrapper[`testWrapper`] exist because a Payload CMS project can need a database before a xref:#gates[gate] can run. How the Payload CMS project reaches that database is a fact _ploaness_ can't know. Declaring either key changes only the route to the database, never a gate or a threshold.
+. xref:#analysis-env[`analysisEnv`] exists because a Payload configuration module reads `process.env` as soon as the module loads, which a reader that only inspects the source files can't satisfy in a bare shell. The values are placeholders, and a xref:#gates[gate] that runs the application, such as xref:#build-gate[`build`], xref:#tests-gate[`tests`], or xref:#e2e-gate[`e2e`], uses the real environment instead.
+. No key turns a xref:#gates[gate] off. A failing gate produces a xref:#finding[finding] to repair.
 
-== About the Document
+== About the Guide
 
-The source text of this document is written in the https://asciidoc.org[AsciiDoc^] markup language. The guideline, export, and linting setup described below live in the repository that holds the source text, and an exported copy of the document carries none of them.
+The source text of this guide is written in the https://asciidoc.org[AsciiDoc^] markup language. The writing guideline, export, and linting setup described below live in the repository that holds the source text, and an exported copy of the guide carries none of them.
 
-=== Guideline
+=== Writing Guideline
 
 The source text should follow the link:README-guideline-writing.adoc[Writing Guideline], stored beside it in the repository.
 
-[#export]
+[#prerequisites]
 === Prerequisites
 
 To export and lint the source text, install the following tools:
@@ -408,6 +405,7 @@ To export and lint the source text, install the following tools:
 . https://poppler.freedesktop.org[`pdftotext`^],
 . https://github.com/tesseract-ocr/tesseract[`tesseract`^].
 
+[#export]
 === Export
 
 . To export the source text to HTML:

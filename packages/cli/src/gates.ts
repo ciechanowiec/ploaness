@@ -3,7 +3,7 @@
 // fingerprint is taken before anything that could rewrite a file and read back after everything has run.
 
 import { assets } from './checks/assets.js'
-import { actions, containers, prose, secrets } from './checks/containers.js'
+import { actions, containers, secrets } from './checks/containers.js'
 import { conventions } from './checks/conventions.js'
 import { dependencyFreshness, licenses } from './checks/dependencies.js'
 import { commitHistory, linearHistory, requireFullHistory } from './checks/history.js'
@@ -74,7 +74,6 @@ const DEFAULT_GATES: readonly Gate[] = [
     run: (context: Context): GateResult =>
       documentation(context, new Set(ALL_GATES.map((gate: Gate): string => gate.id))),
   },
-  { id: 'prose', title: 'README prose', extended: false, run: prose },
   { id: 'skills', title: 'agent skill manifests', extended: false, run: skills },
   { id: 'docker', title: 'container definitions', extended: false, run: containers },
   { id: 'actions', title: 'workflow definitions', extended: false, run: actions },
