@@ -4,7 +4,15 @@
 import type { Context } from '../context.js'
 import { failed, type GateResult } from '../exec.js'
 import { type Gate, gatesFor } from '../gates.js'
-import { type GateOutcome, reportFindings, reportGate, reportVerdict } from '../report.js'
+import {
+  beginGate,
+  type GateOutcome,
+  reportFindings,
+  reportGate,
+  reportHeader,
+  reportNote,
+  reportVerdict,
+} from '../report.js'
 
 const asMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
@@ -17,6 +25,18 @@ const runGate = async (gate: Gate, context: Context): Promise<GateResult> => {
   }
 }
 
+/** Time one gate and package it as the outcome the report layer prints. */
+const timeGate = async (gate: Gate, context: Context): Promise<GateOutcome> => {
+  const started: number = Date.now()
+  const result: GateResult = await runGate(gate, context)
+  return { gate, result, durationMs: Date.now() - started }
+}
+
+// The identifier column is sized to the widest gate in this run rather than to a fixed constant, so
+// adding a longer gate identifier cannot silently push the summaries out of alignment.
+const identifierWidth = (gates: readonly Gate[]): number =>
+  gates.reduce((widest: number, gate: Gate): number => Math.max(widest, gate.id.length), 0)
+
 /**
  * Run Default or Extended verification.
  * @param context the resolved project environment.
@@ -25,18 +45,17 @@ const runGate = async (gate: Gate, context: Context): Promise<GateResult> => {
  */
 export const verify = async (context: Context, extended: boolean): Promise<number> => {
   const gates: readonly Gate[] = gatesFor(extended)
-  console.info(
-    `ploaness ${extended ? 'extended' : 'default'} verification: ${gates.length} gate(s)\n`,
-  )
+  const width: number = identifierWidth(gates)
+  reportHeader(extended, gates.length)
   const outcomes: GateOutcome[] = []
   for (const gate of gates) {
-    const result: GateResult = await runGate(gate, context)
-    const outcome: GateOutcome = { gate, result }
+    beginGate(gate, width)
+    const outcome: GateOutcome = await timeGate(gate, context)
     outcomes.push(outcome)
-    reportGate(outcome)
+    reportGate(outcome, width)
     // The preflight gate decides whether ploaness may judge this project at all. Continuing past a
     // failure there would produce a page of findings about a contract the project never agreed to.
-    if (gate.id === 'preflight' && !result.ok) {
+    if (gate.id === 'preflight' && !outcome.result.ok) {
       break
     }
   }
@@ -46,10 +65,9 @@ export const verify = async (context: Context, extended: boolean): Promise<numbe
 
 /** Run one gate by identifier. A single gate is a debugging aid, never a verdict. */
 export const verifyOne = async (context: Context, gate: Gate): Promise<number> => {
-  const result: GateResult = await runGate(gate, context)
-  const outcome: GateOutcome = { gate, result }
-  reportGate(outcome)
+  const outcome: GateOutcome = await timeGate(gate, context)
+  reportGate(outcome, gate.id.length)
   reportFindings([outcome])
-  console.info('\nA single gate is a debugging aid. Run `ploaness verify` for a verdict.')
-  return result.ok || !context.enforce ? 0 : 1
+  reportNote('A single gate is a debugging aid. Run `ploaness verify` for a verdict.')
+  return outcome.result.ok || !context.enforce ? 0 : 1
 }
