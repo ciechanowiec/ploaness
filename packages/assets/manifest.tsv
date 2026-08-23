@@ -1,0 +1,26 @@
+# Paths ploaness manages in a consumer working tree, because tools ploaness does not run read them from
+# there: git, editors, and coding agents cannot resolve a config through node_modules.
+#
+#   PINNED    ploaness owns the content; the file must exist and match byte for byte.
+#   SEED      ploaness writes it once when absent; the project owns it afterwards.
+#   FORBIDDEN the path must not exist, because ploaness supplies that configuration itself.
+#   SECTION   ploaness owns the marked block at the top; the project owns the text below it.
+#
+# Project documentation belongs to the consuming project. The governing standard and the agent guide are
+# the exceptions, because together they declare the contract every agent is held to. CLAUDE.md is a fixed
+# tool entry point, and AGENTS.md carries the block that points at all three.
+
+README-guideline-software-project.adoc	PINNED
+.ploaness/agent-guide.md	PINNED
+AGENTS.md	SECTION
+CLAUDE.md	PINNED
+.editorconfig	PINNED
+.gitattributes	PINNED
+.nvmrc	PINNED
+.npmrc	PINNED
+.gitignore	SEED
+.stylelintrc.json	FORBIDDEN
+.dependency-cruiser.json	FORBIDDEN
+knip.json	FORBIDDEN
+.gitleaks.toml	FORBIDDEN
+plugins	FORBIDDEN

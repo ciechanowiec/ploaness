@@ -1,0 +1,116 @@
+# ploaness Agent Guide
+
+This guide maps the governing standard to the ploaness harness. After it, continue through the lower
+`AGENTS.md` layers in the order the standard declares. Exact analyzer rules remain in the executable
+harness.
+
+## Layer 1: Governing Standard
+
+- Read `README-guideline-software-project.adoc` before using this ploaness-specific mapping. It states
+  the rules themselves; this guide only maps them onto the harness that enforces them.
+
+## Layer 2: Harness Invariants
+
+- The project declares `ploaness` as a dependency and receives its whole contract from it. Do not weaken,
+  replace, duplicate, or version the tools, configurations, rules, thresholds, or managed files that
+  ploaness owns.
+- ploaness governs Payload CMS projects only. It refuses to run when `payload` is not a declared
+  dependency.
+- Use Node 26 or later, pnpm 11 or later, and a Git working tree.
+- Treat every finding and every tool, setup, or compilation failure as a failed verification. Reporting
+  findings with `--enforce=false` is not a pass.
+
+## Layer 3: Governed Domains
+
+ploaness governs all of the following domains:
+
+- **Harness wiring:** the scripts, git hooks, CI invocation, tool-config inheritance, and test-library
+  versions through which the project installs ploaness. A project that rewrites `verify`, appends rules
+  after the harness ESLint config, redeclares a Biome section, overrides a compiler option, or drops
+  extended verification out of CI fails this domain rather than passing quietly.
+- **Repository files:** managed, seeded, and forbidden paths, and an unchanged committable tree during
+  verification.
+- **Source:** formatting, fast lint, type-aware lint, strict type checking, type coverage, typography,
+  source conventions, style sheets, and module architecture.
+- **Payload usage:** bounded Local API reads, explicit access control on every collection, no
+  access-control override, and no parent-relative imports.
+- **Generated output:** the Payload types and admin import map must match the configuration that
+  produces them.
+- **Dependencies:** licenses, available stable updates, the maximum permitted freshness gap, dead code,
+  and unused dependencies.
+- **Assets and documentation:** image integrity, documentation references, config references, prose, and
+  the agent skill manifest.
+- **Repository assurance:** secret scanning, container and workflow linting, test execution with
+  per-file coverage, commit-message policy, commit typography, and linear history.
+
+Do not treat a domain omitted from one command's output as ungoverned. The shipped configurations and
+the ploaness gates together define the executable contract.
+
+### Commit Messages
+
+Exact analyzer rules stay in the executable harness. This domain is the one exception. No format command
+repairs a commit message, no source file holds it, and a published one cannot be rewritten. An agent
+satisfies the policy only while writing the message, so the policy is declared here in full.
+
+| Rule | Value |
+| --- | --- |
+| Header | `type(scope): subject` |
+| Type | one of `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert` |
+| Scope | optional, and when present drawn from `a-z`, `0-9`, and `-` |
+| Subject | 15 characters or more, with the whole header at most 72 characters |
+| Subject ending | no trailing period |
+| Junk words | `wip`, `fixup`, `misc`, `stuff`, `tmp`, `temp`, `update`, `updates`, `change`, `changes`, `asdf`, as the leading word of the subject |
+| Body | required when the commit changes more than 2 files or more than 50 added plus deleted lines |
+| Body separator | one blank line after the header, since the body is everything after the first blank line |
+| Typography | plain ASCII only: no em dash, en dash, one-character ellipsis, or curly quotation mark |
+| Attribution | no marker naming an AI agent or an agent session, in any commit |
+
+There are no exemptions. Every commit is held to every rule, including the ones git writes for you: a
+merge, a revert, or an autosquash commit must be given a conforming subject by hand.
+
+Four traps account for most failures:
+
+- The 15-character floor rejects a short subject such as `fix typo`.
+- The body threshold counts added and deleted lines together, so a routine change crosses it quickly.
+- An explanation written without a blank line after the header does not count as a body.
+- The attribution ban binds in prose as well as by pattern: a marker that no pattern yet knows is still
+  a violation.
+
+Check a commit as soon as it is recorded, with `ploaness commit-message --range HEAD~1..HEAD`. The
+command reads the repository rather than the build, so an unpublished commit can still be amended.
+
+### History Shape
+
+The history is linear, so a merge commit is prohibited wherever it sits, including between two side
+branches. A branch takes the work of another by `git rebase` or `git cherry-pick`. The check counts the
+parents Git recorded rather than reading the header, so a subject that mentions merging is an ordinary
+commit, and rewording a merge does not hide it.
+
+The rule reaches back to the first commit and has no exception. Avoid a merge rather than plan to repair
+one: once it is published, only a fresh history satisfies the rule.
+
+## Layer 4: Command Workflow
+
+1. Run `ploaness sync` only to create or restore managed repository files, then review and commit its
+   edits.
+2. Run `ploaness format` to apply formatting, then review the resulting source.
+3. Run `ploaness verify` for Default verification.
+4. Run `ploaness verify --extended` before finishing. Extended verification includes Default verification
+   and adds history, build, bundle, and end-to-end checks.
+
+Run a single gate with `ploaness gate <id>` while iterating. A single gate is a debugging aid, never a
+verdict.
+
+## Layer 5: Exceptions and Repairs
+
+- Fix a managed-file finding with `ploaness sync`. A project may take over a managed path through
+  `ploaness.unmanagedAssets` only when the assignment explicitly requires it, and the entry must record
+  the reason. An entry without a reason is ignored.
+- Fix formatting findings with `ploaness format`. Fix type, lint, architecture, Payload, dependency,
+  test, coverage, history, and security findings at their source. Do not disable the failing check.
+- Change typography exclusions, the JavaScript allowlist, coverage exclusions, or the bundle budget only
+  for an explicit project requirement. Never widen one merely to obtain a pass.
+- There is no setting that turns a gate off. If a gate is wrong for the project, that is a ploaness bug
+  to be fixed in ploaness, not a local override.
+- For a source suppression, use the analyzer's exact rule identifier and put the reason on the same
+  line. A bare suppression without a stated reason is itself a finding.

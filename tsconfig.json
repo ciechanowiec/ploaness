@@ -1,0 +1,11 @@
+// The solution file `tsc --build` resolves at the workspace root. It compiles nothing itself; it names the
+// projects that do, in dependency order.
+//
+// Only two packages are listed. `packages/config/tsconfig.json` and `packages/ploaness/tsconfig.json` look
+// like build inputs and are not: they are the configurations ploaness SHIPS for a consumer to extend, and
+// referencing them here would try to compile a consumer's settings as if they described this repository.
+// `packages/assets` holds no TypeScript at all.
+{
+  "files": [],
+  "references": [{ "path": "./packages/governance" }, { "path": "./packages/cli" }]
+}

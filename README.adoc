@@ -1,0 +1,254 @@
+[.text-justify]
+= _ploaness_ User Guide
+:reproducible:
+:doctype: article
+:author: Herman Ciechanowiec
+:email: herman@ciechanowiec.eu
+:chapter-signifier:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:toc: left
+:toclevels: 5
+:icons: font
+:linkcss:
+:sourcedir: {docdir}
+:ploaness-version: 1.0.0
+:stylesdir: https://www.ciechanowiec.eu/linux_mantra/
+:stylesheet: adoc-css-style.css
+:!table-caption:
+:!figure-caption:
+:!example-caption:
+
+[[overview]]
+== Overview
+
+_ploaness_ is an external quality harness for Payload CMS projects. A project inherits its entire contract
+by declaring one dependency: analyzers, thresholds, managed files, commit rules, Payload usage rules, and
+the verification pipeline all arrive from a published package rather than being copied into the repository.
+
+This guide explains xref:#quick-start[how to add _ploaness_ version `{ploaness-version}`],
+xref:#commands[how to run its checks], xref:#gates[what it checks], and xref:#configuration[how to configure
+it]. It does not cover the internal packages.
+
+[[why-external]]
+=== Why the harness is external
+
+A vendored quality contract is a copy. The second project that wants it can only obtain it by copy-paste,
+and from that moment the two copies drift apart with no mechanism that could ever bring them back together.
+Moving the contract into a versioned package makes an upgrade a version bump, and makes a rule change
+something that happens once rather than once per repository.
+
+[[anti-bypass]]
+=== The problem npm has
+
+A build tool that binds its checks to fixed phases cannot be talked out of running them: the checks run
+because the build ran. npm binds nothing. `package.json` scripts are consumer-owned strings, and any
+project - or any agent working in it - can rewrite `verify` to `echo ok` and go green.
+
+So _ploaness_ makes its own wiring a governed domain. The xref:#gates[`wiring` gate] reads the project's
+`package.json`, `eslint.config.mjs`, `biome.json`, `tsconfig.json`, git hooks, and CI workflows, and fails
+when the harness has been disarmed. This cannot make bypass impossible - a project can always uninstall the
+dependency - but it makes bypass loud and deliberate, which is the property a fixed build lifecycle would
+have supplied for free.
+
+[[quick-start]]
+== Quick Start
+
+[[installation]]
+=== Installation
+
+[source,shell]
+----
+pnpm add -D ploaness
+pnpm exec ploaness init
+----
+
+`ploaness init` writes the wiring the harness requires: the npm scripts, the git hooks, and the `biome.json`
+and `tsconfig.json` stubs that extend the shipped configuration. It writes what the `wiring` gate then
+checks, from the same shared constants, so a freshly initialised project is a green project.
+
+[[what-a-consumer-holds]]
+=== What the project keeps in its tree
+
+Four files, and nothing else related to quality tooling:
+
+[cols="1,3"]
+|===
+| `biome.json` | `{ "extends": ["ploaness/biome"], "files": { ... } }`
+| `tsconfig.json` | `extends` plus the project's own `paths`
+| `eslint.config.mjs` | an import of `ploaness/eslint` and its default re-export, and nothing more
+| `vitest.config.mts` | a re-export of `ploaness/vitest`
+|===
+
+Everything else - Stylelint, dependency-cruiser, Knip, the Payload usage rules - lives inside the
+package, and gitleaks runs on its own built-in ruleset. Those paths are `FORBIDDEN` in the working tree,
+because a local copy could only shadow or weaken what the harness already applies.
+
+Prose rules are the exception, and the project owns them outright. See xref:#prose[below].
+
+A project never writes `@ploaness/...`. Under pnpm's strict `node_modules` layout a transitive scoped
+package is not resolvable from the consumer, so every consumer-facing entry point is re-exported through the
+`ploaness` package itself. The scoped packages are an internal packaging detail.
+
+[[commands]]
+== Commands
+
+[cols="1,3"]
+|===
+| `ploaness verify` | Default verification: the 27 gates below
+| `ploaness verify --extended` | Adds the 6 history, build, and end-to-end gates
+| `ploaness verify --enforce=false` | Reports findings and exits 0. It enables nothing extra and is not a pass
+| `ploaness gate <id>` | Runs one gate, for debugging
+| `ploaness format` | Applies every safe automated fix
+| `ploaness sync` | Writes the managed files, and reports the ones it refuses to overwrite
+| `ploaness init` | Writes the wiring into a project that does not have it yet
+| `ploaness precommit` | The pre-commit hook: the fast subset
+| `ploaness commit-message <file>` | The commit-msg hook
+|===
+
+[[gates]]
+== Gates
+
+`ploaness verify` runs these in order. A gate that fails does not stop the run: every gate reports, so one
+run tells you everything that is wrong rather than only the first thing.
+
+[cols="1,3"]
+|===
+| `preflight` | Payload is declared; Node and pnpm floors are met. _ploaness_ is Payload-only by design and refuses to run without it
+| `wiring` | The harness has not been disarmed. See xref:#anti-bypass[above]
+| `assets` | Managed files match the catalogue
+| `tree-snapshot` | Fingerprints the working tree
+| `types` | `tsc --noEmit`
+| `biome` | Formatting and fast lint
+| `biome-schema` | The declared `$schema` matches the installed Biome
+| `eslint` | The type-aware lint layer
+| `conventions` | The typography ban and the hand-written-JavaScript ban
+| `css` | Stylelint
+| `arch` | dependency-cruiser
+| `type-coverage` | 100% on hand-written logic
+| `payload-generated` | `payload-types.ts` and `importMap.js` are not stale
+| `payload-rules` | The Payload usage rules. See xref:#payload-rules[below]
+| `config-refs` | No tool config carves out a file that no longer exists
+| `secrets` | gitleaks
+| `licenses` | Every dependency license sits inside the allowlist
+| `deps` | No dependency is two or more majors behind. Needs the network, and is fail-closed
+| `image-assets` | Every image actually inflates as the format it claims
+| `docs` | The agent docs name no script or file that has gone
+| `prose` | Vale, against the project's own `.vale.ini`. See xref:#prose[below]
+| `skills` | `SKILL.md` frontmatter
+| `docker` | hadolint and `compose config`
+| `actions` | actionlint
+| `knip` | Dead code and unused dependencies
+| `tests` | The suite, with coverage thresholds
+| `tree-verify` | The working tree is unchanged since `tree-snapshot`
+|===
+
+`--extended` adds `require-full-history`, `commit-history`, `linear-history` (no merge commits, ever),
+`build`, `bundle` (a gzipped client-JavaScript budget), and `e2e`.
+
+[[payload-rules]]
+=== Payload usage rules
+
+[cols="1,3"]
+|===
+| `no-unbounded-find` | `payload.find(...)` must declare `depth` or `limit`
+| `no-unbounded-findbyid` | `payload.findByID(...)` must declare `depth`
+| `no-unbounded-findglobal` | `payload.findGlobal(...)` must declare `depth`
+| `no-override-access` | `overrideAccess: true` is banned
+| `no-deep-relative-imports` | Use the `@/` alias
+| `require-collection-access` | A `CollectionConfig` must declare `access` explicitly
+|===
+
+`require-collection-access` is the one that is a security decision rather than a style rule. Omitting
+`access` inherits Payload's defaults, which allow public read. A collection that is meant to be public
+should say so, rather than becoming public because nobody wrote anything down.
+
+Matching uses a balanced-delimiter scan that skips string literals, so multi-line and nested calls read
+correctly, and only calls on a recognisable Payload receiver (`payload`, `req.payload`, `this.payload`) are
+judged. An unrelated `array.find(...)` is never touched.
+
+[[prose]]
+== Prose
+
+The `prose` gate is the one part of the contract _ploaness_ does not dictate. A house style is a decision
+about voice, terminology, and audience; a harness that shipped one would be imposing an editorial opinion
+under the cover of a quality gate.
+
+So the project writes its own `.vale.ini` at the repository root and owns whatever styles it points at.
+_ploaness_ supplies neither, and marks neither as managed. It only insists that whatever the project chose
+actually passes, at `--minAlertLevel=suggestion`, with no alerts in the README.
+
+A project without `.vale.ini` has declared no prose rules, and the gate passes rather than inventing some.
+That is not a hole to hide in: deleting the file is a visible, reviewable change to the repository, which is
+a different thing from a rule that quietly stopped applying.
+
+[[managed-files]]
+== Managed files
+
+Some tools cannot read a configuration through `node_modules`: git, editors, and coding agents read from the
+working tree. Those files are managed, and `ploaness sync` writes them.
+
+There are four dispositions. `PINNED` means _ploaness_ owns the content outright and the file must match it
+byte for byte. `SEED` means _ploaness_ writes the file once when it is absent and the project owns it
+afterwards. `FORBIDDEN` means the path must not exist. `SECTION` means _ploaness_ owns a marked block at the
+top of the file and the project owns everything below it - the disposition for a file both parties must
+write, where pinning would deny the project its own text and seeding would let the harness's half go stale.
+
+[cols="1,1,3"]
+|===
+| Path | Disposition | Note
+
+| `README-guideline-software-project.adoc` | PINNED | The governing standard: the rules themselves, stated independently of any tool
+| `.ploaness/agent-guide.md` | PINNED | Maps the standard onto this harness. Bumping _ploaness_ updates it in every project
+| `AGENTS.md` | SECTION | _ploaness_ owns the block naming the two documents above; the project owns its own instructions below it
+| `CLAUDE.md` | PINNED | A fixed tool entry point, deferring to `AGENTS.md`
+| `.editorconfig` | PINNED |
+| `.gitattributes` | PINNED |
+| `.nvmrc` | PINNED |
+| `.npmrc` | PINNED |
+| `.gitignore` | SEED | Written once when absent; the project owns it afterwards
+| `.stylelintrc.json`, `.dependency-cruiser.json`, `knip.json`, `plugins/` | FORBIDDEN | _ploaness_ supplies these itself
+| `.gitleaks.toml` | FORBIDDEN | The secret scan runs on the tool's built-in ruleset, which a local file could only weaken
+|===
+
+A project that genuinely must own a managed path declares it under `unmanagedAssets` with a reason. The
+reason is mandatory: an exemption that nobody had to justify is an exemption nobody will ever revisit.
+
+The block in `AGENTS.md` is delimited by `BEGIN PLOANESS MANAGED INSTRUCTIONS` and
+`END PLOANESS MANAGED INSTRUCTIONS`. It must lead the file and appear exactly once: a block an agent reaches
+only after scrolling past the project's own prose no longer governs what precedes it, and a second copy
+would let one block go stale while the gate kept reporting the other as current. `ploaness sync` creates the file, or
+refreshes the block while carrying the text below it through byte for byte.
+
+`ploaness sync` refuses a file whose markers are duplicated, incomplete, or no longer leading, because every
+edit it could make there either duplicates the block or swallows text the project owns. The gate reports
+such a file separately and asks for a hand repair rather than for another sync.
+
+[[configuration]]
+== Configuration
+
+Optional, under the `ploaness` key of `package.json`:
+
+[source,json]
+----
+{
+  "ploaness": {
+    "sourceRoots": ["src"],
+    "unmanagedAssets": [{ "path": ".gitignore", "reason": "carries deployment-specific entries" }],
+    "typographyExclusions": ["src/payload-types.ts"],
+    "javascriptAllowlist": ["src/app/(payload)/admin/importMap.js"],
+    "coverageExclude": ["src/migrations/**"],
+    "bundleBudgetBytes": 921600,
+    "pretest": ["pnpm", "run", "db:ensure"],
+    "testWrapper": ["pnpm", "run", "db:scratch", "--"]
+  }
+}
+----
+
+`pretest` and `testWrapper` exist because a Payload suite needs a database before it can boot, and how a
+project obtains one is a fact the harness cannot know. Declaring them does not weaken a rule: the gates and
+their thresholds are unchanged, only the way the project reaches its database.
+
+There is deliberately **no key that disables a gate**. A failing check is a finding to fix, not a setting to
+turn off.

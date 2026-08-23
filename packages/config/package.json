@@ -1,0 +1,54 @@
+{
+  "name": "@ploaness/config",
+  "version": "1.0.0",
+  "description": "Analyzer and tool configurations owned by ploaness: ESLint, Biome, TypeScript, Vitest, Stylelint, dependency-cruiser, knip.",
+  "license": "MIT",
+  "author": "Herman Ciechanowiec <herman@ciechanowiec.eu>",
+  "type": "module",
+  "exports": {
+    "./eslint": "./eslint.js",
+    "./vitest": "./vitest.js",
+    "./biome": "./biome.json",
+    "./tsconfig": "./tsconfig.json",
+    "./stylelint": "./stylelint.json",
+    "./dependency-cruiser": "./dependency-cruiser.json",
+    "./knip": "./knip.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "eslint.js",
+    "vitest.js",
+    "biome.json",
+    "tsconfig.json",
+    "stylelint.json",
+    "dependency-cruiser.json",
+    "knip.json"
+  ],
+  "scripts": {
+    "build": "node --version > /dev/null"
+  },
+  "dependencies": {
+    "@eslint-community/eslint-plugin-eslint-comments": "4.7.2",
+    "@eslint/js": "10.0.1",
+    "@ploaness/governance": "1.0.0",
+    "@vitejs/plugin-react": "6.1.0",
+    "@vitest/eslint-plugin": "1.6.27",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-functional": "10.0.0",
+    "eslint-plugin-jsdoc": "64.2.1",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-regexp": "3.2.0",
+    "eslint-plugin-sonarjs": "4.2.0",
+    "eslint-plugin-testing-library": "7.16.2",
+    "eslint-plugin-unicorn": "73.0.0",
+    "stylelint-config-standard": "40.0.0",
+    "typescript-eslint": "8.67.0",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=26"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

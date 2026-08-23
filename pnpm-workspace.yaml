@@ -1,0 +1,10 @@
+packages:
+  - packages/*
+
+# Link the sibling packages from the workspace during development. The published versions resolve
+# normally from the registry, because the packages declare each other at an exact version rather than
+# through the `workspace:*` protocol: that protocol does not resolve when a package is installed from a
+# tarball outside its workspace, which is exactly how ploaness is verified before it is published.
+linkWorkspacePackages: true
+
+engineStrict: true

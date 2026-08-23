@@ -1,0 +1,73 @@
+// Shared AI-typography ban: characters a human rarely types but language models love, each mapped to
+// the plain ASCII a human would actually write. One source of truth, consumed by both the file gate
+// (check-conventions.ts) and the commit-message gate (check-commit-message.ts). Every banned character is
+// referenced via its code point only, so neither this module nor its callers trip the check on
+// themselves.
+
+interface BannedCharacter {
+  readonly char: string
+  readonly label: string
+  readonly replacement: string
+}
+
+const STRAIGHT_DOUBLE_QUOTE: string = 'a straight double quote'
+const PLAIN_HYPHEN: string = 'a hyphen "-"'
+
+const BANNED_CHARACTERS: readonly BannedCharacter[] = [
+  { char: String.fromCodePoint(0x2014), label: 'em dash (U+2014)', replacement: PLAIN_HYPHEN },
+  { char: String.fromCodePoint(0x2013), label: 'en dash (U+2013)', replacement: PLAIN_HYPHEN },
+  {
+    char: String.fromCodePoint(0x2026),
+    label: 'ellipsis (U+2026)',
+    replacement: 'three dots "..."',
+  },
+  {
+    char: String.fromCodePoint(0x201c),
+    label: 'left double quote (U+201C)',
+    replacement: STRAIGHT_DOUBLE_QUOTE,
+  },
+  {
+    char: String.fromCodePoint(0x201d),
+    label: 'right double quote (U+201D)',
+    replacement: STRAIGHT_DOUBLE_QUOTE,
+  },
+  {
+    char: String.fromCodePoint(0x201e),
+    label: 'low double quote (U+201E)',
+    replacement: STRAIGHT_DOUBLE_QUOTE,
+  },
+]
+
+export interface TypographyViolation {
+  readonly line: number
+  readonly column: number
+  readonly label: string
+  readonly replacement: string
+}
+
+const violationsInLine = (line: string, lineNumber: number): readonly TypographyViolation[] =>
+  BANNED_CHARACTERS.flatMap((banned: BannedCharacter): readonly TypographyViolation[] => {
+    const column: number = line.indexOf(banned.char)
+    return column === -1
+      ? []
+      : [
+          {
+            line: lineNumber,
+            column: column + 1,
+            label: banned.label,
+            replacement: banned.replacement,
+          },
+        ]
+  })
+
+/**
+ * Scans text for banned AI-typography, reporting 1-based line and column positions.
+ * @param text the content to scan, with lines separated by "\n".
+ * @returns one violation per banned character found, in reading order.
+ */
+export const findTypographyViolations = (text: string): readonly TypographyViolation[] =>
+  text
+    .split('\n')
+    .flatMap((line: string, index: number): readonly TypographyViolation[] =>
+      violationsInLine(line, index + 1),
+    )

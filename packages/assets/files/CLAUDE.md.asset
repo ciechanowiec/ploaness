@@ -1,0 +1,6 @@
+# Claude Code
+
+The project instructions for every agent live in [`AGENTS.md`](AGENTS.md), kept as one source of truth so
+Claude Code, OpenCode, Cursor, and other tools all read the same rules. Claude Code imports it here:
+
+@AGENTS.md

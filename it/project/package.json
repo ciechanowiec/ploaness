@@ -1,0 +1,14 @@
+{
+  "name": "ploaness-it-consumer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "payload": "3.88.0"
+  },
+  "devDependencies": {
+    "ploaness": "1.0.0",
+    "vitest": "4.1.11",
+    "@vitest/coverage-v8": "4.1.11"
+  }
+}

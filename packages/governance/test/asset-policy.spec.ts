@@ -1,0 +1,199 @@
+import { describe, expect, it } from 'vitest'
+import {
+  type AssetState,
+  applyManagedSection,
+  checkAsset,
+  findAssetViolations,
+  type ManagedAsset,
+  parseManifest,
+  readManagedSection,
+  SECTION_BEGIN,
+  SECTION_END,
+  syncAction,
+} from '../src/asset-policy.js'
+
+const state = (overrides: Partial<AssetState> = {}): AssetState => ({
+  exists: true,
+  actual: 'body',
+  expected: 'body',
+  ...overrides,
+})
+
+describe('parseManifest', () => {
+  it('reads entries and ignores comments and blank lines', () => {
+    const parsed = parseManifest('# a comment\n\nCLAUDE.md\tPINNED\n.gitignore\tSEED\n')
+    expect(parsed.assets).toEqual([
+      { path: 'CLAUDE.md', disposition: 'PINNED' },
+      { path: '.gitignore', disposition: 'SEED' },
+    ])
+    expect(parsed.problems).toEqual([])
+  })
+
+  it('reports a malformed row rather than dropping it silently', () => {
+    const parsed = parseManifest('CLAUDE.md\tMAYBE\n')
+    expect(parsed.assets).toEqual([])
+    expect(parsed.problems).toHaveLength(1)
+  })
+})
+
+describe('checkAsset', () => {
+  const pinned: ManagedAsset = { path: 'CLAUDE.md', disposition: 'PINNED' }
+  const seed: ManagedAsset = { path: '.gitignore', disposition: 'SEED' }
+  const forbidden: ManagedAsset = { path: 'knip.json', disposition: 'FORBIDDEN' }
+
+  it('accepts a pinned file that matches', () => {
+    expect(checkAsset(pinned, state())).toBeUndefined()
+  })
+
+  it('rejects a pinned file that drifted', () => {
+    expect(checkAsset(pinned, state({ actual: 'edited' }))?.reason).toContain('drifted')
+  })
+
+  it('rejects a missing managed file', () => {
+    expect(checkAsset(pinned, state({ exists: false, actual: undefined }))?.reason).toContain(
+      'missing',
+    )
+  })
+
+  it('accepts a seeded file the project has since edited', () => {
+    expect(checkAsset(seed, state({ actual: 'the project edited this' }))).toBeUndefined()
+  })
+
+  it('rejects a forbidden path that exists', () => {
+    expect(checkAsset(forbidden, state())?.reason).toContain('shadows')
+  })
+
+  it('accepts a forbidden path that is absent', () => {
+    expect(checkAsset(forbidden, state({ exists: false }))).toBeUndefined()
+  })
+})
+
+describe('findAssetViolations', () => {
+  it('skips a path the project has taken over', () => {
+    const assets: readonly ManagedAsset[] = [{ path: 'CLAUDE.md', disposition: 'PINNED' }]
+    const drifted = (): AssetState => state({ actual: 'edited' })
+    expect(findAssetViolations(assets, [], drifted)).toHaveLength(1)
+    expect(findAssetViolations(assets, ['CLAUDE.md'], drifted)).toEqual([])
+  })
+})
+
+describe('syncAction', () => {
+  it('always rewrites a pinned file so drift is repaired', () => {
+    expect(syncAction({ path: 'a', disposition: 'PINNED' }, true)).toBe('write')
+    expect(syncAction({ path: 'a', disposition: 'PINNED' }, false)).toBe('write')
+  })
+
+  it('writes a seed file only when it is absent', () => {
+    expect(syncAction({ path: 'a', disposition: 'SEED' }, true)).toBe('skip')
+    expect(syncAction({ path: 'a', disposition: 'SEED' }, false)).toBe('write')
+  })
+
+  it('deletes a forbidden path that exists', () => {
+    expect(syncAction({ path: 'a', disposition: 'FORBIDDEN' }, true)).toBe('delete')
+    expect(syncAction({ path: 'a', disposition: 'FORBIDDEN' }, false)).toBe('skip')
+  })
+})
+
+// The SECTION disposition is the only one where ploaness and the project write the same file, so every
+// test here is really asking the same question: does the harness keep its own block current without ever
+// touching a line the project wrote?
+describe('a managed section', () => {
+  const block: string = `${SECTION_BEGIN}\ncontract v1\n${SECTION_END}`
+  const agents: ManagedAsset = { path: 'AGENTS.md', disposition: 'SECTION' }
+
+  describe('readManagedSection', () => {
+    it('reads the block back with its markers', () => {
+      expect(readManagedSection(`${block}\n\nproject text`)).toStrictEqual({
+        kind: 'present',
+        block,
+      })
+    })
+
+    it('finds no block in a file that has none', () => {
+      expect(readManagedSection('project text only').kind).toBe('absent')
+    })
+
+    it('treats a file that does not exist yet as one with no block', () => {
+      expect(readManagedSection('').kind).toBe('absent')
+    })
+
+    // Splicing on reversed markers would rewrite from the end marker back to the begin marker, which is
+    // to say: the project's own text. Refusing is the only safe reading.
+    it('refuses a file whose markers are in the wrong order', () => {
+      expect(readManagedSection(`${SECTION_END}\nx\n${SECTION_BEGIN}\n`).kind).toBe('malformed')
+    })
+
+    // A second copy is worse than none: one of the two would go stale while the gate kept reporting the
+    // other as current, so the file would carry a contradiction no check could see.
+    it('refuses a file that carries the block twice', () => {
+      expect(readManagedSection(`${block}\n\n${block}\n`).kind).toBe('malformed')
+    })
+
+    it('refuses a file that has one marker but not the other', () => {
+      expect(readManagedSection(`${SECTION_BEGIN}\ncontract v1\n`).kind).toBe('malformed')
+    })
+
+    // The contract has to be the first thing an agent reads. A block buried below the project's own
+    // prose is still findable, but it is no longer the thing that governs what precedes it.
+    it('refuses a block the project pushed below its own prose', () => {
+      expect(readManagedSection(`# Agent guide\n\n${block}\n`).kind).toBe('malformed')
+    })
+  })
+
+  describe('applyManagedSection', () => {
+    it('replaces an outdated block and keeps the project text', () => {
+      const current: string = `${SECTION_BEGIN}\ncontract v0\n${SECTION_END}\n\nproject text`
+      expect(applyManagedSection(current, block)).toBe(`${block}\n\nproject text`)
+    })
+
+    it('puts the block above text that was never governed', () => {
+      expect(applyManagedSection('project text', block)).toBe(`${block}\n\nproject text`)
+    })
+
+    it('writes only the block into a file that does not exist yet', () => {
+      expect(applyManagedSection('', block)).toBe(`${block}\n`)
+    })
+
+    it('leaves a current file byte for byte alone, so sync reports no change', () => {
+      const current: string = `${block}\n\nproject text`
+      expect(applyManagedSection(current, block)).toBe(current)
+    })
+
+    // The refusal is what stops sync turning one ambiguous file into two blocks.
+    it('refuses to edit a file whose markers are ambiguous', () => {
+      expect(applyManagedSection(`${block}\n\n${block}\n`, block)).toBeUndefined()
+    })
+  })
+
+  describe('checkAsset', () => {
+    it('accepts a file whose leading block is current, whatever the project wrote below', () => {
+      const actual: string = `${block}\n\nproject text`
+      expect(checkAsset(agents, state({ actual, expected: block }))).toBeUndefined()
+    })
+
+    it('rejects a file whose block is stale', () => {
+      const actual: string = `${SECTION_BEGIN}\ncontract v0\n${SECTION_END}`
+      expect(checkAsset(agents, state({ actual, expected: block }))?.reason).toContain('drifted')
+    })
+
+    it('sends a file with no block to sync, which can repair it', () => {
+      expect(checkAsset(agents, state({ actual: 'project text', expected: block }))?.reason).toBe(
+        'the ploaness managed block is missing; run `ploaness sync`',
+      )
+    })
+
+    // Sync refuses this file, so advising it here would send the project round a loop that never ends.
+    it('sends a file with ambiguous markers to a human instead of to sync', () => {
+      const actual: string = `${block}\n\n${block}\n`
+      const reason: string = checkAsset(agents, state({ actual, expected: block }))?.reason ?? ''
+      expect(reason).toContain('repair the markers by hand')
+      expect(reason).not.toContain('ploaness sync')
+    })
+  })
+
+  // Never `write`: that would replace the project's text with the block alone.
+  it('is always spliced, whether or not the file already exists', () => {
+    expect(syncAction(agents, true)).toBe('splice')
+    expect(syncAction(agents, false)).toBe('splice')
+  })
+})

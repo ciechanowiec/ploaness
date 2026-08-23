@@ -1,0 +1,23 @@
+{
+  "name": "@ploaness/assets",
+  "version": "1.0.0",
+  "description": "Files ploaness materialises into a consumer working tree, because tools ploaness does not run read them from there.",
+  "license": "MIT",
+  "author": "Herman Ciechanowiec <herman@ciechanowiec.eu>",
+  "type": "module",
+  "exports": {
+    "./manifest": "./manifest.tsv",
+    "./files/": "./files/",
+    "./package.json": "./package.json"
+  },
+  "files": ["manifest.tsv", "files"],
+  "scripts": {
+    "build": "node --version > /dev/null"
+  },
+  "engines": {
+    "node": ">=26"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

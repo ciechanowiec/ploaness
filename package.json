@@ -1,0 +1,33 @@
+{
+  "name": "ploaness-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Workspace root for ploaness, the external quality harness for Payload CMS projects",
+  "license": "MIT",
+  "author": "Herman Ciechanowiec <herman@ciechanowiec.eu>",
+  "scripts": {
+    "build": "pnpm -r --filter './packages/**' run build",
+    "test": "vitest run --coverage",
+    "typecheck": "tsc --build --force",
+    "lint": "biome check packages/governance packages/cli scripts it",
+    "format": "biome check --write packages/governance packages/cli scripts it",
+    "verify": "pnpm run build && pnpm run typecheck && pnpm run lint && pnpm run test",
+    "pack:local": "sh scripts/pack-local.sh",
+    "it": "sh it/verify.sh"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.9",
+    "@types/node": "26.2.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "eslint": "10.8.1",
+    "fast-check": "4.9.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=26",
+    "pnpm": ">=11"
+  },
+  "packageManager": "pnpm@11.9.0"
+}

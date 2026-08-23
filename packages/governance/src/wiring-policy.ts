@@ -1,0 +1,346 @@
+// Anti-bypass policy: the module that exists because npm has no lifecycle.
+//
+// A build tool that bound its checks to fixed phases would make this unnecessary: the checks would run
+// because the build ran, and the harness would only have to stop a project redeclaring them away. npm
+// binds nothing. A `package.json` script is a consumer-owned string, so a project (or an agent working in
+// it) can rewrite `verify` to `echo ok`, append a rule-disabling block to the flat ESLint config, or drop
+// the harness out of CI, and nothing downstream would notice.
+//
+// So ploaness makes its own installation a governed domain. This module holds the pure rules; the gate
+// that reads the files lives in the CLI. It cannot make bypass impossible, since a project can always
+// uninstall the dependency, but it makes bypass loud and deliberate rather than silent, which is the
+// property a fixed build lifecycle would have supplied for free.
+
+/** A defect in how the consuming project has wired ploaness into itself. */
+export interface WiringViolation {
+  readonly location: string
+  readonly reason: string
+}
+
+/** One CI workflow definition found in the consumer repository. */
+export interface WorkflowFile {
+  readonly name: string
+  readonly content: string
+}
+
+/** The consumer files the wiring gate reads, injected so the core stays free of filesystem access. */
+export interface WiringInputs {
+  readonly packageJson: unknown
+  readonly eslintConfig: string | undefined
+  readonly biomeConfig: string | undefined
+  readonly tsconfig: string | undefined
+  readonly workflows: readonly WorkflowFile[]
+  /**
+   * Test-authoring libraries the consumer's own specs import, mapped to the version ploaness was built
+   * against. The CLI reads these from the ploaness config package rather than hard-coding them here, so
+   * a harness bump moves the expectation in one place.
+   */
+  readonly expectedTestLibraries: Readonly<Record<string, string>>
+  /** The `files` block the consumer's biome.json must declare, from {@link requiredBiomeFiles}. */
+  readonly requiredBiomeFiles: Readonly<Record<string, unknown>>
+}
+
+/** The exact script bodies ploaness owns. The consumer declares the name; ploaness dictates the command. */
+export const REQUIRED_SCRIPTS: Readonly<Record<string, string>> = {
+  verify: 'ploaness verify',
+  'verify:full': 'ploaness verify --extended',
+  format: 'ploaness format',
+}
+
+/**
+ * The specifier a consumer biome.json must extend. Declared once here rather than written as a literal
+ * in both the rule and the scaffolder that writes the file the rule judges, so the two cannot drift.
+ */
+export const REQUIRED_BIOME_EXTENDS: string = 'ploaness/biome'
+
+/**
+ * The specifier a consumer tsconfig.json must extend: the literal file path, not the bare
+ * `ploaness/tsconfig` package specifier. TypeScript honours both, but a Payload project is also parsed
+ * by Next.js, which does not read a package exports map and fails on the bare form. Requiring the path
+ * that works everywhere is the difference between `tsc` passing and `next build` dying on a config it
+ * cannot resolve.
+ */
+export const REQUIRED_TSCONFIG_EXTENDS: string = 'ploaness/tsconfig.json'
+
+/** The git hooks ploaness owns, as simple-git-hooks entries. */
+export const REQUIRED_HOOKS: Readonly<Record<string, string>> = {
+  'pre-commit': 'ploaness precommit',
+  'commit-msg': 'ploaness commit-message $1',
+  'pre-push': 'ploaness verify',
+}
+
+/**
+ * The `files` block a consumer's biome.json must carry verbatim.
+ *
+ * File selection cannot live in the shared config the way rule configuration does. Biome resolves a
+ * relative glob against the directory of the config that declares it, and the shared config sits inside
+ * node_modules, where `src/**` matches nothing; Biome then falls back to checking the entire tree. So
+ * ploaness dictates the block and the wiring gate enforces it byte for byte, which keeps ownership with
+ * the harness even though the text has to sit at the project root.
+ * @param sourceRoots the directories the project declared as holding first-party source.
+ * @returns the exact block a conforming biome.json declares.
+ */
+export const requiredBiomeFiles = (
+  sourceRoots: readonly string[],
+): Readonly<Record<string, unknown>> => ({
+  ignoreUnknown: false,
+  includes: [
+    ...sourceRoots.map((root: string): string => `${root}/**/*`),
+    'package.json',
+    'biome.json',
+    'tsconfig.json',
+    '*.config.ts',
+    '*.config.mts',
+    'vitest.setup.ts',
+    '!src/payload-types.ts',
+    '!src/app/(payload)/admin/importMap.js',
+    '!**/.next',
+    '!**/node_modules',
+  ],
+})
+
+/**
+ * The `include` and `exclude` a consumer's tsconfig.json must carry verbatim.
+ *
+ * The same constraint as {@link requiredBiomeFiles}, for the same reason: TypeScript resolves these globs
+ * against the directory of the config that declares them. Left in the shared config they would walk the
+ * ploaness package itself rather than the project, so they must sit at the project root while ploaness
+ * keeps ownership of their contents.
+ */
+export const REQUIRED_TSCONFIG_PATHS: Readonly<Record<string, readonly string[]>> = {
+  include: [
+    'next-env.d.ts',
+    '**/*.ts',
+    '**/*.tsx',
+    '**/*.mts',
+    '.next/types/**/*.ts',
+    '.next/dev/types/**/*.ts',
+  ],
+  exclude: ['node_modules'],
+}
+
+/** Extended verification must run in CI, invoked either directly or through the owned script. */
+export const CI_INVOCATIONS: readonly string[] = ['ploaness verify --extended', 'run verify:full']
+
+// tsconfig keys a project may legitimately set for itself. Everything else is a compiler strictness
+// decision ploaness owns, so a local override is how a project would quietly weaken type checking.
+const ALLOWED_TSCONFIG_COMPILER_OPTIONS: ReadonlySet<string> = new Set([
+  'paths',
+  'baseUrl',
+  'plugins',
+  'types',
+  'rootDir',
+  'outDir',
+])
+
+// Biome sections ploaness owns outright. A consumer redeclaring one of them replaces the harness rules
+// for that section wholesale, which is a silent downgrade rather than an addition.
+const OWNED_BIOME_SECTIONS: readonly string[] = ['linter', 'formatter', 'javascript', 'assist']
+
+const asRecord = (raw: unknown): Record<string, unknown> =>
+  typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
+
+const asStringRecord = (raw: unknown): Record<string, string> => {
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(asRecord(raw))) {
+    if (typeof value === 'string') {
+      result[key] = value
+    }
+  }
+  return result
+}
+
+const declaredDependencies = (packageJson: Record<string, unknown>): Record<string, string> => ({
+  ...asStringRecord(packageJson['dependencies']),
+  ...asStringRecord(packageJson['devDependencies']),
+})
+
+const checkDependency = (packageJson: Record<string, unknown>): readonly WiringViolation[] =>
+  Object.hasOwn(declaredDependencies(packageJson), 'ploaness')
+    ? []
+    : [
+        {
+          location: 'package.json',
+          reason: 'ploaness must be a declared dependency of the project',
+        },
+      ]
+
+const checkExactEntries = (
+  actual: Record<string, string>,
+  required: Readonly<Record<string, string>>,
+  locationPrefix: string,
+): readonly WiringViolation[] =>
+  Object.entries(required).flatMap(
+    ([name, body]: readonly [string, string]): readonly WiringViolation[] => {
+      const found: string | undefined = actual[name]
+      if (found === body) {
+        return []
+      }
+      return [
+        {
+          location: `${locationPrefix}.${name}`,
+          reason: `is ${found === undefined ? 'missing' : `"${found}"`} but ploaness requires "${body}"`,
+        },
+      ]
+    },
+  )
+
+// A flat ESLint config is an array, so a consumer can append a block that switches rules back off after
+// the harness config has been spread in. Requiring the file to be a bare re-export makes any addition
+// surface as a wiring violation instead of a silent downgrade.
+const ESLINT_REEXPORT: RegExp =
+  /^(?:\s*\/\/[^\n]*\n|\s)*import\s+(\w+)\s+from\s+['"]ploaness\/eslint['"];?\s*export\s+default\s+\1;?\s*$/
+
+const checkEslint = (config: string | undefined): readonly WiringViolation[] => {
+  if (config === undefined) {
+    return [{ location: 'eslint.config.mjs', reason: 'missing; must re-export ploaness/eslint' }]
+  }
+  return ESLINT_REEXPORT.test(config)
+    ? []
+    : [
+        {
+          location: 'eslint.config.mjs',
+          reason:
+            'must contain nothing but an import of ploaness/eslint and its default re-export; a local block would override the harness rules',
+        },
+      ]
+}
+
+const checkBiome = (
+  config: string | undefined,
+  requiredFiles: Readonly<Record<string, unknown>>,
+): readonly WiringViolation[] => {
+  if (config === undefined) {
+    return [{ location: 'biome.json', reason: `missing; must extend ${REQUIRED_BIOME_EXTENDS}` }]
+  }
+  const parsed: Record<string, unknown> = asRecord(JSON.parse(config))
+  const extendsValue: unknown = parsed['extends']
+  const violations: WiringViolation[] = []
+  if (!Array.isArray(extendsValue) || !extendsValue.includes(REQUIRED_BIOME_EXTENDS)) {
+    violations.push({
+      location: 'biome.json',
+      reason: `must declare "extends": ["${REQUIRED_BIOME_EXTENDS}"]`,
+    })
+  }
+  for (const section of OWNED_BIOME_SECTIONS) {
+    if (Object.hasOwn(parsed, section)) {
+      violations.push({
+        location: `biome.json ${section}`,
+        reason: 'ploaness owns this section; remove the local override',
+      })
+    }
+  }
+  if (JSON.stringify(parsed['files']) !== JSON.stringify(requiredFiles)) {
+    violations.push({
+      location: 'biome.json files',
+      reason:
+        'must declare the ploaness file-selection block verbatim; run `ploaness init` to write it',
+    })
+  }
+  return violations
+}
+
+const checkTsconfig = (config: string | undefined): readonly WiringViolation[] => {
+  if (config === undefined) {
+    return [
+      { location: 'tsconfig.json', reason: `missing; must extend ${REQUIRED_TSCONFIG_EXTENDS}` },
+    ]
+  }
+  const parsed: Record<string, unknown> = asRecord(JSON.parse(config))
+  const violations: WiringViolation[] = []
+  if (parsed['extends'] !== REQUIRED_TSCONFIG_EXTENDS) {
+    violations.push({
+      location: 'tsconfig.json',
+      reason: `must declare "extends": "${REQUIRED_TSCONFIG_EXTENDS}"`,
+    })
+  }
+  for (const key of Object.keys(asRecord(parsed['compilerOptions']))) {
+    if (!ALLOWED_TSCONFIG_COMPILER_OPTIONS.has(key)) {
+      violations.push({
+        location: `tsconfig.json compilerOptions.${key}`,
+        reason: 'ploaness owns this compiler option; remove the local override',
+      })
+    }
+  }
+  for (const [key, value] of Object.entries(REQUIRED_TSCONFIG_PATHS)) {
+    if (JSON.stringify(parsed[key]) !== JSON.stringify(value)) {
+      violations.push({
+        location: `tsconfig.json ${key}`,
+        reason: 'must declare the ploaness value verbatim; run `ploaness init` to write it',
+      })
+    }
+  }
+  return violations
+}
+
+const checkWorkflows = (workflows: readonly WorkflowFile[]): readonly WiringViolation[] =>
+  workflows.some((workflow: WorkflowFile): boolean =>
+    CI_INVOCATIONS.some((invocation: string): boolean => workflow.content.includes(invocation)),
+  )
+    ? []
+    : [
+        {
+          location: '.github/workflows',
+          reason:
+            'no workflow runs extended verification; local git hooks are bypassable, so CI is the only backstop',
+        },
+      ]
+
+// These libraries cannot move into the harness. Under the strict pnpm layout a consumer spec could not
+// resolve `import { describe } from "vitest"` if vitest were only a dependency of ploaness, so the
+// project must declare them itself and ploaness pins the version instead of owning the package.
+const checkTestLibraries = (
+  packageJson: Record<string, unknown>,
+  expected: Readonly<Record<string, string>>,
+): readonly WiringViolation[] => {
+  const declared: Record<string, string> = declaredDependencies(packageJson)
+  return Object.entries(expected).flatMap(
+    ([name, version]: readonly [string, string]): readonly WiringViolation[] => {
+      const found: string | undefined = declared[name]
+      if (found === undefined) {
+        return [
+          {
+            location: `package.json devDependencies.${name}`,
+            reason: `missing; specs import it directly, so the project must declare it at ${version}`,
+          },
+        ]
+      }
+      return found === version
+        ? []
+        : [
+            {
+              location: `package.json devDependencies.${name}`,
+              reason: `is "${found}" but ploaness was built against "${version}"`,
+            },
+          ]
+    },
+  )
+}
+
+/**
+ * Return every way the consuming project has weakened or dropped its ploaness wiring. An empty array
+ * means the harness is installed exactly as ploaness dictates and cannot have been quietly disarmed.
+ * @param inputs the consumer files and expectations to judge.
+ * @returns one violation per defect, in a stable order.
+ */
+export const findWiringViolations = (inputs: WiringInputs): readonly WiringViolation[] => {
+  const packageJson: Record<string, unknown> = asRecord(inputs.packageJson)
+  return [
+    ...checkDependency(packageJson),
+    ...checkExactEntries(
+      asStringRecord(packageJson['scripts']),
+      REQUIRED_SCRIPTS,
+      'package.json scripts',
+    ),
+    ...checkExactEntries(
+      asStringRecord(packageJson['simple-git-hooks']),
+      REQUIRED_HOOKS,
+      'package.json simple-git-hooks',
+    ),
+    ...checkTestLibraries(packageJson, inputs.expectedTestLibraries),
+    ...checkEslint(inputs.eslintConfig),
+    ...checkBiome(inputs.biomeConfig, inputs.requiredBiomeFiles),
+    ...checkTsconfig(inputs.tsconfig),
+    ...checkWorkflows(inputs.workflows),
+  ]
+}

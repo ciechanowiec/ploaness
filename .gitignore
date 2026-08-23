@@ -1,0 +1,18 @@
+node_modules/
+dist/
+coverage/
+dist-tarballs/
+*.tsbuildinfo
+.DS_Store
+packages/ploaness/biome.json
+packages/ploaness/tsconfig.json
+
+# IDE and editors. These mirror the rules ploaness ships to consumers: an IDE workspace records local
+# paths and per-developer state, so it belongs to the developer rather than to the repository.
+/.idea/*
+!/.idea/runConfigurations
+*.iml
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.fleet/

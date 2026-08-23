@@ -1,0 +1,20 @@
+// Public surface of the ploaness governance layer: the pure, unit-tested rules, free of filesystem,
+// process, and network access. Every gate in the CLI is a thin I/O shell around a function exported
+// here. The split is what makes the rules cheap to test exhaustively: a pure function over strings
+// needs no fixture repository to exercise its edge cases.
+
+export * from './agent-references.js'
+export * from './asset-policy.js'
+export * from './banned-typography.js'
+export * from './bundle-budget.js'
+export * from './commit-message.js'
+export * from './config-references.js'
+export * from './dependency-freshness.js'
+export * from './document-references.js'
+export * from './history-policy.js'
+export * from './image-assets.js'
+export * from './license-allowlist.js'
+export * from './payload-policy.js'
+export * from './settings.js'
+export * from './skill-manifest.js'
+export * from './wiring-policy.js'

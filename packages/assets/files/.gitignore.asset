@@ -1,0 +1,98 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Patterns are intentionally un-anchored (e.g. `node_modules/`, not `/node_modules`) so they
+# match nested packages once this becomes a monorepo. Root-only entries keep a leading slash.
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Build output & caches
+build/
+dist/
+out/
+.turbo/
+*.tsbuildinfo
+# Written by the type-coverage gate, which ploaness runs itself.
+.type-coverage/
+
+# Next.js / Vercel
+.next/
+next-env.d.ts
+.vercel
+
+# Java (monorepo)
+target/
+*.class
+.gradle/
+hs_err_pid*
+
+# Terraform / Cloud (monorepo)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+
+# Testing
+coverage/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Environment
+.env
+.env*.local
+
+# Database
+/.postgres-backup-*.sql
+
+# Media / uploads (Payload)
+/media
+
+# Logs
+*.log*
+*.logs*
+logs/
+log/
+
+# IDE & editors
+/.idea/*
+!/.idea/runConfigurations
+*.iml
+# Share the project-level VS Code config that aligns every dev with the build; ignore the rest.
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/mcp.json
+!.vscode/settings.json
+.fleet/
+
+# OS
+.DS_Store
+Thumbs.db
+~$*.docx
+*.docx.tmp
+.~lock.*#
+
+# Security
+*.pem
+
+# Compiled documentation
+README*.pdf
+README*.html
+README*.docx
+
+# Drawio
+*.drawio.png.bkp
+*.drawio.png.dtmp
+
+# IDE / tool exports
+repo.xml
+
+# Local Claude config
+.claude/settings.local.json
+claude/settings.local.json
+.claude/scheduled_tasks.lock
+claude/scheduled_tasks.lock

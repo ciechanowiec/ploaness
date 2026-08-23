@@ -1,0 +1,116 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.9/schema.json",
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "domains": {
+      "react": "all",
+      "next": "all",
+      "project": "all"
+    },
+    "rules": {
+      "preset": "recommended",
+      "complexity": {
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": {
+            "maxAllowedComplexity": 8
+          }
+        },
+        "useSimplifiedLogicExpression": "error",
+        "noVoid": "error",
+        "useLiteralKeys": "off",
+        "noCommaOperator": "error",
+        "noThisInStatic": "error"
+      },
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error",
+        "noUnusedFunctionParameters": "error",
+        "useImportExtensions": "off",
+        "noUndeclaredDependencies": "off",
+        "noUnresolvedImports": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "error",
+        "noParameterAssign": "error",
+        "useConst": "error",
+        "useBlockStatements": "error",
+        "noImplicitBoolean": "error",
+        "useDefaultSwitchClause": "error",
+        "noDefaultExport": "off",
+        "useNamingConvention": {
+          "level": "error",
+          "options": {
+            "strictCase": false
+          }
+        },
+        "useExplicitLengthCheck": "off",
+        "useComponentExportOnlyModules": "off",
+        "useCollapsedElseIf": "error",
+        "useConsistentArrayType": {
+          "level": "error",
+          "options": {
+            "syntax": "shorthand"
+          }
+        },
+        "useForOf": "error",
+        "useShorthandAssign": "error",
+        "noYodaExpression": "error",
+        "useThrowNewError": "error",
+        "useThrowOnlyError": "error",
+        "useNumberNamespace": "error",
+        "noEnum": "error"
+      },
+      "performance": {
+        "noBarrelFile": "error",
+        "noJsxPropsBind": "off"
+      },
+      "suspicious": {
+        "noDoubleEquals": "error",
+        "noExplicitAny": "error",
+        "noVar": "error",
+        "noConsole": {
+          "level": "error",
+          "options": {
+            "allow": [
+              "warn",
+              "error",
+              "info"
+            ]
+          }
+        },
+        "noEmptyBlockStatements": "error",
+        "noLeakedRender": "error"
+      },
+      "security": {
+        "noSecrets": "off"
+      },
+      "nursery": {
+        "preset": "recommended",
+        "noImpliedEval": "error"
+      }
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  }
+}
