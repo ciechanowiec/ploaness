@@ -52,8 +52,8 @@ endif::[]
 [[overview]]
 == Overview
 
-. _ploaness_ is a quality harness for Payload CMS projects. A Payload CMS project declares one dependency on the `ploaness` package and receives from it the analyzer settings, the xref:#managed-files[managed files], the commit rules, the xref:#payload-usage-rules[], and the xref:#gates[gates] that inspect it.
-. This guide is written for an engineer who adds _ploaness_ version `{ploaness-version}` to a Payload CMS project and then runs its xref:#verification-commands[verification commands]. It explains xref:#quick-start[how to add _ploaness_], xref:#commands[how to run it], xref:#gates[what each gate verifies], and xref:#configuration[how to configure it]. It doesn't cover the packages that _ploaness_ is built from.
+. _ploaness_ is a quality harness for https://payloadcms.com[Payload CMS^] projects. A https://payloadcms.com[Payload CMS^] project declares one dependency on the `ploaness` package and receives from it the analyzer settings, the xref:#managed-files[managed files], the commit rules, the xref:#payload-cms-usage-rules[], and the xref:#gates[gates] that inspect it.
+. This guide is written for an engineer who adds _ploaness_ version `{ploaness-version}` to a https://payloadcms.com[Payload CMS^] project and then runs its xref:#verification-commands[verification commands]. It explains xref:#quick-start[how to add _ploaness_], xref:#commands[how to run it], xref:#gates[what each gate verifies], and xref:#configuration[how to configure it].
 
 [[quick-start]]
 == Quick Start
@@ -62,7 +62,7 @@ endif::[]
 === Requirements
 
 . _ploaness_ runs on Node 26 or newer.
-. The Payload CMS project declares `payload` among its dependencies. Every rule _ploaness_ applies is a rule about Payload.
+. The https://payloadcms.com[Payload CMS^] project declares the https://www.npmjs.com/package/payload[`payload` package^] among its dependencies. Every rule _ploaness_ applies is a rule about https://payloadcms.com[Payload CMS^].
 . Three xref:#gates[gates] run their analyzer in a container: xref:#secrets-gate[`secrets`], xref:#docker-gate[`docker`], and xref:#actions-gate[`actions`]. Each analyzer needs a reachable Docker daemon.
 
 [[installation]]
@@ -81,7 +81,7 @@ pnpm exec ploaness init
 [[project-files]]
 === Project Files
 
-. A Payload CMS project keeps four project files of its own in the working tree. Each project file points at the shipped analyzer settings and adds only what the analyzer has to read from the repository root:
+. A https://payloadcms.com[Payload CMS^] project keeps four project files of its own in the working tree. Each project file points at the shipped analyzer settings and adds only what the analyzer has to read from the repository root:
 +
 [cols="2,5"]
 |===
@@ -91,7 +91,7 @@ pnpm exec ploaness init
 | `{ "extends": ["ploaness/biome"] }` and the `files` block that selects what Biome reads.
 
 | `tsconfig.json`
-| `{ "extends": "ploaness/tsconfig.json" }`, the Payload CMS project's own `paths`, and the `include` and `exclude` globs.
+| `{ "extends": "ploaness/tsconfig.json" }`, the https://payloadcms.com[Payload CMS^] project's own `paths`, and the `include` and `exclude` globs.
 
 | `eslint.config.mjs`
 | An import of `ploaness/eslint` and its default re-export.
@@ -100,7 +100,7 @@ pnpm exec ploaness init
 | A re-export of `ploaness/vitest`.
 |===
 . Biome and TypeScript resolve a relative glob against the directory of the file that declares it. A glob left inside `node_modules` matches no file in the working tree, which is why the two blocks sit at the repository root. _ploaness_ still owns their text, and the xref:#wiring-gate[`wiring` gate] compares them character for character.
-. A Payload CMS project never names an `@ploaness/...` package. Under the `node_modules` layout that pnpm creates, a Payload CMS project can't resolve a package it doesn't depend on directly, so every entry point it needs is re-exported through `ploaness` itself.
+. A https://payloadcms.com[Payload CMS^] project never names an `@ploaness/...` package. Under the `node_modules` layout that pnpm creates, a https://payloadcms.com[Payload CMS^] project can't resolve a package it doesn't depend on directly, so every entry point it needs is re-exported through `ploaness` itself.
 
 [[commands]]
 == Commands
@@ -143,17 +143,19 @@ pnpm exec ploaness init
 
 . A _gate_ is one named verification operation that a xref:#verification-commands[verification command] runs. A failing gate doesn't stop the run.
 . A [[finding]]_finding_ is one problem reported by a gate. Every gate completes, so one run reports every finding rather than the first finding only. An analyzer's native output has its own name and becomes a finding only when a gate reports it.
-. The order is fixed. The structural gates that catch a mis-wired Payload CMS project run before the analyzers whose output would be harder to read, and the xref:#tree-snapshot-gate[fingerprint of the working tree] is taken before any gate can rewrite a file.
+. The gate order is fixed. The structural gates that catch a mis-wired https://payloadcms.com[Payload CMS^] project run before the analyzers whose output would be harder to read, and the xref:#tree-snapshot-gate[fingerprint of the working tree] is taken before any gate can rewrite a file.
 
 [[default-gates]]
 === Default Verification Gates
+
+xref:#default-verification[] runs the following 26 gates.
 
 [cols="2,5"]
 |===
 | Gate | Behavior
 
 | `preflight`
-| The Payload CMS project meets the xref:#requirements[].
+| The https://payloadcms.com[Payload CMS^] project meets the xref:#requirements[].
 
 | [[wiring-gate,the wiring gate]]`wiring`
 | The xref:#project-scripts[project scripts], xref:#project-files[project files], and workflows that arm _ploaness_ are intact.
@@ -192,7 +194,7 @@ pnpm exec ploaness init
 | `payload-types.ts` and `importMap.js` are current.
 
 | [[payload-rules-gate]]`payload-rules`
-| The six xref:#payload-usage-rules[].
+| The six xref:#payload-cms-usage-rules[].
 
 | `config-refs`
 | No analyzer setting carves out a path that no longer exists.
@@ -234,6 +236,8 @@ pnpm exec ploaness init
 [[extended-gates]]
 === Extended Verification Gates
 
+xref:#extended-verification[] adds the following six gates to xref:#default-verification[].
+
 [cols="2,5"]
 |===
 | Gate | Behavior
@@ -257,10 +261,10 @@ pnpm exec ploaness init
 | The end-to-end suite.
 |===
 
-[[payload-usage-rules]]
-=== Payload Usage Rules
+[[payload-cms-usage-rules]]
+=== https://payloadcms.com[Payload CMS^] Usage Rules
 
-. The xref:#payload-rules-gate[`payload-rules` gate] reads the Payload CMS project's TypeScript source files and reports these rules:
+. The xref:#payload-rules-gate[`payload-rules` gate] reads the https://payloadcms.com[Payload CMS^] project's TypeScript source files and reports these rules:
 +
 [cols="3,5"]
 |===
@@ -284,7 +288,7 @@ pnpm exec ploaness init
 | [[require-collection-access-rule]]`require-collection-access`
 | A `CollectionConfig` declares `access` of its own.
 |===
-. The xref:#require-collection-access-rule[`require-collection-access` rule] guards a security decision rather than a matter of style. A collection that omits `access` inherits the Payload defaults, which grant public read. A collection meant to be readable by anyone declares that in writing.
+. The xref:#require-collection-access-rule[`require-collection-access` rule] guards a security decision rather than a matter of style. A collection that omits `access` inherits the https://payloadcms.com[Payload CMS^] defaults, which grant public read. A collection meant to be readable by anyone declares that in writing.
 . The xref:#payload-rules-gate[`payload-rules` gate] reads a call by scanning for its matching bracket and skipping over string literals, so a call spread across several lines or nested inside another one still reads correctly. Only a call on `payload`, `req.payload`, or `this.payload` counts, which is what leaves an unrelated `array.find(...)` alone.
 
 [[managed-files]]
@@ -298,7 +302,7 @@ pnpm exec ploaness init
 
 | [[managed-section,managed section]]Managed section
 | `AGENTS.md`
-| _ploaness_ owns the xref:#managed-section[managed section] at the top. The Payload CMS project owns the text below it.
+| _ploaness_ owns the xref:#managed-section[managed section] at the top. The https://payloadcms.com[Payload CMS^] project owns the text below it.
 
 | [[pinned-file,pinned file]]Pinned file
 | `README-guideline-software-project.adoc`, `.ploaness/agent-guide.md`, `CLAUDE.md`, `.editorconfig`, `.gitattributes`, `.nvmrc`, `.npmrc`
@@ -306,21 +310,21 @@ pnpm exec ploaness init
 
 | [[seed-file,seed file]]Seed file
 | `.gitignore`
-| The xref:#sync-command[] creates the xref:#seed-file[seed file] once when it's absent. The Payload CMS project owns the seed file afterwards.
+| The xref:#sync-command[] creates the xref:#seed-file[seed file] once when it's absent. The https://payloadcms.com[Payload CMS^] project owns the seed file afterwards.
 
 | [[forbidden-file,forbidden file]]Forbidden file
 | `.stylelintrc.json`, `.dependency-cruiser.json`, `knip.json`, `.gitleaks.toml`, `plugins`
 | _ploaness_ supplies the analyzer settings for each xref:#forbidden-file[forbidden file]. A forbidden file must not exist, because a copy in the working tree could only shadow or weaken those settings.
 |===
-. `README-guideline-software-project.adoc` states the rules the Payload CMS project is held to, in a form that names no tool. `.ploaness/agent-guide.md` maps those rules onto _ploaness_. Both are xref:#pinned-file[pinned], so raising the _ploaness_ version updates them in every Payload CMS project at once.
-. The xref:#managed-section[] in `AGENTS.md` is enclosed by `BEGIN PLOANESS MANAGED INSTRUCTIONS` and `END PLOANESS MANAGED INSTRUCTIONS`. It leads the file and appears exactly once. A managed section that an agent reaches only after the Payload CMS project's own text no longer governs what comes before it, and a second copy would let one managed section go stale while the xref:#assets-gate[`assets` gate] still reported the other as current.
-. The xref:#sync-command[] creates `AGENTS.md` or refreshes its xref:#managed-section[], carrying the text below the managed section through unchanged. It refuses a file whose markers are duplicated, incomplete, or no longer leading, because every edit it could make there would either duplicate the managed section or swallow text the Payload CMS project owns. The xref:#assets-gate[`assets` gate] names such a file on its own and asks for a repair by hand.
-. To let the Payload CMS project own a xref:#pinned-file[], a xref:#seed-file[], or a xref:#forbidden-file[], list its path under xref:#unmanaged-assets[`unmanagedAssets`] together with the reason. _ploaness_ then leaves that path alone. An entry without a reason is dropped, so _ploaness_ continues to apply the file's policy.
+. `README-guideline-software-project.adoc` states the rules the https://payloadcms.com[Payload CMS^] project is held to, in a form that names no tool. `.ploaness/agent-guide.md` maps those rules onto _ploaness_. Both are xref:#pinned-file[pinned], so raising the _ploaness_ version updates them in every https://payloadcms.com[Payload CMS^] project at once.
+. The xref:#managed-section[] in `AGENTS.md` is enclosed by `BEGIN PLOANESS MANAGED INSTRUCTIONS` and `END PLOANESS MANAGED INSTRUCTIONS`. It leads the file and appears exactly once. A managed section that an agent reaches only after the https://payloadcms.com[Payload CMS^] project's own text no longer governs what comes before it, and a second copy would let one managed section go stale while the xref:#assets-gate[`assets` gate] still reported the other as current.
+. The xref:#sync-command[] creates `AGENTS.md` or refreshes its xref:#managed-section[], carrying the text below the managed section through unchanged. It refuses a file whose markers are duplicated, incomplete, or no longer leading, because every edit it could make there would either duplicate the managed section or swallow text the https://payloadcms.com[Payload CMS^] project owns. The xref:#assets-gate[`assets` gate] names such a file on its own and asks for a repair by hand.
+. To let the https://payloadcms.com[Payload CMS^] project own a xref:#pinned-file[], a xref:#seed-file[], or a xref:#forbidden-file[], list its path under xref:#unmanaged-assets[`unmanagedAssets`] together with the reason. _ploaness_ then leaves that path alone. An entry without a reason is dropped, so _ploaness_ continues to apply the file's policy.
 
 [[configuration]]
 == Configuration
 
-. _ploaness_ configuration lives under the `ploaness` key of `package.json`. Every key is optional, and a Payload CMS project that declares none still receives the whole contract:
+. _ploaness_ configuration lives under the `ploaness` key of `package.json`. Every key is optional, and a https://payloadcms.com[Payload CMS^] project that declares none still receives the whole contract:
 +
 [source,json]
 ----
@@ -338,7 +342,7 @@ pnpm exec ploaness init
   }
 }
 ----
-. Every list key adds to the shipped default rather than replacing it:
+. Every list-valued _ploaness_ configuration key adds to the shipped default rather than replacing it:
 +
 [cols="3,3,5"]
 |===
@@ -346,14 +350,14 @@ pnpm exec ploaness init
 
 | `sourceRoots`
 | `src`, `tests`, `scripts`
-| The directories that hold the Payload CMS project's own source files, read by the xref:#gates[gates] that select files and measure coverage.
+| The directories that hold the https://payloadcms.com[Payload CMS^] project's own source files, read by the xref:#gates[gates] that select files and measure coverage.
 
 | [[unmanaged-assets,unmanagedAssets]]`unmanagedAssets`
 | empty
-| xref:#managed-files[Managed files] the Payload CMS project takes over.
+| xref:#managed-files[Managed files] the https://payloadcms.com[Payload CMS^] project takes over.
 
 | `typographyExclusions`
-| the generated Payload files
+| the generated https://payloadcms.com[Payload CMS^] files
 | Path patterns that the ban on typographic characters skips.
 
 | `javascriptAllowlist`
@@ -374,14 +378,14 @@ pnpm exec ploaness init
 
 | [[test-wrapper]]`testWrapper`
 | empty
-| An argument list wrapping the process run by the xref:#tests-gate[`tests`], xref:#build-gate[`build`], and xref:#e2e-gate[`e2e`] gates, for a Payload CMS project that uses a scratch database.
+| An argument list wrapping the process run by the xref:#tests-gate[`tests`], xref:#build-gate[`build`], and xref:#e2e-gate[`e2e`] gates, for a https://payloadcms.com[Payload CMS^] project that uses a scratch database.
 
 | [[analysis-env]]`analysisEnv`
 | `PAYLOAD_SECRET`, `DATABASE_URL`
-| Placeholder environment variables for the xref:#gates[gates] that import the Payload CMS project to read it.
+| Placeholder environment variables for the xref:#gates[gates] that import the https://payloadcms.com[Payload CMS^] project to read it.
 |===
-. xref:#pretest[`pretest`] and xref:#test-wrapper[`testWrapper`] exist because a Payload CMS project can need a database before a xref:#gates[gate] can run. How the Payload CMS project reaches that database is a fact _ploaness_ can't know. Declaring either key changes only the route to the database, never a gate or a threshold.
-. xref:#analysis-env[`analysisEnv`] exists because a Payload configuration module reads `process.env` as soon as the module loads, which a reader that only inspects the source files can't satisfy in a bare shell. The values are placeholders, and a xref:#gates[gate] that runs the application, such as xref:#build-gate[`build`], xref:#tests-gate[`tests`], or xref:#e2e-gate[`e2e`], uses the real environment instead.
+. xref:#pretest[`pretest`] and xref:#test-wrapper[`testWrapper`] exist because a https://payloadcms.com[Payload CMS^] project can need a database before a xref:#gates[gate] can run. How the https://payloadcms.com[Payload CMS^] project reaches that database is a fact _ploaness_ can't know. Declaring either key changes only the route to the database, never a gate or a threshold.
+. xref:#analysis-env[`analysisEnv`] exists because a https://payloadcms.com[Payload CMS^] configuration module reads `process.env` as soon as the module loads, which a reader that only inspects the source files can't satisfy in a bare shell. The values are placeholders, and a xref:#gates[gate] that runs the application, such as xref:#build-gate[`build`], xref:#tests-gate[`tests`], or xref:#e2e-gate[`e2e`], uses the real environment instead.
 . No key turns a xref:#gates[gate] off. A failing gate produces a xref:#finding[finding] to repair.
 
 == About the Guide
@@ -390,12 +394,12 @@ The source text of this guide is written in the https://asciidoc.org[AsciiDoc^] 
 
 === Writing Guideline
 
-The source text should follow the link:README-guideline-writing.adoc[Writing Guideline], stored beside it in the repository.
+The source text of this guide should follow the link:README-guideline-writing.adoc[Writing Guideline], stored beside it in the repository.
 
 [#prerequisites]
 === Prerequisites
 
-To export and lint the source text, install the following tools:
+To export and lint the source text of this guide, install the following tools:
 
 . https://asciidoctor.org/#installation[Asciidoctor^],
 . https://docs.asciidoctor.org/pdf-converter/latest/install/[Asciidoctor PDF^],
@@ -408,21 +412,21 @@ To export and lint the source text, install the following tools:
 [#export]
 === Export
 
-. To export the source text to HTML:
+. To export the source text of this guide to HTML:
 +
 [source,bash,subs="attributes+"]
 ----
 asciidoctor --attribute allow-uri-read {docname}{docfilesuffix}
 ----
 
-. Export the source text to PDF with this command:
+. Export the source text of this guide to PDF with this command:
 +
 [source,bash,subs="attributes+"]
 ----
 asciidoctor-pdf --attribute allow-uri-read --require ./.docs/lib/common-style.rb {docname}{docfilesuffix}
 ----
 
-. Export the source text to DOCX with this command:
+. Export the source text of this guide to DOCX with this command:
 +
 [source,bash,subs="attributes+"]
 ----
@@ -431,7 +435,7 @@ prepared="$(python3 {sourcedir}/.docs/lib/export_prepare.py --docx-compat {docna
 
 === Linting
 
-Lint the source text:
+Lint the source text of this guide:
 
 [source,bash,subs="attributes+"]
 ----
