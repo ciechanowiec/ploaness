@@ -127,6 +127,18 @@ const validateCompose = (root: string): RunResult => {
     : run('sh', ['-c', 'docker-compose config > /dev/null'], { cwd: root })
 }
 
+/** Validate the compose file, if the project ships one. */
+const composeFindings = (context: Context): readonly string[] => {
+  const composeFile: string | undefined = COMPOSE_FILES.find((file: string): boolean =>
+    existsSync(path.join(context.root, file)),
+  )
+  if (composeFile === undefined) {
+    return []
+  }
+  const compose: RunResult = validateCompose(context.root)
+  return compose.code === 0 ? [] : [`${composeFile}:`, ...asFindings(compose.output)]
+}
+
 /** Lint every Dockerfile and validate the compose file. */
 export const containers = (context: Context): GateResult => {
   const targets: readonly string[] = dockerfiles(context)
@@ -148,15 +160,7 @@ export const containers = (context: Context): GateResult => {
       findings.push(`${target}:`, ...asFindings(result.output))
     }
   }
-  const composeFile: string | undefined = COMPOSE_FILES.find((file: string): boolean =>
-    existsSync(path.join(context.root, file)),
-  )
-  if (composeFile !== undefined) {
-    const compose: RunResult = validateCompose(context.root)
-    if (compose.code !== 0) {
-      findings.push(`${composeFile}:`, ...asFindings(compose.output))
-    }
-  }
+  findings.push(...composeFindings(context))
   return findings.length > 0
     ? failed('container definitions have defects', findings)
     : passed(`${targets.length} Dockerfile(s) and the compose file are valid`)

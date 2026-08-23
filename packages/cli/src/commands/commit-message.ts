@@ -9,6 +9,41 @@ import type { Context } from '../context.js'
  * The commit-message entry point, in three modes: a message file, a revision range, or the whole
  * history.
  */
+/** Report a run of findings under a closing line, and return the failing exit code. */
+const reportProblems = (findings: readonly string[], summary: string): number => {
+  for (const finding of findings) {
+    console.error(finding)
+  }
+  console.error(`\n${summary}. See .ploaness/agent-guide.md.`)
+  return 1
+}
+
+/** Check the messages already in the history, either a range or all of it. */
+const checkHistory = (context: Context, revisions: readonly string[]): number => {
+  const result = commitHistory(context, revisions)
+  if (!result.ok) {
+    return reportProblems(result.findings, result.summary)
+  }
+  console.info(result.summary)
+  return 0
+}
+
+/** Check one pending message, read from the file the author points at. */
+const checkPending = (context: Context, file: string): number => {
+  const problems: readonly string[] = commitMessageProblems(context, readFileSync(file, 'utf8'))
+  return problems.length > 0
+    ? reportProblems(problems, `${problems.length} commit-message problem(s)`)
+    : 0
+}
+
+/**
+ * The commit-message entry point, in three modes: a message file, a revision range, or the whole
+ * history.
+ * @param context the resolved project environment.
+ * @param mode a message file path, `--range`, or `--all`.
+ * @param value the revision range, when mode is `--range`.
+ * @returns the process exit code.
+ */
 export const commitMessage = (
   context: Context,
   mode: string | undefined,
@@ -18,26 +53,11 @@ export const commitMessage = (
     console.error('usage: ploaness commit-message <message-file> | --range <base>..<head> | --all')
     return 1
   }
-  if (mode === '--all' || mode === '--range') {
-    const revisions: readonly string[] = mode === '--all' ? ['HEAD'] : [value ?? 'HEAD']
-    const result = commitHistory(context, revisions)
-    if (!result.ok) {
-      for (const finding of result.findings) {
-        console.error(finding)
-      }
-      console.error(`\n${result.summary}. See .ploaness/agent-guide.md.`)
-      return 1
-    }
-    console.info(result.summary)
-    return 0
+  if (mode === '--all') {
+    return checkHistory(context, ['HEAD'])
   }
-  const problems: readonly string[] = commitMessageProblems(context, readFileSync(mode, 'utf8'))
-  if (problems.length > 0) {
-    for (const problem of problems) {
-      console.error(problem)
-    }
-    console.error(`\n${problems.length} commit-message problem(s). See .ploaness/agent-guide.md.`)
-    return 1
+  if (mode === '--range') {
+    return checkHistory(context, [value ?? 'HEAD'])
   }
-  return 0
+  return checkPending(context, mode)
 }

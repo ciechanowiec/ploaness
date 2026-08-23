@@ -151,6 +151,33 @@ export const parseManifest = (manifest: string): ParsedManifest => {
 }
 
 /**
+ * Judge a path whose marked block ploaness owns and whose remaining text the project owns.
+ * @param asset the catalogue entry.
+ * @param state the working-tree and shipped content for that path.
+ * @returns a violation, or undefined when the block matches what ploaness ships.
+ */
+const checkSection = (asset: ManagedAsset, state: AssetState): AssetViolation | undefined => {
+  const section: SectionState = readManagedSection(state.actual ?? '')
+  // Malformed markers get their own advice on purpose: `ploaness sync` refuses such a file, so telling
+  // the project to run it would send it round a loop that cannot terminate.
+  if (section.kind === 'malformed') {
+    return { path: asset.path, reason: `${section.reason}; repair the markers by hand` }
+  }
+  if (section.kind === 'absent') {
+    return {
+      path: asset.path,
+      reason: 'the ploaness managed block is missing; run `ploaness sync`',
+    }
+  }
+  return section.block === (state.expected ?? '').trim()
+    ? undefined
+    : {
+        path: asset.path,
+        reason: 'the ploaness managed block drifted from the ploaness copy; run `ploaness sync`',
+      }
+}
+
+/**
  * Judge one managed path against its disposition.
  * @param asset the catalogue entry.
  * @param state the working-tree and shipped content for that path.
@@ -173,27 +200,7 @@ export const checkAsset = (asset: ManagedAsset, state: AssetState): AssetViolati
     return undefined
   }
   if (asset.disposition === 'SECTION') {
-    const section: SectionState = readManagedSection(state.actual ?? '')
-    // Malformed markers get their own advice on purpose: `ploaness sync` refuses such a file, so telling
-    // the project to run it would send it round a loop that cannot terminate.
-    if (section.kind === 'malformed') {
-      return {
-        path: asset.path,
-        reason: `${section.reason}; repair the markers by hand`,
-      }
-    }
-    if (section.kind === 'absent') {
-      return {
-        path: asset.path,
-        reason: 'the ploaness managed block is missing; run `ploaness sync`',
-      }
-    }
-    return section.block === (state.expected ?? '').trim()
-      ? undefined
-      : {
-          path: asset.path,
-          reason: 'the ploaness managed block drifted from the ploaness copy; run `ploaness sync`',
-        }
+    return checkSection(asset, state)
   }
   return state.actual === state.expected
     ? undefined

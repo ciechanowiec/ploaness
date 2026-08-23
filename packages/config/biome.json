@@ -1,5 +1,6 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.9/schema.json",
+  "root": false,
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
@@ -55,7 +56,15 @@
         "useNamingConvention": {
           "level": "error",
           "options": {
-            "strictCase": false
+            "strictCase": false,
+            "conventions": [
+              {
+                "selector": {
+                  "kind": "objectLiteralProperty"
+                },
+                "formats": ["camelCase", "CONSTANT_CASE"]
+              }
+            ]
           }
         },
         "useExplicitLengthCheck": "off",
@@ -76,7 +85,7 @@
         "noEnum": "error"
       },
       "performance": {
-        "noBarrelFile": "error",
+        "noBarrelFile": "off",
         "noJsxPropsBind": "off"
       },
       "suspicious": {
@@ -86,11 +95,7 @@
         "noConsole": {
           "level": "error",
           "options": {
-            "allow": [
-              "warn",
-              "error",
-              "info"
-            ]
+            "allow": ["warn", "error", "info"]
           }
         },
         "noEmptyBlockStatements": "error",

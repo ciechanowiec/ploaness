@@ -101,6 +101,49 @@ export interface SyncChange {
   readonly action: 'wrote' | 'deleted' | 'spliced' | 'refused'
 }
 
+const spliceSection = (
+  assetPath: string,
+  target: string,
+  source: string,
+): SyncChange | undefined => {
+  const current: string = existsSync(target) ? readFileSync(target, 'utf8') : ''
+  const spliced: string | undefined = applyManagedSection(
+    current,
+    readFileSync(source, 'utf8').trim(),
+  )
+  // Ambiguous markers are the one case sync will not touch: every guess it could make either duplicates
+  // the block or swallows text the project owns, and both are worse than stopping.
+  if (spliced === undefined) {
+    return { path: assetPath, action: 'refused' }
+  }
+  if (spliced === current) {
+    return undefined
+  }
+  mkdirSync(path.dirname(target), { recursive: true })
+  writeFileSync(target, spliced)
+  return { path: assetPath, action: 'spliced' }
+}
+
+/** Apply one catalogue entry to the working tree, reporting the change it made. */
+const syncOne = (context: Context, asset: ManagedAsset): SyncChange | undefined => {
+  const target: string = path.join(context.root, asset.path)
+  const action: ReturnType<typeof syncAction> = syncAction(asset, existsSync(target))
+  if (action === 'delete') {
+    rmSync(target, { recursive: true, force: true })
+    return { path: asset.path, action: 'deleted' }
+  }
+  const source: string = bodyPath(asset.path)
+  if (action === 'skip' || !existsSync(source)) {
+    return undefined
+  }
+  if (action === 'splice') {
+    return spliceSection(asset.path, target, source)
+  }
+  mkdirSync(path.dirname(target), { recursive: true })
+  cpSync(source, target)
+  return { path: asset.path, action: 'wrote' }
+}
+
 /**
  * Materialise the managed files into the working tree. This is the only command that writes them: a
  * PINNED file is rewritten so drift is repaired, a SEED file is written only when absent so the
@@ -108,52 +151,11 @@ export interface SyncChange {
  * block replaced so the project's own text around it is carried through untouched.
  */
 export const syncAssets = (context: Context): readonly SyncChange[] => {
-  const parsed: ParsedManifest = catalogue()
   const owned: ReadonlySet<string> = new Set(unmanagedPaths(context))
-  const changes: SyncChange[] = []
-  for (const asset of parsed.assets) {
-    if (owned.has(asset.path)) {
-      continue
-    }
-    const target: string = path.join(context.root, asset.path)
-    const action: ReturnType<typeof syncAction> = syncAction(asset, existsSync(target))
-    if (action === 'delete') {
-      rmSync(target, { recursive: true, force: true })
-      changes.push({ path: asset.path, action: 'deleted' })
-      continue
-    }
-    if (action === 'skip') {
-      continue
-    }
-    const source: string = bodyPath(asset.path)
-    if (!existsSync(source)) {
-      continue
-    }
-    if (action === 'splice') {
-      const current: string = existsSync(target) ? readFileSync(target, 'utf8') : ''
-      const spliced: string | undefined = applyManagedSection(
-        current,
-        readFileSync(source, 'utf8').trim(),
-      )
-      // Ambiguous markers are the one case sync will not touch: every guess it could make either
-      // duplicates the block or swallows text the project owns, and both are worse than stopping.
-      if (spliced === undefined) {
-        changes.push({ path: asset.path, action: 'refused' })
-        continue
-      }
-      if (spliced === current) {
-        continue
-      }
-      mkdirSync(path.dirname(target), { recursive: true })
-      writeFileSync(target, spliced)
-      changes.push({ path: asset.path, action: 'spliced' })
-      continue
-    }
-    mkdirSync(path.dirname(target), { recursive: true })
-    cpSync(source, target)
-    changes.push({ path: asset.path, action: 'wrote' })
-  }
-  return changes
+  return catalogue()
+    .assets.filter((asset: ManagedAsset): boolean => !owned.has(asset.path))
+    .map((asset: ManagedAsset): SyncChange | undefined => syncOne(context, asset))
+    .filter((change: SyncChange | undefined): change is SyncChange => change !== undefined)
 }
 
 /** Write a managed file only when the path is absent, used by `ploaness init`. */

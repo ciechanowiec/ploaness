@@ -86,49 +86,47 @@ type Lookup =
   | { readonly kind: 'absent' }
   | { readonly kind: 'unreachable' }
 
+/** One registry attempt: an answer, or undefined when the attempt was inconclusive and may be retried. */
+const attemptLookup = async (name: string): Promise<Lookup | undefined> => {
+  let response: Response
+  try {
+    response = await fetch(versionDocumentUrl(name), { headers: { accept: 'application/json' } })
+  } catch {
+    return undefined
+  }
+  if (response.ok) {
+    const body: unknown = await response.json()
+    const version: unknown = asRecord(body)['version']
+    return typeof version === 'string' ? { kind: 'version', version } : { kind: 'absent' }
+  }
+  // A 404 is a real answer, and retrying cannot change it.
+  return response.status === 404 ? { kind: 'absent' } : undefined
+}
+
 const latestVersion = async (name: string): Promise<Lookup> => {
   for (let attempt: number = 1; attempt <= REGISTRY_ATTEMPTS; attempt += 1) {
-    let response: Response
-    try {
-      response = await fetch(versionDocumentUrl(name), { headers: { accept: 'application/json' } })
-    } catch {
-      continue
-    }
-    if (response.ok) {
-      const body: unknown = await response.json()
-      const version: unknown = asRecord(body)['version']
-      return typeof version === 'string' ? { kind: 'version', version } : { kind: 'absent' }
-    }
-    // A 404 is a real answer, and retrying cannot change it.
-    if (response.status === 404) {
-      return { kind: 'absent' }
+    const lookup: Lookup | undefined = await attemptLookup(name)
+    if (lookup !== undefined) {
+      return lookup
     }
   }
   return { kind: 'unreachable' }
 }
 
-/**
- * Fail when a declared dependency is two or more majors behind its latest release; warn on any lesser
- * lag. This is the one gate that needs the network, and it is fail-closed: it cannot prove freshness
- * without the registry, so it fails rather than passing silently. A dependency the registry does not
- * publish at all - a private or workspace-linked package - is reported rather than judged, because a
- * public "latest" it has no claim to would be a fabricated comparison.
- */
-export const dependencyFreshness = async (context: Context): Promise<GateResult> => {
-  const declared: Record<string, string> = declaredDependencies(context.packageJson)
-  const names: readonly string[] = Object.keys(declared)
+/** The three ways a registry lookup can land, kept apart so the report can speak about each. */
+interface Sorted {
+  readonly statuses: readonly DependencyStatus[]
+  readonly unreachable: readonly string[]
+  readonly unpublished: readonly string[]
+}
+
+const sortLookups = (
+  declared: Record<string, string>,
+  results: readonly (readonly [string, Lookup])[],
+): Sorted => {
   const statuses: DependencyStatus[] = []
   const unreachable: string[] = []
   const unpublished: string[] = []
-  const results: readonly (readonly [string, Lookup])[] = await Promise.all(
-    names.map(async (name: string): Promise<readonly [string, Lookup]> => {
-      try {
-        return [name, await latestVersion(name)]
-      } catch {
-        return [name, { kind: 'unreachable' }]
-      }
-    }),
-  )
   for (const [name, lookup] of results) {
     if (lookup.kind === 'unreachable') {
       unreachable.push(name)
@@ -143,6 +141,29 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
       })
     }
   }
+  return { statuses, unreachable, unpublished }
+}
+
+/**
+ * Fail when a declared dependency is two or more majors behind its latest release; warn on any lesser
+ * lag. This is the one gate that needs the network, and it is fail-closed: it cannot prove freshness
+ * without the registry, so it fails rather than passing silently. A dependency the registry does not
+ * publish at all - a private or workspace-linked package - is reported rather than judged, because a
+ * public "latest" it has no claim to would be a fabricated comparison.
+ */
+export const dependencyFreshness = async (context: Context): Promise<GateResult> => {
+  const declared: Record<string, string> = declaredDependencies(context.packageJson)
+  const names: readonly string[] = Object.keys(declared)
+  const results: readonly (readonly [string, Lookup])[] = await Promise.all(
+    names.map(async (name: string): Promise<readonly [string, Lookup]> => {
+      try {
+        return [name, await latestVersion(name)]
+      } catch {
+        return [name, { kind: 'unreachable' }]
+      }
+    }),
+  )
+  const { statuses, unreachable, unpublished }: Sorted = sortLookups(declared, results)
   if (unreachable.length > 0) {
     return failed('the npm registry was unreachable, so freshness cannot be proven', [
       `no "latest" resolved for: ${unreachable.slice(0, 10).join(', ')}`,

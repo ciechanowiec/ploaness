@@ -209,7 +209,7 @@ const checkBiome = (
   const parsed: Record<string, unknown> = asRecord(JSON.parse(config))
   const extendsValue: unknown = parsed['extends']
   const violations: WiringViolation[] = []
-  if (!Array.isArray(extendsValue) || !extendsValue.includes(REQUIRED_BIOME_EXTENDS)) {
+  if (!(Array.isArray(extendsValue) && extendsValue.includes(REQUIRED_BIOME_EXTENDS))) {
     violations.push({
       location: 'biome.json',
       reason: `must declare "extends": ["${REQUIRED_BIOME_EXTENDS}"]`,

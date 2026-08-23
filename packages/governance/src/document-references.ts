@@ -72,7 +72,7 @@ export const findDocumentReferenceViolations = (
     ...extractScriptReferences(inputs.markdown),
   ]
     .filter(
-      (name: string): boolean => !inputs.scriptNames.has(name) && !inputs.reservedWords.has(name),
+      (name: string): boolean => !(inputs.scriptNames.has(name) || inputs.reservedWords.has(name)),
     )
     .map(
       (name: string): DocumentViolation => ({

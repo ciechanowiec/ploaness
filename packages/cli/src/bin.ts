@@ -22,6 +22,10 @@ const USAGE: string = `ploaness, the quality harness for Payload CMS projects
 
 Report-only mode (--enforce=false) prints findings and exits 0. It is not a pass.`
 
+// The complexity here is the length of the command list, one case per command. Splitting the switch
+// into a dispatch table would move the same branching behind a lookup and cost the reader the one
+// place that shows every command the binary accepts.
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one case per command
 const main = async (): Promise<number> => {
   const argv: readonly string[] = process.argv.slice(2)
   const [command, ...rest] = argv

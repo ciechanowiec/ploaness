@@ -47,37 +47,44 @@ const endsWithAny = (file: string, extensions: readonly string[]): boolean =>
 const matchesAny = (file: string, patterns: readonly string[]): boolean =>
   patterns.some((pattern: string): boolean => new RegExp(pattern).test(file))
 
+const typographyFindings = (context: Context, tracked: readonly string[]): readonly string[] =>
+  tracked
+    .filter(
+      (file: string): boolean =>
+        endsWithAny(file, TYPOGRAPHY_EXTENSIONS) &&
+        !matchesAny(file, context.settings.typographyExclusions),
+    )
+    .flatMap((file: string): readonly string[] => {
+      const content: string = blankVendorRegions(
+        readFileSync(path.join(context.root, file), 'utf8'),
+      )
+      return findTypographyViolations(content).map(
+        (violation: TypographyViolation): string =>
+          `${file}:${violation.line}:${violation.column} banned ${violation.label}; use ${violation.replacement}`,
+      )
+    })
+
+const javascriptFindings = (context: Context, tracked: readonly string[]): readonly string[] =>
+  tracked
+    .filter(
+      (file: string): boolean =>
+        endsWithAny(file, JAVASCRIPT_EXTENSIONS) &&
+        !matchesAny(file, context.settings.javascriptAllowlist),
+    )
+    .map(
+      (file: string): string =>
+        `${file} hand-written JavaScript is banned; write TypeScript instead`,
+    )
+
 /** Scan every tracked file for banned typography and stray hand-written JavaScript. */
 export const conventions = (context: Context): GateResult => {
   const tracked: readonly string[] = trackedFiles(context.root).filter((file: string): boolean =>
     existsSync(path.join(context.root, file)),
   )
-  const findings: string[] = []
-
-  for (const file of tracked) {
-    if (
-      !endsWithAny(file, TYPOGRAPHY_EXTENSIONS) ||
-      matchesAny(file, context.settings.typographyExclusions)
-    ) {
-      continue
-    }
-    const content: string = blankVendorRegions(readFileSync(path.join(context.root, file), 'utf8'))
-    for (const violation of findTypographyViolations(content)) {
-      findings.push(
-        `${file}:${violation.line}:${violation.column} banned ${violation.label}; use ${violation.replacement}`,
-      )
-    }
-  }
-
-  for (const file of tracked) {
-    if (
-      endsWithAny(file, JAVASCRIPT_EXTENSIONS) &&
-      !matchesAny(file, context.settings.javascriptAllowlist)
-    ) {
-      findings.push(`${file} hand-written JavaScript is banned; write TypeScript instead`)
-    }
-  }
-
+  const findings: readonly string[] = [
+    ...typographyFindings(context, tracked),
+    ...javascriptFindings(context, tracked),
+  ]
   return findings.length > 0
     ? failed(`${findings.length} convention violation(s)`, findings)
     : passed(`${tracked.length} tracked file(s) follow the source conventions`)

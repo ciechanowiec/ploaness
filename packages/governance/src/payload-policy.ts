@@ -63,6 +63,98 @@ const lastMeaningful = (text: string): string => {
   return ''
 }
 
+// Each scanner below answers one question: where does the construct that starts at `index` end? Keeping
+// them apart is what lets stripComments read as the dispatch it is rather than as four interleaved
+// state machines sharing one cursor.
+
+const blank = (text: string): string => text.replaceAll(/[^\n]/g, ' ')
+
+const endOfLineComment = (source: string, index: number): number => {
+  const end: number = source.indexOf('\n', index)
+  return end === -1 ? source.length : end
+}
+
+const endOfBlockComment = (source: string, index: number): number => {
+  const end: number = source.indexOf('*/', index + 2)
+  return end === -1 ? source.length : end + 2
+}
+
+const endOfStringLiteral = (source: string, index: number): number => {
+  const quote: string = source[index] ?? ''
+  let cursor: number = index + 1
+  while (cursor < source.length) {
+    const inner: string = source[cursor] ?? ''
+    if (inner === '\\') {
+      cursor += 2
+      continue
+    }
+    cursor += 1
+    if (inner === quote) {
+      break
+    }
+  }
+  return cursor
+}
+
+// A regex literal ends at the first unescaped slash outside a character class, and never spans a line.
+// A regex literal's end depends on escapes, newlines, and character-class nesting at once. Splitting
+// the three apart would hide the single cursor they share behind three functions that each need the
+// others' state.
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one cursor, three interacting rules
+const endOfRegexLiteral = (source: string, index: number): number => {
+  let cursor: number = index + 1
+  let inClass: boolean = false
+  while (cursor < source.length) {
+    const inner: string = source[cursor] ?? ''
+    if (inner === '\\') {
+      cursor += 2
+      continue
+    }
+    if (inner === '\n') {
+      break
+    }
+    if (inner === '[') {
+      inClass = true
+    } else if (inner === ']') {
+      inClass = false
+    } else if (inner === '/' && !inClass) {
+      cursor += 1
+      break
+    }
+    cursor += 1
+  }
+  return cursor
+}
+
+/** One comment, string, or regex literal: where it ends, and whether it is erased rather than kept. */
+interface Skipped {
+  readonly stop: number
+  readonly erased: boolean
+}
+
+// A string literal is kept because its contents are the only place a banned construct can legitimately
+// appear as data. Everything else here is erased, so prose naming a construct is never read as one.
+// Four guard clauses, one per construct. The count is the number of constructs, and collapsing them
+// into a table would trade a readable list for a lookup that says less.
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one guard per construct
+const constructAt = (source: string, index: number, output: string): Skipped | undefined => {
+  const character: string = source[index] ?? ''
+  const next: string = source[index + 1] ?? ''
+  if (character === '/' && next === '/') {
+    return { stop: endOfLineComment(source, index), erased: true }
+  }
+  if (character === '/' && next === '*') {
+    return { stop: endOfBlockComment(source, index), erased: true }
+  }
+  if (QUOTES.has(character)) {
+    return { stop: endOfStringLiteral(source, index), erased: false }
+  }
+  if (character === '/' && VALUE_POSITION.has(lastMeaningful(output))) {
+    return { stop: endOfRegexLiteral(source, index), erased: true }
+  }
+  return undefined
+}
+
 /**
  * Blank every comment and regular-expression literal to spaces, leaving newlines intact so reported line
  * numbers still point at real source positions. Without this, prose that merely names a banned construct
@@ -74,110 +166,78 @@ const lastMeaningful = (text: string): string => {
 export const stripComments = (source: string): string => {
   let output: string = ''
   let index: number = 0
-  const blank = (text: string): string => text.replaceAll(/[^\n]/g, ' ')
   while (index < source.length) {
-    const character: string = source[index] ?? ''
-    const next: string = source[index + 1] ?? ''
-    if (character === '/' && next === '/') {
-      const end: number = source.indexOf('\n', index)
-      const stop: number = end === -1 ? source.length : end
-      output += blank(source.slice(index, stop))
-      index = stop
+    const skipped: Skipped | undefined = constructAt(source, index, output)
+    if (skipped === undefined) {
+      output += source[index] ?? ''
+      index += 1
       continue
     }
-    if (character === '/' && next === '*') {
-      const end: number = source.indexOf('*/', index + 2)
-      const stop: number = end === -1 ? source.length : end + 2
-      output += blank(source.slice(index, stop))
-      index = stop
-      continue
-    }
-    if (QUOTES.has(character)) {
-      let cursor: number = index + 1
-      while (cursor < source.length) {
-        const inner: string = source[cursor] ?? ''
-        if (inner === '\\') {
-          cursor += 2
-          continue
-        }
-        if (inner === character) {
-          cursor += 1
-          break
-        }
-        cursor += 1
-      }
-      output += source.slice(index, cursor)
-      index = cursor
-      continue
-    }
-    if (character === '/' && VALUE_POSITION.has(lastMeaningful(output))) {
-      let cursor: number = index + 1
-      let inClass: boolean = false
-      while (cursor < source.length) {
-        const inner: string = source[cursor] ?? ''
-        if (inner === '\\') {
-          cursor += 2
-          continue
-        }
-        if (inner === '\n') {
-          break
-        }
-        if (inner === '[') {
-          inClass = true
-        } else if (inner === ']') {
-          inClass = false
-        } else if (inner === '/' && !inClass) {
-          cursor += 1
-          break
-        }
-        cursor += 1
-      }
-      output += blank(source.slice(index, cursor))
-      index = cursor
-      continue
-    }
-    output += character
-    index += 1
+    const text: string = source.slice(index, skipped.stop)
+    output += skipped.erased ? blank(text) : text
+    index = skipped.stop
   }
   return output
 }
 
+/** One character of a delimiter-aware scan, with the bracket depth that holds once it is applied. */
+interface ScanStep {
+  readonly character: string
+  readonly index: number
+  readonly depth: number
+}
+
 /**
- * Read the text between the parenthesis at `open` and its match, tracking nesting and skipping string
- * literals so a bracket or quote inside a string cannot unbalance the scan.
+ * Walk `source` from `start`, tracking string literals and bracket nesting so that a bracket or a quote
+ * inside a string cannot unbalance the scan. Both readers below need exactly this bookkeeping and differ
+ * only in what they do with each character, so it lives here once rather than in each of them.
+ * @param source the text to walk.
+ * @param start the index to begin at.
+ * @param visit called for every character outside a string literal; return false to stop the walk.
+ */
+// One cursor carrying depth across a character walk. Every split of this loop has to pass that cursor
+// back and forth, which is harder to review than the loop, and this is the code the unbounded-call
+// rules are decided by.
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one cursor shared by the whole walk
+const scanDelimited = (source: string, start: number, visit: (step: ScanStep) => boolean): void => {
+  let depth: number = 0
+  let index: number = start
+  while (index < source.length) {
+    const character: string = source[index] ?? ''
+    // A string literal is jumped over whole rather than tracked character by character, so a bracket or
+    // a quote inside it can never reach the depth count.
+    if (QUOTES.has(character)) {
+      index = endOfStringLiteral(source, index)
+      continue
+    }
+    index += 1
+    if (OPENERS.has(character)) {
+      depth += 1
+    } else if (CLOSERS.has(character)) {
+      depth -= 1
+    }
+    if (!visit({ character, index: index - 1, depth })) {
+      return
+    }
+  }
+}
+
+/**
+ * Read the text between the parenthesis at `open` and its match.
  * @param source the file contents.
  * @param open the index of the opening parenthesis.
  * @returns the argument text, or undefined when the call is unterminated (a parse error another gate reports).
  */
 export const balancedArguments = (source: string, open: number): string | undefined => {
-  let depth: number = 0
-  let quote: string | undefined
-  for (let index: number = open; index < source.length; index += 1) {
-    const character: string = source[index] ?? ''
-    if (quote !== undefined) {
-      if (character === '\\') {
-        index += 1
-      } else if (character === quote) {
-        quote = undefined
-      }
-      continue
+  let close: number | undefined
+  scanDelimited(source, open, (step: ScanStep): boolean => {
+    if (CLOSERS.has(step.character) && step.depth === 0) {
+      close = step.index
+      return false
     }
-    if (QUOTES.has(character)) {
-      quote = character
-      continue
-    }
-    if (OPENERS.has(character)) {
-      depth += 1
-      continue
-    }
-    if (CLOSERS.has(character)) {
-      depth -= 1
-      if (depth === 0) {
-        return source.slice(open + 1, index)
-      }
-    }
-  }
-  return undefined
+    return true
+  })
+  return close === undefined ? undefined : source.slice(open + 1, close)
 }
 
 /**
@@ -187,38 +247,16 @@ export const balancedArguments = (source: string, open: number): string | undefi
  * @returns the depth-one characters, with nested structures elided.
  */
 export const topLevelSlice = (argumentText: string): string => {
-  let depth: number = 0
-  let quote: string | undefined
   let collected: string = ''
-  for (let index: number = 0; index < argumentText.length; index += 1) {
-    const character: string = argumentText[index] ?? ''
-    if (quote !== undefined) {
-      if (character === '\\') {
-        index += 1
-      } else if (character === quote) {
-        quote = undefined
-      }
-      continue
+  scanDelimited(argumentText, 0, (step: ScanStep): boolean => {
+    if (OPENERS.has(step.character)) {
+      // A nested structure collapses to one space, so the keys inside it cannot be read as top level.
+      collected += step.depth === 1 ? ' ' : ''
+    } else if (!CLOSERS.has(step.character) && step.depth === 1) {
+      collected += step.character
     }
-    if (QUOTES.has(character)) {
-      quote = character
-      continue
-    }
-    if (OPENERS.has(character)) {
-      depth += 1
-      if (depth === 1) {
-        collected += ' '
-      }
-      continue
-    }
-    if (CLOSERS.has(character)) {
-      depth -= 1
-      continue
-    }
-    if (depth === 1) {
-      collected += character
-    }
-  }
+    return true
+  })
   return collected
 }
 
@@ -260,41 +298,50 @@ const PAYLOAD_RECEIVER: RegExp = /(?:^|[^\w$.])(?:payload|req\.payload|this\.pay
 const declaresKey = (topLevel: string, key: string): boolean =>
   new RegExp(String.raw`(^|[\s,])${key}\s*:`).test(topLevel)
 
-const findUnboundedCalls = (source: string): readonly PayloadViolation[] => {
-  const violations: PayloadViolation[] = []
-  for (const rule of BOUNDED_CALLS) {
-    let searchFrom: number = 0
-    for (;;) {
-      const found: number = source.indexOf(rule.call, searchFrom)
-      if (found === -1) {
-        break
-      }
-      searchFrom = found + rule.call.length
-      if (!PAYLOAD_RECEIVER.test(source.slice(0, found))) {
-        continue
-      }
-      const argumentText: string | undefined = balancedArguments(
-        source,
-        found + rule.call.length - 1,
-      )
-      // An unterminated call, an options variable rather than a literal, or an object spread all make the
-      // bound impossible to decide statically. Staying silent there keeps the gate free of false
-      // positives; the reviewer still sees the call.
-      if (
-        argumentText === undefined ||
-        !argumentText.includes('{') ||
-        argumentText.includes('...')
-      ) {
-        continue
-      }
-      const topLevel: string = topLevelSlice(argumentText)
-      if (!rule.required.some((key: string): boolean => declaresKey(topLevel, key))) {
-        violations.push({ line: lineOf(source, found), rule: rule.rule, reason: rule.reason })
-      }
-    }
+// An unterminated call, an options variable rather than a literal, or an object spread all make the
+// bound impossible to decide statically. Staying silent there keeps the gate free of false positives;
+// the reviewer still sees the call.
+const unboundedCallAt = (
+  source: string,
+  rule: BoundedCallRule,
+  found: number,
+): PayloadViolation | undefined => {
+  if (!PAYLOAD_RECEIVER.test(source.slice(0, found))) {
+    return undefined
   }
-  return violations
+  const argumentText: string | undefined = balancedArguments(source, found + rule.call.length - 1)
+  if (argumentText === undefined || !argumentText.includes('{') || argumentText.includes('...')) {
+    return undefined
+  }
+  const topLevel: string = topLevelSlice(argumentText)
+  if (rule.required.some((key: string): boolean => declaresKey(topLevel, key))) {
+    return undefined
+  }
+  return { line: lineOf(source, found), rule: rule.rule, reason: rule.reason }
 }
+
+const occurrences = (source: string, needle: string): readonly number[] => {
+  const found: number[] = []
+  let searchFrom: number = 0
+  for (;;) {
+    const at: number = source.indexOf(needle, searchFrom)
+    if (at === -1) {
+      return found
+    }
+    found.push(at)
+    searchFrom = at + needle.length
+  }
+}
+
+const findUnboundedCalls = (source: string): readonly PayloadViolation[] =>
+  BOUNDED_CALLS.flatMap((rule: BoundedCallRule): readonly PayloadViolation[] =>
+    occurrences(source, rule.call)
+      .map((found: number): PayloadViolation | undefined => unboundedCallAt(source, rule, found))
+      .filter(
+        (violation: PayloadViolation | undefined): violation is PayloadViolation =>
+          violation !== undefined,
+      ),
+  )
 
 const OVERRIDE_ACCESS: RegExp = /overrideAccess\s*:\s*true/g
 

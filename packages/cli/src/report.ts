@@ -53,18 +53,14 @@ const COLOURS: Readonly<Record<string, string>> = {
 
 // NO_COLOR and FORCE_COLOR are the conventions every other tool in the pipeline already honours, so a
 // project that has set one does not have to set a ploaness-specific variable as well.
-// Read by destructuring rather than by key: the shipped tsconfig forbids dot access on an index
-// signature, and the shipped Biome config rewrites a literal key into dot access. Destructuring is the
-// one form both accept.
 const richOutput = (): boolean => {
-  const { NO_COLOR: noColour, FORCE_COLOR: forceColour, TERM: term } = process.env
-  if (noColour !== undefined) {
+  if (process.env['NO_COLOR'] !== undefined) {
     return false
   }
-  if (forceColour !== undefined) {
+  if (process.env['FORCE_COLOR'] !== undefined) {
     return true
   }
-  return term !== 'dumb' && process.stdout.isTTY === true
+  return process.env['TERM'] !== 'dumb' && process.stdout.isTTY === true
 }
 
 const RICH: boolean = richOutput()
