@@ -49,12 +49,33 @@ scope, not an oversight, and it must not be worked around by weakening `prefligh
 What substitutes for it reimplements no rule. `ploaness gate <id>` builds its context from the working
 directory and never runs `preflight`, so every gate whose rule is about a repository's shape rather than
 about Payload runs here unchanged. `scripts/verify.sh` is that list, and `pnpm run verify` runs it:
-`conventions`, `config-refs`, `docs`, `skills`, `image-assets`, `licenses`, `deps`, `actions`, `secrets`,
+`biome-schema`, `conventions`, `editorconfig`, `suppressions`, `config-refs`, `docs`, `skills`,
+`image-assets`, `licenses`, `vulnerabilities`, `install-scripts`, `deps`, `actions`, `secrets`,
 `require-full-history`, `commit-history`, and `linear-history`, around the build, the type check, the
-lint, and the unit suite. It also pipes every TypeScript asset body back through Biome under the path
-it will occupy in a consumer, because the `.asset` suffix hides the language from every tool that would
-otherwise read it and the one shipped body that is code once reached a consumer unformatted. A gate that ploaness cannot turn on itself is a gate this repository is not
-held to, so prefer adding one here over asserting that it cannot apply.
+lint, and the unit suite.
+
+Three analyzers the shipped gates point at a Payload layout run here against this workspace instead,
+because only their globs are project-shaped: dependency-cruiser through
+`packages/config/dependency-cruiser-repo.json`, knip through `knip-repo.json`, and `type-coverage` over
+`tsconfig.lint.json`. The framework-neutral half of the architecture contract lives in
+`dependency-cruiser-core.json` and is shared with what a consumer receives, for the reason
+`eslint-core.js` exists. Each `-repo` config is named that way because `.dependency-cruiser.json` and
+`knip.json` are FORBIDDEN paths in a governed project; a file with either name here would read as a
+counterexample.
+
+Two more checks are about files a governed project has no equivalent of. `scripts/lib/check-asset-bodies.sh`
+pipes every TypeScript asset body back through Biome under the path it will occupy in a consumer,
+because the `.asset` suffix hides the language from every tool that would otherwise read it and the one
+shipped body that is code once reached a consumer unformatted. And shellcheck reads the shell scripts
+that implement these checks, which the standard makes source code of this repository: the analyzer runs
+in a digest-pinned image declared in `toolchain-pins.ts` beside the three the gates use.
+
+What remains genuinely inapplicable is `preflight`, `wiring`, and `assets`, which judge a consumer's
+installation of ploaness; `payload-generated` and `payload-rules`, which are about Payload; `css`,
+`docker`, `bundle`, and `e2e`, for which this repository has no stylesheet, Dockerfile, client bundle,
+or browser. Everything else is on. A gate that ploaness cannot turn on itself is a gate this repository
+is not held to, so prefer adding one here over asserting that it cannot apply - `arch` was absent on
+that reasoning, and a module cycle grew in `packages/governance` where nothing was looking.
 
 A tracked-tree fingerprint brackets the whole run. A verification that rewrote a source file would
 describe a tree nobody committed, so `build` regenerating a stale asset body is reported as a failure to
@@ -82,6 +103,11 @@ though it returned data, and `.filter(fn)` over `git ls-files` crashed on a syml
 
 Do not clear a new finding with a suppression while the budget is the thing standing between this
 repository and the ceiling. `ploaness gate suppressions` reports where it stands.
+
+Note what the ceiling does NOT count: it measures files whose extension is code, so a shell script's
+`# shellcheck disable=` is free. Resolve a shell finding structurally rather than by directive - that is
+why the asset-body check is a script rather than a function, and why the fixture mutations are programs
+in `it/lib/` rather than arguments to `node -e`.
 
 ### Test code and the two measurements it is not held to
 
