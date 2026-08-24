@@ -269,6 +269,31 @@ edit_json "$scratch/pass-denial-repaired/.claude/settings.json" permissions.deny
 commit_case pass-denial-repaired 'feat(fixture): let sync repair the write denial' "$CONFORMING_BODY"
 expect pass-denial-repaired generated-denial PASS
 
+# Harness Integrity. Each of these passed before: a project could go green forever with one flag, swap a
+# config the harness believes it owns, or undo a pinned version through an override.
+new_case fail-report-only-ci
+node -e '
+  const { readFileSync, writeFileSync } = require("node:fs")
+  const file = process.argv[1]
+  const text = readFileSync(file, "utf8")
+  writeFileSync(file, text.replace("run verify:full", "run verify:full --enforce=false"))
+' "$scratch/fail-report-only-ci/.github/workflows/verify.yml"
+commit_case fail-report-only-ci 'feat(fixture): run verification in report-only mode' "$CONFORMING_BODY"
+expect fail-report-only-ci wiring FAIL 'not a pass'
+
+new_case fail-vitest-config-swapped
+printf "import { defineConfig } from 'vitest/config'\n\nexport default defineConfig({})\n" \
+    > "$scratch/fail-vitest-config-swapped/vitest.config.mts"
+commit_case fail-vitest-config-swapped 'feat(fixture): replace the owned vitest config' "$CONFORMING_BODY"
+expect fail-vitest-config-swapped wiring FAIL 'vitest.config.mts'
+
+new_case fail-pinned-override
+# Into the existing overrides block, which sits last in the file. A second `overrides:` key would be
+# invalid YAML, and pnpm would read only the first.
+printf '  vitest: "3.0.0"\n' >> "$scratch/fail-pinned-override/pnpm-workspace.yaml"
+commit_case fail-pinned-override 'feat(fixture): override a version ploaness pins' "$CONFORMING_BODY"
+expect fail-pinned-override wiring FAIL 'pins'
+
 # Text the project owns below the block is not ploaness's to judge, so adding some must not fail.
 new_case pass-section-project-text
 printf '\n## Project notes\n\nThe project owns everything below the managed block.\n' \

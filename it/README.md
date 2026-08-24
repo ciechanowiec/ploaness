@@ -35,6 +35,9 @@ needle from the rule name - `no-unbounded-find`, not merely `payload-rules`.
 | `fail-typography-css` | an em dash in a stylesheet | `conventions`, naming `em dash` |
 | `fail-suppressions` | `maxSuppressions: 0` plus one suppression | `suppressions`, naming `ceiling` |
 | `fail-generated-denial` | the write denial removed from `.claude/settings.json` | `generated-denial`, naming `no write denial` |
+| `fail-report-only-ci` | `--enforce=false` added to the CI invocation | `wiring`, naming `not a pass` |
+| `fail-vitest-config-swapped` | `vitest.config.mts` replaced with a local config | `wiring`, naming the file |
+| `fail-pinned-override` | an override redefining a version ploaness pins | `wiring`, naming `pins` |
 | `pass-section-project-text` | project prose added below the managed block | nothing; the project owns that text |
 
 The two `commit-` cases named above exist because both rules diverged from the governing standard once:

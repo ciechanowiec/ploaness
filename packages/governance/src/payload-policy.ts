@@ -91,7 +91,6 @@ const endOfStringLiteral = (source: string, index: number): number => {
 // A regex literal's end depends on escapes, newlines, and character-class nesting at once. Splitting
 // the three apart would hide the single cursor they share behind three functions that each need the
 // others' state.
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one cursor, three interacting rules
 // Whether the next character sits inside a character class, which is what decides if `/` closes the
 // literal or is just a slash the class contains.
 const isInClassAfter = (character: string, isInClass: boolean): boolean => {
@@ -230,7 +229,6 @@ const scanDelimited = <State>(
   fold: (state: State, step: ScanStep) => Folded<State>,
   initial: State,
 ): State => {
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one cursor shared by the whole walk
   // One cursor carries depth across a character walk. Every split of this loop has to pass that cursor
   // back and forth, which is harder to review than the loop, and this is the code the unbounded-call
   // rules are decided by.

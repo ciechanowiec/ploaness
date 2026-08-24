@@ -24,6 +24,8 @@ const WIRED_PACKAGE_JSON: Record<string, unknown> = {
 const wiredInputs = (overrides: Record<string, unknown> = {}): WiringInputs => ({
   packageJson: WIRED_PACKAGE_JSON,
   eslintConfig: "import ploaness from 'ploaness/eslint'\n\nexport default ploaness\n",
+  vitestConfig: "import ploaness from 'ploaness/vitest'\n\nexport default ploaness\n",
+  workspaceFile: '',
   biomeConfig: JSON.stringify({ extends: ['ploaness/biome'], files: BIOME_FILES }),
   tsconfig: JSON.stringify({
     extends: 'ploaness/tsconfig.json',
@@ -207,5 +209,127 @@ describe('a project file that is absent entirely', () => {
         violation.reason.includes('specs import it directly'),
       ),
     ).toBe(true)
+  })
+})
+
+const workflowNamed = (content: string): readonly WorkflowFile[] => [
+  { name: 'verify.yml', content },
+]
+
+// A workflow that runs verification but neuters it is worse than one that never ran it: the project is
+// green forever, and the harness reports that the wiring is intact.
+describe('a workflow that neuters verification', () => {
+  it('rejects a verification run in report-only mode', () => {
+    const workflows: readonly WorkflowFile[] = workflowNamed(
+      'jobs:\n  verify:\n    steps:\n      - run: ploaness verify --extended --enforce=false\n',
+    )
+    const reasons: readonly string[] = findWiringViolations(wiredInputs({ workflows })).map(
+      (violation: WiringViolation): string => violation.reason,
+    )
+    expect(reasons.some((reason: string) => reason.includes('not a pass'))).toBe(true)
+  })
+
+  it('rejects continue-on-error on the step that runs verification', () => {
+    const workflows: readonly WorkflowFile[] = workflowNamed(
+      'jobs:\n  verify:\n    steps:\n      - name: Verify\n' +
+        '        continue-on-error: true\n        run: ploaness verify --extended\n',
+    )
+    const reasons: readonly string[] = findWiringViolations(wiredInputs({ workflows })).map(
+      (violation: WiringViolation): string => violation.reason,
+    )
+    expect(reasons.some((reason: string) => reason.includes('continue-on-error'))).toBe(true)
+  })
+
+  it('leaves continue-on-error alone on a step that does not run verification', () => {
+    const workflows: readonly WorkflowFile[] = workflowNamed(
+      'jobs:\n  verify:\n    steps:\n      - name: Upload\n' +
+        '        continue-on-error: true\n        run: echo upload\n' +
+        '      - run: ploaness verify --extended\n',
+    )
+    expect(findWiringViolations(wiredInputs({ workflows }))).toEqual([])
+  })
+
+  // A mention in a comment used to satisfy the requirement, because the whole file was searched as one
+  // string rather than line by line.
+  it('does not accept an invocation that only appears in a comment', () => {
+    const workflows: readonly WorkflowFile[] = workflowNamed(
+      'jobs:\n  verify:\n    steps:\n      # run: ploaness verify --extended\n' +
+        '      - run: echo nothing\n',
+    )
+    const locations: readonly string[] = findWiringViolations(wiredInputs({ workflows })).map(
+      (violation: WiringViolation): string => violation.location,
+    )
+    expect(locations).toContain('.github/workflows')
+  })
+
+  it('accepts a workflow that runs verification plainly', () => {
+    const workflows: readonly WorkflowFile[] = workflowNamed(
+      'jobs:\n  verify:\n    steps:\n      - run: pnpm run verify:full\n',
+    )
+    expect(findWiringViolations(wiredInputs({ workflows }))).toEqual([])
+  })
+})
+
+// This file was seeded by `init` and then read by nothing, while the tests gate runs the project's
+// vitest against it - so the coverage thresholds could be dropped without a single finding.
+describe('the vitest config', () => {
+  it('rejects a config that is not the bare re-export', () => {
+    const vitestConfig: string =
+      "import { defineConfig } from 'vitest/config'\n\n" +
+      'export default defineConfig({ test: { coverage: { enabled: false } } })\n'
+    const locations: readonly string[] = findWiringViolations(wiredInputs({ vitestConfig })).map(
+      (violation: WiringViolation): string => violation.location,
+    )
+    expect(locations).toContain('vitest.config.mts')
+  })
+
+  it('rejects a config that re-exports and then adds to it', () => {
+    const vitestConfig: string =
+      "import ploaness from 'ploaness/vitest'\n\n" +
+      'export default { ...ploaness, test: { coverage: { thresholds: {} } } }\n'
+    const locations: readonly string[] = findWiringViolations(wiredInputs({ vitestConfig })).map(
+      (violation: WiringViolation): string => violation.location,
+    )
+    expect(locations).toContain('vitest.config.mts')
+  })
+
+  it('reports the file as missing when it is absent', () => {
+    const reasons: readonly string[] = findWiringViolations(
+      wiredInputs({ vitestConfig: undefined }),
+    ).map((violation: WiringViolation): string => violation.reason)
+    expect(reasons.some((reason: string) => reason.includes('missing'))).toBe(true)
+  })
+})
+
+// A pinned version is only a pin while nothing else can change it.
+describe('install configuration that undoes a pin', () => {
+  it('rejects an override that redefines a pinned package', () => {
+    const workspaceFile: string = ['overrides:', "  vitest: '3.0.0'"].join('\n')
+    const locations: readonly string[] = findWiringViolations(wiredInputs({ workspaceFile })).map(
+      (violation: WiringViolation): string => violation.location,
+    )
+    expect(locations).toContain('pnpm-workspace.yaml overrides.vitest')
+  })
+
+  // A pre-publication consumer points the ploaness packages at local tarballs; ploaness does not pin
+  // its own version through this mechanism, so that override must keep working.
+  it('leaves an override for a package ploaness does not pin alone', () => {
+    const workspaceFile: string = [
+      'overrides:',
+      '  deepmerge-ts: "^8.0.2"',
+      '  ploaness: "file:../ploaness/dist-tarballs/ploaness-1.0.0.tgz"',
+    ].join('\n')
+    expect(findWiringViolations(wiredInputs({ workspaceFile }))).toEqual([])
+  })
+
+  it('rejects an audit configuration that silences the vulnerability gate', () => {
+    const packageJson: Record<string, unknown> = {
+      ...WIRED_PACKAGE_JSON,
+      pnpm: { auditConfig: { ignoreGhsas: ['GHSA-1'] } },
+    }
+    const reasons: readonly string[] = findWiringViolations(wiredInputs({ packageJson })).map(
+      (violation: WiringViolation): string => violation.reason,
+    )
+    expect(reasons.some((reason: string) => reason.includes('vulnerabilityAllowlist'))).toBe(true)
   })
 })

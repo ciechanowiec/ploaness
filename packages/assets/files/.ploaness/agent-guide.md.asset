@@ -26,8 +26,13 @@ ploaness governs all of the following domains:
 
 - **Harness wiring:** the scripts, CI invocation, tool-config inheritance, and test-library
   versions through which the project installs ploaness. A project that rewrites `verify`, appends rules
-  after the harness ESLint config, redeclares a Biome section, overrides a compiler option, or drops
-  extended verification out of CI fails this domain rather than passing quietly.
+  after the harness ESLint config, redeclares a Biome section, overrides a compiler option, replaces the
+  vitest config, or drops extended verification out of CI fails this domain rather than passing quietly.
+  So does one that runs verification with `--enforce=false`, tolerates its failure with
+  `continue-on-error`, redefines a pinned version through an install override, or silences the
+  vulnerability gate through `pnpm.auditConfig`. A setting may make the harness stricter and never
+  looser: a declared source root is added to the shipped ones rather than replacing them, and a bundle
+  budget larger than the shipped ceiling is ignored.
 - **Repository files:** managed, seeded, and forbidden paths, and an unchanged committable tree during
   verification.
 - **Source:** formatting, fast lint, type-aware lint, strict type checking, type coverage, typography,

@@ -201,7 +201,12 @@ const asStringRecord = (raw: unknown): Readonly<Record<string, string>> => {
 export const readSettings = (packageJson: unknown): Settings => {
   const raw: Record<string, unknown> = asRecord(asRecord(packageJson)['ploaness'])
   return {
-    sourceRoots: asStringArray(raw['sourceRoots'], DEFAULT_SOURCE_ROOTS),
+    // Additive, like every other list field. Replacing the default let a project declare `["src"]` and
+    // silently drop `tests` and `scripts` from the conventions, payload-rules, suppressions, css and
+    // architecture gates - a scope narrowing the harness is supposed to refuse.
+    sourceRoots: [
+      ...new Set<string>([...DEFAULT_SOURCE_ROOTS, ...asStringArray(raw['sourceRoots'], [])]),
+    ],
     unmanagedAssets: asUnmanagedAssets(raw['unmanagedAssets']),
     typographyExclusions: [
       ...DEFAULT_TYPOGRAPHY_EXCLUSIONS,
@@ -212,7 +217,12 @@ export const readSettings = (packageJson: unknown): Settings => {
       ...asStringArray(raw['javascriptAllowlist'], []),
     ],
     coverageExclude: [...DEFAULT_COVERAGE_EXCLUDE, ...asStringArray(raw['coverageExclude'], [])],
-    bundleBudgetBytes: asPositiveInteger(raw['bundleBudgetBytes'], DEFAULT_BUNDLE_BUDGET_BYTES),
+    // Only a stricter budget is honoured. A project could otherwise declare a budget large enough to
+    // pass anything, which is a threshold the harness owns rather than one it leaves open.
+    bundleBudgetBytes: Math.min(
+      DEFAULT_BUNDLE_BUDGET_BYTES,
+      asPositiveInteger(raw['bundleBudgetBytes'], DEFAULT_BUNDLE_BUDGET_BYTES),
+    ),
     maxSuppressions: asNonNegativeInteger(raw['maxSuppressions']),
     vulnerabilitySeverity:
       typeof raw['vulnerabilitySeverity'] === 'string' ? raw['vulnerabilitySeverity'] : undefined,

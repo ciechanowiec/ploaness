@@ -198,3 +198,40 @@ describe('secretAllowlist', () => {
     expect(readSettings({}).secretAllowlist).toEqual([])
   })
 })
+
+// Harness Integrity: a setting may make the harness stricter, never looser. Both of these used to be
+// one-line escapes - one narrowed five gates' scope, the other made the bundle budget unreachable.
+describe('settings that cannot loosen the harness', () => {
+  it('adds a declared source root to the shipped ones rather than replacing them', () => {
+    const roots: readonly string[] = readSettings({
+      ploaness: { sourceRoots: ['app'] },
+    }).sourceRoots
+    expect(roots).toContain('app')
+    expect(roots).toContain('tests')
+    expect(roots).toContain('scripts')
+  })
+
+  it('cannot drop a shipped source root by declaring a narrower list', () => {
+    expect(readSettings({ ploaness: { sourceRoots: ['src'] } }).sourceRoots).toContain('tests')
+  })
+
+  it('does not repeat a root a project declares that is already shipped', () => {
+    const roots: readonly string[] = readSettings({
+      ploaness: { sourceRoots: ['src'] },
+    }).sourceRoots
+    expect(roots.filter((root: string): boolean => root === 'src')).toHaveLength(1)
+  })
+
+  it('honours a stricter bundle budget', () => {
+    const budget: number = readSettings({ ploaness: { bundleBudgetBytes: 1024 } }).bundleBudgetBytes
+    expect(budget).toBe(1024)
+  })
+
+  it('refuses a bundle budget larger than the shipped ceiling', () => {
+    const shipped: number = readSettings({}).bundleBudgetBytes
+    const raised: number = readSettings({
+      ploaness: { bundleBudgetBytes: shipped * 100 },
+    }).bundleBudgetBytes
+    expect(raised).toBe(shipped)
+  })
+})

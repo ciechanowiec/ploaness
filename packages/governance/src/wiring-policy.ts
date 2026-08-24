@@ -1,3 +1,4 @@
+import { findOverrides, findSilencedAdvisories, type OverrideEntry } from './install-policy.js'
 // Anti-bypass policy: the module that exists because npm has no lifecycle.
 //
 // A build tool that bound its checks to fixed phases would make this unnecessary: the checks would run
@@ -27,6 +28,10 @@ export interface WorkflowFile {
 export interface WiringInputs {
   readonly packageJson: unknown
   readonly eslintConfig: string | undefined
+  /** The project's vitest config. The tests gate runs the project's vitest against it. */
+  readonly vitestConfig: string | undefined
+  /** The contents of pnpm-workspace.yaml, or an empty string when the project ships none. */
+  readonly workspaceFile: string
   readonly biomeConfig: string | undefined
   readonly tsconfig: string | undefined
   readonly workflows: readonly WorkflowFile[]
@@ -112,6 +117,15 @@ export const REQUIRED_TSCONFIG_PATHS: Readonly<Record<string, readonly string[]>
   exclude: ['node_modules'],
 }
 
+const LAST_ENTRY: number = -1
+
+/** One place a workflow invokes verification, with the step that carries it. */
+interface WorkflowInvocation {
+  readonly workflow: WorkflowFile
+  readonly line: string
+  readonly step: readonly string[]
+}
+
 /** Extended verification must run in CI, invoked either directly or through the owned script. */
 export const CI_INVOCATIONS: readonly string[] = ['ploaness verify --extended', 'run verify:full']
 
@@ -185,8 +199,14 @@ const checkExactEntries = (
 // Comments and blank lines are dropped first, so the pattern below describes only the two statements
 // the file may contain. Expressing the preamble inside the pattern made it backtrack on a long file.
 const COMMENT_OR_BLANK: RegExp = /^\s*(?:\/\/.*)?$/
-const ESLINT_REEXPORT: RegExp =
-  /^import\s+(\w+)\s+from\s+['"]ploaness\/eslint['"];?\s*export\s+default\s+\1;?$/
+// A config file the harness owns may contain nothing but an import of the shipped value and its
+// default re-export. Anything more is a local block that overrides what ploaness supplies.
+const reexportPattern = (specifier: string): RegExp => {
+  const escaped: string = specifier.replace('/', String.raw`\/`)
+  return new RegExp(
+    String.raw`^import\s+(\w+)\s+from\s+['"]${escaped}['"];?\s*export\s+default\s+\1;?$`,
+  )
+}
 
 const withoutPreamble = (config: string): string =>
   config
@@ -195,17 +215,24 @@ const withoutPreamble = (config: string): string =>
     .join('\n')
     .trim()
 
-const checkEslint = (config: string | undefined): readonly WiringViolation[] => {
+// `vitest.config.mts` was seeded by `init` and then checked by nothing, while the tests gate runs the
+// project's vitest with the project's config - so rewriting that file dropped the coverage thresholds,
+// the include globs, and the environment without a single finding.
+const checkReexport = (
+  config: string | undefined,
+  file: string,
+  specifier: string,
+): readonly WiringViolation[] => {
   if (config === undefined) {
-    return [{ location: 'eslint.config.mjs', reason: 'missing; must re-export ploaness/eslint' }]
+    return [{ location: file, reason: `missing; must re-export ${specifier}` }]
   }
-  return ESLINT_REEXPORT.test(withoutPreamble(config))
+  return reexportPattern(specifier).test(withoutPreamble(config))
     ? []
     : [
         {
-          location: 'eslint.config.mjs',
+          location: file,
           reason:
-            'must contain nothing but an import of ploaness/eslint and its default re-export; ' +
+            `must contain nothing but an import of ${specifier} and its default re-export; ` +
             'a local block would override the harness rules',
         },
       ]
@@ -290,22 +317,124 @@ const checkTsconfig = (config: string | undefined): readonly WiringViolation[] =
   return [...wrongExtends, ...overriddenOptions, ...wrongPaths]
 }
 
-const checkWorkflows = (workflows: readonly WorkflowFile[]): readonly WiringViolation[] =>
-  workflows.some((workflow: WorkflowFile): boolean =>
-    CI_INVOCATIONS.some((invocation: string): boolean => workflow.content.includes(invocation)),
+/** The flag that turns verification into a report. A run in that mode is not a pass. */
+export const REPORT_ONLY_FLAG: string = '--enforce=false'
+
+/** The step setting that lets a workflow continue after the verification step has failed. */
+const CONTINUE_ON_ERROR: string = 'continue-on-error'
+
+const isComment = (line: string): boolean => line.trimStart().startsWith('#')
+
+const isStepStart = (line: string): boolean => /^\s*-\s/.test(line)
+
+// The line indexes that actually invoke verification. A mention inside a comment is not an invocation,
+// which is why the whole file is no longer searched as one string.
+const invokingLines = (lines: readonly string[]): readonly number[] =>
+  lines.flatMap((line: string, index: number): readonly number[] =>
+    !isComment(line) &&
+    CI_INVOCATIONS.some((invocation: string): boolean => line.includes(invocation))
+      ? [index]
+      : [],
   )
-    ? []
-    : [
-        {
-          location: '.github/workflows',
-          reason:
-            'no workflow runs extended verification; ploaness enforces no local git hooks, so CI is the only backstop',
-        },
-      ]
+
+// The step a line belongs to: from the nearest list item at or above it, to the next one.
+const stepAround = (lines: readonly string[], index: number): readonly string[] => {
+  const startCandidates: readonly number[] = lines
+    .slice(0, index + 1)
+    .flatMap((line: string, at: number): readonly number[] => (isStepStart(line) ? [at] : []))
+  const start: number = startCandidates.at(LAST_ENTRY) ?? 0
+  const after: number = lines
+    .slice(start + 1)
+    .findIndex((line: string): boolean => isStepStart(line))
+  return after === -1 ? lines.slice(start) : lines.slice(start, start + 1 + after)
+}
+
+// A workflow that runs verification but neuters it is worse than one that never ran it: the project is
+// green forever and the harness reports that its wiring is intact. Both escapes are checked on the step
+// that carries the invocation rather than on the file, so an unrelated step may still tolerate failure.
+const checkWorkflows = (workflows: readonly WorkflowFile[]): readonly WiringViolation[] => {
+  const invoking: readonly WorkflowInvocation[] = workflows.flatMap(
+    (workflow: WorkflowFile): readonly WorkflowInvocation[] => {
+      const lines: readonly string[] = workflow.content.split('\n')
+      return invokingLines(lines).map(
+        (index: number): WorkflowInvocation => ({
+          workflow,
+          line: lines[index] ?? '',
+          step: stepAround(lines, index),
+        }),
+      )
+    },
+  )
+  if (invoking.length === 0) {
+    return [
+      {
+        location: '.github/workflows',
+        reason:
+          'no workflow runs extended verification; ploaness enforces no local git hooks, so CI is the only backstop',
+      },
+    ]
+  }
+  return invoking.flatMap((found: WorkflowInvocation): readonly WiringViolation[] => {
+    const reportOnly: readonly WiringViolation[] = found.line.includes(REPORT_ONLY_FLAG)
+      ? [
+          {
+            location: `.github/workflows/${found.workflow.name}`,
+            reason:
+              `runs verification with ${REPORT_ONLY_FLAG}, which prints findings and exits 0; ` +
+              'a run in that mode is not a pass',
+          },
+        ]
+      : []
+    const tolerated: readonly WiringViolation[] = found.step.some((line: string): boolean =>
+      line.includes(CONTINUE_ON_ERROR),
+    )
+      ? [
+          {
+            location: `.github/workflows/${found.workflow.name}`,
+            reason:
+              `declares ${CONTINUE_ON_ERROR} on the step that runs verification, ` +
+              'so a failing run cannot fail the workflow',
+          },
+        ]
+      : []
+    return [...reportOnly, ...tolerated]
+  })
+}
 
 // These libraries cannot move into the harness. Under the strict pnpm layout a consumer spec could not
 // resolve `import { describe } from "vitest"` if vitest were only a dependency of ploaness, so the
 // project must declare them itself and ploaness pins the version instead of owning the package.
+// A pinned version is only a pin while nothing else can change it. An `overrides` entry installs a
+// different version and leaves the declaration in package.json untouched, so the version check passes
+// while the code runs against something ploaness never saw. The ploaness packages themselves are not
+// pinned this way, so a pre-publication consumer may still point them at a local tarball.
+const checkPinnedOverrides = (
+  workspaceFile: string,
+  expected: Readonly<Record<string, string>>,
+): readonly WiringViolation[] =>
+  findOverrides(workspaceFile)
+    .filter((entry: OverrideEntry): boolean => Object.hasOwn(expected, entry.packageName))
+    .map(
+      (entry: OverrideEntry): WiringViolation => ({
+        location: `pnpm-workspace.yaml ${entry.key}.${entry.packageName}`,
+        reason:
+          'redefines a version ploaness pins; remove it, because the pin decides what the ' +
+          'gates run against',
+      }),
+    )
+
+// The sanctioned route for an advisory a project cannot reach is `ploaness.vulnerabilityAllowlist`,
+// which records a reason and a date and fails once the entry stops suppressing anything.
+const checkSilencedAdvisories = (packageJson: unknown): readonly WiringViolation[] =>
+  findSilencedAdvisories(packageJson).map(
+    (key: string): WiringViolation => ({
+      location: `package.json pnpm.auditConfig.${key}`,
+      reason:
+        'silences the vulnerability gate; record the advisory in ' +
+        'ploaness.vulnerabilityAllowlist instead, with a reason and a date',
+    }),
+  )
+
 const checkTestLibraries = (
   packageJson: Record<string, unknown>,
   expected: Readonly<Record<string, string>>,
@@ -350,7 +479,10 @@ export const findWiringViolations = (inputs: WiringInputs): readonly WiringViola
       'package.json scripts',
     ),
     ...checkTestLibraries(packageJson, inputs.expectedTestLibraries),
-    ...checkEslint(inputs.eslintConfig),
+    ...checkPinnedOverrides(inputs.workspaceFile, inputs.expectedTestLibraries),
+    ...checkSilencedAdvisories(inputs.packageJson),
+    ...checkReexport(inputs.eslintConfig, 'eslint.config.mjs', 'ploaness/eslint'),
+    ...checkReexport(inputs.vitestConfig, 'vitest.config.mts', 'ploaness/vitest'),
     ...checkBiome(inputs.biomeConfig, inputs.requiredBiomeFiles),
     ...checkTsconfig(inputs.tsconfig),
     ...checkWorkflows(inputs.workflows),
