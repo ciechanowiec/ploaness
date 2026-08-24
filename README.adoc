@@ -223,7 +223,7 @@ xref:#default-verification[] runs the following 31 gates.
 | The six xref:#payload-cms-usage-rules[].
 
 | `config-refs`
-| No analyzer setting carves out a path that no longer exists.
+| No analyzer setting carves out a path that no longer exists, and no declared exclusion matches nothing the gate it narrows would have judged.
 
 | [[secrets-gate]]`secrets`
 | gitleaks over the git history, on the tool's own rules plus the declared `secretAllowlist`.

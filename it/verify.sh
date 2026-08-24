@@ -322,13 +322,13 @@ edit_json "$scratch/fail-ranged-toolchain/package.json" devDependencies.vitest '
 commit_case fail-ranged-toolchain 'feat(fixture): loosen a pinned toolchain version' "$CONFORMING_BODY"
 expect fail-ranged-toolchain wiring FAIL 'ploaness pins it'
 
-# An exclusion narrows a gate's scope, which the harness grants only by file role. An entry that names
-# one existing file is not a role; it is one file the project would rather not be judged on.
-new_case fail-convenience-exclusion
-edit_json "$scratch/fail-convenience-exclusion/package.json" ploaness.coverageExclude \
-    '[{"pattern":"src/lib/reads.ts","reason":"not worth testing"}]'
-commit_case fail-convenience-exclusion 'feat(fixture): exclude one file from coverage' "$CONFORMING_BODY"
-expect fail-convenience-exclusion wiring FAIL 'names one existing file'
+# An exclusion that matches nothing leaves the report reading exactly as it would have read without it,
+# so it records a decision nobody can see the effect of - and it outlives the file it was written for.
+new_case fail-dead-coverage-exclusion
+edit_json "$scratch/fail-dead-coverage-exclusion/package.json" ploaness.coverageExclude \
+    '[{"pattern":"src/legacy/**","reason":"vendored from the previous stack, not hand-written here"}]'
+commit_case fail-dead-coverage-exclusion 'feat(fixture): exclude a path coverage never measures' "$CONFORMING_BODY"
+expect fail-dead-coverage-exclusion config-refs FAIL 'excludes nothing'
 
 new_case fail-unexplained-exclusion
 edit_json "$scratch/fail-unexplained-exclusion/package.json" ploaness.typographyExclusions \

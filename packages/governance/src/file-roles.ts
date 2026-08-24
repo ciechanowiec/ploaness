@@ -52,6 +52,42 @@ export const hasExtension = (filePath: string, extensions: readonly string[]): b
 export const matchesRole = (filePath: string, patterns: readonly string[]): boolean =>
   patterns.some((pattern: string): boolean => new RegExp(pattern).test(filePath))
 
+// The glob dialect the coverage settings are written in, which is not the regex dialect `matchesRole`
+// reads. `**/` crosses directory boundaries and `*` does not, which is the whole distinction between
+// `src/**/*.tsx` and `src/*.tsx`; collapsing the two would silently widen every pattern that uses one.
+const GLOB_TOKEN: RegExp = /\*\*\/|\*\*|[*?.+^${}()|[\]\\]/g
+
+const asRegexToken = (token: string): string => {
+  switch (token) {
+    case '**/': {
+      return '(?:[^/]*/)*'
+    }
+    case '**': {
+      return '.*'
+    }
+    case '*': {
+      return '[^/]*'
+    }
+    case '?': {
+      return '[^/]'
+    }
+    default: {
+      return `\\${token}`
+    }
+  }
+}
+
+/**
+ * Whether a repo-relative path matches a glob pattern of the kind the coverage settings carry.
+ * @param pattern the glob, such as `src/app/**` or `src/**\/*.tsx`.
+ * @param filePath the repo-relative path to test.
+ * @returns whether the whole path matches the whole pattern.
+ */
+export const matchesGlob = (pattern: string, filePath: string): boolean =>
+  new RegExp(
+    `^${pattern.replaceAll(GLOB_TOKEN, (token: string): string => asRegexToken(token))}$`,
+  ).test(filePath)
+
 /**
  * Decide whether a path holds code the Code Rules govern.
  * @param filePath the repo-relative path.

@@ -35,7 +35,7 @@ needle from the rule name - `no-unbounded-find`, not merely `payload-rules`.
 | `fail-typography-css` | an em dash in a stylesheet | `conventions`, naming `em dash` |
 | `fail-suppressions` | `maxSuppressions: 0` plus one suppression | `suppressions`, naming `ceiling` |
 | `fail-generated-denial` | the write denial removed from `.claude/settings.json` | `generated-denial`, naming `no write denial` |
-| `fail-convenience-exclusion` | a coverage exclusion naming one existing file | `wiring`, naming `names one existing file` |
+| `fail-dead-coverage-exclusion` | a coverage exclusion matching nothing the report measures | `config-refs`, naming `excludes nothing` |
 | `fail-unexplained-exclusion` | an exclusion with no reason | `wiring`, naming `states no reason` |
 | `fail-ranged-toolchain` | a caret range on a pinned toolchain version | `wiring`, naming `ploaness pins it` |
 | `fail-partial-access` | one operation dropped from a collection's access block | `payload-rules`, naming `require-complete-access` |

@@ -8,6 +8,7 @@
 // instead of silently escaping an allowlist nobody remembered to extend. With `include` set, Vitest
 // counts every matching file even when no test imports it, so an untested unit scores zero and fails the
 // gate rather than being invisible.
+import { COVERAGE_INCLUDE } from '@ploaness/governance'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 import { projectSettings as settings } from './project-settings.js'
@@ -32,7 +33,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
-      include: ['src/**/*.ts', 'scripts/**/*.ts'],
+      // Imported rather than written here: the exclusion-reach rule judges a declared exclusion against
+      // exactly this set, and a second copy of it would decide a verdict the report never agreed with.
+      include: [...COVERAGE_INCLUDE],
       exclude: [...settings.coverageExclude],
       thresholds: {
         // perFile: every covered file must independently clear the bar. Without it one fully covered

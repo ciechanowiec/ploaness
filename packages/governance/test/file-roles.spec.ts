@@ -4,6 +4,7 @@ import {
   hasExtension,
   isBinary,
   isGovernedCode,
+  matchesGlob,
   matchesRole,
   PROSE_EXTENSIONS,
 } from '../src/file-roles.js'
@@ -71,5 +72,50 @@ describe('isGovernedCode', () => {
 
   it('does not govern prose, which the Code Rules are not about', () => {
     expect(isGovernedCode('README.adoc', [])).toBe(false)
+  })
+})
+
+// The coverage settings are written as globs, not as the regular expressions `matchesRole` reads. Each
+// token here decides how far a pattern reaches, and reading one of them alike would silently widen every
+// exclusion that uses it.
+describe('matchesGlob', () => {
+  it('matches a literal path with no token in it', () => {
+    expect(matchesGlob('src/payload-types.ts', 'src/payload-types.ts')).toBe(true)
+  })
+
+  it('reads a period as a period rather than as any character', () => {
+    expect(matchesGlob('src/payload-types.ts', 'src/payload/types.ts')).toBe(false)
+  })
+
+  it('lets a single star cross no directory boundary', () => {
+    expect(matchesGlob('src/*.ts', 'src/lib/reads.ts')).toBe(false)
+  })
+
+  it('matches a single star within one segment', () => {
+    expect(matchesGlob('src/*.ts', 'src/reads.ts')).toBe(true)
+  })
+
+  it('lets a double star cross any number of boundaries', () => {
+    expect(matchesGlob('src/app/**', 'src/app/(payload)/admin/page.tsx')).toBe(true)
+  })
+
+  it('lets a double-star segment stand for no directory at all', () => {
+    expect(matchesGlob('src/**/*.tsx', 'src/page.tsx')).toBe(true)
+  })
+
+  it('lets a double-star segment stand for several directories', () => {
+    expect(matchesGlob('src/**/*.tsx', 'src/blocks/hero/index.tsx')).toBe(true)
+  })
+
+  it('matches exactly one character for a question mark', () => {
+    expect(matchesGlob('src/page?.ts', 'src/page1.ts')).toBe(true)
+  })
+
+  it('does not let a question mark stand for two characters', () => {
+    expect(matchesGlob('src/page?.ts', 'src/page12.ts')).toBe(false)
+  })
+
+  it('anchors the pattern, so a prefix match is not a match', () => {
+    expect(matchesGlob('src/lib', 'src/lib/reads.ts')).toBe(false)
   })
 })

@@ -1,6 +1,5 @@
 // The anti-bypass gate. Reads the consumer's own files and fails when ploaness has been disarmed. The
 // rules are pure and live in @ploaness/governance; this file supplies the I/O and the expectations.
-import { existsSync } from 'node:fs'
 import path from 'node:path'
 import {
   findWiringViolations,
@@ -153,8 +152,6 @@ export const wiring = (context: Context): GateResult => {
     playwrightConfig: readText(path.join(context.root, 'playwright.config.ts')),
     workspaceFile: readText(path.join(context.root, 'pnpm-workspace.yaml')) ?? '',
     declaredExclusions: context.settings.declaredExclusions,
-    isExistingPath: (relativePath: string): boolean =>
-      existsSync(path.join(context.root, relativePath)),
     biomeConfig: readText(path.join(context.root, 'biome.json')),
     tsconfig: readText(path.join(context.root, 'tsconfig.json')),
     expectedTestLibraries: expectedTestLibraries(),

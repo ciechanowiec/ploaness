@@ -27,7 +27,6 @@ const wiredInputs = (overrides: Record<string, unknown> = {}): WiringInputs => (
   playwrightConfig: "import ploaness from 'ploaness/playwright'\n\nexport default ploaness\n",
   workspaceFile: '',
   declaredExclusions: [],
-  isExistingPath: (): boolean => false,
   biomeConfig: JSON.stringify({ extends: ['ploaness/biome'], files: BIOME_FILES }),
   tsconfig: JSON.stringify({
     extends: 'ploaness/tsconfig.json',

@@ -4,16 +4,20 @@
 import { existsSync, globSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
+  COVERAGE_INCLUDE,
   type ConfigReferenceViolation,
+  type DeclaredExclusion,
   type DocumentViolation,
   extractLiteralSourcePaths,
   findDocumentReferenceViolations,
   findMissingConfigReferences,
   findSkillManifestViolations,
+  findUnreachedExclusions,
+  matchesGlob,
   requiredBiomeFiles,
   type SkillViolation,
 } from '@ploaness/governance'
-import { type Context, shippedDirectory } from '../context.js'
+import { type Context, shippedDirectory, trackedFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 const DOC_FILES: readonly string[] = ['AGENTS.md', 'CLAUDE.md']
@@ -81,12 +85,40 @@ const configTargets = (context: Context): readonly string[] => {
 const mandatedReferences = (context: Context): ReadonlySet<string> =>
   new Set(extractLiteralSourcePaths(biomeFilesJson(context)))
 
-/** A concrete source file carved out of a tool config must still exist on disk. */
+// A declared exclusion is judged against the paths the gate it narrows would otherwise have read: a
+// coverage exclusion against what the coverage report measures, a typography or JavaScript exclusion
+// against the tracked tree the conventions gate walks. Judging either against the other's set would
+// report a finding about the wrong thing.
+const measuredByCoverage = (tracked: readonly string[]): readonly string[] =>
+  tracked.filter((file: string): boolean =>
+    COVERAGE_INCLUDE.some((pattern: string): boolean => matchesGlob(pattern, file)),
+  )
+
+const deadExclusions = (context: Context): readonly string[] => {
+  const tracked: readonly string[] = trackedFiles(context.root)
+  const declared: readonly DeclaredExclusion[] = context.settings.declaredExclusions
+  const coverage: readonly DeclaredExclusion[] = declared.filter(
+    (entry: DeclaredExclusion): boolean => entry.kind === 'glob',
+  )
+  const overTree: readonly DeclaredExclusion[] = declared.filter(
+    (entry: DeclaredExclusion): boolean => entry.kind !== 'glob',
+  )
+  return [
+    ...findUnreachedExclusions(coverage, measuredByCoverage(tracked)),
+    ...findUnreachedExclusions(overTree, tracked),
+  ]
+}
+
+/**
+ * A concrete source file carved out of a tool config must still exist on disk, and a declared exclusion
+ * must exclude something. Both are the same defect at different scales: a carve-out that reaches
+ * nothing leaves the report reading exactly as it would have read without it.
+ */
 export const configReferences = (context: Context): GateResult => {
   const isExistingFile = (relativePath: string): boolean =>
     existsSync(path.join(context.root, relativePath))
   const mandated: ReadonlySet<string> = mandatedReferences(context)
-  const findings: readonly string[] = configTargets(context).flatMap(
+  const dangling: readonly string[] = configTargets(context).flatMap(
     (configPath: string): readonly string[] =>
       findMissingConfigReferences(
         extractLiteralSourcePaths(readFileSync(configPath, 'utf8')),
@@ -98,9 +130,10 @@ export const configReferences = (context: Context): GateResult => {
             `${path.basename(configPath)}: ${violation.path} (${violation.reason})`,
         ),
   )
+  const findings: readonly string[] = [...dangling, ...deadExclusions(context)]
   return findings.length > 0
-    ? failed(`${String(findings.length)} dangling config reference(s)`, findings)
-    : passed('every source file carved out of a tool config exists')
+    ? failed(`${String(findings.length)} carve-out(s) that reach nothing`, findings)
+    : passed('every carve-out of a tool config or setting reaches a file that exists')
 }
 
 /** The frontmatter an agent uses to discover and invoke a skill must be well formed. */

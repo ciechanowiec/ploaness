@@ -162,8 +162,11 @@ verdict.
   test, coverage, history, and security findings at their source. Do not disable the failing check.
 - An exclusion narrows a gate, which ploaness permits only by file role. Each entry is a `pattern` and
   the `reason` it is excluded, and the reason states the role: what that file IS, not that testing or
-  checking it is inconvenient. An entry naming a single existing file is rejected, because one path is
-  not a role. An entry without a reason is dropped rather than honoured, so the gate gets stricter.
+  checking it is inconvenient. An entry without a reason is dropped rather than honoured, so the gate
+  gets stricter. An entry that matches nothing the gate would have judged is a finding: it leaves the
+  report reading exactly as it would have read without it, and it outlives the file it was written for.
+  A coverage exclusion is matched as a glob and a typography or JavaScript one as a regular expression,
+  which is what those settings already carry; a skipped crawl route is a URL and is not judged this way.
 - There is no setting that turns a gate off. If a gate is wrong for the project, that is a ploaness bug
   to be fixed in ploaness, not a local override.
 - For a source suppression, use the analyzer's exact rule identifier and put the reason on the same

@@ -36,8 +36,6 @@ export interface WiringInputs {
   readonly workspaceFile: string
   /** Every exclusion the project declared, so the gate can refuse one that narrows by convenience. */
   readonly declaredExclusions: readonly DeclaredExclusion[]
-  /** Whether a path exists in the working tree, injected so this module stays free of I/O. */
-  readonly isExistingPath: (path: string) => boolean
   readonly biomeConfig: string | undefined
   readonly tsconfig: string | undefined
   /**
@@ -364,7 +362,7 @@ export const findWiringViolations = (inputs: WiringInputs): readonly WiringViola
       workspaceFile: inputs.workspaceFile,
     }),
     ...checkSilencedAdvisories(inputs.packageJson),
-    ...findConvenienceExclusions(inputs.declaredExclusions, inputs.isExistingPath).map(
+    ...findConvenienceExclusions(inputs.declaredExclusions).map(
       (reason: string): WiringViolation => ({ location: 'package.json ploaness', reason }),
     ),
     ...checkReexport(inputs.eslintConfig, 'eslint.config.mjs', 'ploaness/eslint'),
