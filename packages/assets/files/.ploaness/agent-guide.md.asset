@@ -131,8 +131,10 @@ verdict.
   the reason. An entry without a reason is ignored.
 - Fix formatting findings with `ploaness format`. Fix type, lint, architecture, Payload, dependency,
   test, coverage, history, and security findings at their source. Do not disable the failing check.
-- Change typography exclusions, the JavaScript allowlist, coverage exclusions, or the bundle budget only
-  for an explicit project requirement. Never widen one merely to obtain a pass.
+- An exclusion narrows a gate, which ploaness permits only by file role. Each entry is a `pattern` and
+  the `reason` it is excluded, and the reason states the role: what that file IS, not that testing or
+  checking it is inconvenient. An entry naming a single existing file is rejected, because one path is
+  not a role. An entry without a reason is dropped rather than honoured, so the gate gets stricter.
 - There is no setting that turns a gate off. If a gate is wrong for the project, that is a ploaness bug
   to be fixed in ploaness, not a local override.
 - For a source suppression, use the analyzer's exact rule identifier and put the reason on the same

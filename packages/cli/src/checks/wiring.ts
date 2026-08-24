@@ -98,6 +98,9 @@ export const wiring = (context: Context): GateResult => {
     eslintConfig: readText(path.join(context.root, 'eslint.config.mjs')),
     vitestConfig: readText(path.join(context.root, 'vitest.config.mts')),
     workspaceFile: readText(path.join(context.root, 'pnpm-workspace.yaml')) ?? '',
+    declaredExclusions: context.settings.declaredExclusions,
+    isExistingPath: (relativePath: string): boolean =>
+      existsSync(path.join(context.root, relativePath)),
     biomeConfig: readText(path.join(context.root, 'biome.json')),
     tsconfig: readText(path.join(context.root, 'tsconfig.json')),
     workflows: readWorkflows(context.root),

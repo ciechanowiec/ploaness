@@ -26,6 +26,8 @@ const wiredInputs = (overrides: Record<string, unknown> = {}): WiringInputs => (
   eslintConfig: "import ploaness from 'ploaness/eslint'\n\nexport default ploaness\n",
   vitestConfig: "import ploaness from 'ploaness/vitest'\n\nexport default ploaness\n",
   workspaceFile: '',
+  declaredExclusions: [],
+  isExistingPath: (): boolean => false,
   biomeConfig: JSON.stringify({ extends: ['ploaness/biome'], files: BIOME_FILES }),
   tsconfig: JSON.stringify({
     extends: 'ploaness/tsconfig.json',

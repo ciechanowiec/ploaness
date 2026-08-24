@@ -1,4 +1,5 @@
 import { findOverrides, findSilencedAdvisories, type OverrideEntry } from './install-policy.js'
+import { type DeclaredExclusion, findConvenienceExclusions } from './settings.js'
 // Anti-bypass policy: the module that exists because npm has no lifecycle.
 //
 // A build tool that bound its checks to fixed phases would make this unnecessary: the checks would run
@@ -32,6 +33,10 @@ export interface WiringInputs {
   readonly vitestConfig: string | undefined
   /** The contents of pnpm-workspace.yaml, or an empty string when the project ships none. */
   readonly workspaceFile: string
+  /** Every exclusion the project declared, so the gate can refuse one that narrows by convenience. */
+  readonly declaredExclusions: readonly DeclaredExclusion[]
+  /** Whether a path exists in the working tree, injected so this module stays free of I/O. */
+  readonly isExistingPath: (path: string) => boolean
   readonly biomeConfig: string | undefined
   readonly tsconfig: string | undefined
   readonly workflows: readonly WorkflowFile[]
@@ -493,6 +498,9 @@ export const findWiringViolations = (inputs: WiringInputs): readonly WiringViola
     ...checkTestLibraries(packageJson, inputs.expectedTestLibraries, inputs.requiredTestLibraries),
     ...checkPinnedOverrides(inputs.workspaceFile, inputs.expectedTestLibraries),
     ...checkSilencedAdvisories(inputs.packageJson),
+    ...findConvenienceExclusions(inputs.declaredExclusions, inputs.isExistingPath).map(
+      (reason: string): WiringViolation => ({ location: 'package.json ploaness', reason }),
+    ),
     ...checkReexport(inputs.eslintConfig, 'eslint.config.mjs', 'ploaness/eslint'),
     ...checkReexport(inputs.vitestConfig, 'vitest.config.mts', 'ploaness/vitest'),
     ...checkBiome(inputs.biomeConfig, inputs.requiredBiomeFiles),

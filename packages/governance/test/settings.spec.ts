@@ -11,7 +11,13 @@ describe('readSettings', () => {
   })
 
   it('adds project exclusions to the defaults rather than replacing them', () => {
-    const settings: Settings = readSettings({ ploaness: { typographyExclusions: ['^vendor/'] } })
+    const settings: Settings = readSettings({
+      ploaness: {
+        typographyExclusions: [
+          { pattern: '^vendor/', reason: 'third-party sources, vendored as-is' },
+        ],
+      },
+    })
     expect(settings.typographyExclusions).toContain('^vendor/')
     expect(settings.typographyExclusions).toContain(String.raw`^src/payload-types\.ts$`)
   })

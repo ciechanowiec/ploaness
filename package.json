@@ -40,12 +40,24 @@
       "it"
     ],
     "typographyExclusions": [
-      "^\\.vale/styles/"
+      {
+        "pattern": "^\\.vale/styles/",
+        "reason": "Vale detector definitions, whose content is the character they detect"
+      }
     ],
     "javascriptAllowlist": [
-      "^packages/config/(eslint|eslint-core|vitest)\\.js$",
-      "^packages/ploaness/(bin|eslint|vitest)\\.js$",
-      "^packages/(ploaness|assets)/build\\.mjs$"
+      {
+        "pattern": "^packages/config/(eslint|eslint-core|vitest)\\.js$",
+        "reason": "analyzer configuration, loaded as JavaScript by the tools that read it"
+      },
+      {
+        "pattern": "^packages/ploaness/(bin|eslint|vitest)\\.js$",
+        "reason": "package entry shims, loaded as JavaScript by the resolver"
+      },
+      {
+        "pattern": "^packages/(ploaness|assets)/build\\.mjs$",
+        "reason": "build scripts run by node directly, before any TypeScript is compiled"
+      }
     ]
   }
 }

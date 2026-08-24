@@ -10,6 +10,14 @@
 import type { SecretException } from './secret-policy.js'
 import type { VulnerabilityException } from './vulnerability-policy.js'
 
+/** One exclusion a project declared, and the file role it claims. */
+export interface DeclaredExclusion {
+  /** Which setting it came from, so a finding can name it. */
+  readonly setting: string
+  readonly pattern: string
+  readonly reason: string
+}
+
 /** A managed path a project has taken over from the catalogue, with the reason it did so. */
 export interface UnmanagedAsset {
   readonly path: string
@@ -24,6 +32,8 @@ export interface Settings {
   readonly unmanagedAssets: readonly UnmanagedAsset[]
   /** Repo-relative path patterns exempt from the typography ban (generated files only). */
   readonly typographyExclusions: readonly string[]
+  /** Every exclusion the project declared, honoured or not, so a gate can judge them. */
+  readonly declaredExclusions: readonly DeclaredExclusion[]
   /** Repo-relative path patterns exempt from the hand-written-JavaScript ban. */
   readonly javascriptAllowlist: readonly string[]
   /** Glob patterns excluded from coverage measurement, by role rather than by convenience. */
@@ -180,6 +190,43 @@ const asSecretAllowlist = (raw: unknown): readonly SecretException[] => {
   })
 }
 
+// An exclusion narrows a gate's scope, which is the one thing the standard says a project's settings
+// may not do without the harness's leave. The leave it grants is an exclusion by file role - so an
+// entry states the role it is claiming, and an entry that states none is dropped rather than honoured.
+// A dropped entry makes the gate stricter, which is the safe direction to fail in.
+const asDeclaredExclusions = (raw: unknown, setting: string): readonly DeclaredExclusion[] => {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  return raw.map((entry: unknown): DeclaredExclusion => readExclusion(entry, setting))
+}
+
+// A bare string is kept with an empty reason rather than dropped silently, so the gate can name the
+// entry the project wrote instead of reporting that its exclusions simply stopped applying.
+const readExclusion = (entry: unknown, setting: string): DeclaredExclusion => {
+  if (typeof entry === 'string') {
+    return { setting, pattern: entry, reason: '' }
+  }
+  if (typeof entry !== 'object' || entry === null) {
+    return { setting, pattern: '', reason: '' }
+  }
+  const record: Record<string, unknown> = entry as Record<string, unknown>
+  return {
+    setting,
+    pattern: asText(record['pattern']),
+    reason: asText(record['reason']).trim(),
+  }
+}
+
+const asText = (raw: unknown): string => (typeof raw === 'string' ? raw : '')
+
+const honoured = (entries: readonly DeclaredExclusion[]): readonly string[] =>
+  entries
+    .filter(
+      (entry: DeclaredExclusion): boolean => entry.pattern.length > 0 && entry.reason.length > 0,
+    )
+    .map((entry: DeclaredExclusion): string => entry.pattern)
+
 const asRecord = (raw: unknown): Record<string, unknown> =>
   typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
 
@@ -200,6 +247,18 @@ const asStringRecord = (raw: unknown): Readonly<Record<string, string>> => {
  */
 export const readSettings = (packageJson: unknown): Settings => {
   const raw: Record<string, unknown> = asRecord(asRecord(packageJson)['ploaness'])
+  const declaredTypography: readonly DeclaredExclusion[] = asDeclaredExclusions(
+    raw['typographyExclusions'],
+    'typographyExclusions',
+  )
+  const declaredJavascript: readonly DeclaredExclusion[] = asDeclaredExclusions(
+    raw['javascriptAllowlist'],
+    'javascriptAllowlist',
+  )
+  const declaredCoverage: readonly DeclaredExclusion[] = asDeclaredExclusions(
+    raw['coverageExclude'],
+    'coverageExclude',
+  )
   return {
     // Additive, like every other list field. Replacing the default let a project declare `["src"]` and
     // silently drop `tests` and `scripts` from the conventions, payload-rules, suppressions, css and
@@ -208,15 +267,10 @@ export const readSettings = (packageJson: unknown): Settings => {
       ...new Set<string>([...DEFAULT_SOURCE_ROOTS, ...asStringArray(raw['sourceRoots'], [])]),
     ],
     unmanagedAssets: asUnmanagedAssets(raw['unmanagedAssets']),
-    typographyExclusions: [
-      ...DEFAULT_TYPOGRAPHY_EXCLUSIONS,
-      ...asStringArray(raw['typographyExclusions'], []),
-    ],
-    javascriptAllowlist: [
-      ...DEFAULT_JAVASCRIPT_ALLOWLIST,
-      ...asStringArray(raw['javascriptAllowlist'], []),
-    ],
-    coverageExclude: [...DEFAULT_COVERAGE_EXCLUDE, ...asStringArray(raw['coverageExclude'], [])],
+    typographyExclusions: [...DEFAULT_TYPOGRAPHY_EXCLUSIONS, ...honoured(declaredTypography)],
+    declaredExclusions: [...declaredTypography, ...declaredJavascript, ...declaredCoverage],
+    javascriptAllowlist: [...DEFAULT_JAVASCRIPT_ALLOWLIST, ...honoured(declaredJavascript)],
+    coverageExclude: [...DEFAULT_COVERAGE_EXCLUDE, ...honoured(declaredCoverage)],
     // Only a stricter budget is honoured. A project could otherwise declare a budget large enough to
     // pass anything, which is a threshold the harness owns rather than one it leaves open.
     bundleBudgetBytes: Math.min(
@@ -233,3 +287,33 @@ export const readSettings = (packageJson: unknown): Settings => {
     analysisEnv: { ...DEFAULT_ANALYSIS_ENV, ...asStringRecord(raw['analysisEnv']) },
   }
 }
+
+// Characters that make a pattern describe a shape rather than one named thing. A pattern with none of
+// them, that resolves to a file which exists, is not a role: it is one file the project would rather
+// not be judged on, which is the exclusion by convenience the standard refuses.
+const PATTERN_METACHARACTERS: RegExp = /[*?[\]{}()|+^$\\]/
+
+/**
+ * Report every declared exclusion the harness cannot honour.
+ * @param entries the exclusions the project declared.
+ * @param isExistingPath whether a path exists in the working tree, injected so this stays pure.
+ * @returns one message per entry that states no role, or that names a single existing file.
+ */
+export const findConvenienceExclusions = (
+  entries: readonly DeclaredExclusion[],
+  isExistingPath: (path: string) => boolean,
+): readonly string[] =>
+  entries.flatMap((entry: DeclaredExclusion): readonly string[] => {
+    if (entry.reason.length === 0) {
+      return [
+        `${entry.setting} entry "${entry.pattern}" states no reason; ` +
+          'an exclusion is granted by file role, so the role must be written down',
+      ]
+    }
+    return !PATTERN_METACHARACTERS.test(entry.pattern) && isExistingPath(entry.pattern)
+      ? [
+          `${entry.setting} entry "${entry.pattern}" names one existing file rather than a role; ` +
+            'exclude the role that file plays, or test it',
+        ]
+      : []
+  })

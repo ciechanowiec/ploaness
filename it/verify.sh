@@ -332,6 +332,20 @@ edit_json "$scratch/fail-ranged-toolchain/package.json" devDependencies.vitest '
 commit_case fail-ranged-toolchain 'feat(fixture): loosen a pinned toolchain version' "$CONFORMING_BODY"
 expect fail-ranged-toolchain wiring FAIL 'ploaness pins it'
 
+# An exclusion narrows a gate's scope, which the harness grants only by file role. An entry that names
+# one existing file is not a role; it is one file the project would rather not be judged on.
+new_case fail-convenience-exclusion
+edit_json "$scratch/fail-convenience-exclusion/package.json" ploaness.coverageExclude \
+    '[{"pattern":"src/lib/reads.ts","reason":"not worth testing"}]'
+commit_case fail-convenience-exclusion 'feat(fixture): exclude one file from coverage' "$CONFORMING_BODY"
+expect fail-convenience-exclusion wiring FAIL 'names one existing file'
+
+new_case fail-unexplained-exclusion
+edit_json "$scratch/fail-unexplained-exclusion/package.json" ploaness.typographyExclusions \
+    '["^docs/"]'
+commit_case fail-unexplained-exclusion 'feat(fixture): exclude a path without a reason' "$CONFORMING_BODY"
+expect fail-unexplained-exclusion wiring FAIL 'states no reason'
+
 # Text the project owns below the block is not ploaness's to judge, so adding some must not fail.
 new_case pass-section-project-text
 printf '\n## Project notes\n\nThe project owns everything below the managed block.\n' \
