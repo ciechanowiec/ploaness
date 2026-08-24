@@ -203,7 +203,7 @@ describe('a project file that is absent entirely', () => {
     )
   })
 
-  it('reports a test library the project never declared', () => {
+  it('reports a pinned package the project never declared', () => {
     const packageJson: Record<string, unknown> = {
       ...WIRED_PACKAGE_JSON,
       devDependencies: { ploaness: '1.0.0' },
@@ -213,7 +213,7 @@ describe('a project file that is absent entirely', () => {
     )
     expect(
       violations.some((violation: WiringViolation) =>
-        violation.reason.includes('specs import it directly'),
+        violation.reason.includes('the project must declare it'),
       ),
     ).toBe(true)
   })
@@ -341,6 +341,14 @@ const withDependency = (name: string, specifier: string): WiringInputs =>
   })
 
 describe('a version range', () => {
+  it('names the block a package is actually declared in', () => {
+    const inputs: WiringInputs = wiredInputs({
+      expectedTestLibraries: { next: '16.3.2' },
+      packageJson: { ...WIRED_PACKAGE_JSON, dependencies: { next: '16.3.1' } },
+    })
+    expect(locations(inputs)).toContain('package.json dependencies.next')
+  })
+
   it('rejects a caret range', () => {
     expect(locations(withDependency('graphql', '^16.14.2'))).toContain('package.json graphql')
   })

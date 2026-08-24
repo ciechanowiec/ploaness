@@ -128,7 +128,26 @@ export const beginGate = (gate: Gate, width: number): void => {
   write(`  ${paint('.', DIM)} ${gate.id.padEnd(width)}  ${paint('running', DIM)}`)
 }
 
-/** Print the one-line verdict for a gate that has just finished. */
+// A failing gate prints its findings where it failed, not at the end of the run. Extended verification
+// is thirty-seven gates and several minutes; deferring the reason put it minutes away from the line
+// that announced it, so a reader watching a run learned that something broke long before learning what.
+// The closing verdict still names the gate, which is what makes the block above findable afterwards.
+const reportGateFindings = (outcome: GateOutcome): void => {
+  const verdict: string = verdictOf(outcome.result)
+  if (verdict === PASS) {
+    return
+  }
+  const heading: string = `${verdict}  ${outcome.gate.id} - ${outcome.gate.title}`
+  line('')
+  line(`  ${paint(heading, COLOURS[verdict] ?? RESET)}`)
+  line(`  ${paint('-'.repeat(heading.length), DIM)}`)
+  for (const finding of outcome.result.findings) {
+    line(`  ${finding}`)
+  }
+  line('')
+}
+
+/** Print the one-line verdict for a gate that has just finished, and its findings when it did not pass. */
 export const reportGate = (outcome: GateOutcome, width: number): void => {
   const verdict: string = verdictOf(outcome.result)
   const identifier: string = outcome.gate.id.padEnd(width)
@@ -139,29 +158,13 @@ export const reportGate = (outcome: GateOutcome, width: number): void => {
     write(CLEAR_LINE)
   }
   line(spread(plain, elapsed(outcome.durationMs), decorated))
+  reportGateFindings(outcome)
 }
 
 /** Print a closing aside, such as the reminder that one gate is not a verdict. */
 export const reportNote = (text: string): void => {
   line('')
   line(`  ${paint(text, DIM)}`)
-}
-
-/** Print the findings of every gate that failed, plus any warnings a passing gate raised. */
-export const reportFindings = (outcomes: readonly GateOutcome[]): void => {
-  for (const outcome of outcomes) {
-    const verdict: string = verdictOf(outcome.result)
-    if (verdict === PASS) {
-      continue
-    }
-    const heading: string = `${verdict}  ${outcome.gate.id} - ${outcome.gate.title}`
-    line('')
-    line(`  ${paint(heading, COLOURS[verdict] ?? RESET)}`)
-    line(`  ${paint('-'.repeat(heading.length), DIM)}`)
-    for (const finding of outcome.result.findings) {
-      line(`  ${finding}`)
-    }
-  }
 }
 
 const tally = (outcomes: readonly GateOutcome[], verdict: string): number =>

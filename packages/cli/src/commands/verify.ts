@@ -7,7 +7,6 @@ import { type Gate, gatesFor } from '../gates.js'
 import {
   beginGate,
   type GateOutcome,
-  reportFindings,
   reportGate,
   reportHeader,
   reportNote,
@@ -69,7 +68,6 @@ export const verify = async (context: Context, isExtended: boolean): Promise<num
   const width: number = identifierWidth(gates)
   reportHeader(isExtended, gates.length)
   const outcomes: readonly GateOutcome[] = await runGates(gates, context, width)
-  reportFindings(outcomes)
   return reportVerdict(outcomes, isExtended, context.isEnforced)
 }
 
@@ -77,7 +75,6 @@ export const verify = async (context: Context, isExtended: boolean): Promise<num
 export const verifyOne = async (context: Context, gate: Gate): Promise<number> => {
   const outcome: GateOutcome = await timeGate(gate, context)
   reportGate(outcome, gate.id.length)
-  reportFindings([outcome])
   reportNote('A single gate is a debugging aid. Run `ploaness verify` for a verdict.')
   return outcome.result.ok || !context.isEnforced ? 0 : 1
 }

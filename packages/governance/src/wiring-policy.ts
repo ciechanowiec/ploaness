@@ -185,6 +185,18 @@ const declaredDependencies = (packageJson: Record<string, unknown>): Record<stri
   ...asStringRecord(packageJson['devDependencies']),
 })
 
+// Which block a package is actually declared in. A finding that named `devDependencies` for a package
+// sitting in `dependencies` sent the reader to the wrong half of the file - and the framework pins,
+// which are runtime dependencies, are exactly the ones that would be misreported.
+const blockOf = (packageJson: Record<string, unknown>, name: string): string | undefined => {
+  if (Object.hasOwn(asStringRecord(packageJson['dependencies']), name)) {
+    return 'dependencies'
+  }
+  return Object.hasOwn(asStringRecord(packageJson['devDependencies']), name)
+    ? 'devDependencies'
+    : undefined
+}
+
 const checkDependency = (packageJson: Record<string, unknown>): readonly WiringViolation[] =>
   Object.hasOwn(declaredDependencies(packageJson), 'ploaness')
     ? []
@@ -614,8 +626,8 @@ const checkTestLibraries = (
         return required.has(name)
           ? [
               {
-                location: `package.json devDependencies.${name}`,
-                reason: `missing; specs import it directly, so the project must declare it at ${version}`,
+                location: `package.json ${name}`,
+                reason: `missing; ploaness pins it, so the project must declare it at ${version}`,
               },
             ]
           : []
@@ -624,7 +636,7 @@ const checkTestLibraries = (
         ? []
         : [
             {
-              location: `package.json devDependencies.${name}`,
+              location: `package.json ${blockOf(packageJson, name) ?? ''}.${name}`,
               reason:
                 `is "${found}" but ploaness pins it at "${version}"; ` +
                 'a range lets an upstream release change a verdict',
