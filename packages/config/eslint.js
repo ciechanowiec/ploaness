@@ -11,7 +11,6 @@
 // Philosophy: maximum-explicit. The build should be hard to satisfy by accident, so that code which
 // passes is verbose, explicit and readable by construction.
 
-import vitest from '@vitest/eslint-plugin'
 //
 // The framework-neutral half - the caps, the explicitness rules, the naming ban, the suppression
 // discipline, the mock ban - lives in ./eslint-core.js and is shared with the ploaness repository's own
@@ -24,10 +23,13 @@ import {
   compose,
   guidelineRules,
   immutabilityBlock,
+  NO_FAST_CHECK_SEED,
   NO_INHERITANCE,
   NO_LITERAL_ASSERTIONS,
   prettierLast,
+  testIntegrityRules,
   typeAwareParsing,
+  vitestPlugin,
 } from './eslint-core.js'
 
 const NO_INLINE_CONFIG_FUNCTIONS_SELECTOR = 'ArrowFunctionExpression, FunctionExpression'
@@ -239,41 +241,12 @@ export default compose(
   //    runner (and its own `forbidOnly` in CI), so these Vitest/RTL rules do not apply there.
   {
     files: ['tests/int/**/*.ts', 'tests/int/**/*.tsx', 'tests/unit/**/*.ts', 'tests/unit/**/*.tsx'],
-    plugins: { vitest, 'testing-library': testingLibrary },
+    plugins: { vitest: vitestPlugin, 'testing-library': testingLibrary },
     rules: {
-      // A test must actually run and actually assert.
-      'vitest/no-focused-tests': 'error', // ban `.only` - it skips the rest of the suite.
-      'vitest/no-disabled-tests': 'error', // ban `.skip` / `xit` / `xdescribe`.
-      'vitest/no-commented-out-tests': 'error', // a commented-out test is a deleted test that looks present.
-      // a fast-check fc.assert property counts as the assertion too.
-      'vitest/expect-expect': ['error', { assertFunctionNames: ['expect', 'fc.assert'] }],
-      // vitest/expect-expect (above) is the assertion-presence gate here and understands fc.assert.
-      // sonarjs/assertions-in-tests is a less-configurable duplicate that does not, so it defers in
-      // this scope (it stays on for tests/unit, which has no fast-check property tests).
-      'sonarjs/assertions-in-tests': 'off',
-      'vitest/valid-expect': 'error', // `expect` is called correctly (awaited, matcher present).
-      'vitest/no-standalone-expect': 'error', // assertions must live inside a test.
-      'vitest/no-conditional-expect': 'error', // an assertion behind an `if` may never execute.
-      'vitest/no-conditional-tests': 'error', // tests must not be defined conditionally.
-      'vitest/no-identical-title': 'error', // duplicate titles hide one test behind another.
-      'vitest/valid-title': 'error',
-      'vitest/no-import-node-test': 'error', // use the Vitest API, not node:test.
-      'vitest/consistent-test-it': ['error', { fn: 'it' }],
-      'vitest/prefer-hooks-on-top': 'error', // setup before assertions, so reading order matches run order.
-
-      // Property tests must stay deterministic: the fixed global seed (vitest.setup.ts) is the only
-      // seed. Forbid per-call `seed` overrides, which would reintroduce a volatile gate.
-      'no-restricted-syntax': [
-        ...NO_INHERITANCE,
-        ...NO_LITERAL_ASSERTIONS,
-        {
-          selector:
-            "CallExpression[callee.object.name='fc'][callee.property.name='assert'] > " +
-            "ObjectExpression > Property[key.name='seed']",
-          message:
-            'Do not set a per-call fast-check seed. Property tests use the fixed global seed in vitest.setup.ts.',
-        },
-      ],
+      // A test must actually run and actually assert. The rules live in eslint-core.js, because the
+      // ploaness repository's own suite is held to them too.
+      ...testIntegrityRules,
+      'no-restricted-syntax': [...NO_INHERITANCE, ...NO_LITERAL_ASSERTIONS, ...NO_FAST_CHECK_SEED],
 
       // React Testing Library: test components the way a user experiences them.
       'testing-library/await-async-queries': 'error',

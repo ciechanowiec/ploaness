@@ -10,6 +10,7 @@
 // composes them with its own workspace layout. Neither restates a rule.
 import js from '@eslint/js'
 import comments from '@eslint-community/eslint-plugin-eslint-comments/configs'
+import vitest from '@vitest/eslint-plugin'
 import prettier from 'eslint-config-prettier'
 import functional from 'eslint-plugin-functional'
 import jsdoc from 'eslint-plugin-jsdoc'
@@ -351,6 +352,51 @@ export const guidelineRules = {
   ],
 }
 
+// Test integrity. In AI-driven development with little human review, the cheapest way to make a suite
+// lie is to quietly stop a test from running or asserting: `.only` skips every other test, `.skip` and a
+// commented-out spec remove one while it still reads as present, and a test with no assertion drives the
+// code without judging what it produced. These make each of those a build failure.
+//
+// It lived only in the shipped config, so the harness published the check and was not measured by it -
+// the same asymmetry that put the caps and the naming bans in this file.
+/** The plugin the block below needs, re-exported so a caller declares no version of its own. */
+export const vitestPlugin = vitest
+
+/** The Vitest half of the test-integrity block, shared by every config that lints a Vitest suite. */
+export const testIntegrityRules = {
+  'vitest/no-focused-tests': 'error', // ban `.only` - it skips the rest of the suite.
+  'vitest/no-disabled-tests': 'error', // ban `.skip` / `xit` / `xdescribe`.
+  'vitest/no-commented-out-tests': 'error', // a commented-out test is a deleted test that looks present.
+  // a fast-check fc.assert property counts as the assertion too.
+  'vitest/expect-expect': ['error', { assertFunctionNames: ['expect', 'fc.assert'] }],
+  // vitest/expect-expect (above) is the assertion-presence gate here and understands fc.assert.
+  // sonarjs/assertions-in-tests is a less-configurable duplicate that does not, so it defers in
+  // this scope.
+  'sonarjs/assertions-in-tests': 'off',
+  'vitest/valid-expect': 'error', // `expect` is called correctly (awaited, matcher present).
+  'vitest/no-standalone-expect': 'error', // assertions must live inside a test.
+  'vitest/no-conditional-expect': 'error', // an assertion behind an `if` may never execute.
+  'vitest/no-conditional-tests': 'error', // tests must not be defined conditionally.
+  'vitest/no-identical-title': 'error', // duplicate titles hide one test behind another.
+  'vitest/valid-title': 'error',
+  'vitest/no-import-node-test': 'error', // use the Vitest API, not node:test.
+  'vitest/consistent-test-it': ['error', { fn: 'it' }],
+  'vitest/prefer-hooks-on-top': 'error', // setup before assertions, so reading order matches run order.
+}
+
+// Property tests must stay deterministic: the fixed global seed in the suite's setup file is the only
+// seed. A per-call override reintroduces a gate whose verdict changes between two runs of an unchanged
+// repository, which is the one thing a check may never do.
+const NO_FAST_CHECK_SEED = [
+  {
+    selector:
+      "CallExpression[callee.object.name='fc'][callee.property.name='assert'] > " +
+      "ObjectExpression > Property[key.name='seed']",
+    message:
+      'Do not set a per-call fast-check seed. Property tests use the fixed global seed in the suite setup.',
+  },
+]
+
 /** No `let`, no in-place mutation. The caller supplies the files and the generated-role exemptions. */
 export const immutabilityBlock = (files, ignores) => ({
   files,
@@ -366,6 +412,7 @@ export const immutabilityBlock = (files, ignores) => ({
 export {
   MOCKING_PACKAGES,
   MOCKING_VI_METHODS,
+  NO_FAST_CHECK_SEED,
   NO_INHERITANCE,
   NO_LITERAL_ASSERTIONS,
   NO_MOCKS_MESSAGE,

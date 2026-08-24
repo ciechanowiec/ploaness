@@ -101,12 +101,24 @@ const inheritanceSelectors = async (): Promise<readonly string[]> => {
   return selectorsIn(asRecord(core)?.['NO_INHERITANCE'])
 }
 
-const expectBanInEveryBlock = async (blocks: readonly FlatBlock[]): Promise<void> => {
+/** How the inheritance ban stands across one config: how many blocks set the key, and what is missing. */
+interface BanStatus {
+  readonly blocks: number
+  readonly missing: readonly string[]
+}
+
+// The assertions live in the test rather than in this helper, so a test body that judges nothing reads
+// as judging nothing. Returning the finding and asserting on it also names WHICH selector went missing,
+// which a loop of per-block assertions does not.
+const banStatus = async (blocks: readonly FlatBlock[]): Promise<BanStatus> => {
   const settings: readonly unknown[] = restrictedSyntaxSettings(blocks)
-  expect(settings.length).toBeGreaterThan(0)
   const expected: readonly string[] = await inheritanceSelectors()
-  for (const setting of settings) {
-    expect(selectorsIn(setting)).toEqual(expect.arrayContaining([...expected]))
+  return {
+    blocks: settings.length,
+    missing: settings.flatMap((setting: unknown): readonly string[] => {
+      const present: readonly string[] = selectorsIn(setting)
+      return expected.filter((selector: string): boolean => !present.includes(selector))
+    }),
   }
 }
 
@@ -122,10 +134,14 @@ describe('flat config severity', () => {
 
 describe('inheritance ban survives every no-restricted-syntax block', () => {
   it('keeps the ban in every such block of the shipped config', async () => {
-    await expectBanInEveryBlock(await shippedConfig())
+    const status: BanStatus = await banStatus(await shippedConfig())
+    expect(status.blocks).toBeGreaterThan(0)
+    expect(status.missing).toEqual([])
   })
 
   it('keeps the ban in every such block of the workspace config', async () => {
-    await expectBanInEveryBlock(await workspaceConfig())
+    const status: BanStatus = await banStatus(await workspaceConfig())
+    expect(status.blocks).toBeGreaterThan(0)
+    expect(status.missing).toEqual([])
   })
 })

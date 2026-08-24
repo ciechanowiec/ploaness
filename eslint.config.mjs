@@ -10,10 +10,13 @@ import {
   compose,
   guidelineRules,
   immutabilityBlock,
+  NO_FAST_CHECK_SEED,
   NO_INHERITANCE,
   NO_LITERAL_ASSERTIONS,
   prettierLast,
+  testIntegrityRules,
   typeAwareParsing,
+  vitestPlugin,
 } from '@ploaness/config/eslint-core'
 
 const SOURCE = 'packages/*/src/**/*.ts'
@@ -55,12 +58,17 @@ export default compose(
 
   {
     files: [SPECS],
+    plugins: { vitest: vitestPlugin },
     rules: {
+      // The test-integrity block the shipped config applies to a Payload project's suite. This
+      // repository publishes those rules and was not measured by them, which is the whole reason
+      // eslint-core.js exists.
+      ...testIntegrityRules,
       // The literal-assertion ban, which the shipped config applies to a Payload project's tests.
       // `NO_INHERITANCE` is spread in beside it because this key REPLACES the base setting rather than
       // adding to it, so naming only the assertion selectors here silently disarmed the inheritance ban
       // in every spec - the exact trap `eslint-core.js` documents.
-      'no-restricted-syntax': [...NO_INHERITANCE, ...NO_LITERAL_ASSERTIONS],
+      'no-restricted-syntax': [...NO_INHERITANCE, ...NO_LITERAL_ASSERTIONS, ...NO_FAST_CHECK_SEED],
       // A test's expected value IS its specification. Naming it moves the specification away from the
       // assertion that reads it, which makes the test harder to check by eye rather than easier - the
       // opposite of what the bare-number ban exists to achieve. This is a role distinction, not a
