@@ -3,6 +3,7 @@
 // project has no copy to drift from.
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { asRecord } from '@ploaness/governance'
 import { type Context, readJson, resolveTool, shippedDirectory } from '../context.js'
 import { failed, fromRun, type GateResult, passed, type RunResult, runNode } from '../exec.js'
 
@@ -41,10 +42,7 @@ const SCHEMA_PATTERN: RegExp = /biomejs\.dev\/schemas\/(\d+\.\d+\.\d+)\/schema\.
 // bump would leave the pinned `$schema` stale and silently out of date.
 export const biomeSchema = (): GateResult => {
   const manifest: unknown = readJson(path.join(shippedDirectory('@biomejs/biome'), 'package.json'))
-  const installed: string =
-    typeof manifest === 'object' && manifest !== null
-      ? versionOf(manifest as Record<string, unknown>)
-      : ''
+  const installed: string = versionOf(asRecord(manifest))
   const declared: string | undefined = SCHEMA_PATTERN.exec(
     readFileSync(configFile('biome.json'), 'utf8'),
   )?.[1]

@@ -2,13 +2,11 @@
 // judge a project that is not one. Running anyway would produce a verdict about a contract the project
 // never agreed to.
 
+import { asRecord } from '@ploaness/governance'
 import type { Context } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 const MINIMUM_NODE_MAJOR: number = 26
-
-const asRecord = (raw: unknown): Record<string, unknown> =>
-  typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
 
 const declaredDependencies = (packageJson: unknown): Record<string, unknown> => {
   const root: Record<string, unknown> = asRecord(packageJson)

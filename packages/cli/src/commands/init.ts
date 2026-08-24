@@ -4,6 +4,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import {
+  asRecord,
   REQUIRED_BIOME_EXTENDS,
   REQUIRED_SCRIPTS,
   REQUIRED_TSCONFIG_EXTENDS,
@@ -60,12 +61,9 @@ const patchPackageJson = (context: Context): readonly string[] => {
   if (!existsSync(file)) {
     return ['package.json is missing, so the scripts were not written']
   }
-  const parsed: Record<string, unknown> = JSON.parse(readFileSync(file, 'utf8')) as Record<
-    string,
-    unknown
-  >
+  const parsed: Record<string, unknown> = asRecord(JSON.parse(readFileSync(file, 'utf8')))
   const scripts: Record<string, unknown> = {
-    ...(parsed['scripts'] as Record<string, unknown> | undefined),
+    ...asRecord(parsed['scripts']),
     ...REQUIRED_SCRIPTS,
   }
   const updated: Record<string, unknown> = { ...parsed, scripts }

@@ -96,6 +96,17 @@ step arch "$cli_bin/depcruise" packages scripts \
     --config packages/config/dependency-cruiser-repo.json
 step knip "$cli_bin/knip" --config packages/config/knip-repo.json
 
+# The specs are exempt for the reason AGENTS.md records: `--strict` counts every type assertion as
+# uncovered, and a spec exists to construct inputs the production types cannot express. Reaching 100%
+# there would mean building objects nobody reads. Everything else is measured, and clearing it removed
+# fifty assertions rather than adding one exemption - six modules each carried their own copy of the
+# same two narrowing helpers, and every copy narrowed with a claim the compiler could not check.
+step type-coverage "$cli_bin/type-coverage" \
+    --at-least 100 --strict --cache false -p tsconfig.lint.json \
+    --ignore-files 'packages/*/test/**' \
+    --ignore-files 'vitest.config.mts' \
+    --ignore-files 'vitest.setup.ts'
+
 # The gates whose rules are about a repository's shape, in the order `gates.ts` runs them.
 gate biome-schema
 gate conventions

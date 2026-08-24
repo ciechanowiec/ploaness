@@ -1,4 +1,5 @@
 import { findSilencedAdvisories } from './install-policy.js'
+import { asRecord, asStringRecord, isArray } from './json-shapes.js'
 import { type DeclaredExclusion, findConvenienceExclusions } from './settings.js'
 import { declaredDependencies, findVersionViolations } from './version-policy.js'
 import type { WiringViolation } from './wiring-violation.js'
@@ -150,17 +151,6 @@ const ALLOWED_TSCONFIG_COMPILER_OPTIONS: ReadonlySet<string> = new Set([
 // for that section wholesale, which is a silent downgrade rather than an addition.
 const OWNED_BIOME_SECTIONS: readonly string[] = ['linter', 'formatter', 'javascript', 'assist']
 
-const asRecord = (raw: unknown): Record<string, unknown> =>
-  typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
-
-const asStringRecord = (raw: unknown): Record<string, string> => {
-  return Object.fromEntries(
-    Object.entries(asRecord(raw)).filter(
-      ([, value]: readonly [string, unknown]): boolean => typeof value === 'string',
-    ),
-  ) as Record<string, string>
-}
-
 const checkDependency = (packageJson: Record<string, unknown>): readonly WiringViolation[] =>
   Object.hasOwn(declaredDependencies(packageJson), 'ploaness')
     ? []
@@ -249,7 +239,7 @@ const checkBiome = (
   const parsed: Record<string, unknown> = asRecord(JSON.parse(config))
   const extendsValue: unknown = parsed['extends']
   const missingExtends: readonly WiringViolation[] =
-    Array.isArray(extendsValue) && extendsValue.includes(REQUIRED_BIOME_EXTENDS)
+    isArray(extendsValue) && extendsValue.includes(REQUIRED_BIOME_EXTENDS)
       ? []
       : [
           {

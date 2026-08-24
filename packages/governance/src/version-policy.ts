@@ -5,6 +5,7 @@
 // the size cap, which is the cap doing its job: they answer different questions and share only the
 // helpers below.
 import { findOverrides, type OverrideEntry } from './install-policy.js'
+import { asOptionalText, asRecord, asStringRecord } from './json-shapes.js'
 import type { WiringViolation } from './wiring-violation.js'
 
 /** What a project must declare and at which version, plus the invariants those pins imply. */
@@ -22,16 +23,6 @@ export interface VersionInputs {
   /** The contents of pnpm-workspace.yaml, or an empty string when the project ships none. */
   readonly workspaceFile: string
 }
-
-const asRecord = (raw: unknown): Record<string, unknown> =>
-  typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
-
-const asStringRecord = (raw: unknown): Record<string, string> =>
-  Object.fromEntries(
-    Object.entries(asRecord(raw)).filter(
-      ([, value]: readonly [string, unknown]): boolean => typeof value === 'string',
-    ),
-  ) as Record<string, string>
 
 /** Every package a project declares, whichever block it sits in. */
 export const declaredDependencies = (
@@ -122,9 +113,6 @@ const checkPackageManager = (
         },
       ]
 }
-
-const asOptionalText = (raw: unknown): string | undefined =>
-  typeof raw === 'string' ? raw : undefined
 
 // `preflight` checks the Node that is actually running, which is the version a gate is executed by.
 // The `engines` block is a different statement: it is what the project tells an installer, a CI image

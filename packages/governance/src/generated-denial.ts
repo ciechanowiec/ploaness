@@ -7,6 +7,7 @@
 // The standard scopes this to "where the runtime used by AI agents supports the denial", so a rule here
 // binds one runtime and cannot bind them all. That is conformance rather than a shortfall, and the gate
 // says so rather than implying a guarantee it does not have.
+import { asRecord, isArray, readKey } from './json-shapes.js'
 
 /** The artefacts Payload derives from the configuration. Declared once and consumed by every rule. */
 export const GENERATED_ARTEFACTS: readonly string[] = [
@@ -23,15 +24,8 @@ export const requiredDenyRules = (): readonly string[] =>
   ])
 
 const stringsAt = (settings: unknown, section: string, key: string): readonly string[] => {
-  if (typeof settings !== 'object' || settings === null) {
-    return []
-  }
-  const outer: unknown = (settings as Record<string, unknown>)[section]
-  if (typeof outer !== 'object' || outer === null) {
-    return []
-  }
-  const inner: unknown = (outer as Record<string, unknown>)[key]
-  return Array.isArray(inner)
+  const inner: unknown = readKey(readKey(settings, section), key)
+  return isArray(inner)
     ? inner.filter((entry: unknown): entry is string => typeof entry === 'string')
     : []
 }
@@ -42,14 +36,8 @@ const stringsAt = (settings: unknown, section: string, key: string): readonly st
  * @returns the settings to write, preserving every key the project owns.
  */
 export const applyDenyRules = (existing: unknown): Record<string, unknown> => {
-  const base: Record<string, unknown> =
-    typeof existing === 'object' && existing !== null
-      ? { ...(existing as Record<string, unknown>) }
-      : {}
-  const permissions: Record<string, unknown> =
-    typeof base['permissions'] === 'object' && base['permissions'] !== null
-      ? { ...(base['permissions'] as Record<string, unknown>) }
-      : {}
+  const base: Record<string, unknown> = { ...asRecord(existing) }
+  const permissions: Record<string, unknown> = { ...asRecord(base['permissions']) }
   const deny: readonly string[] = stringsAt(base, 'permissions', 'deny')
   const merged: readonly string[] = [
     ...deny,

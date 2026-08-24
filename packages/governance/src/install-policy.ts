@@ -7,6 +7,7 @@
 //
 // The reader is deliberately small. It is not a YAML parser: it looks for the two block keys pnpm reads
 // at the top level of a workspace file, which is where they must appear to take effect.
+import { readKey } from './json-shapes.js'
 
 /** The install-config keys that can redefine a resolved version. */
 const OVERRIDE_KEYS: readonly string[] = [
@@ -18,6 +19,9 @@ const OVERRIDE_KEYS: readonly string[] = [
 
 /** The key naming the dependencies permitted to run an install script. */
 const ALLOWLIST_KEY: string = 'onlyBuiltDependencies'
+
+/** The `pnpm.auditConfig` keys that drop an advisory the vulnerability gate would otherwise report. */
+const SILENCING_KEYS: readonly string[] = ['ignoreCves', 'ignoreGhsas']
 
 /** A dependency whose resolved version a project has redefined. */
 export interface OverrideEntry {
@@ -81,15 +85,7 @@ export const declaresInstallScriptAllowlist = (
   ) {
     return true
   }
-  if (typeof packageJson !== 'object' || packageJson === null) {
-    return false
-  }
-  const pnpm: unknown = (packageJson as Record<string, unknown>)['pnpm']
-  return (
-    typeof pnpm === 'object' &&
-    pnpm !== null &&
-    Array.isArray((pnpm as Record<string, unknown>)[ALLOWLIST_KEY])
-  )
+  return Array.isArray(readKey(readKey(packageJson, 'pnpm'), ALLOWLIST_KEY))
 }
 
 /**
@@ -98,18 +94,6 @@ export const declaresInstallScriptAllowlist = (
  * @returns one message per silencing key found.
  */
 export const findSilencedAdvisories = (packageJson: unknown): readonly string[] => {
-  if (typeof packageJson !== 'object' || packageJson === null) {
-    return []
-  }
-  const pnpm: unknown = (packageJson as Record<string, unknown>)['pnpm']
-  if (typeof pnpm !== 'object' || pnpm === null) {
-    return []
-  }
-  const auditConfig: unknown = (pnpm as Record<string, unknown>)['auditConfig']
-  if (typeof auditConfig !== 'object' || auditConfig === null) {
-    return []
-  }
-  return ['ignoreCves', 'ignoreGhsas'].filter((key: string): boolean =>
-    Array.isArray((auditConfig as Record<string, unknown>)[key]),
-  )
+  const auditConfig: unknown = readKey(readKey(packageJson, 'pnpm'), 'auditConfig')
+  return SILENCING_KEYS.filter((key: string): boolean => Array.isArray(readKey(auditConfig, key)))
 }

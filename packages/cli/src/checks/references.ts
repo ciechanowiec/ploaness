@@ -4,6 +4,7 @@
 import { existsSync, globSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
+  asRecord,
   COVERAGE_INCLUDE,
   type ConfigReferenceViolation,
   type DeclaredExclusion,
@@ -21,9 +22,6 @@ import { type Context, shippedDirectory, trackedFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 const DOC_FILES: readonly string[] = ['AGENTS.md', 'CLAUDE.md']
-
-const asRecord = (raw: unknown): Record<string, unknown> =>
-  typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
 
 const declaredScripts = (context: Context): Record<string, unknown> =>
   asRecord(asRecord(context.packageJson)['scripts'])

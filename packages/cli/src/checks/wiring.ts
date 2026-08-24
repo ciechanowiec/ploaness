@@ -2,7 +2,13 @@
 // rules are pure and live in @ploaness/governance; this file supplies the I/O and the expectations.
 import path from 'node:path'
 import {
+  asOptionalText,
+  asRecord,
+  asStringRecord,
   findWiringViolations,
+  isArray,
+  isRecord,
+  readKey,
   requiredBiomeFiles,
   type WiringViolation,
 } from '@ploaness/governance'
@@ -46,26 +52,27 @@ interface PinGroup {
   readonly versions: Readonly<Record<string, string>>
 }
 
-const readPins = (): Record<string, unknown> => {
-  const parsed: unknown = readJson(path.join(shippedDirectory('@ploaness/config'), 'pins.json'))
-  return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {}
-}
+const shippedFile = (packageName: string, fileName: string): string =>
+  path.join(shippedDirectory(packageName), fileName)
+
+const readPins = (): Record<string, unknown> =>
+  asRecord(readJson(shippedFile('@ploaness/config', 'pins.json')))
 
 const pinGroups = (): readonly PinGroup[] => {
   const groups: unknown = readPins()['groups']
-  if (!Array.isArray(groups)) {
-    return []
-  }
-  return groups.flatMap((group: unknown): readonly PinGroup[] => {
-    if (typeof group !== 'object' || group === null) {
-      return []
-    }
-    const record: Record<string, unknown> = group as Record<string, unknown>
-    const versions: unknown = record['versions']
-    return typeof versions === 'object' && versions !== null
-      ? [{ required: record['required'] === true, versions: versions as Record<string, string> }]
-      : []
-  })
+  return isArray(groups)
+    ? groups.flatMap((group: unknown): readonly PinGroup[] => {
+        const record: Record<string, unknown> = asRecord(group)
+        return isRecord(record['versions'])
+          ? [
+              {
+                required: record['required'] === true,
+                versions: asStringRecord(record['versions']),
+              },
+            ]
+          : []
+      })
+    : []
 }
 
 /** Every pinned version, whether the group that holds it is required or merely matched. */
@@ -75,17 +82,6 @@ const ownedVersions = (): Readonly<Record<string, string>> =>
     string
   >
 
-const asText = (raw: unknown): string | undefined => (typeof raw === 'string' ? raw : undefined)
-
-const asStringRecord = (raw: unknown): Readonly<Record<string, string>> =>
-  typeof raw === 'object' && raw !== null
-    ? (Object.fromEntries(
-        Object.entries(raw as Record<string, unknown>).filter(
-          ([, value]: readonly [string, unknown]): boolean => typeof value === 'string',
-        ),
-      ) as Record<string, string>)
-    : {}
-
 // Where a pinned version is read from. The harness installs these itself, so its own manifests are the
 // single source of the expectation and a harness bump moves it in exactly one place. Both packages are
 // consulted because the split between them is an internal packaging detail: vitest is declared by the
@@ -94,14 +90,8 @@ const asStringRecord = (raw: unknown): Readonly<Record<string, string>> =>
 const VERSION_SOURCES: readonly string[] = ['@ploaness/config', '@ploaness/cli']
 
 const declaredBy = (packageName: string): Record<string, unknown> => {
-  const manifest: unknown = readJson(path.join(shippedDirectory(packageName), 'package.json'))
-  const dependencies: unknown =
-    typeof manifest === 'object' && manifest !== null
-      ? (manifest as Record<string, unknown>)['dependencies']
-      : undefined
-  return typeof dependencies === 'object' && dependencies !== null
-    ? (dependencies as Record<string, unknown>)
-    : {}
+  const manifest: unknown = readJson(shippedFile(packageName, 'package.json'))
+  return asRecord(readKey(manifest, 'dependencies'))
 }
 
 // The packages a project's specs import, so every project must declare them. The rest of the pinned set
@@ -130,16 +120,18 @@ const requiredPackages = (): ReadonlySet<string> =>
   ])
 
 const expectedTestLibraries = (): Readonly<Record<string, string>> => {
-  const declared: Record<string, unknown> = Object.assign(
-    {},
-    ...VERSION_SOURCES.map((source: string): Record<string, unknown> => declaredBy(source)),
-  ) as Record<string, unknown>
-  const fromDependencies: Record<string, string> = Object.fromEntries(
-    TEST_LIBRARY_NAMES.map((name: string): readonly [string, unknown] => [
-      name,
-      declared[name],
-    ]).filter(([, version]: readonly [string, unknown]): boolean => typeof version === 'string'),
-  ) as Record<string, string>
+  // Built from one flat list of entries rather than by folding an object into itself: a later source
+  // still wins, because `fromEntries` keeps the last entry for a repeated key.
+  const declared: Record<string, unknown> = Object.fromEntries(
+    VERSION_SOURCES.flatMap((source: string): readonly (readonly [string, unknown])[] =>
+      Object.entries(declaredBy(source)),
+    ),
+  )
+  const fromDependencies: Record<string, string> = asStringRecord(
+    Object.fromEntries(
+      TEST_LIBRARY_NAMES.map((name: string): readonly [string, unknown] => [name, declared[name]]),
+    ),
+  )
   return { ...fromDependencies, ...ownedVersions() }
 }
 
@@ -157,7 +149,7 @@ export const wiring = (context: Context): GateResult => {
     expectedTestLibraries: expectedTestLibraries(),
     requiredTestLibraries: requiredPackages(),
     payloadVersion: ownedVersions()['payload'],
-    requiredPackageManager: asText(readPins()['packageManager']),
+    requiredPackageManager: asOptionalText(readPins()['packageManager']),
     requiredEngines: asStringRecord(readPins()['engines']),
     requiredBiomeFiles: requiredBiomeFiles(context.settings.sourceRoots),
   })

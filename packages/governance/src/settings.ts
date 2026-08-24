@@ -8,6 +8,9 @@
 // is the contract rather than a preference.
 
 import { matchesGlob, matchesRole } from './file-roles.js'
+// Only string-valued entries survive `asStringRecord`: a non-string would reach `spawn` as a
+// malformed environment.
+import { asRecord, asStringRecord, asText, isArray, isRecord } from './json-shapes.js'
 import type { SecretException } from './secret-policy.js'
 import type { VulnerabilityException } from './vulnerability-policy.js'
 
@@ -139,10 +142,11 @@ const DEFAULT_COVERAGE_EXCLUDE: readonly string[] = [
   'src/**/*.tsx',
 ]
 
+const isTextArray = (raw: unknown): raw is readonly string[] =>
+  isArray(raw) && raw.every((entry: unknown): boolean => typeof entry === 'string')
+
 const asStringArray = (raw: unknown, fallback: readonly string[]): readonly string[] =>
-  Array.isArray(raw) && raw.every((entry: unknown): boolean => typeof entry === 'string')
-    ? (raw as readonly string[])
-    : fallback
+  isTextArray(raw) ? raw : fallback
 
 const asPositiveInteger = (raw: unknown, fallback: number): number =>
   typeof raw === 'number' && Number.isSafeInteger(raw) && raw > 0 ? raw : fallback
@@ -155,73 +159,45 @@ const asNonNegativeInteger = (raw: unknown): number | undefined =>
 
 // An entry without a non-empty reason is dropped rather than honoured: taking over a managed path is a
 // decision the project must record, so an unexplained entry must not weaken the asset gate.
-const asUnmanagedAssets = (raw: unknown): readonly UnmanagedAsset[] => {
-  if (!Array.isArray(raw)) {
-    return []
-  }
-  return raw.flatMap((entry: unknown): readonly UnmanagedAsset[] => {
-    if (typeof entry !== 'object' || entry === null) {
-      return []
-    }
-    const record: Record<string, unknown> = entry as Record<string, unknown>
-    const path: unknown = record['path']
-    const reason: unknown = record['reason']
-    return typeof path === 'string' && typeof reason === 'string' && reason.trim().length > 0
-      ? [{ path, reason }]
-      : []
-  })
-}
+const asUnmanagedAssets = (raw: unknown): readonly UnmanagedAsset[] =>
+  isArray(raw)
+    ? raw.flatMap((entry: unknown): readonly UnmanagedAsset[] => {
+        const record: Record<string, unknown> = asRecord(entry)
+        const path: string = asText(record['path'])
+        const reason: string = asText(record['reason'])
+        return path.length > 0 && reason.trim().length > 0 ? [{ path, reason }] : []
+      })
+    : []
 
 // An advisory date must be recorded as a date. An entry whose reason or date is missing or malformed is
 // dropped rather than honoured, so a typo re-exposes the finding instead of quietly excusing it.
 const ISO_DATE: RegExp = /^\d{4}-\d{2}-\d{2}$/
 
-const isNonEmptyText = (raw: unknown): boolean => typeof raw === 'string' && raw.trim().length > 0
-
-const isRecordedDate = (raw: unknown): boolean => typeof raw === 'string' && ISO_DATE.test(raw)
-
-const asVulnerabilityAllowlist = (raw: unknown): readonly VulnerabilityException[] => {
-  if (!Array.isArray(raw)) {
-    return []
-  }
-  return raw.flatMap((entry: unknown): readonly VulnerabilityException[] => {
-    if (typeof entry !== 'object' || entry === null) {
-      return []
-    }
-    const record: Record<string, unknown> = entry as Record<string, unknown>
-    const advisory: unknown = record['advisory']
-    const reason: unknown = record['reason']
-    const addedOn: unknown = record['addedOn']
-    const isRecorded: boolean =
-      isNonEmptyText(advisory) && isNonEmptyText(reason) && isRecordedDate(addedOn)
-    return isRecorded
-      ? [{ advisory: advisory as string, reason: reason as string, addedOn: addedOn as string }]
-      : []
-  })
-}
+const asVulnerabilityAllowlist = (raw: unknown): readonly VulnerabilityException[] =>
+  isArray(raw)
+    ? raw.flatMap((entry: unknown): readonly VulnerabilityException[] => {
+        const record: Record<string, unknown> = asRecord(entry)
+        const advisory: string = asText(record['advisory']).trim()
+        const reason: string = asText(record['reason']).trim()
+        const addedOn: string = asText(record['addedOn'])
+        const isRecorded: boolean =
+          advisory.length > 0 && reason.length > 0 && ISO_DATE.test(addedOn)
+        return isRecorded ? [{ advisory, reason, addedOn }] : []
+      })
+    : []
 
 // An unexplained exception is dropped, exactly as an unexplained managed-path takeover is: a fixture
 // credential is a decision the project must record, and a typo must re-expose the finding rather than
 // quietly widen the scan.
-const asSecretAllowlist = (raw: unknown): readonly SecretException[] => {
-  if (!Array.isArray(raw)) {
-    return []
-  }
-  return raw.flatMap((entry: unknown): readonly SecretException[] => {
-    if (typeof entry !== 'object' || entry === null) {
-      return []
-    }
-    const record: Record<string, unknown> = entry as Record<string, unknown>
-    const filePath: unknown = record['path']
-    const reason: unknown = record['reason']
-    const isRecorded: boolean =
-      typeof filePath === 'string' &&
-      typeof reason === 'string' &&
-      filePath.trim().length > 0 &&
-      reason.trim().length > 0
-    return isRecorded ? [{ path: filePath as string, reason: reason as string }] : []
-  })
-}
+const asSecretAllowlist = (raw: unknown): readonly SecretException[] =>
+  isArray(raw)
+    ? raw.flatMap((entry: unknown): readonly SecretException[] => {
+        const record: Record<string, unknown> = asRecord(entry)
+        const filePath: string = asText(record['path']).trim()
+        const reason: string = asText(record['reason']).trim()
+        return filePath.length > 0 && reason.length > 0 ? [{ path: filePath, reason }] : []
+      })
+    : []
 
 // An exclusion narrows a gate's scope, which is the one thing the standard says a project's settings
 // may not do without the harness's leave. The leave it grants is an exclusion by file role - so an
@@ -231,12 +207,10 @@ const asDeclaredExclusions = (
   raw: unknown,
   setting: string,
   kind: ExclusionKind,
-): readonly DeclaredExclusion[] => {
-  if (!Array.isArray(raw)) {
-    return []
-  }
-  return raw.map((entry: unknown): DeclaredExclusion => readExclusion(entry, setting, kind))
-}
+): readonly DeclaredExclusion[] =>
+  isArray(raw)
+    ? raw.map((entry: unknown): DeclaredExclusion => readExclusion(entry, setting, kind))
+    : []
 
 // A bare string is kept with an empty reason rather than dropped silently, so the gate can name the
 // entry the project wrote instead of reporting that its exclusions simply stopped applying.
@@ -244,19 +218,16 @@ const readExclusion = (entry: unknown, setting: string, kind: ExclusionKind): De
   if (typeof entry === 'string') {
     return { setting, pattern: entry, reason: '', kind }
   }
-  if (typeof entry !== 'object' || entry === null) {
+  if (!isRecord(entry)) {
     return { setting, pattern: '', reason: '', kind }
   }
-  const record: Record<string, unknown> = entry as Record<string, unknown>
   return {
     setting,
-    pattern: asText(record['pattern']),
-    reason: asText(record['reason']).trim(),
+    pattern: asText(entry['pattern']),
+    reason: asText(entry['reason']).trim(),
     kind,
   }
 }
-
-const asText = (raw: unknown): string => (typeof raw === 'string' ? raw : '')
 
 const honoured = (entries: readonly DeclaredExclusion[]): readonly string[] =>
   entries
@@ -264,18 +235,6 @@ const honoured = (entries: readonly DeclaredExclusion[]): readonly string[] =>
       (entry: DeclaredExclusion): boolean => entry.pattern.length > 0 && entry.reason.length > 0,
     )
     .map((entry: DeclaredExclusion): string => entry.pattern)
-
-const asRecord = (raw: unknown): Record<string, unknown> =>
-  typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
-
-// Only string-valued entries survive: a non-string would reach `spawn` as a malformed environment.
-const asStringRecord = (raw: unknown): Readonly<Record<string, string>> => {
-  return Object.fromEntries(
-    Object.entries(asRecord(raw)).filter(
-      ([, value]: readonly [string, unknown]): boolean => typeof value === 'string',
-    ),
-  ) as Record<string, string>
-}
 
 /** The four exclusion lists a project may declare, each read under the matching kind its setting uses. */
 interface DeclaredLists {

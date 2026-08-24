@@ -4,11 +4,16 @@
 // behind" is, and that is a real liability.
 import {
   type Advisory,
+  asRecord,
+  asStringRecord,
+  asText,
   type DependencyStatus,
   type FreshnessFinding,
   type FreshnessReport,
   findFreshnessViolations,
   findLicenseViolations,
+  isArray,
+  isRecord,
   judgeVulnerabilities,
   type LicensedPackage,
   type VulnerabilityReport,
@@ -59,20 +64,12 @@ export const licenses = (context: Context): GateResult => {
     : passed(`all ${String(packages.length)} dependency licenses are within policy`)
 }
 
-const asRecord = (raw: unknown): Record<string, unknown> =>
-  typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
-
 const declaredDependencies = (packageJson: unknown): Record<string, string> => {
   const root: Record<string, unknown> = asRecord(packageJson)
-  const merged: Record<string, unknown> = {
+  return asStringRecord({
     ...asRecord(root['dependencies']),
     ...asRecord(root['devDependencies']),
-  }
-  return Object.fromEntries(
-    Object.entries(merged).filter(
-      ([, version]: readonly [string, unknown]): boolean => typeof version === 'string',
-    ),
-  ) as Record<string, string>
+  })
 }
 
 // The registry exposes two documents per package: the packument root and, per version, a version
@@ -230,18 +227,18 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
 type AuditAdvisory = Record<string, unknown>
 
 const asStrings = (raw: unknown): readonly string[] =>
-  Array.isArray(raw)
-    ? raw.filter((entry: unknown): entry is string => typeof entry === 'string')
-    : []
+  isArray(raw) ? raw.filter((entry: unknown): entry is string => typeof entry === 'string') : []
 
-const asText = (raw: AuditAdvisory, key: string, fallback: string): string =>
-  typeof raw[key] === 'string' ? raw[key] : fallback
+const textAt = (raw: AuditAdvisory, key: string, fallback: string): string => {
+  const found: string = asText(raw[key])
+  return found.length > 0 ? found : fallback
+}
 
 const asAdvisory = (key: string, raw: AuditAdvisory): Advisory => ({
-  id: asText(raw, 'github_advisory_id', key),
-  packageName: asText(raw, 'module_name', 'unknown'),
-  severity: asText(raw, 'severity', 'info'),
-  title: asText(raw, 'title', 'no title reported'),
+  id: textAt(raw, 'github_advisory_id', key),
+  packageName: textAt(raw, 'module_name', 'unknown'),
+  severity: textAt(raw, 'severity', 'info'),
+  title: textAt(raw, 'title', 'no title reported'),
   aliases: asStrings(raw['cves']),
 })
 
@@ -251,19 +248,11 @@ const asAdvisory = (key: string, raw: AuditAdvisory): Advisory => ({
 const parseAudit = (output: string): readonly Advisory[] | undefined => {
   try {
     const parsed: unknown = JSON.parse(output)
-    if (typeof parsed !== 'object' || parsed === null) {
+    if (!(isRecord(parsed) && isRecord(parsed['metadata']))) {
       return undefined
     }
-    const record: Record<string, unknown> = parsed as Record<string, unknown>
-    if (typeof record['metadata'] !== 'object' || record['metadata'] === null) {
-      return undefined
-    }
-    const advisories: Record<string, AuditAdvisory> =
-      typeof record['advisories'] === 'object' && record['advisories'] !== null
-        ? (record['advisories'] as Record<string, AuditAdvisory>)
-        : {}
-    return Object.entries(advisories).map(
-      ([key, raw]: readonly [string, AuditAdvisory]): Advisory => asAdvisory(key, raw),
+    return Object.entries(asRecord(parsed['advisories'])).map(
+      ([key, raw]: readonly [string, unknown]): Advisory => asAdvisory(key, asRecord(raw)),
     )
   } catch {
     return undefined

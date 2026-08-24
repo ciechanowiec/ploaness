@@ -51,6 +51,11 @@ const DISPOSITIONS: ReadonlySet<string> = new Set<string>([
   'SECTION',
 ])
 
+// A guard rather than a set membership test followed by an assertion. Both say the same thing; only
+// this one is a claim the compiler checks, so a disposition added to the union without being added to
+// the set above stops compiling instead of parsing into a value no rule handles.
+const isDisposition = (raw: string): raw is Disposition => DISPOSITIONS.has(raw)
+
 // A manifest row is a path and a disposition, and nothing else.
 const MANIFEST_COLUMNS: number = 2
 
@@ -138,13 +143,13 @@ const readManifestRow = (index: number, line: string): ParsedRow => {
     return { asset: undefined, problem: undefined }
   }
   const [path, disposition] = trimmed.split('\t', MANIFEST_COLUMNS)
-  if (path === undefined || disposition === undefined || !DISPOSITIONS.has(disposition)) {
+  if (path === undefined || disposition === undefined || !isDisposition(disposition)) {
     return {
       asset: undefined,
       problem: `manifest line ${String(index + 1)}: expected "<path>", a tab, then PINNED, SEED, FORBIDDEN, or SECTION`,
     }
   }
-  return { asset: { path, disposition: disposition as Disposition }, problem: undefined }
+  return { asset: { path, disposition }, problem: undefined }
 }
 
 /**
