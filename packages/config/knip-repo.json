@@ -1,0 +1,52 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": [],
+      "project": ["*.{js,mjs,ts,mts}"]
+    },
+    "packages/cli": {
+      "entry": [],
+      "project": ["src/**/*.ts"],
+      "ignoreDependencies": [
+        "@biomejs/biome",
+        "@ploaness/assets",
+        "@ploaness/config",
+        "@vitest/coverage-v8",
+        "dependency-cruiser",
+        "eslint",
+        "stylelint",
+        "tsx",
+        "type-coverage",
+        "vitest"
+      ]
+    },
+    "packages/config": {
+      "entry": ["*.js", "test/**/*.spec.ts"],
+      "project": ["*.js", "test/**/*.ts"],
+      "ignoreDependencies": [
+        "@axe-core/playwright",
+        "@testing-library/jest-dom",
+        "@testing-library/react",
+        "@testing-library/user-event",
+        "fast-check",
+        "stylelint-config-standard"
+      ],
+      "ignoreUnresolved": ["next"]
+    },
+    "packages/ploaness": {
+      "entry": ["*.js"],
+      "project": ["*.js", "*.mjs"],
+      "ignoreDependencies": ["@ploaness/assets", "@ploaness/governance"],
+      "ignoreUnresolved": ["next"]
+    },
+    "packages/assets": {
+      "entry": [],
+      "project": ["*.mjs"]
+    },
+    "packages/governance": {
+      "entry": ["test/**/*.spec.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    }
+  }
+}

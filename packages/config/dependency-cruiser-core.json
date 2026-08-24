@@ -1,0 +1,59 @@
+{
+  "$comment": "The framework-neutral half of the ploaness architecture contract, extracted for the reason eslint-core.js was: this repository published the rules and ran none of them on itself, and a cycle grew in packages/governance where nothing was looking. Every rule here is about a shape any repository can have. What stays in the sibling configs is the layer map, which is the one genuinely project-shaped part.",
+  "forbidden": [
+    {
+      "name": "no-circular",
+      "severity": "error",
+      "comment": "Circular dependencies make modules impossible to reason about or test in isolation. Break the cycle (usually by extracting the shared piece into a lower layer).",
+      "from": {},
+      "to": {
+        "circular": true
+      }
+    },
+    {
+      "name": "not-to-unresolvable",
+      "severity": "error",
+      "comment": "An import that does not resolve is a broken path (a typo, a renamed file, a missing dependency). It would fail at runtime; fail it at the gate instead.",
+      "from": {},
+      "to": {
+        "couldNotResolve": true
+      }
+    },
+    {
+      "name": "not-to-spec",
+      "severity": "error",
+      "comment": "Production code must never import a test/spec file.",
+      "from": {},
+      "to": {
+        "path": "\\.(spec|test)\\.(ts|tsx)$"
+      }
+    },
+    {
+      "name": "no-deprecated-core",
+      "severity": "error",
+      "comment": "Do not import deprecated Node.js core modules (punycode, domain, sys, the constants module, ...). They are slated for removal.",
+      "from": {},
+      "to": {
+        "dependencyTypes": ["core"],
+        "path": [
+          "^(v8/tools/codemap)$",
+          "^(node:)?(_(linklist|stream_wrap)|sys|constants|domain|punycode)$"
+        ]
+      }
+    }
+  ],
+  "options": {
+    "doNotFollow": {
+      "path": "(^|/)node_modules/"
+    },
+    "tsConfig": {
+      "fileName": "tsconfig.json"
+    },
+    "tsPreCompilationDeps": true,
+    "enhancedResolveOptions": {
+      "exportsFields": ["exports"],
+      "conditionNames": ["import", "require", "node", "default", "types"],
+      "mainFields": ["module", "main", "types", "typings"]
+    }
+  }
+}

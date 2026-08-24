@@ -22,6 +22,7 @@
   "files": [
     "a11y.js",
     "biome.json",
+    "dependency-cruiser-core.json",
     "dependency-cruiser.json",
     "eslint-core.js",
     "eslint.js",

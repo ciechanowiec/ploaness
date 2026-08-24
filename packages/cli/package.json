@@ -46,7 +46,6 @@
     "access": "public"
   },
   "devDependencies": {
-    "@types/node": "26.2.0",
-    "typescript": "6.0.3"
+    "@types/node": "26.2.0"
   }
 }

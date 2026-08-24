@@ -85,7 +85,3 @@ export const conventions = (context: Context): GateResult => {
     ? failed(`${String(findings.length)} convention violation(s)`, findings)
     : passed(`${String(tracked.length)} tracked file(s) follow the source conventions`)
 }
-
-/** Report typography findings without the JavaScript rule, used by the commit-message hook path. */
-export const typographyOf = (text: string): readonly TypographyViolation[] =>
-  findTypographyViolations(text)

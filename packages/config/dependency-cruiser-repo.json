@@ -1,0 +1,50 @@
+{
+  "$comment": "The architecture contract for the ploaness repository itself, which is a pnpm workspace rather than a Payload application. It shares every framework-neutral rule with what consumers receive and differs only in the layer map, which is the one genuinely project-shaped part. It is named `-repo` rather than `.dependency-cruiser.json` because that path is FORBIDDEN in a governed project: a consumer may not hold a local copy of this contract, and a file with that name here would read as a counterexample.",
+  "extends": "./dependency-cruiser-core.json",
+  "forbidden": [
+    {
+      "name": "not-to-dev-dep",
+      "severity": "error",
+      "comment": "Published source must not import a devDependency. A consumer installs the package without them, so the import would resolve here and fail there. The specs are exempt because they ARE the development-only half.",
+      "from": {
+        "path": "^packages/[^/]+/src/"
+      },
+      "to": {
+        "dependencyTypes": ["npm-dev"],
+        "dependencyTypesNot": ["type-only"],
+        "pathNot": ["node_modules/@types/"]
+      }
+    },
+    {
+      "name": "governance-stays-pure",
+      "severity": "error",
+      "comment": "The governance package is the pure-rule floor: every rule is a function over strings that were already read, which is what makes it unit-testable without building a fixture repository. It must therefore depend on no other ploaness package and reach nothing that performs I/O. `node:zlib` is deliberately not on the list: inflating a PNG's IDAT stream is a computation over bytes the caller already handed in, and banning it would push a rule into the CLI to escape a ban rather than to gain an ability. A rule that needed a file to be READ is a rule that belongs in the CLI, or an argument that belongs in its signature.",
+      "from": {
+        "path": "^packages/governance/src/"
+      },
+      "to": {
+        "path": "^(node:)?(fs|fs/promises|child_process|net|http|https|dgram|dns|tls|readline|os|process|worker_threads|cluster|repl|v8|vm)$|^packages/(?!governance/)"
+      }
+    },
+    {
+      "name": "nothing-imports-the-cli",
+      "severity": "error",
+      "comment": "The CLI holds every read and every process the harness starts, and nothing beneath it imports it back. The `ploaness` meta package is not beneath it: it is the consumer-facing package that re-exports every entry point, so it sits above the CLI and is exempt. Phrased as 'anything else must not import the CLI' rather than by enumerating the packages underneath, so a NEW package is governed the moment it exists.",
+      "from": {
+        "path": "^packages/",
+        "pathNot": "^packages/(cli|ploaness)/"
+      },
+      "to": {
+        "path": "^packages/cli/"
+      }
+    }
+  ],
+  "options": {
+    "doNotFollow": {
+      "path": "(^|/)node_modules/"
+    },
+    "tsConfig": {
+      "fileName": "tsconfig.lint.json"
+    }
+  }
+}

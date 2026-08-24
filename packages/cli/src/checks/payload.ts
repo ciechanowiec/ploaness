@@ -81,7 +81,3 @@ export const payloadRules = (context: Context): GateResult => {
     ? failed(`${String(findings.length)} Payload usage violation(s)`, findings)
     : passed(`${String(candidates.length)} source file(s) use Payload within the rules`)
 }
-
-/** Expose the pure rule for the single-file case, so a fixture can assert on one source. */
-export const payloadViolationsIn = (source: string): readonly PayloadViolation[] =>
-  findPayloadViolations(source)

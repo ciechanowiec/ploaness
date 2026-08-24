@@ -83,7 +83,21 @@ step lint       pnpm run lint
 step lint:eslint pnpm run lint:eslint
 step lint:assets check_asset_bodies
 
+# Three analyzers the `ploaness verify` gates run against a Payload layout. Their rules are about a
+# repository's shape, so they apply here unchanged; only the globs differ, which is what the `-repo`
+# configs carry. They are invoked from the CLI package's own install rather than through
+# `ploaness gate`, because the gate would hand them the shipped configs and those describe `src/`.
+#
+# `arch` is the reason this block exists. It never ran here, and a cycle grew in `packages/governance`
+# where nothing was looking.
+cli_bin="$root/packages/cli/node_modules/.bin"
+
+step arch "$cli_bin/depcruise" packages scripts \
+    --config packages/config/dependency-cruiser-repo.json
+step knip "$cli_bin/knip" --config packages/config/knip-repo.json
+
 # The gates whose rules are about a repository's shape, in the order `gates.ts` runs them.
+gate biome-schema
 gate conventions
 gate editorconfig
 gate suppressions
