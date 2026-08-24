@@ -9,7 +9,12 @@
 // at the top level of a workspace file, which is where they must appear to take effect.
 
 /** The install-config keys that can redefine a resolved version. */
-const OVERRIDE_KEYS: readonly string[] = ['overrides', 'resolutions']
+const OVERRIDE_KEYS: readonly string[] = [
+  'overrides',
+  'resolutions',
+  'patchedDependencies',
+  'packageExtensions',
+]
 
 /** The key naming the dependencies permitted to run an install script. */
 const ALLOWLIST_KEY: string = 'onlyBuiltDependencies'

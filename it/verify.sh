@@ -411,6 +411,14 @@ node -e '
 commit_case fail-missing-pin 'feat(fixture): drop a package ploaness pins' "$CONFORMING_BODY"
 expect fail-missing-pin wiring FAIL 'missing'
 
+# Changing the version is not the only way to change what a version installs. A patch keeps the version
+# and swaps the code, which is the quietest of the three and invisible in the dependency block.
+new_case fail-patched-pin
+edit_json "$scratch/fail-patched-pin/package.json" 'pnpm.patchedDependencies.vitest@4.1.11' \
+    'patches/vitest.patch'
+commit_case fail-patched-pin 'feat(fixture): patch a package ploaness pins' "$CONFORMING_BODY"
+expect fail-patched-pin wiring FAIL 'changes what a version ploaness pins installs'
+
 # ploaness owns the framework version outright, not merely the analyzers that measure it.
 new_case fail-framework-version
 edit_json "$scratch/fail-framework-version/package.json" dependencies.next '16.3.0'

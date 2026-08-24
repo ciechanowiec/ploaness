@@ -449,6 +449,58 @@ describe('the declared toolchain', () => {
   })
 })
 
+// Changing the version is not the only way to change what a version installs.
+const withKey = (holder: string, key: string, entry: string): WiringInputs =>
+  wiredInputs({
+    packageJson:
+      holder === 'pnpm'
+        ? { ...WIRED_PACKAGE_JSON, pnpm: { [key]: { [entry]: 'x' } } }
+        : { ...WIRED_PACKAGE_JSON, [key]: { [entry]: 'x' } },
+  })
+
+describe('an escape from a pinned version', () => {
+  it('rejects a package.json override of a pinned package', () => {
+    expect(locations(withKey('root', 'overrides', 'vitest'))).toContain(
+      'package.json overrides.vitest',
+    )
+  })
+
+  it('rejects a yarn-style resolution of a pinned package', () => {
+    expect(locations(withKey('root', 'resolutions', 'vitest'))).toContain(
+      'package.json resolutions.vitest',
+    )
+  })
+
+  // A patch keeps the version and swaps the code, which is the quietest bypass of the three.
+  it('rejects a patch of a pinned package, keyed by name and version', () => {
+    expect(locations(withKey('pnpm', 'patchedDependencies', 'vitest@4.1.11'))).toContain(
+      'package.json patchedDependencies.vitest@4.1.11',
+    )
+  })
+
+  it('rejects a package extension that rewrites a pinned package manifest', () => {
+    expect(locations(withKey('pnpm', 'packageExtensions', 'vitest'))).toContain(
+      'package.json packageExtensions.vitest',
+    )
+  })
+
+  it('leaves an entry for a package ploaness does not pin alone', () => {
+    expect(locations(withKey('pnpm', 'patchedDependencies', 'left-pad@1.3.0'))).toEqual([])
+  })
+
+  // A scoped name begins with the same character the version is split on.
+  it('reads the package name out of a scoped patch key', () => {
+    const inputs: WiringInputs = wiredInputs({
+      expectedTestLibraries: { '@types/node': '26.2.0' },
+      packageJson: {
+        ...WIRED_PACKAGE_JSON,
+        pnpm: { patchedDependencies: { '@types/node@26.2.0': 'x' } },
+      },
+    })
+    expect(locations(inputs)).toContain('package.json patchedDependencies.@types/node@26.2.0')
+  })
+})
+
 // A pinned version is only a pin while nothing else can change it.
 describe('install configuration that undoes a pin', () => {
   it('rejects an override that redefines a pinned package', () => {
