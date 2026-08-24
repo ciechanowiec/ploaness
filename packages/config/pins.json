@@ -1,0 +1,11 @@
+{
+  "$comment": "Framework versions ploaness owns. Every governed project declares these exactly, and the wiring gate reports any other value. They are data rather than dependencies of this package for one reason: ploaness imports none of them, and declaring them would install a second copy of Payload, Next and React into every consumer that already has one. So this file is the single place these versions are written, the way a real dependency is the single place a toolchain version is written.",
+  "$payloadFamily": "Only `payload` is listed. Every `@payloadcms/*` package a project declares is required to match it, because Payload breaks at runtime when its own packages disagree. Deriving the family from `payload` rather than enumerating it means a project that adds a Payload plugin is covered without this file changing.",
+  "framework": {
+    "payload": "3.88.0",
+    "next": "16.3.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "sharp": "0.35.3"
+  }
+}

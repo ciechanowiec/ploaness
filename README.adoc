@@ -65,7 +65,14 @@ endif::[]
 . The https://payloadcms.com[Payload CMS^] project declares the https://www.npmjs.com/package/payload[`payload` package^] among its dependencies. Every rule _ploaness_ applies is a rule about https://payloadcms.com[Payload CMS^].
 . Three xref:#gates[gates] run their analyzer in a container: xref:#secrets-gate[`secrets`], xref:#docker-gate[`docker`], and xref:#actions-gate[`actions`]. Each analyzer needs a reachable Docker daemon, and each image is pinned by digest so an upstream release can't change a verdict.
 . Two xref:#gates[gates] read a public service by design and fail when it's unreachable: xref:#vulnerabilities-gate[`vulnerabilities`] reads the advisory database, and `deps` reads the package registry.
-. _ploaness_ pins every package whose version changes what a xref:#gates[gate] does: `vitest`, `@vitest/coverage-v8`, `typescript`, `jsdom`, `fast-check`, the `@testing-library` packages, `@playwright/test`, and `@axe-core/playwright`. A https://payloadcms.com[Payload CMS^] project declares `vitest`, `@vitest/coverage-v8`, `typescript`, `@playwright/test` and `@axe-core/playwright` itself, because specs in its working tree import them and the last two are imported by xref:#accessibility-sweep[the accessibility sweep] _ploaness_ ships there; it declares the rest only if it uses them, and at the pinned version when it does. A range on any of them lets an upstream release change a verdict while the project stays unchanged, so the xref:#wiring-gate[`wiring` gate] rejects one.
+. _ploaness_ pins two sets of versions, and the xref:#wiring-gate[`wiring` gate] rejects any other value for either.
++
+The *toolchain* is every package whose version changes what a xref:#gates[gate] does: `vitest`, `@vitest/coverage-v8`, `typescript`, `jsdom`, `fast-check`, the `@testing-library` packages, `@playwright/test`, `@axe-core/playwright`, and `tsx`, which the xref:#e2e-gate[`e2e`] gate starts the run through. A https://payloadcms.com[Payload CMS^] project declares the ones its own files import and declares the rest only if it uses them, at the pinned version either way. The expected version is read from _ploaness_'s own manifests, so there is no second copy to drift.
++
+The *framework* is `payload`, `next`, `react`, `react-dom`, and `sharp`. Every governed https://payloadcms.com[Payload CMS^] project declares all five, because the xref:#preflight-gate[`preflight` gate] already assumes every one of them. These versions are written in `pins.json` rather than declared as dependencies of _ploaness_, because _ploaness_ imports none of them and declaring them would install a second https://payloadcms.com[Payload CMS^], Next, and React into a project that already has one.
+. Every `@payloadcms/...` package a https://payloadcms.com[Payload CMS^] project declares carries the pinned `payload` version. https://payloadcms.com[Payload CMS^] fails at runtime when its own packages disagree, and the rule is derived from the pin rather than written as a list, so a project that adds a https://payloadcms.com[Payload CMS^] plugin is covered by the rule that already exists.
+. No declared dependency carries a range. A `^`, `~`, comparator, wildcard, or partial version resolves to whichever release is newest at install time, which is the same hole pinning the toolchain closes, one layer down: the xref:#build-gate[`build`], xref:#tests-gate[`tests`], and xref:#e2e-gate[`e2e`] gates would run against something nobody wrote down. A specifier naming an artefact rather than a range, such as a local tarball or a workspace link, is not a range and is left alone.
+. An install override may redefine a package the https://payloadcms.com[Payload CMS^] project does *not* declare, and may not redefine one it does. The permitted case is a transitive package carrying an advisory with no upgrade path above it, which the project can reach no other way. The forbidden case is a package whose version the project already wrote down: two declarations of one version don't stay equal, and the one that loses is the one every reader believes.
 
 [[installation]]
 === Installation
@@ -159,7 +166,7 @@ xref:#default-verification[] runs the following 31 gates.
 |===
 | Gate | Behavior
 
-| `preflight`
+| [[preflight-gate]]`preflight`
 | The https://payloadcms.com[Payload CMS^] project meets the xref:#requirements[].
 
 | [[wiring-gate,the wiring gate]]`wiring`

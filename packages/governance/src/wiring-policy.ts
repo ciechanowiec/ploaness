@@ -53,6 +53,12 @@ export interface WiringInputs {
   readonly expectedTestLibraries: Readonly<Record<string, string>>
   /** The subset every project must declare, because its own specs import them. */
   readonly requiredTestLibraries: ReadonlySet<string>
+  /**
+   * The exact version every `@payloadcms/*` package must carry, which is the pinned `payload` version.
+   * Derived from the pin rather than enumerated, so a project that adds a Payload plugin is covered
+   * without ploaness listing it.
+   */
+  readonly payloadVersion: string | undefined
   /** The `files` block the consumer's biome.json must declare, from {@link requiredBiomeFiles}. */
   readonly requiredBiomeFiles: Readonly<Record<string, unknown>>
 }
@@ -420,20 +426,51 @@ const checkWorkflows = (workflows: readonly WorkflowFile[]): readonly WiringViol
 // different version and leaves the declaration in package.json untouched, so the version check passes
 // while the code runs against something ploaness never saw. The ploaness packages themselves are not
 // pinned this way, so a pre-publication consumer may still point them at a local tarball.
-const checkPinnedOverrides = (
-  workspaceFile: string,
+const overrideViolation = (
+  entry: OverrideEntry,
   expected: Readonly<Record<string, string>>,
-): readonly WiringViolation[] =>
-  findOverrides(workspaceFile)
-    .filter((entry: OverrideEntry): boolean => Object.hasOwn(expected, entry.packageName))
-    .map(
-      (entry: OverrideEntry): WiringViolation => ({
-        location: `pnpm-workspace.yaml ${entry.key}.${entry.packageName}`,
+  declared: Record<string, string>,
+): readonly WiringViolation[] => {
+  const location: string = `pnpm-workspace.yaml ${entry.key}.${entry.packageName}`
+  if (Object.hasOwn(expected, entry.packageName)) {
+    return [
+      {
+        location,
         reason:
           'redefines a version ploaness pins; remove it, because the pin decides what the ' +
           'gates run against',
-      }),
-    )
+      },
+    ]
+  }
+  const own: string | undefined = declared[entry.packageName]
+  return own === undefined
+    ? []
+    : [
+        {
+          location,
+          reason:
+            `overrides a package the project declares at "${own}"; change the declaration ` +
+            'instead, or the installed version is not the declared one',
+        },
+      ]
+}
+
+// A project may override what it does not declare, and may not override what it does. The permitted
+// case is a transitive package carrying an advisory with no upgrade path above it, which the project
+// can reach no other way and which the standard says to resolve by upgrading rather than excusing. The
+// forbidden case is a package whose version the project already wrote down: two declarations of one
+// version will not stay equal, and the one that loses is the one every reader believes. The ploaness
+// packages are neither, so a pre-publication consumer may still point them at a local tarball.
+const checkPinnedOverrides = (
+  workspaceFile: string,
+  expected: Readonly<Record<string, string>>,
+  packageJson: Record<string, unknown>,
+): readonly WiringViolation[] => {
+  const declared: Record<string, string> = declaredDependencies(packageJson)
+  return findOverrides(workspaceFile).flatMap((entry: OverrideEntry): readonly WiringViolation[] =>
+    overrideViolation(entry, expected, declared),
+  )
+}
 
 // The sanctioned route for an advisory a project cannot reach is `ploaness.vulnerabilityAllowlist`,
 // which records a reason and a date and fails once the entry stops suppressing anything.
@@ -446,6 +483,66 @@ const checkSilencedAdvisories = (packageJson: unknown): readonly WiringViolation
         'ploaness.vulnerabilityAllowlist instead, with a reason and a date',
     }),
   )
+
+// A specifier that is not a registry version at all: a local tarball, a workspace link, a git or npm
+// alias. None of them is a range, and a pre-publication consumer resolves the ploaness packages this
+// way, so the range ban must read past them rather than through them.
+const NON_REGISTRY: RegExp = /^(?:file|link|workspace|catalog|git\+[a-z]+|git|github|npm|https?):/
+
+// Anything that resolves to "whichever version is newest at install time". The standard pins the
+// toolchain so an upstream release cannot change a verdict while the project stays unchanged, and a
+// range on an application dependency is the same hole one layer down: the build, the suite and the
+// end-to-end run all execute against something nobody wrote down. `*` and an empty specifier are the
+// widest ranges of all rather than exceptions to the rule.
+const RANGE_OPERATOR: RegExp = /^\s*(?:[\^~><=*]|$)/
+const RANGE_UNION: RegExp = /\|\||\s-\s|\sx$|\.x/
+
+const isExactVersion = (specifier: string): boolean => {
+  if (NON_REGISTRY.test(specifier)) {
+    return true
+  }
+  return !(RANGE_OPERATOR.test(specifier) || RANGE_UNION.test(specifier))
+}
+
+const checkExactVersions = (packageJson: Record<string, unknown>): readonly WiringViolation[] =>
+  Object.entries(declaredDependencies(packageJson))
+    .filter(([, specifier]: readonly [string, string]): boolean => !isExactVersion(specifier))
+    .map(
+      ([name, specifier]: readonly [string, string]): WiringViolation => ({
+        location: `package.json ${name}`,
+        reason:
+          `is "${specifier}", which is a range; declare one exact version, because a range ` +
+          'lets an upstream release change what the gates run against',
+      }),
+    )
+
+// Payload refuses to boot, or fails in ways that read as application defects, when its own packages
+// disagree about their version. The rule is derived from the pinned `payload` rather than written as a
+// list, so a project adding `@payloadcms/plugin-form-builder` is covered by the rule that already
+// exists instead of by an entry somebody has to remember.
+const PAYLOAD_SCOPE: string = '@payloadcms/'
+
+const checkPayloadFamily = (
+  packageJson: Record<string, unknown>,
+  payloadVersion: string | undefined,
+): readonly WiringViolation[] => {
+  if (payloadVersion === undefined) {
+    return []
+  }
+  return Object.entries(declaredDependencies(packageJson))
+    .filter(
+      ([name, version]: readonly [string, string]): boolean =>
+        name.startsWith(PAYLOAD_SCOPE) && version !== payloadVersion,
+    )
+    .map(
+      ([name, version]: readonly [string, string]): WiringViolation => ({
+        location: `package.json ${name}`,
+        reason:
+          `is "${version}" but payload is pinned at "${payloadVersion}"; ` +
+          'Payload fails at runtime when its own packages disagree',
+      }),
+    )
+}
 
 // Two obligations, not one. A project must DECLARE the few packages every project uses, because under
 // the strict pnpm layout its own specs could not resolve them otherwise. Every other pinned package
@@ -501,7 +598,9 @@ export const findWiringViolations = (inputs: WiringInputs): readonly WiringViola
       'package.json scripts',
     ),
     ...checkTestLibraries(packageJson, inputs.expectedTestLibraries, inputs.requiredTestLibraries),
-    ...checkPinnedOverrides(inputs.workspaceFile, inputs.expectedTestLibraries),
+    ...checkExactVersions(packageJson),
+    ...checkPayloadFamily(packageJson, inputs.payloadVersion),
+    ...checkPinnedOverrides(inputs.workspaceFile, inputs.expectedTestLibraries, packageJson),
     ...checkSilencedAdvisories(inputs.packageJson),
     ...findConvenienceExclusions(inputs.declaredExclusions, inputs.isExistingPath).map(
       (reason: string): WiringViolation => ({ location: 'package.json ploaness', reason }),

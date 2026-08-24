@@ -346,6 +346,45 @@ edit_json "$scratch/fail-unexplained-exclusion/package.json" ploaness.typography
 commit_case fail-unexplained-exclusion 'feat(fixture): exclude a path without a reason' "$CONFORMING_BODY"
 expect fail-unexplained-exclusion wiring FAIL 'states no reason'
 
+# The standard pins the toolchain so an upstream release cannot change a verdict while the project
+# stays unchanged. A range on an application dependency is that same hole one layer down: the build,
+# the suite and the end-to-end run all execute against something nobody wrote down.
+new_case fail-ranged-dependency
+edit_json "$scratch/fail-ranged-dependency/package.json" dependencies.next '^16.3.1'
+commit_case fail-ranged-dependency 'feat(fixture): declare a dependency as a range' "$CONFORMING_BODY"
+expect fail-ranged-dependency wiring FAIL 'which is a range'
+
+# ploaness owns the framework version outright, not merely the analyzers that measure it.
+new_case fail-framework-version
+edit_json "$scratch/fail-framework-version/package.json" dependencies.next '16.3.0'
+commit_case fail-framework-version 'feat(fixture): take a framework version ploaness does not pin' \
+    "$CONFORMING_BODY"
+expect fail-framework-version wiring FAIL 'ploaness pins it'
+
+# Payload fails at runtime when its own packages disagree. The rule is derived from the pinned payload
+# version, so a package ploaness has never heard of is still covered.
+new_case fail-payload-family
+edit_json "$scratch/fail-payload-family/package.json" \
+    'dependencies.@payloadcms/plugin-form-builder' '3.87.0'
+commit_case fail-payload-family 'feat(fixture): mismatch a Payload package version' "$CONFORMING_BODY"
+expect fail-payload-family wiring FAIL 'when its own packages disagree'
+
+# An override of a package the project declares makes the installed version differ from the declared
+# one, which guts every pin above it. An override of a purely transitive package stays legal.
+new_case fail-declared-override
+printf '  graphql: "17.0.0"\n' >> "$scratch/fail-declared-override/pnpm-workspace.yaml"
+commit_case fail-declared-override 'feat(fixture): override a package the project declares' \
+    "$CONFORMING_BODY"
+expect fail-declared-override wiring FAIL 'change the declaration instead'
+
+# The rule is not "no overrides". A transitive package carrying an advisory with no upgrade path above
+# it can be reached no other way, and the standard says to resolve it by upgrading.
+new_case pass-transitive-override
+printf '  dompurify: "^3.4.14"\n' >> "$scratch/pass-transitive-override/pnpm-workspace.yaml"
+commit_case pass-transitive-override 'feat(fixture): override a purely transitive package' \
+    "$CONFORMING_BODY"
+expect pass-transitive-override wiring PASS
+
 new_case fail-playwright-config-swapped
 printf "import { defineConfig } from '@playwright/test'\n\nexport default defineConfig({ forbidOnly: false })\n" \
     > "$scratch/fail-playwright-config-swapped/playwright.config.ts"

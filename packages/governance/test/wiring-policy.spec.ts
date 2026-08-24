@@ -38,6 +38,7 @@ const wiredInputs = (overrides: Record<string, unknown> = {}): WiringInputs => (
   workflows: [{ name: 'verify.yml', content: 'run: ploaness verify --extended' }],
   expectedTestLibraries: { vitest: '4.1.11', jsdom: '30.0.1' },
   requiredTestLibraries: new Set<string>(['vitest']),
+  payloadVersion: undefined,
   requiredBiomeFiles: BIOME_FILES,
   ...overrides,
 })
@@ -327,6 +328,80 @@ describe('the playwright config', () => {
   })
 })
 
+// The standard pins the toolchain so an upstream release cannot change a verdict while the project
+// stays unchanged. A range on an application dependency is that same hole one layer down.
+const withDependency = (name: string, specifier: string): WiringInputs =>
+  wiredInputs({
+    packageJson: {
+      ...WIRED_PACKAGE_JSON,
+      devDependencies: { ploaness: '1.0.0', vitest: '4.1.11', [name]: specifier },
+    },
+  })
+
+describe('a version range', () => {
+  it('rejects a caret range', () => {
+    expect(locations(withDependency('graphql', '^16.14.2'))).toContain('package.json graphql')
+  })
+
+  it('rejects a tilde range', () => {
+    expect(locations(withDependency('graphql', '~16.14.2'))).toContain('package.json graphql')
+  })
+
+  it('rejects a comparator', () => {
+    expect(locations(withDependency('graphql', '>=16.0.0'))).toContain('package.json graphql')
+  })
+
+  it('rejects a wildcard, which is the widest range of all', () => {
+    expect(locations(withDependency('graphql', '*'))).toContain('package.json graphql')
+  })
+
+  it('rejects a partial version, which floats on the digits it omits', () => {
+    expect(locations(withDependency('graphql', '16.x'))).toContain('package.json graphql')
+  })
+
+  it('accepts an exact version', () => {
+    expect(locations(withDependency('graphql', '16.14.2'))).not.toContain('package.json graphql')
+  })
+
+  // A pre-publication consumer resolves the ploaness packages from a local tarball, which is not a
+  // range and must keep working.
+  it('accepts a non-registry specifier, which names one artefact rather than a range', () => {
+    const found: readonly string[] = locations(withDependency('ploaness', 'file:../x.tgz'))
+    expect(found).not.toContain('package.json ploaness')
+  })
+})
+
+// Payload fails at runtime when its own packages disagree, and the rule is derived from the pinned
+// `payload` so a project that adds a plugin is covered without ploaness listing the plugin.
+const withFamily = (version: string): WiringInputs =>
+  wiredInputs({
+    payloadVersion: '3.88.0',
+    packageJson: {
+      ...WIRED_PACKAGE_JSON,
+      dependencies: { payload: '3.88.0', '@payloadcms/db-postgres': version },
+    },
+  })
+
+describe('the Payload package family', () => {
+  it('rejects a Payload package that disagrees with the pinned payload version', () => {
+    expect(locations(withFamily('3.87.0'))).toContain('package.json @payloadcms/db-postgres')
+  })
+
+  it('accepts a Payload package that agrees, without being listed anywhere', () => {
+    expect(locations(withFamily('3.88.0'))).not.toContain('package.json @payloadcms/db-postgres')
+  })
+
+  it('says nothing when ploaness pins no payload version', () => {
+    const inputs: WiringInputs = wiredInputs({
+      packageJson: {
+        ...WIRED_PACKAGE_JSON,
+        dependencies: { '@payloadcms/db-postgres': '3.87.0' },
+      },
+    })
+    expect(locations(inputs)).not.toContain('package.json @payloadcms/db-postgres')
+  })
+})
+
 // A pinned version is only a pin while nothing else can change it.
 describe('install configuration that undoes a pin', () => {
   it('rejects an override that redefines a pinned package', () => {
@@ -335,6 +410,27 @@ describe('install configuration that undoes a pin', () => {
       (violation: WiringViolation): string => violation.location,
     )
     expect(locations).toContain('pnpm-workspace.yaml overrides.vitest')
+  })
+
+  // The rule is not "no overrides": a transitive package with an unpatched advisory can be reached no
+  // other way. It is "do not override what you declare", because the installed version would then
+  // differ from the one every reader believes.
+  it('rejects an override of a package the project declares itself', () => {
+    const inputs: WiringInputs = wiredInputs({
+      workspaceFile: ['overrides:', "  graphql: '17.0.0'"].join('\n'),
+      packageJson: {
+        ...WIRED_PACKAGE_JSON,
+        dependencies: { graphql: '16.14.2' },
+      },
+    })
+    expect(locations(inputs)).toContain('pnpm-workspace.yaml overrides.graphql')
+  })
+
+  it('leaves an override of a purely transitive package alone', () => {
+    const inputs: WiringInputs = wiredInputs({
+      workspaceFile: ['overrides:', "  dompurify: '^3.4.14'"].join('\n'),
+    })
+    expect(locations(inputs)).not.toContain('pnpm-workspace.yaml overrides.dompurify')
   })
 
   // A pre-publication consumer points the ploaness packages at local tarballs; ploaness does not pin

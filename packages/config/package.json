@@ -16,7 +16,8 @@
     "./package.json": "./package.json",
     "./eslint-core": "./eslint-core.js",
     "./playwright": "./playwright.js",
-    "./a11y": "./a11y.js"
+    "./a11y": "./a11y.js",
+    "./pins": "./pins.json"
   },
   "files": [
     "a11y.js",
@@ -25,6 +26,7 @@
     "eslint-core.js",
     "eslint.js",
     "knip.json",
+    "pins.json",
     "playwright.js",
     "project-settings.js",
     "stylelint.json",

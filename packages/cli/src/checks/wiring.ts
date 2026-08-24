@@ -33,7 +33,26 @@ const TEST_LIBRARY_NAMES: readonly string[] = [
   '@testing-library/user-event',
   '@playwright/test',
   '@axe-core/playwright',
+  // The end-to-end gate injects `--import=tsx/esm`, so the project's tsx decides whether that gate can
+  // start at all. ploaness depended on a package it neither required nor pinned until this was added.
+  'tsx',
 ]
+
+// The application framework, which ploaness owns outright rather than merely measuring. These versions
+// come from `pins.json` instead of from a dependency, because ploaness imports none of them and
+// declaring them would install a second Payload, Next and React into every consumer that has one.
+const FRAMEWORK_NAMES: readonly string[] = ['payload', 'next', 'react', 'react-dom', 'sharp']
+
+const frameworkPins = (): Readonly<Record<string, string>> => {
+  const parsed: unknown = readJson(path.join(shippedDirectory('@ploaness/config'), 'pins.json'))
+  const framework: unknown =
+    typeof parsed === 'object' && parsed !== null
+      ? (parsed as Record<string, unknown>)['framework']
+      : undefined
+  return typeof framework === 'object' && framework !== null
+    ? (framework as Record<string, string>)
+    : {}
+}
 
 const WORKFLOW_DIRECTORY: string = path.join('.github', 'workflows')
 
@@ -80,6 +99,11 @@ const REQUIRED_TEST_LIBRARIES: ReadonlySet<string> = new Set<string>([
   'typescript',
   '@playwright/test',
   '@axe-core/playwright',
+  // ploaness starts the end-to-end run through it, so a project without it has a gate that cannot run.
+  'tsx',
+  // Every governed project is a Payload application built by Next and rendered by React. Requiring
+  // these is not an addition to the contract; it is what `preflight` already assumes.
+  ...FRAMEWORK_NAMES,
 ])
 
 const expectedTestLibraries = (): Readonly<Record<string, string>> => {
@@ -87,12 +111,13 @@ const expectedTestLibraries = (): Readonly<Record<string, string>> => {
     {},
     ...VERSION_SOURCES.map((source: string): Record<string, unknown> => declaredBy(source)),
   ) as Record<string, unknown>
-  return Object.fromEntries(
+  const fromDependencies: Record<string, string> = Object.fromEntries(
     TEST_LIBRARY_NAMES.map((name: string): readonly [string, unknown] => [
       name,
       declared[name],
     ]).filter(([, version]: readonly [string, unknown]): boolean => typeof version === 'string'),
   ) as Record<string, string>
+  return { ...fromDependencies, ...frameworkPins() }
 }
 
 /** Verify the project has installed ploaness exactly as ploaness dictates. */
@@ -111,6 +136,7 @@ export const wiring = (context: Context): GateResult => {
     workflows: readWorkflows(context.root),
     expectedTestLibraries: expectedTestLibraries(),
     requiredTestLibraries: REQUIRED_TEST_LIBRARIES,
+    payloadVersion: frameworkPins()['payload'],
     requiredBiomeFiles: requiredBiomeFiles(context.settings.sourceRoots),
   })
   return violations.length > 0

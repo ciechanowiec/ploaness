@@ -24,7 +24,7 @@ harness.
 
 ploaness governs all of the following domains:
 
-- **Harness wiring:** the scripts, CI invocation, tool-config inheritance, and test-library
+- **Harness wiring:** the scripts, CI invocation, tool-config inheritance, and pinned
   versions through which the project installs ploaness. A project that rewrites `verify`, appends rules
   after the harness ESLint config, redeclares a Biome section, overrides a compiler option, replaces the
   vitest or Playwright config, or drops extended verification out of CI fails this domain rather than
@@ -57,6 +57,14 @@ ploaness governs all of the following domains:
   must require authentication or published status.
 - **Generated output:** the Payload types and admin import map must match the configuration that
   produces them.
+- **Versions:** ploaness owns two sets of them. The toolchain is every package whose version changes
+  what a gate does; the framework is `payload`, `next`, `react`, `react-dom` and `sharp`, which every
+  governed project declares. Declare each at the exact version ploaness pins, and every
+  `@payloadcms/*` package at the pinned `payload` version, because Payload fails at runtime when its
+  own packages disagree. No dependency carries a range: a caret, tilde, comparator, wildcard or
+  partial version means the build and the suite run against whatever was newest at install time. An
+  install override may redefine a package the project does NOT declare, which is the only way to
+  reach a transitive advisory, and may not redefine one it does.
 - **Dependencies:** licenses, known vulnerabilities, available stable updates, the maximum permitted
   freshness gap, dead code, unused dependencies, and the allowlist naming which dependencies may run a
   build or postinstall script. An empty allowlist is a valid answer; an undeclared one is not, because
