@@ -5,7 +5,7 @@
 // the size cap, which is the cap doing its job: they answer different questions and share only the
 // helpers below.
 import { findOverrides, type OverrideEntry } from './install-policy.js'
-import type { WiringViolation } from './wiring-policy.js'
+import type { WiringViolation } from './wiring-violation.js'
 
 /** What a project must declare and at which version, plus the invariants those pins imply. */
 export interface VersionInputs {

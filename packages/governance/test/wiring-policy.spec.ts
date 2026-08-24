@@ -6,9 +6,9 @@ import {
   REQUIRED_TSCONFIG_PATHS,
   requiredBiomeFiles,
   type WiringInputs,
-  type WiringViolation,
   type WorkflowFile,
 } from '../src/wiring-policy.js'
+import type { WiringViolation } from '../src/wiring-violation.js'
 
 const BIOME_FILES: Readonly<Record<string, unknown>> = requiredBiomeFiles([
   'src',

@@ -1,6 +1,7 @@
 import { findSilencedAdvisories } from './install-policy.js'
 import { type DeclaredExclusion, findConvenienceExclusions } from './settings.js'
 import { declaredDependencies, findVersionViolations } from './version-policy.js'
+import type { WiringViolation } from './wiring-violation.js'
 // Anti-bypass policy: the module that exists because npm has no lifecycle.
 //
 // A build tool that bound its checks to fixed phases would make this unnecessary: the checks would run
@@ -13,12 +14,6 @@ import { declaredDependencies, findVersionViolations } from './version-policy.js
 // that reads the files lives in the CLI. It cannot make bypass impossible, since a project can always
 // uninstall the dependency, but it makes bypass loud and deliberate rather than silent, which is the
 // property a fixed build lifecycle would have supplied for free.
-
-/** A defect in how the consuming project has wired ploaness into itself. */
-export interface WiringViolation {
-  readonly location: string
-  readonly reason: string
-}
 
 /** One CI workflow definition found in the consumer repository. */
 export interface WorkflowFile {
