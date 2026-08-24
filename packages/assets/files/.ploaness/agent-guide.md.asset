@@ -43,7 +43,9 @@ ploaness governs all of the following domains:
 - **Generated output:** the Payload types and admin import map must match the configuration that
   produces them.
 - **Dependencies:** licenses, known vulnerabilities, available stable updates, the maximum permitted
-  freshness gap, dead code, and unused dependencies. A vulnerability is resolved by upgrading the
+  freshness gap, dead code, unused dependencies, and the allowlist naming which dependencies may run a
+  build or postinstall script. An empty allowlist is a valid answer; an undeclared one is not, because
+  it lets every package in the resolved set execute code at install time. A vulnerability is resolved by upgrading the
   package. Record an exception only when no upgrade exists, and record it in full: the advisory, why
   the project cannot reach it, and the date it was added. An exception that suppresses nothing fails.
 - **Suppressions:** the suppression count is capped against the size of the source. Every run reports

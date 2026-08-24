@@ -294,6 +294,22 @@ printf '  vitest: "3.0.0"\n' >> "$scratch/fail-pinned-override/pnpm-workspace.ya
 commit_case fail-pinned-override 'feat(fixture): override a version ploaness pins' "$CONFORMING_BODY"
 expect fail-pinned-override wiring FAIL 'pins'
 
+# Left undeclared, every package in the resolved set may run code during install.
+new_case fail-install-scripts
+node -e '
+  const { readFileSync, writeFileSync } = require("node:fs")
+  const file = process.argv[1]
+  const kept = readFileSync(file, "utf8")
+    .split("\n")
+    .filter((line, index, lines) => {
+      const start = lines.indexOf("onlyBuiltDependencies:")
+      return start === -1 || index < start || !(index === start || /^\s+-\s/.test(line))
+    })
+  writeFileSync(file, kept.join("\n"))
+' "$scratch/fail-install-scripts/pnpm-workspace.yaml"
+commit_case fail-install-scripts 'feat(fixture): drop the install-script allowlist' "$CONFORMING_BODY"
+expect fail-install-scripts install-scripts FAIL 'onlyBuiltDependencies'
+
 # Text the project owns below the block is not ploaness's to judge, so adding some must not fail.
 new_case pass-section-project-text
 printf '\n## Project notes\n\nThe project owns everything below the managed block.\n' \

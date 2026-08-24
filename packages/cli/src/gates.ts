@@ -9,6 +9,7 @@ import { dependencyFreshness, licenses, vulnerabilities } from './checks/depende
 import { editorconfig } from './checks/editorconfig.js'
 import { generatedDenial } from './checks/generated.js'
 import { commitHistory, linearHistory, requireFullHistory } from './checks/history.js'
+import { installScripts } from './checks/install.js'
 import { bundle, imageAssets } from './checks/integrity.js'
 import { payloadGenerated, payloadRules } from './checks/payload.js'
 import { preflight } from './checks/preflight.js'
@@ -78,6 +79,12 @@ const DEFAULT_GATES: readonly Gate[] = [
     title: 'known vulnerabilities',
     isExtended: false,
     run: vulnerabilities,
+  },
+  {
+    id: 'install-scripts',
+    title: 'install-script allowlist',
+    isExtended: false,
+    run: installScripts,
   },
   { id: 'deps', title: 'dependency freshness', isExtended: false, run: dependencyFreshness },
   { id: 'image-assets', title: 'image integrity', isExtended: false, run: imageAssets },

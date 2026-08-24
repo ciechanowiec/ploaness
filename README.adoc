@@ -113,7 +113,7 @@ pnpm exec ploaness init
 | Command | Behavior
 
 | [[default-verification,default verification]]`ploaness verify`
-| Runs the xref:#default-gates[30 default verification gates].
+| Runs the xref:#default-gates[31 default verification gates].
 
 | [[extended-verification,extended verification]]`ploaness verify --extended`
 | Runs xref:#default-verification[] and the xref:#extended-gates[6 extended verification gates] as well.
@@ -149,7 +149,7 @@ pnpm exec ploaness init
 [[default-gates]]
 === Default Verification Gates
 
-xref:#default-verification[] runs the following 30 gates.
+xref:#default-verification[] runs the following 31 gates.
 
 [cols="2,5"]
 |===
@@ -218,6 +218,10 @@ xref:#default-verification[] runs the following 30 gates.
 | [[vulnerabilities-gate]]`vulnerabilities`
 | No package in the resolved set carries a known vulnerability at or above the declared severity. The
   advisory database must be reachable.
+
+| [[install-scripts-gate]]`install-scripts`
+| The https://payloadcms.com[Payload CMS^] project names the dependencies permitted to run a build or
+  postinstall script. An empty list is a valid answer; leaving the list undeclared is not.
 
 | `deps`
 | No dependency is two or more major versions behind. The registry must be reachable.

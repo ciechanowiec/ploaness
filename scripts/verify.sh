@@ -54,6 +54,7 @@ gate skills
 gate image-assets
 gate licenses
 gate vulnerabilities
+gate install-scripts
 gate deps
 gate actions
 gate secrets
