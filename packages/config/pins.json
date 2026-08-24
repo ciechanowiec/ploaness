@@ -13,7 +13,7 @@
       "why": "The application itself. A governed project is a Payload application, built by Next, rendered by React, serving images through sharp and a GraphQL API through graphql, which payload declares as a peer. This is what the preflight gate already assumes rather than something the pins impose. Only `payload` is listed for its own family: every @payloadcms/* package a project declares is required to match it, so a project that adds a Payload plugin is covered by the rule that already exists.",
       "versions": {
         "payload": "3.88.0",
-        "next": "16.3.1",
+        "next": "16.3.2",
         "react": "19.2.8",
         "react-dom": "19.2.8",
         "sharp": "0.35.3",
@@ -27,7 +27,7 @@
       "versions": {
         "@types/node": "26.2.0",
         "@types/react": "19.2.18",
-        "@types/react-dom": "19.2.4"
+        "@types/react-dom": "19.2.5"
       }
     },
     {
