@@ -59,6 +59,13 @@ export interface WiringInputs {
    * without ploaness listing it.
    */
   readonly payloadVersion: string | undefined
+  /**
+   * The exact `packageManager` field the project must declare. The package manager resolves the whole
+   * dependency graph, so it is the one piece of toolchain that decides what every other pin means.
+   */
+  readonly requiredPackageManager: string | undefined
+  /** The `engines` block the project must declare, so a project states the runtime ploaness requires. */
+  readonly requiredEngines: Readonly<Record<string, string>>
   /** The `files` block the consumer's biome.json must declare, from {@link requiredBiomeFiles}. */
   readonly requiredBiomeFiles: Readonly<Record<string, unknown>>
 }
@@ -484,6 +491,51 @@ const checkSilencedAdvisories = (packageJson: unknown): readonly WiringViolation
     }),
   )
 
+// Corepack reads `packageManager` and runs exactly that version, so it decides how every other pinned
+// version is resolved. A project on a different pnpm can produce a different tree from the same
+// lockfile, which makes every pin above it a statement about a graph nobody built.
+const checkPackageManager = (
+  packageJson: Record<string, unknown>,
+  required: string | undefined,
+): readonly WiringViolation[] => {
+  if (required === undefined) {
+    return []
+  }
+  const declared: unknown = packageJson['packageManager']
+  return declared === required
+    ? []
+    : [
+        {
+          location: 'package.json packageManager',
+          reason: `is ${describeFound(asOptionalText(declared))} but ploaness requires "${required}"`,
+        },
+      ]
+}
+
+const asOptionalText = (raw: unknown): string | undefined =>
+  typeof raw === 'string' ? raw : undefined
+
+// `preflight` checks the Node that is actually running, which is the version a gate is executed by.
+// The `engines` block is a different statement: it is what the project tells an installer, a CI image
+// and a reader to use. Leaving it unchecked let a project declare a runtime ploaness refuses.
+const checkEngines = (
+  packageJson: Record<string, unknown>,
+  required: Readonly<Record<string, string>>,
+): readonly WiringViolation[] => {
+  const declared: Record<string, string> = asStringRecord(packageJson['engines'])
+  return Object.entries(required).flatMap(
+    ([name, range]: readonly [string, string]): readonly WiringViolation[] =>
+      declared[name] === range
+        ? []
+        : [
+            {
+              location: `package.json engines.${name}`,
+              reason: `is ${describeFound(declared[name])} but ploaness requires "${range}"`,
+            },
+          ],
+  )
+}
+
 // A specifier that is not a registry version at all: a local tarball, a workspace link, a git or npm
 // alias. None of them is a range, and a pre-publication consumer resolves the ploaness packages this
 // way, so the range ban must read past them rather than through them.
@@ -600,6 +652,8 @@ export const findWiringViolations = (inputs: WiringInputs): readonly WiringViola
     ...checkTestLibraries(packageJson, inputs.expectedTestLibraries, inputs.requiredTestLibraries),
     ...checkExactVersions(packageJson),
     ...checkPayloadFamily(packageJson, inputs.payloadVersion),
+    ...checkPackageManager(packageJson, inputs.requiredPackageManager),
+    ...checkEngines(packageJson, inputs.requiredEngines),
     ...checkPinnedOverrides(inputs.workspaceFile, inputs.expectedTestLibraries, packageJson),
     ...checkSilencedAdvisories(inputs.packageJson),
     ...findConvenienceExclusions(inputs.declaredExclusions, inputs.isExistingPath).map(

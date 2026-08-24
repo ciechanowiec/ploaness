@@ -1,17 +1,45 @@
 {
-  "$comment": "Versions ploaness owns but does not install. A pinned analyzer is declared as a real dependency of a ploaness package, so its version has exactly one source; these cannot be, because ploaness imports none of them and declaring them would install a second Payload, Next, React, or set of type definitions into a project that already has one. Two copies of @types/react in one tree is not merely waste - it is a class of type error that reads as the project's fault. So this file is that one source instead. Every entry is required of every governed project and matched exactly. Keys beginning with $ are notes; every other key is a group whose entries are merged, so adding a group needs no code change.",
-  "$framework": "The application itself. A governed project is a Payload application, built by Next, rendered by React, and processing images through sharp - which is what the preflight gate already assumes rather than something new the pins impose. Only `payload` is listed: every @payloadcms/* package a project declares is required to match it, so a project that adds a Payload plugin is covered by the rule that already exists.",
-  "$types": "Type definitions travel with what they describe, and they are pinned for the toolchain's reason rather than the framework's: a type package is an input to tsc, so a patch release changes what type-checks without a line of the project changing. They carry their own version lines rather than the version of the package they describe, so unlike the Payload family they cannot be derived and have to be written down.",
-  "framework": {
-    "payload": "3.88.0",
-    "next": "16.3.1",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "sharp": "0.35.3"
+  "$comment": "Everything ploaness pins that it cannot pin by declaring a dependency. A pinned analyzer is a real dependency of a ploaness package, so its version has exactly one source; nothing here can be, because ploaness imports none of it and declaring it would install a second Payload, Next, React, or set of type definitions into a project that already has one - and two copies of @types/react in a single tree is not merely waste, it is a class of type error that reads as the project's fault. This file is that one source instead. It is data rather than code: a group carries the rule that applies to it, so adding one needs no change anywhere else.",
+  "$required": "A required group is declared by every governed project and matched exactly. An unrequired group is matched only when the project declares it, and is never forced on a project with no use for it. That distinction is not a convenience: a Payload project on MongoDB has no Postgres driver, and requiring one would make ploaness dictate a database rather than a version. Requiring a package a project does not need would also manufacture a dependency the dead-code gate then rightly reports as unused.",
+  "packageManager": "pnpm@11.5.0",
+  "engines": {
+    "node": ">=26",
+    "pnpm": ">=11"
   },
-  "types": {
-    "@types/node": "26.2.0",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.4"
-  }
+  "groups": [
+    {
+      "name": "framework",
+      "required": true,
+      "why": "The application itself. A governed project is a Payload application, built by Next, rendered by React, serving images through sharp and a GraphQL API through graphql, which payload declares as a peer. This is what the preflight gate already assumes rather than something the pins impose. Only `payload` is listed for its own family: every @payloadcms/* package a project declares is required to match it, so a project that adds a Payload plugin is covered by the rule that already exists.",
+      "versions": {
+        "payload": "3.88.0",
+        "next": "16.3.1",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
+        "sharp": "0.35.3",
+        "graphql": "16.14.2"
+      }
+    },
+    {
+      "name": "types",
+      "required": true,
+      "why": "Type definitions travel with what they describe, and they are pinned for the toolchain's reason rather than the framework's: a type package is an input to tsc, so a patch release changes what type-checks while the project stays unchanged. They carry their own version lines rather than the version of the package they describe, so unlike the Payload family they cannot be derived and have to be written down.",
+      "versions": {
+        "@types/node": "26.2.0",
+        "@types/react": "19.2.18",
+        "@types/react-dom": "19.2.4"
+      }
+    },
+    {
+      "name": "ecosystem",
+      "required": false,
+      "why": "Packages a Payload project commonly reaches for, none of which every project needs: a database driver and its types, a loader for .env, and a cross-platform way to set a variable in a package script. ploaness owns the version of each so no two governed projects disagree about one, and forces none of them on a project that has no use for it.",
+      "versions": {
+        "pg": "8.23.0",
+        "@types/pg": "8.23.1",
+        "dotenv": "17.4.2",
+        "cross-env": "10.1.0"
+      }
+    }
+  ]
 }

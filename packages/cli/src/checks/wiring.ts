@@ -38,24 +38,55 @@ const TEST_LIBRARY_NAMES: readonly string[] = [
   'tsx',
 ]
 
-// The framework and its type definitions: packages ploaness owns outright rather than merely measuring,
-// and cannot declare as dependencies without installing a second copy into every consumer. `pins.json`
-// is their single source, and the group names are not restated here - every non-comment key is merged,
-// so a new group of pins needs no change in this file. Restating the names would be a second copy of
-// what the file already contains, which is the drift the file exists to prevent.
-const COMMENT_KEY: string = '$'
-
-const ownedVersions = (): Readonly<Record<string, string>> => {
-  const parsed: unknown = readJson(path.join(shippedDirectory('@ploaness/config'), 'pins.json'))
-  if (typeof parsed !== 'object' || parsed === null) {
-    return {}
-  }
-  const groups: readonly unknown[] = Object.entries(parsed as Record<string, unknown>)
-    .filter(([key]: readonly [string, unknown]): boolean => !key.startsWith(COMMENT_KEY))
-    .map(([, group]: readonly [string, unknown]): unknown => group)
-    .filter((group: unknown): boolean => typeof group === 'object' && group !== null)
-  return Object.assign({}, ...groups) as Record<string, string>
+// Packages ploaness owns outright rather than merely measuring, and cannot declare as dependencies
+// without installing a second copy into every consumer. `pins.json` is their single source. Nothing
+// about a group is restated here - not its name, not which packages it holds, not whether it is
+// required - because every one of those would be a second copy of what the file already contains,
+// which is the drift the file exists to prevent. Adding a group needs no change in this file.
+interface PinGroup {
+  readonly required: boolean
+  readonly versions: Readonly<Record<string, string>>
 }
+
+const readPins = (): Record<string, unknown> => {
+  const parsed: unknown = readJson(path.join(shippedDirectory('@ploaness/config'), 'pins.json'))
+  return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {}
+}
+
+const pinGroups = (): readonly PinGroup[] => {
+  const groups: unknown = readPins()['groups']
+  if (!Array.isArray(groups)) {
+    return []
+  }
+  return groups.flatMap((group: unknown): readonly PinGroup[] => {
+    if (typeof group !== 'object' || group === null) {
+      return []
+    }
+    const record: Record<string, unknown> = group as Record<string, unknown>
+    const versions: unknown = record['versions']
+    return typeof versions === 'object' && versions !== null
+      ? [{ required: record['required'] === true, versions: versions as Record<string, string> }]
+      : []
+  })
+}
+
+/** Every pinned version, whether the group that holds it is required or merely matched. */
+const ownedVersions = (): Readonly<Record<string, string>> =>
+  Object.assign({}, ...pinGroups().map((group: PinGroup): unknown => group.versions)) as Record<
+    string,
+    string
+  >
+
+const asText = (raw: unknown): string | undefined => (typeof raw === 'string' ? raw : undefined)
+
+const asStringRecord = (raw: unknown): Readonly<Record<string, string>> =>
+  typeof raw === 'object' && raw !== null
+    ? (Object.fromEntries(
+        Object.entries(raw as Record<string, unknown>).filter(
+          ([, value]: readonly [string, unknown]): boolean => typeof value === 'string',
+        ),
+      ) as Record<string, string>)
+    : {}
 
 const WORKFLOW_DIRECTORY: string = path.join('.github', 'workflows')
 
@@ -106,10 +137,16 @@ const REQUIRED_TEST_LIBRARIES: ReadonlySet<string> = new Set<string>([
   'tsx',
 ])
 
-// Everything ploaness pins is required, and the owned set is read from the pin file rather than listed
-// again, so pinning a package is the whole of what makes a project declare it.
+// A pin in a required group is what makes a project declare the package. A pin in any other group is
+// matched when the project declares it and forced on nobody, which is how ploaness can own the version
+// of a Postgres driver without deciding that every governed project uses Postgres.
 const requiredPackages = (): ReadonlySet<string> =>
-  new Set<string>([...REQUIRED_TEST_LIBRARIES, ...Object.keys(ownedVersions())])
+  new Set<string>([
+    ...REQUIRED_TEST_LIBRARIES,
+    ...pinGroups()
+      .filter((group: PinGroup): boolean => group.required)
+      .flatMap((group: PinGroup): readonly string[] => Object.keys(group.versions)),
+  ])
 
 const expectedTestLibraries = (): Readonly<Record<string, string>> => {
   const declared: Record<string, unknown> = Object.assign(
@@ -142,6 +179,8 @@ export const wiring = (context: Context): GateResult => {
     expectedTestLibraries: expectedTestLibraries(),
     requiredTestLibraries: requiredPackages(),
     payloadVersion: ownedVersions()['payload'],
+    requiredPackageManager: asText(readPins()['packageManager']),
+    requiredEngines: asStringRecord(readPins()['engines']),
     requiredBiomeFiles: requiredBiomeFiles(context.settings.sourceRoots),
   })
   return violations.length > 0

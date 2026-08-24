@@ -39,6 +39,8 @@ const wiredInputs = (overrides: Record<string, unknown> = {}): WiringInputs => (
   expectedTestLibraries: { vitest: '4.1.11', jsdom: '30.0.1' },
   requiredTestLibraries: new Set<string>(['vitest']),
   payloadVersion: undefined,
+  requiredPackageManager: undefined,
+  requiredEngines: {},
   requiredBiomeFiles: BIOME_FILES,
   ...overrides,
 })
@@ -399,6 +401,43 @@ describe('the Payload package family', () => {
       },
     })
     expect(locations(inputs)).not.toContain('package.json @payloadcms/db-postgres')
+  })
+})
+
+// The package manager resolves the whole graph, so it decides what every other pin means. The engines
+// block is what a project tells an installer and a CI image to use, which preflight cannot see.
+describe('the declared toolchain', () => {
+  it('rejects a package manager other than the pinned one', () => {
+    const inputs: WiringInputs = wiredInputs({
+      requiredPackageManager: 'pnpm@11.5.0',
+      packageJson: { ...WIRED_PACKAGE_JSON, packageManager: 'pnpm@10.0.0' },
+    })
+    expect(locations(inputs)).toContain('package.json packageManager')
+  })
+
+  it('rejects a missing package manager, which pins nothing at all', () => {
+    const inputs: WiringInputs = wiredInputs({ requiredPackageManager: 'pnpm@11.5.0' })
+    expect(locations(inputs)).toContain('package.json packageManager')
+  })
+
+  it('accepts the pinned package manager', () => {
+    const inputs: WiringInputs = wiredInputs({
+      requiredPackageManager: 'pnpm@11.5.0',
+      packageJson: { ...WIRED_PACKAGE_JSON, packageManager: 'pnpm@11.5.0' },
+    })
+    expect(locations(inputs)).not.toContain('package.json packageManager')
+  })
+
+  it('rejects an engines entry that states a runtime ploaness refuses', () => {
+    const inputs: WiringInputs = wiredInputs({
+      requiredEngines: { node: '>=26' },
+      packageJson: { ...WIRED_PACKAGE_JSON, engines: { node: '>=20' } },
+    })
+    expect(locations(inputs)).toContain('package.json engines.node')
+  })
+
+  it('says nothing when ploaness requires no engines block', () => {
+    expect(locations(wiredInputs())).not.toContain('package.json engines.node')
   })
 })
 

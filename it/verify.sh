@@ -354,6 +354,42 @@ edit_json "$scratch/fail-ranged-dependency/package.json" dependencies.next '^16.
 commit_case fail-ranged-dependency 'feat(fixture): declare a dependency as a range' "$CONFORMING_BODY"
 expect fail-ranged-dependency wiring FAIL 'which is a range'
 
+# Corepack runs exactly the package manager named here, so it decides how every other pinned version
+# resolves. A project on a different pnpm can build a different tree from the same lockfile.
+new_case fail-package-manager
+edit_json "$scratch/fail-package-manager/package.json" packageManager 'pnpm@10.0.0'
+commit_case fail-package-manager 'feat(fixture): run a package manager ploaness does not pin' \
+    "$CONFORMING_BODY"
+expect fail-package-manager wiring FAIL 'packageManager'
+
+# preflight reads the Node that is running. The engines block is what the project tells an installer
+# and a CI image to use, which is a different statement and was unchecked.
+new_case fail-engines
+edit_json "$scratch/fail-engines/package.json" engines.node '>=20'
+commit_case fail-engines 'feat(fixture): declare a runtime ploaness refuses' "$CONFORMING_BODY"
+expect fail-engines wiring FAIL 'engines.node'
+
+# ploaness owns the version of a Postgres driver without deciding that every project uses Postgres:
+# an unrequired pin is matched when declared and forced on nobody.
+new_case fail-ecosystem-version
+edit_json "$scratch/fail-ecosystem-version/package.json" devDependencies.pg '8.22.0'
+commit_case fail-ecosystem-version 'feat(fixture): take an ecosystem version ploaness does not pin' \
+    "$CONFORMING_BODY"
+expect fail-ecosystem-version wiring FAIL 'ploaness pins it'
+
+# The same pin, absent: a project with no Postgres is not asked to grow one.
+new_case pass-ecosystem-absent
+node -e '
+  const { readFileSync, writeFileSync } = require("node:fs")
+  const file = process.argv[1]
+  const parsed = JSON.parse(readFileSync(file, "utf8"))
+  delete parsed.devDependencies.pg
+  writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`)
+' "$scratch/pass-ecosystem-absent/package.json"
+commit_case pass-ecosystem-absent 'feat(fixture): drop a package ploaness pins but never requires' \
+    "$CONFORMING_BODY"
+expect pass-ecosystem-absent wiring PASS
+
 # A type package is an input to tsc, so a patch release changes what type-checks while the project
 # stays unchanged. Pinning one is the toolchain argument applied to types.
 new_case fail-types-version
@@ -393,7 +429,7 @@ expect fail-payload-family wiring FAIL 'when its own packages disagree'
 # An override of a package the project declares makes the installed version differ from the declared
 # one, which guts every pin above it. An override of a purely transitive package stays legal.
 new_case fail-declared-override
-printf '  graphql: "17.0.0"\n' >> "$scratch/fail-declared-override/pnpm-workspace.yaml"
+printf '  nanoid: "5.0.0"\n' >> "$scratch/fail-declared-override/pnpm-workspace.yaml"
 commit_case fail-declared-override 'feat(fixture): override a package the project declares' \
     "$CONFORMING_BODY"
 expect fail-declared-override wiring FAIL 'change the declaration instead'
