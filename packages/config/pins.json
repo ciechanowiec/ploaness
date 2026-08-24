@@ -1,11 +1,17 @@
 {
-  "$comment": "Framework versions ploaness owns. Every governed project declares these exactly, and the wiring gate reports any other value. They are data rather than dependencies of this package for one reason: ploaness imports none of them, and declaring them would install a second copy of Payload, Next and React into every consumer that already has one. So this file is the single place these versions are written, the way a real dependency is the single place a toolchain version is written.",
-  "$payloadFamily": "Only `payload` is listed. Every `@payloadcms/*` package a project declares is required to match it, because Payload breaks at runtime when its own packages disagree. Deriving the family from `payload` rather than enumerating it means a project that adds a Payload plugin is covered without this file changing.",
+  "$comment": "Versions ploaness owns but does not install. A pinned analyzer is declared as a real dependency of a ploaness package, so its version has exactly one source; these cannot be, because ploaness imports none of them and declaring them would install a second Payload, Next, React, or set of type definitions into a project that already has one. Two copies of @types/react in one tree is not merely waste - it is a class of type error that reads as the project's fault. So this file is that one source instead. Every entry is required of every governed project and matched exactly. Keys beginning with $ are notes; every other key is a group whose entries are merged, so adding a group needs no code change.",
+  "$framework": "The application itself. A governed project is a Payload application, built by Next, rendered by React, and processing images through sharp - which is what the preflight gate already assumes rather than something new the pins impose. Only `payload` is listed: every @payloadcms/* package a project declares is required to match it, so a project that adds a Payload plugin is covered by the rule that already exists.",
+  "$types": "Type definitions travel with what they describe, and they are pinned for the toolchain's reason rather than the framework's: a type package is an input to tsc, so a patch release changes what type-checks without a line of the project changing. They carry their own version lines rather than the version of the package they describe, so unlike the Payload family they cannot be derived and have to be written down.",
   "framework": {
     "payload": "3.88.0",
     "next": "16.3.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "sharp": "0.35.3"
+  },
+  "types": {
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4"
   }
 }

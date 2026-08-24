@@ -58,8 +58,10 @@ ploaness governs all of the following domains:
 - **Generated output:** the Payload types and admin import map must match the configuration that
   produces them.
 - **Versions:** ploaness owns two sets of them. The toolchain is every package whose version changes
-  what a gate does; the framework is `payload`, `next`, `react`, `react-dom` and `sharp`, which every
-  governed project declares. Declare each at the exact version ploaness pins, and every
+  what a gate does. The framework is `payload`, `next`, `react`, `react-dom` and `sharp`, plus
+  `@types/node`, `@types/react` and `@types/react-dom`, which are pinned for the toolchain's reason:
+  a type package is an input to tsc, so a patch release changes what type-checks while the project
+  stays unchanged. Every governed project declares all of them. Declare each at the exact version ploaness pins, and every
   `@payloadcms/*` package at the pinned `payload` version, because Payload fails at runtime when its
   own packages disagree. No dependency carries a range: a caret, tilde, comparator, wildcard or
   partial version means the build and the suite run against whatever was newest at install time. An

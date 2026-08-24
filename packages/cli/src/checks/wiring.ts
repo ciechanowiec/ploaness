@@ -38,20 +38,23 @@ const TEST_LIBRARY_NAMES: readonly string[] = [
   'tsx',
 ]
 
-// The application framework, which ploaness owns outright rather than merely measuring. These versions
-// come from `pins.json` instead of from a dependency, because ploaness imports none of them and
-// declaring them would install a second Payload, Next and React into every consumer that has one.
-const FRAMEWORK_NAMES: readonly string[] = ['payload', 'next', 'react', 'react-dom', 'sharp']
+// The framework and its type definitions: packages ploaness owns outright rather than merely measuring,
+// and cannot declare as dependencies without installing a second copy into every consumer. `pins.json`
+// is their single source, and the group names are not restated here - every non-comment key is merged,
+// so a new group of pins needs no change in this file. Restating the names would be a second copy of
+// what the file already contains, which is the drift the file exists to prevent.
+const COMMENT_KEY: string = '$'
 
-const frameworkPins = (): Readonly<Record<string, string>> => {
+const ownedVersions = (): Readonly<Record<string, string>> => {
   const parsed: unknown = readJson(path.join(shippedDirectory('@ploaness/config'), 'pins.json'))
-  const framework: unknown =
-    typeof parsed === 'object' && parsed !== null
-      ? (parsed as Record<string, unknown>)['framework']
-      : undefined
-  return typeof framework === 'object' && framework !== null
-    ? (framework as Record<string, string>)
-    : {}
+  if (typeof parsed !== 'object' || parsed === null) {
+    return {}
+  }
+  const groups: readonly unknown[] = Object.entries(parsed as Record<string, unknown>)
+    .filter(([key]: readonly [string, unknown]): boolean => !key.startsWith(COMMENT_KEY))
+    .map(([, group]: readonly [string, unknown]): unknown => group)
+    .filter((group: unknown): boolean => typeof group === 'object' && group !== null)
+  return Object.assign({}, ...groups) as Record<string, string>
 }
 
 const WORKFLOW_DIRECTORY: string = path.join('.github', 'workflows')
@@ -101,10 +104,12 @@ const REQUIRED_TEST_LIBRARIES: ReadonlySet<string> = new Set<string>([
   '@axe-core/playwright',
   // ploaness starts the end-to-end run through it, so a project without it has a gate that cannot run.
   'tsx',
-  // Every governed project is a Payload application built by Next and rendered by React. Requiring
-  // these is not an addition to the contract; it is what `preflight` already assumes.
-  ...FRAMEWORK_NAMES,
 ])
+
+// Everything ploaness pins is required, and the owned set is read from the pin file rather than listed
+// again, so pinning a package is the whole of what makes a project declare it.
+const requiredPackages = (): ReadonlySet<string> =>
+  new Set<string>([...REQUIRED_TEST_LIBRARIES, ...Object.keys(ownedVersions())])
 
 const expectedTestLibraries = (): Readonly<Record<string, string>> => {
   const declared: Record<string, unknown> = Object.assign(
@@ -117,7 +122,7 @@ const expectedTestLibraries = (): Readonly<Record<string, string>> => {
       declared[name],
     ]).filter(([, version]: readonly [string, unknown]): boolean => typeof version === 'string'),
   ) as Record<string, string>
-  return { ...fromDependencies, ...frameworkPins() }
+  return { ...fromDependencies, ...ownedVersions() }
 }
 
 /** Verify the project has installed ploaness exactly as ploaness dictates. */
@@ -135,8 +140,8 @@ export const wiring = (context: Context): GateResult => {
     tsconfig: readText(path.join(context.root, 'tsconfig.json')),
     workflows: readWorkflows(context.root),
     expectedTestLibraries: expectedTestLibraries(),
-    requiredTestLibraries: REQUIRED_TEST_LIBRARIES,
-    payloadVersion: frameworkPins()['payload'],
+    requiredTestLibraries: requiredPackages(),
+    payloadVersion: ownedVersions()['payload'],
     requiredBiomeFiles: requiredBiomeFiles(context.settings.sourceRoots),
   })
   return violations.length > 0

@@ -354,6 +354,27 @@ edit_json "$scratch/fail-ranged-dependency/package.json" dependencies.next '^16.
 commit_case fail-ranged-dependency 'feat(fixture): declare a dependency as a range' "$CONFORMING_BODY"
 expect fail-ranged-dependency wiring FAIL 'which is a range'
 
+# A type package is an input to tsc, so a patch release changes what type-checks while the project
+# stays unchanged. Pinning one is the toolchain argument applied to types.
+new_case fail-types-version
+edit_json "$scratch/fail-types-version/package.json" 'devDependencies.@types/react' '19.2.17'
+commit_case fail-types-version 'feat(fixture): take a type version ploaness does not pin' \
+    "$CONFORMING_BODY"
+expect fail-types-version wiring FAIL 'ploaness pins it'
+
+# The required set is derived from the pin file, so a pinned package the project never declares is a
+# missing dependency rather than an entry that quietly enforces nothing.
+new_case fail-missing-pin
+node -e '
+  const { readFileSync, writeFileSync } = require("node:fs")
+  const file = process.argv[1]
+  const parsed = JSON.parse(readFileSync(file, "utf8"))
+  delete parsed.devDependencies["@types/node"]
+  writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`)
+' "$scratch/fail-missing-pin/package.json"
+commit_case fail-missing-pin 'feat(fixture): drop a package ploaness pins' "$CONFORMING_BODY"
+expect fail-missing-pin wiring FAIL 'missing'
+
 # ploaness owns the framework version outright, not merely the analyzers that measure it.
 new_case fail-framework-version
 edit_json "$scratch/fail-framework-version/package.json" dependencies.next '16.3.0'
