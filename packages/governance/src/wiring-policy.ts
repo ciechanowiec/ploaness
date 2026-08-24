@@ -7,19 +7,19 @@ import type { WiringViolation } from './wiring-violation.js'
 // A build tool that bound its checks to fixed phases would make this unnecessary: the checks would run
 // because the build ran, and the harness would only have to stop a project redeclaring them away. npm
 // binds nothing. A `package.json` script is a consumer-owned string, so a project (or an agent working in
-// it) can rewrite `verify` to `echo ok`, append a rule-disabling block to the flat ESLint config, or drop
-// the harness out of CI, and nothing downstream would notice.
+// it) can rewrite `verify` to `echo ok`, append a rule-disabling block to the flat ESLint config, or swap
+// the configuration a tool reads, and nothing downstream would notice.
 //
 // So ploaness makes its own installation a governed domain. This module holds the pure rules; the gate
 // that reads the files lives in the CLI. It cannot make bypass impossible, since a project can always
 // uninstall the dependency, but it makes bypass loud and deliberate rather than silent, which is the
 // property a fixed build lifecycle would have supplied for free.
-
-/** One CI workflow definition found in the consumer repository. */
-export interface WorkflowFile {
-  readonly name: string
-  readonly content: string
-}
+//
+// What this module deliberately does NOT rule on is where verification runs. It once required a workflow
+// invoking extended verification, and refused `--enforce=false` and `continue-on-error` around it. The
+// governing standard states no such rule: it says the head commit of the main branch passes the
+// verification command, and leaves the mechanism to the project. A rule the standard does not state is
+// ploaness dictating a hosting platform, so it is gone rather than kept for being useful.
 
 /** The consumer files the wiring gate reads, injected so the core stays free of filesystem access. */
 export interface WiringInputs {
@@ -40,7 +40,6 @@ export interface WiringInputs {
   readonly isExistingPath: (path: string) => boolean
   readonly biomeConfig: string | undefined
   readonly tsconfig: string | undefined
-  readonly workflows: readonly WorkflowFile[]
   /**
    * Test-authoring libraries the consumer's own specs import, mapped to the version ploaness was built
    * against. The CLI reads these from the ploaness config package rather than hard-coding them here, so
@@ -137,18 +136,6 @@ export const REQUIRED_TSCONFIG_PATHS: Readonly<Record<string, readonly string[]>
   ],
   exclude: ['node_modules'],
 }
-
-const LAST_ENTRY: number = -1
-
-/** One place a workflow invokes verification, with the step that carries it. */
-interface WorkflowInvocation {
-  readonly workflow: WorkflowFile
-  readonly line: string
-  readonly step: readonly string[]
-}
-
-/** Extended verification must run in CI, invoked either directly or through the owned script. */
-export const CI_INVOCATIONS: readonly string[] = ['ploaness verify --extended', 'run verify:full']
 
 // tsconfig keys a project may legitimately set for itself. Everything else is a compiler strictness
 // decision ploaness owns, so a local override is how a project would quietly weaken type checking.
@@ -333,90 +320,6 @@ const checkTsconfig = (config: string | undefined): readonly WiringViolation[] =
   return [...wrongExtends, ...overriddenOptions, ...wrongPaths]
 }
 
-/** The flag that turns verification into a report. A run in that mode is not a pass. */
-export const REPORT_ONLY_FLAG: string = '--enforce=false'
-
-/** The step setting that lets a workflow continue after the verification step has failed. */
-const CONTINUE_ON_ERROR: string = 'continue-on-error'
-
-const isComment = (line: string): boolean => line.trimStart().startsWith('#')
-
-const isStepStart = (line: string): boolean => /^\s*-\s/.test(line)
-
-// The line indexes that actually invoke verification. A mention inside a comment is not an invocation,
-// which is why the whole file is no longer searched as one string.
-const invokingLines = (lines: readonly string[]): readonly number[] =>
-  lines.flatMap((line: string, index: number): readonly number[] =>
-    !isComment(line) &&
-    CI_INVOCATIONS.some((invocation: string): boolean => line.includes(invocation))
-      ? [index]
-      : [],
-  )
-
-// The step a line belongs to: from the nearest list item at or above it, to the next one.
-const stepAround = (lines: readonly string[], index: number): readonly string[] => {
-  const startCandidates: readonly number[] = lines
-    .slice(0, index + 1)
-    .flatMap((line: string, at: number): readonly number[] => (isStepStart(line) ? [at] : []))
-  const start: number = startCandidates.at(LAST_ENTRY) ?? 0
-  const after: number = lines
-    .slice(start + 1)
-    .findIndex((line: string): boolean => isStepStart(line))
-  return after === -1 ? lines.slice(start) : lines.slice(start, start + 1 + after)
-}
-
-// A workflow that runs verification but neuters it is worse than one that never ran it: the project is
-// green forever and the harness reports that its wiring is intact. Both escapes are checked on the step
-// that carries the invocation rather than on the file, so an unrelated step may still tolerate failure.
-const checkWorkflows = (workflows: readonly WorkflowFile[]): readonly WiringViolation[] => {
-  const invoking: readonly WorkflowInvocation[] = workflows.flatMap(
-    (workflow: WorkflowFile): readonly WorkflowInvocation[] => {
-      const lines: readonly string[] = workflow.content.split('\n')
-      return invokingLines(lines).map(
-        (index: number): WorkflowInvocation => ({
-          workflow,
-          line: lines[index] ?? '',
-          step: stepAround(lines, index),
-        }),
-      )
-    },
-  )
-  if (invoking.length === 0) {
-    return [
-      {
-        location: '.github/workflows',
-        reason:
-          'no workflow runs extended verification; ploaness enforces no local git hooks, so CI is the only backstop',
-      },
-    ]
-  }
-  return invoking.flatMap((found: WorkflowInvocation): readonly WiringViolation[] => {
-    const reportOnly: readonly WiringViolation[] = found.line.includes(REPORT_ONLY_FLAG)
-      ? [
-          {
-            location: `.github/workflows/${found.workflow.name}`,
-            reason:
-              `runs verification with ${REPORT_ONLY_FLAG}, which prints findings and exits 0; ` +
-              'a run in that mode is not a pass',
-          },
-        ]
-      : []
-    const tolerated: readonly WiringViolation[] = found.step.some((line: string): boolean =>
-      line.includes(CONTINUE_ON_ERROR),
-    )
-      ? [
-          {
-            location: `.github/workflows/${found.workflow.name}`,
-            reason:
-              `declares ${CONTINUE_ON_ERROR} on the step that runs verification, ` +
-              'so a failing run cannot fail the workflow',
-          },
-        ]
-      : []
-    return [...reportOnly, ...tolerated]
-  })
-}
-
 // These libraries cannot move into the harness. Under the strict pnpm layout a consumer spec could not
 // resolve `import { describe } from "vitest"` if vitest were only a dependency of ploaness, so the
 // project must declare them itself and ploaness pins the version instead of owning the package.
@@ -469,6 +372,5 @@ export const findWiringViolations = (inputs: WiringInputs): readonly WiringViola
     ...checkReexport(inputs.playwrightConfig, 'playwright.config.ts', 'ploaness/playwright'),
     ...checkBiome(inputs.biomeConfig, inputs.requiredBiomeFiles),
     ...checkTsconfig(inputs.tsconfig),
-    ...checkWorkflows(inputs.workflows),
   ]
 }

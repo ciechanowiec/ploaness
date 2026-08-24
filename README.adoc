@@ -152,7 +152,7 @@ pnpm exec ploaness init
 | `ploaness commit-message <file>`
 | Verifies one commit message. It reads `--range <base>..<head>` or `--all` in place of a file.
 |===
-. [[verification-commands,verification commands]]The two verification commands are xref:#default-verification[] and xref:#extended-verification[]. Both read one flag, [[report-only-mode,report-only mode]]`--enforce=false`, which prints the xref:#finding[findings] and exits with status `0`. That flag enables no further xref:#gates[gate], and the status it exits with isn't a pass. It's for adopting _ploaness_, not for running it: the xref:#wiring-gate[`wiring` gate] rejects a workflow that passes the flag to verification, because a project that did so would stay green whatever the gates found.
+. [[verification-commands,verification commands]]The two verification commands are xref:#default-verification[] and xref:#extended-verification[]. Both read one flag, [[report-only-mode,report-only mode]]`--enforce=false`, which prints the xref:#finding[findings] and exits with status `0`. That flag enables no further xref:#gates[gate], and the status it exits with isn't a pass. It's for adopting _ploaness_, not for running it, and every run in that mode says so in its own output.
 . For example, xref:#extended-verification[`ploaness verify --extended --enforce=false`] runs the xref:#default-gates[default verification gates] and xref:#extended-gates[extended verification gates] in xref:#report-only-mode[report-only mode].
 
 [[gates]]
@@ -175,7 +175,7 @@ xref:#default-verification[] runs the following 31 gates.
 | The https://payloadcms.com[Payload CMS^] project meets the xref:#requirements[].
 
 | [[wiring-gate,the wiring gate]]`wiring`
-| The xref:#project-scripts[project scripts], xref:#project-files[project files], and workflows that arm _ploaness_ are intact, and nothing in the https://payloadcms.com[Payload CMS^] project undoes them: a workflow can't run verification in xref:#report-only-mode[], a xref:#project-files[project file] can't be replaced by a local one, and an install override can't redefine a version _ploaness_ pins.
+| The xref:#project-scripts[project scripts] and xref:#project-files[project files] that arm _ploaness_ are intact, and nothing in the https://payloadcms.com[Payload CMS^] project undoes them: a xref:#project-files[project file] can't be replaced by a local one, and an install override can't redefine a version _ploaness_ pins. Where verification runs is the project's own decision, so the gate rules on nothing outside the repository's own files.
 
 | [[assets-gate]]`assets`
 | The xref:#managed-files[managed files] match what _ploaness_ ships.

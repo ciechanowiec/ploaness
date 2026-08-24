@@ -269,18 +269,8 @@ edit_json "$scratch/pass-denial-repaired/.claude/settings.json" permissions.deny
 commit_case pass-denial-repaired 'feat(fixture): let sync repair the write denial' "$CONFORMING_BODY"
 expect pass-denial-repaired generated-denial PASS
 
-# Harness Integrity. Each of these passed before: a project could go green forever with one flag, swap a
-# config the harness believes it owns, or undo a pinned version through an override.
-new_case fail-report-only-ci
-node -e '
-  const { readFileSync, writeFileSync } = require("node:fs")
-  const file = process.argv[1]
-  const text = readFileSync(file, "utf8")
-  writeFileSync(file, text.replace("run verify:full", "run verify:full --enforce=false"))
-' "$scratch/fail-report-only-ci/.github/workflows/verify.yml"
-commit_case fail-report-only-ci 'feat(fixture): run verification in report-only mode' "$CONFORMING_BODY"
-expect fail-report-only-ci wiring FAIL 'not a pass'
-
+# Harness Integrity. Each of these passed before: a project could swap a config the harness believes it
+# owns, or undo a pinned version through an override.
 new_case fail-vitest-config-swapped
 printf "import { defineConfig } from 'vitest/config'\n\nexport default defineConfig({})\n" \
     > "$scratch/fail-vitest-config-swapped/vitest.config.mts"

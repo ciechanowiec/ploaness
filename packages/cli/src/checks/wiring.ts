@@ -1,12 +1,11 @@
 // The anti-bypass gate. Reads the consumer's own files and fails when ploaness has been disarmed. The
 // rules are pure and live in @ploaness/governance; this file supplies the I/O and the expectations.
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import {
   findWiringViolations,
   requiredBiomeFiles,
   type WiringViolation,
-  type WorkflowFile,
 } from '@ploaness/governance'
 import { type Context, readJson, readText, shippedDirectory } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
@@ -88,23 +87,6 @@ const asStringRecord = (raw: unknown): Readonly<Record<string, string>> =>
       ) as Record<string, string>)
     : {}
 
-const WORKFLOW_DIRECTORY: string = path.join('.github', 'workflows')
-
-const readWorkflows = (root: string): readonly WorkflowFile[] => {
-  const directory: string = path.join(root, WORKFLOW_DIRECTORY)
-  if (!existsSync(directory)) {
-    return []
-  }
-  return readdirSync(directory)
-    .filter((name: string): boolean => name.endsWith('.yml') || name.endsWith('.yaml'))
-    .map(
-      (name: string): WorkflowFile => ({
-        name,
-        content: readFileSync(path.join(directory, name), 'utf8'),
-      }),
-    )
-}
-
 // Where a pinned version is read from. The harness installs these itself, so its own manifests are the
 // single source of the expectation and a harness bump moves it in exactly one place. Both packages are
 // consulted because the split between them is an internal packaging detail: vitest is declared by the
@@ -175,7 +157,6 @@ export const wiring = (context: Context): GateResult => {
       existsSync(path.join(context.root, relativePath)),
     biomeConfig: readText(path.join(context.root, 'biome.json')),
     tsconfig: readText(path.join(context.root, 'tsconfig.json')),
-    workflows: readWorkflows(context.root),
     expectedTestLibraries: expectedTestLibraries(),
     requiredTestLibraries: requiredPackages(),
     payloadVersion: ownedVersions()['payload'],

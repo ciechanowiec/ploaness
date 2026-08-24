@@ -24,16 +24,15 @@ harness.
 
 ploaness governs all of the following domains:
 
-- **Harness wiring:** the scripts, CI invocation, tool-config inheritance, and pinned
-  versions through which the project installs ploaness. A project that rewrites `verify`, appends rules
-  after the harness ESLint config, redeclares a Biome section, overrides a compiler option, replaces the
-  vitest or Playwright config, or drops extended verification out of CI fails this domain rather than
-  passing quietly.
-  So does one that runs verification with `--enforce=false`, tolerates its failure with
-  `continue-on-error`, redefines a pinned version through an install override, or silences the
-  vulnerability gate through `pnpm.auditConfig`. A setting may make the harness stricter and never
-  looser: a declared source root is added to the shipped ones rather than replacing them, and a bundle
-  budget larger than the shipped ceiling is ignored.
+- **Harness wiring:** the scripts, tool-config inheritance, and pinned versions through which the
+  project installs ploaness. A project that rewrites `verify`, appends rules after the harness ESLint
+  config, redeclares a Biome section, overrides a compiler option, or replaces the vitest or Playwright
+  config fails this domain rather than passing quietly. So does one that redefines a pinned version
+  through an install override, or silences the vulnerability gate through `pnpm.auditConfig`. A setting
+  may make the harness stricter and never looser: a declared source root is added to the shipped ones
+  rather than replacing them, and a bundle budget larger than the shipped ceiling is ignored.
+  Where verification runs is the project's own decision and no gate rules on it. `--enforce=false`
+  prints findings and exits zero; a run in that mode is not a pass, whoever started it.
 - **The two settings no check can verify:** `ploaness.pretest` and `ploaness.testWrapper` are arbitrary
   argv, and a wrapper that swallows its child's exit code is indistinguishable from one that does not
   until it runs. So the rule is stated here rather than enforced. The wrapper exists to put a database

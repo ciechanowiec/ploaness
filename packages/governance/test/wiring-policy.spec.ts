@@ -6,7 +6,6 @@ import {
   REQUIRED_TSCONFIG_PATHS,
   requiredBiomeFiles,
   type WiringInputs,
-  type WorkflowFile,
 } from '../src/wiring-policy.js'
 import type { WiringViolation } from '../src/wiring-violation.js'
 
@@ -35,7 +34,6 @@ const wiredInputs = (overrides: Record<string, unknown> = {}): WiringInputs => (
     compilerOptions: { paths: {} },
     ...REQUIRED_TSCONFIG_PATHS,
   }),
-  workflows: [{ name: 'verify.yml', content: 'run: ploaness verify --extended' }],
   expectedTestLibraries: { vitest: '4.1.11', jsdom: '30.0.1' },
   requiredTestLibraries: new Set<string>(['vitest']),
   payloadVersion: undefined,
@@ -109,21 +107,7 @@ describe('config tampering', () => {
   })
 })
 
-describe('CI and dependencies', () => {
-  it('catches extended verification missing from CI', () => {
-    const workflows: readonly WorkflowFile[] = [
-      { name: 'verify.yml', content: 'run: pnpm run lint' },
-    ]
-    expect(locations(wiredInputs({ workflows }))).toContain('.github/workflows')
-  })
-
-  it('accepts CI invoking the owned script instead of the raw command', () => {
-    const workflows: readonly WorkflowFile[] = [
-      { name: 'verify.yml', content: 'run: pnpm run verify:full' },
-    ]
-    expect(findWiringViolations(wiredInputs({ workflows }))).toEqual([])
-  })
-
+describe('dependencies', () => {
   it('catches a missing harness dependency', () => {
     const packageJson: Record<string, unknown> = {
       ...WIRED_PACKAGE_JSON,
@@ -216,64 +200,6 @@ describe('a project file that is absent entirely', () => {
         violation.reason.includes('the project must declare it'),
       ),
     ).toBe(true)
-  })
-})
-
-const workflowNamed = (content: string): readonly WorkflowFile[] => [
-  { name: 'verify.yml', content },
-]
-
-// A workflow that runs verification but neuters it is worse than one that never ran it: the project is
-// green forever, and the harness reports that the wiring is intact.
-describe('a workflow that neuters verification', () => {
-  it('rejects a verification run in report-only mode', () => {
-    const workflows: readonly WorkflowFile[] = workflowNamed(
-      'jobs:\n  verify:\n    steps:\n      - run: ploaness verify --extended --enforce=false\n',
-    )
-    const reasons: readonly string[] = findWiringViolations(wiredInputs({ workflows })).map(
-      (violation: WiringViolation): string => violation.reason,
-    )
-    expect(reasons.some((reason: string) => reason.includes('not a pass'))).toBe(true)
-  })
-
-  it('rejects continue-on-error on the step that runs verification', () => {
-    const workflows: readonly WorkflowFile[] = workflowNamed(
-      'jobs:\n  verify:\n    steps:\n      - name: Verify\n' +
-        '        continue-on-error: true\n        run: ploaness verify --extended\n',
-    )
-    const reasons: readonly string[] = findWiringViolations(wiredInputs({ workflows })).map(
-      (violation: WiringViolation): string => violation.reason,
-    )
-    expect(reasons.some((reason: string) => reason.includes('continue-on-error'))).toBe(true)
-  })
-
-  it('leaves continue-on-error alone on a step that does not run verification', () => {
-    const workflows: readonly WorkflowFile[] = workflowNamed(
-      'jobs:\n  verify:\n    steps:\n      - name: Upload\n' +
-        '        continue-on-error: true\n        run: echo upload\n' +
-        '      - run: ploaness verify --extended\n',
-    )
-    expect(findWiringViolations(wiredInputs({ workflows }))).toEqual([])
-  })
-
-  // A mention in a comment used to satisfy the requirement, because the whole file was searched as one
-  // string rather than line by line.
-  it('does not accept an invocation that only appears in a comment', () => {
-    const workflows: readonly WorkflowFile[] = workflowNamed(
-      'jobs:\n  verify:\n    steps:\n      # run: ploaness verify --extended\n' +
-        '      - run: echo nothing\n',
-    )
-    const locations: readonly string[] = findWiringViolations(wiredInputs({ workflows })).map(
-      (violation: WiringViolation): string => violation.location,
-    )
-    expect(locations).toContain('.github/workflows')
-  })
-
-  it('accepts a workflow that runs verification plainly', () => {
-    const workflows: readonly WorkflowFile[] = workflowNamed(
-      'jobs:\n  verify:\n    steps:\n      - run: pnpm run verify:full\n',
-    )
-    expect(findWiringViolations(wiredInputs({ workflows }))).toEqual([])
   })
 })
 
