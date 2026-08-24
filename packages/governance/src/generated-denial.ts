@@ -16,9 +16,18 @@ export const GENERATED_ARTEFACTS: readonly string[] = [
   'src/payload-generated-schema.ts',
 ]
 
-/** The deny rules a runtime must carry for the artefacts above. */
-export const requiredDenyRules = (): readonly string[] =>
-  GENERATED_ARTEFACTS.flatMap((artefact: string): readonly string[] => [
+/**
+ * The deny rules a runtime must carry for a set of generated artefacts.
+ *
+ * The artefacts are a parameter rather than the constant above, because two different sets need the
+ * same rule: a governed Payload project denies what Payload generates, and the ploaness repository
+ * denies the asset bodies and shipped configs its own build regenerates. Closing over one of them would
+ * have meant a second copy of this function for the other.
+ * @param artefacts the repo-relative paths a generator owns.
+ * @returns the Edit and Write denials the runtime settings must carry.
+ */
+export const requiredDenyRules = (artefacts: readonly string[]): readonly string[] =>
+  artefacts.flatMap((artefact: string): readonly string[] => [
     `Edit(${artefact})`,
     `Write(${artefact})`,
   ])
@@ -33,15 +42,19 @@ const stringsAt = (settings: unknown, section: string, key: string): readonly st
 /**
  * Merge the required deny rules into an existing runtime settings object.
  * @param existing the parsed settings, or undefined when the file does not exist.
+ * @param artefacts the repo-relative paths a generator owns.
  * @returns the settings to write, preserving every key the project owns.
  */
-export const applyDenyRules = (existing: unknown): Record<string, unknown> => {
+export const applyDenyRules = (
+  existing: unknown,
+  artefacts: readonly string[],
+): Record<string, unknown> => {
   const base: Record<string, unknown> = { ...asRecord(existing) }
   const permissions: Record<string, unknown> = { ...asRecord(base['permissions']) }
   const deny: readonly string[] = stringsAt(base, 'permissions', 'deny')
   const merged: readonly string[] = [
     ...deny,
-    ...requiredDenyRules().filter((rule: string): boolean => !deny.includes(rule)),
+    ...requiredDenyRules(artefacts).filter((rule: string): boolean => !deny.includes(rule)),
   ]
   return { ...base, permissions: { ...permissions, deny: merged } }
 }
@@ -50,21 +63,24 @@ export const applyDenyRules = (existing: unknown): Record<string, unknown> => {
  * Report every required denial the runtime settings do not carry, and every re-permission of one.
  * @param settings the parsed runtime settings, or undefined when absent.
  * @param localSettings the parsed machine-local overrides, or undefined when absent.
+ * @param artefacts the repo-relative paths a generator owns.
  * @returns one message per missing denial or re-permitted artefact.
  */
 export const findDenialViolations = (
   settings: unknown,
   localSettings: unknown,
+  artefacts: readonly string[],
 ): readonly string[] => {
+  const required: readonly string[] = requiredDenyRules(artefacts)
   const deny: readonly string[] = stringsAt(settings, 'permissions', 'deny')
-  const missing: readonly string[] = requiredDenyRules()
+  const missing: readonly string[] = required
     .filter((rule: string): boolean => !deny.includes(rule))
     .map((rule: string): string => `no write denial for ${rule}; run \`ploaness sync\` to add it`)
   // A local override that re-permits a denied artefact undoes the denial on the one machine where it
   // matters most, and it is untracked, so nothing else would ever report it.
   const allowed: readonly string[] = stringsAt(localSettings, 'permissions', 'allow')
   const rePermitted: readonly string[] = allowed
-    .filter((rule: string): boolean => requiredDenyRules().includes(rule))
+    .filter((rule: string): boolean => required.includes(rule))
     .map(
       (rule: string): string =>
         `local settings re-permit ${rule}, which the project denies; remove the local allow entry`,

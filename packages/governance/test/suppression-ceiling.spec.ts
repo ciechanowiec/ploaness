@@ -10,6 +10,11 @@ import {
   suppressionCeiling,
 } from '../src/suppression-ceiling.js'
 
+// Assembled for the same reason the module assembles its own tokens: written whole, this spec would be
+// counted by the rule it tests.
+const nocheck = (): string => ['no', 'check'].join('')
+const NOCHECK: string = `// @ts-${nocheck()}\n`
+
 // Assembled rather than written whole, for the same reason the module assembles its own tokens: a spec
 // containing a literal suppression would be counted by the rule it is testing.
 const disable = (tool: string): string => `${tool}-disable`
@@ -125,5 +130,17 @@ describe('judgeSuppressions', () => {
 
   it('carries the sites through, so the report can name them', () => {
     expect(judgeSuppressions(sites(2), 0, undefined).sites).toHaveLength(2)
+  })
+})
+
+// The broadest suppression there is: it turns the type checker off for a whole file rather than for one
+// line, and it was the one form the count did not charge for.
+describe('the file-wide type-check suppression', () => {
+  it('counts a nocheck directive', () => {
+    expect(findSuppressions('src/lib/reads.ts', NOCHECK)).toHaveLength(1)
+  })
+
+  it('names it, so the report says which suppression was spent', () => {
+    expect(findSuppressions('src/lib/reads.ts', NOCHECK)[0]?.token).toContain('check')
   })
 })

@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(packages/assets/files/.editorconfig.asset)",
+      "Write(packages/assets/files/.editorconfig.asset)",
+      "Edit(packages/assets/files/.gitattributes.asset)",
+      "Write(packages/assets/files/.gitattributes.asset)",
+      "Edit(packages/assets/files/.gitignore.asset)",
+      "Write(packages/assets/files/.gitignore.asset)",
+      "Edit(packages/assets/files/.npmrc.asset)",
+      "Write(packages/assets/files/.npmrc.asset)",
+      "Edit(packages/assets/files/.nvmrc.asset)",
+      "Write(packages/assets/files/.nvmrc.asset)",
+      "Edit(packages/assets/files/CLAUDE.md.asset)",
+      "Write(packages/assets/files/CLAUDE.md.asset)",
+      "Edit(packages/assets/files/README-guideline-software-project.adoc.asset)",
+      "Write(packages/assets/files/README-guideline-software-project.adoc.asset)",
+      "Edit(packages/ploaness/biome.json)",
+      "Write(packages/ploaness/biome.json)",
+      "Edit(packages/ploaness/tsconfig.json)",
+      "Write(packages/ploaness/tsconfig.json)"
+    ]
+  }
+}

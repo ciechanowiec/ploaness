@@ -19,12 +19,18 @@ const IGNORE: string = 'ignore'
 
 // One entry per suppression form. `eslint-enable`, `biome-ignore-end`, and `stylelint-enable` close a
 // block that its opener already counted, so counting them would double every block suppression.
+//
+// `@ts-nocheck` was missing, and it is the broadest suppression available: it turns the type checker off
+// for a whole file rather than for one line. `ban-ts-comment` refuses it wherever ESLint reads, so it
+// was never free - but a file ESLint's config ignores escaped both, and the ceiling is what makes the
+// next suppression cost the removal of an existing one.
 const SUPPRESSION_TOKENS: readonly string[] = [
   `eslint-${DISABLE}`,
   `biome-${IGNORE}`,
   `stylelint-${DISABLE}`,
   `@ts-expect-error`,
   `@ts-${IGNORE}`,
+  `@ts-nocheck`,
 ]
 
 const CLOSING_TOKENS: readonly string[] = [

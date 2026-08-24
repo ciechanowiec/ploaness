@@ -2,7 +2,7 @@
 // runtime settings file and, on the sync path, writes it back.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { applyDenyRules, findDenialViolations } from '@ploaness/governance'
+import { applyDenyRules, findDenialViolations, GENERATED_ARTEFACTS } from '@ploaness/governance'
 import type { Context } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
@@ -28,6 +28,7 @@ export const generatedDenial = (context: Context): GateResult => {
   const findings: readonly string[] = findDenialViolations(
     readJson(context.root, SETTINGS_PATH),
     readJson(context.root, LOCAL_SETTINGS_PATH),
+    GENERATED_ARTEFACTS,
   )
   return findings.length > 0
     ? failed(`${String(findings.length)} generated file(s) are writable by an agent`, [
@@ -48,7 +49,7 @@ export const generatedDenial = (context: Context): GateResult => {
 export const hasWrittenDenyRules = (context: Context): boolean => {
   const full: string = path.join(context.root, SETTINGS_PATH)
   const existing: unknown = readJson(context.root, SETTINGS_PATH)
-  const merged: Record<string, unknown> = applyDenyRules(existing)
+  const merged: Record<string, unknown> = applyDenyRules(existing, GENERATED_ARTEFACTS)
   const text: string = `${JSON.stringify(merged, null, JSON_INDENT)}\n`
   if (existsSync(full) && readFileSync(full, 'utf8') === text) {
     return false
