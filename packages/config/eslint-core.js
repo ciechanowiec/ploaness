@@ -110,17 +110,45 @@ export const compose = tseslint.config
 /** Formatting is Biome's job; this disables every conflicting stylistic rule and must stay last. */
 export const prettierLast = prettier
 
-/** The preset layers every ploaness-governed project runs. */
+// A warning severity does not exist in a governed repository: a check has two verdicts, and a finding
+// that prints and exits 0 is neither. Several presets ship rules at `warn` anyway - 31 of jsdoc's and 6
+// of regexp's, as of this writing - so every finding they report was invisible to the build.
+//
+// The list of which rules those are is NOT written down here. It would be a copy of what the presets
+// declare, and it would go stale on the next upgrade in the one direction that fails open. Each layer's
+// own declarations are re-read instead and raised to `error`, options intact. A rule a preset turns
+// `off` stays off: that is a decision about whether the rule runs, not about how loudly it speaks.
+const escalate = (setting) => {
+  const severity = Array.isArray(setting) ? setting[0] : setting
+  if (severity === 'off' || severity === 0) {
+    return setting
+  }
+  return Array.isArray(setting) ? ['error', ...setting.slice(1)] : 'error'
+}
+
+const withoutWarnings = (layer) =>
+  layer.rules === undefined
+    ? layer
+    : {
+        ...layer,
+        rules: Object.fromEntries(
+          Object.entries(layer.rules).map(([id, setting]) => [id, escalate(setting)]),
+        ),
+      }
+
+/** The preset layers every ploaness-governed project runs, none of which may report at `warn`. */
 export const baseLayers = [
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
   sonarjs.configs.recommended,
   unicorn.configs.recommended,
-  jsdoc.configs['flat/recommended-typescript'],
+  // The plugin's own error-severity variant of the same preset. The escalation above would raise it
+  // anyway; naming the variant states the intent where a reader of the layer list will see it.
+  jsdoc.configs['flat/recommended-typescript-error'],
   comments.recommended, // disciplined eslint-disable comments (scoped + justified)
   regexp.configs['flat/recommended'], // regex correctness and safety
-]
+].map(withoutWarnings)
 
 /**
  * Type-aware parsing, with the caller supplying the parser options its layout needs.

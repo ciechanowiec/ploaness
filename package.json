@@ -10,13 +10,13 @@
     "build": "pnpm -r --filter './packages/**' run build",
     "test": "vitest run --coverage",
     "typecheck": "tsc --build --force && tsc -p tsconfig.lint.json",
-    "lint": "biome check .",
+    "lint": "biome check --error-on-warnings .",
     "format": "biome check --write . && eslint . --fix",
     "verify": "sh scripts/verify.sh",
     "pack:local": "sh scripts/pack-local.sh",
     "it": "sh it/verify.sh",
     "verify:fast": "pnpm run build && pnpm run typecheck && pnpm run lint && pnpm run lint:eslint && pnpm run test",
-    "lint:eslint": "eslint ."
+    "lint:eslint": "eslint . --max-warnings=0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.9",

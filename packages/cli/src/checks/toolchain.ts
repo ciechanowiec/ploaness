@@ -17,10 +17,14 @@ export const types = (context: Context): GateResult =>
     'the project type-checks under the ploaness compiler options',
   )
 
+// `--error-on-warnings` for the reason the Stylelint invocation below carries `--max-warnings=0`: a
+// check has two verdicts, and a diagnostic Biome ranks as a warning would otherwise print and exit 0.
 /** Formatting and fast lint. */
 export const biome = (context: Context): GateResult =>
   fromRun(
-    runNode(resolveTool('@biomejs/biome', 'biome'), ['check', '.'], { cwd: context.root }),
+    runNode(resolveTool('@biomejs/biome', 'biome'), ['check', '--error-on-warnings', '.'], {
+      cwd: context.root,
+    }),
     'Biome reports no formatting or lint defect',
   )
 
@@ -57,9 +61,15 @@ export const biomeSchema = (): GateResult => {
       ])
 }
 
+// `--max-warnings=0` is the backstop behind the severity escalation in `eslint-core.js`. That
+// escalation raises what the current presets declare; this flag fails the build on a warning whatever
+// its source, including a preset added later whose severities nobody re-read.
 /** The type-aware lint layer, which catches what a syntax-only linter cannot. */
 export const eslint = (context: Context): GateResult =>
-  fromRun(runNode(resolveTool('eslint'), ['.'], { cwd: context.root }), 'ESLint reports no defect')
+  fromRun(
+    runNode(resolveTool('eslint'), ['.', '--max-warnings=0'], { cwd: context.root }),
+    'ESLint reports no defect',
+  )
 
 // `--max-warnings=0` because the shipped config asks Stylelint to report a descriptionless, needless, or
 // wrongly scoped disable, and Stylelint reports those at warning severity. A warning severity does not
