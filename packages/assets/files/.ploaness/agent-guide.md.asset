@@ -34,6 +34,13 @@ ploaness governs all of the following domains:
   vulnerability gate through `pnpm.auditConfig`. A setting may make the harness stricter and never
   looser: a declared source root is added to the shipped ones rather than replacing them, and a bundle
   budget larger than the shipped ceiling is ignored.
+- **The two settings no check can verify:** `ploaness.pretest` and `ploaness.testWrapper` are arbitrary
+  argv, and a wrapper that swallows its child's exit code is indistinguishable from one that does not
+  until it runs. So the rule is stated here rather than enforced. The wrapper exists to put a database
+  in front of the suite and nothing else: it passes the child's exit code through unchanged, it does not
+  retry, it does not filter output, and it does not decide what runs. A pretest command provisions;
+  it does not edit the tree being verified. Either one used to turn a red run green is a bypass, and the
+  fact that no gate reports it is the reason it is written down.
 - **Repository files:** managed, seeded, and forbidden paths, and an unchanged committable tree during
   verification.
 - **Source:** formatting, fast lint, type-aware lint, strict type checking, type coverage, typography,

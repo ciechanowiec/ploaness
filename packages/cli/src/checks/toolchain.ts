@@ -99,6 +99,13 @@ export const architecture = (context: Context): GateResult =>
 
 // Roles with no hand-written type surface to measure: framework glue, generated files, views, and
 // configuration. Measuring them would dilute the score rather than sharpen it.
+//
+// This list must never become empty, for a reason beyond what it names. type-coverage also reads a
+// `typeCoverage` key from the consumer's package.json, which ploaness does not police - and does not
+// need to, because a CLI `--ignore-files` REPLACES that key's `ignoreFiles` rather than merging with
+// it. Measured: with these flags the score is identical whether or not a consumer declares
+// `typeCoverage.ignoreFiles: ["src/**", "scripts/**"]`. Passing no `--ignore-files` would hand the
+// consumer that key back, which is a scope narrowing the harness is supposed to refuse.
 const TYPE_COVERAGE_IGNORE: readonly string[] = [
   '.next/**',
   'src/app/**',
