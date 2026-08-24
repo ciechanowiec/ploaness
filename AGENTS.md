@@ -81,6 +81,22 @@ though it returned data, and `.filter(fn)` over `git ls-files` crashed on a syml
 Do not clear a new finding with a suppression while the budget is the thing standing between this
 repository and the ceiling. `ploaness gate suppressions` reports where it stands.
 
+### Test code and the two measurements it is not held to
+
+Test code passes the same static-analysis checks as production code: tsc at full strictness, every
+ESLint rule, and the coverage floors. Two measurements are deliberately not applied to it, each for a
+reason about what the measurement means rather than about convenience.
+
+Type coverage, at `--strict`, counts every type assertion as uncovered - and a test exists to construct
+inputs the production types cannot express. A Payload access predicate takes a full `PayloadRequest`, so
+asserting a partial one is the correct way to test the predicate; reaching 100% would mean building
+framework objects nobody reads. The bare-number ban is off in tests for the same kind of reason: a
+test's expected value IS its specification, and naming it moves the specification away from the
+assertion that reads it.
+
+Everything else that was relaxed for tests has been turned back on, including the size caps, the
+explicitness rules, and the immutability rules.
+
 ### Roles this repository declares
 
 The `ploaness` key of `package.json` carries two exclusions, each a role rather than a convenience:

@@ -210,8 +210,7 @@ xref:#default-verification[] runs the following 30 gates.
 | No analyzer setting carves out a path that no longer exists.
 
 | [[secrets-gate]]`secrets`
-| gitleaks over the git history and the tracked tree, on the tool's own rules plus the declared
-  `secretAllowlist`.
+| gitleaks over the git history, on the tool's own rules plus the declared `secretAllowlist`.
 
 | `licenses`
 | The license of every dependency sits inside the allowlist.

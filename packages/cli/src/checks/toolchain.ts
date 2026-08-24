@@ -106,6 +106,13 @@ const TYPE_COVERAGE_IGNORE: readonly string[] = [
   'src/payload.config.ts',
   'src/payload-types.ts',
   'src/seed/**',
+  // Test code is held to tsc at full strictness, to every ESLint rule, and to the coverage floors -
+  // the static-analysis checks the standard means. Type coverage is a different measurement: with
+  // `--strict` it counts every type assertion as uncovered, and a test's job is to construct inputs
+  // the production types cannot express. A Payload access predicate takes a full PayloadRequest, so
+  // asserting a partial one is the correct way to test the predicate, and the only way to reach 100%
+  // here would be to build framework objects nobody reads. This is a file role, not a convenience.
+  'tests/**',
   '*.config.ts',
   '*.config.mts',
   '*.config.mjs',

@@ -11,7 +11,6 @@ import {
   requiredBiomeFiles,
 } from '@ploaness/governance'
 import { hasSeededFile } from '../checks/assets.js'
-import { hasWrittenDenyRules } from '../checks/generated.js'
 import type { Context } from '../context.js'
 import { sync } from './sync.js'
 
@@ -84,11 +83,7 @@ export const init = (context: Context): number => {
   for (const note of notes) {
     console.info(`  ${note}`)
   }
-  // The runtime settings file is merged, never managed: a project legitimately owns hooks, env, and
-  // model keys in it, and JSON carries no comment syntax for a managed-section marker.
-  if (hasWrittenDenyRules(context)) {
-    console.info('  wrote .claude/settings.json (write denial for the generated Payload artefacts)')
-  }
+  // `sync` writes the managed files and merges the write denial into the runtime settings.
   sync(context)
   console.info(
     '\nReview every change, then run `pnpm install` followed by `ploaness verify`. A pre-existing' +

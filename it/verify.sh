@@ -260,6 +260,15 @@ edit_json "$scratch/fail-generated-denial/.claude/settings.json" permissions.den
 commit_case fail-generated-denial 'feat(fixture): drop the generated-file write denial' "$CONFORMING_BODY"
 expect fail-generated-denial generated-denial FAIL 'no write denial'
 
+# The finding tells the project to run `ploaness sync`, so sync must actually be able to repair it. It
+# could not: the write denial was written by `init` alone, and a project following the advice went round
+# a loop. This case pins the repair to the advice.
+new_case pass-denial-repaired
+edit_json "$scratch/pass-denial-repaired/.claude/settings.json" permissions.deny '[]'
+(cd "$scratch/pass-denial-repaired" && ./node_modules/.bin/ploaness sync >/dev/null 2>&1)
+commit_case pass-denial-repaired 'feat(fixture): let sync repair the write denial' "$CONFORMING_BODY"
+expect pass-denial-repaired generated-denial PASS
+
 # Text the project owns below the block is not ploaness's to judge, so adding some must not fail.
 new_case pass-section-project-text
 printf '\n## Project notes\n\nThe project owns everything below the managed block.\n' \
