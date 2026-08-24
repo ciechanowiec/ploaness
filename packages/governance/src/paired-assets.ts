@@ -17,11 +17,20 @@ const ASSET_DIRECTORY: string = 'files'
 /** The suffix npm forces on a packed body: a packed `.npmrc` is stripped and a `.gitignore` renamed. */
 const ASSET_SUFFIX: string = '.asset'
 
-// `.ploaness/agent-guide.md` maps the guideline onto the harness for a consumer. ploaness is not a
-// consumer of itself - it has no `.ploaness/` directory - so the body is authored where it is shipped
-// and there is no root file to pair it with. A SECTION entry is likewise unpaired: its body is the
-// managed block, not a copy of any whole file.
-const ASSET_AUTHORED_PATHS: ReadonlySet<string> = new Set<string>(['.ploaness/agent-guide.md'])
+// Two paths are authored where they are shipped rather than copied from a root file, both because
+// ploaness is not a consumer of itself.
+//
+// `.ploaness/agent-guide.md` maps the guideline onto the harness for a consumer, and ploaness has no
+// `.ploaness/` directory. `tests/e2e/a11y.e2e.spec.ts` drives a Payload application through a browser,
+// and ploaness is a library with no application to drive; pairing it with a root file would mean
+// keeping a Next.js project in this repository for one spec to compile against. What proves that body
+// instead is the third verification leg AGENTS.md already requires: a real consumer runs it.
+//
+// A SECTION entry is likewise unpaired: its body is the managed block, not a copy of any whole file.
+const ASSET_AUTHORED_PATHS: ReadonlySet<string> = new Set<string>([
+  '.ploaness/agent-guide.md',
+  'tests/e2e/a11y.e2e.spec.ts',
+])
 
 /** A root file and the shipped body generated from it. */
 export interface PairedAsset {

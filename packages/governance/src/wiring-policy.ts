@@ -31,6 +31,11 @@ export interface WiringInputs {
   readonly eslintConfig: string | undefined
   /** The project's vitest config. The tests gate runs the project's vitest against it. */
   readonly vitestConfig: string | undefined
+  /**
+   * The project's Playwright config. Required rather than optional: ploaness ships the accessibility
+   * sweep as a managed spec, so every project has an end-to-end suite and something must run it.
+   */
+  readonly playwrightConfig: string | undefined
   /** The contents of pnpm-workspace.yaml, or an empty string when the project ships none. */
   readonly workspaceFile: string
   /** Every exclusion the project declared, so the gate can refuse one that narrows by convenience. */
@@ -503,6 +508,7 @@ export const findWiringViolations = (inputs: WiringInputs): readonly WiringViola
     ),
     ...checkReexport(inputs.eslintConfig, 'eslint.config.mjs', 'ploaness/eslint'),
     ...checkReexport(inputs.vitestConfig, 'vitest.config.mts', 'ploaness/vitest'),
+    ...checkReexport(inputs.playwrightConfig, 'playwright.config.ts', 'ploaness/playwright'),
     ...checkBiome(inputs.biomeConfig, inputs.requiredBiomeFiles),
     ...checkTsconfig(inputs.tsconfig),
     ...checkWorkflows(inputs.workflows),

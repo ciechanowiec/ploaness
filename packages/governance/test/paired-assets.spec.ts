@@ -11,6 +11,7 @@ import {
 const catalogue: readonly ManagedAsset[] = [
   { path: 'README-guideline-software-project.adoc', disposition: 'PINNED' },
   { path: '.ploaness/agent-guide.md', disposition: 'PINNED' },
+  { path: 'tests/e2e/a11y.e2e.spec.ts', disposition: 'PINNED' },
   { path: 'AGENTS.md', disposition: 'SECTION' },
   { path: '.gitignore', disposition: 'SEED' },
   { path: '.gitleaks.toml', disposition: 'FORBIDDEN' },
@@ -45,6 +46,12 @@ describe('pairedAssets', () => {
 
   it('leaves a path ploaness authors directly as an asset unpaired', () => {
     expect(pathsOf(pairedAssets(catalogue))).not.toContain('.ploaness/agent-guide.md')
+  })
+
+  // ploaness is a library and has no Payload application for the sweep to compile against, so there is
+  // no root file to mirror. A real consumer running it is what proves that body instead.
+  it('leaves the managed accessibility sweep unpaired', () => {
+    expect(pathsOf(pairedAssets(catalogue))).not.toContain('tests/e2e/a11y.e2e.spec.ts')
   })
 
   it('pairs a newly managed path by default, so forgetting to mirror one cannot pass', () => {

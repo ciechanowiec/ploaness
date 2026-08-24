@@ -19,6 +19,12 @@ CLAUDE.md	PINNED
 .nvmrc	PINNED
 .npmrc	PINNED
 .gitignore	SEED
+
+# An executable spec rather than a configuration, and the only one ploaness ships. Static rules cannot
+# see a contrast defect that appears only under :hover or :focus, nor a page nobody remembered to add to
+# a scan list, so this one check has to run rather than read. It is PINNED for the same reason every
+# other rule is the harness's: a check the project can edit is not a rule.
+tests/e2e/a11y.e2e.spec.ts	PINNED
 .stylelintrc.json	FORBIDDEN
 .dependency-cruiser.json	FORBIDDEN
 knip.json	FORBIDDEN

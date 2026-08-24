@@ -51,7 +51,9 @@ directory and never runs `preflight`, so every gate whose rule is about a reposi
 about Payload runs here unchanged. `scripts/verify.sh` is that list, and `pnpm run verify` runs it:
 `conventions`, `config-refs`, `docs`, `skills`, `image-assets`, `licenses`, `deps`, `actions`, `secrets`,
 `require-full-history`, `commit-history`, and `linear-history`, around the build, the type check, the
-lint, and the unit suite. A gate that ploaness cannot turn on itself is a gate this repository is not
+lint, and the unit suite. It also pipes every TypeScript asset body back through Biome under the path
+it will occupy in a consumer, because the `.asset` suffix hides the language from every tool that would
+otherwise read it and the one shipped body that is code once reached a consumer unformatted. A gate that ploaness cannot turn on itself is a gate this repository is not
 held to, so prefer adding one here over asserting that it cannot apply.
 
 A tracked-tree fingerprint brackets the whole run. A verification that rewrote a source file would
@@ -97,6 +99,25 @@ assertion that reads it.
 Everything else that was relaxed for tests has been turned back on, including the size caps, the
 explicitness rules, and the immutability rules.
 
+### The one asset that is executable
+
+Every other managed file is a configuration, read by a tool. The accessibility sweep, whose body is
+`packages/assets/files/tests/e2e/a11y.e2e.spec.ts.asset`, is a spec that runs, and it is managed for the
+same reason a rule is: a check a project can edit is not a rule. Three consequences follow, and each is
+handled where it arises rather than waived.
+
+A consumer cannot remove a suppression inside a file it does not own, so the suppressions gate leaves
+managed paths out of both the count and the line total. Counting them would spend a fifth of a small
+project's whole allowance on a decision the project never made.
+
+`ploaness` is not a Payload application and has no browser to drive, so this body has no root file to
+pair with and is listed in `ASSET_AUTHORED_PATHS`. Nothing here compiles it. What proves it is the third
+verification leg: a real consumer runs it, which is the reason that leg exists.
+
+Shipping a spec makes the end-to-end suite mandatory, so `playwright.config.ts` joined the files the
+wiring gate requires as a bare re-export, and the `e2e` gate no longer reports a pass for a project that
+declares no suite.
+
 ### Roles this repository declares
 
 The `ploaness` key of `package.json` carries two exclusions, each a role rather than a convenience:
@@ -105,7 +126,10 @@ The `ploaness` key of `package.json` carries two exclusions, each a role rather 
   whose content *is* the banned character. It is the same self-reference `banned-typography.ts` solves
   by naming characters as code points.
 - The JavaScript allowlist covers the analyzer configs and package entry shims. An ESLint flat config
-  and a `bin` shim are loaded as JavaScript by the tools that read them and cannot be TypeScript.
+  and a `bin` shim are loaded as JavaScript by the tools that read them and cannot be TypeScript. Both
+  patterns name the two directories rather than listing filenames: an enumeration is a second copy of
+  what the directory already contains, and shipping the Playwright entry point failed the conventions
+  gate the moment the file was tracked because the list had not been extended with it.
 
 ## Coding Style & Naming Conventions
 

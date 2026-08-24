@@ -7,6 +7,8 @@
     "payload": "3.88.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.62.1",
     "@vitest/coverage-v8": "4.1.11",
     "ploaness": "1.0.0",
     "typescript": "6.0.3",

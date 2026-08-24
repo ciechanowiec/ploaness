@@ -1,0 +1,176 @@
+// ploaness owns this file. Edit the harness, not this copy: `ploaness verify` compares it byte for byte
+// and `ploaness sync` restores it. The one thing a project declares about it - route prefixes the crawl
+// must not follow - goes under the `ploaness` key of package.json, as `accessibilitySkipRoutes`.
+//
+// Accessibility has to stay default-safe as a site grows. Rather than a hand-maintained list of pages to
+// scan, which someone will eventually forget to extend, this sweep crawls every public route reachable
+// from the home page and runs axe on each: in its default state, and with every interactive control
+// driven into :hover and :focus. State-only contrast defects are invisible to a default scan and to any
+// static rule, which is the half of accessibility a linter can never reach. A page linked anywhere on
+// the site is therefore checked the moment it exists, with no test to add. Per-page content and
+// behaviour assertions still belong in the project's own feature specs.
+import AxeBuilder from '@axe-core/playwright'
+import { expect, type Locator, type Page, type Response, test } from '@playwright/test'
+import { SKIPPED_ROUTE_PREFIXES } from 'ploaness/a11y'
+
+// Taken from the public surface of the builder this spec already imports, rather than from `axe-core`,
+// which is a transitive package no project declares.
+type AxeResults = Awaited<ReturnType<AxeBuilder['analyze']>>
+
+// Safety valve so a runaway crawl cannot hang CI. Hitting it is reported, never silent.
+const MAX_ROUTES: number = 50
+
+// The sweep scans every interactive control in three states on every route, so its cost grows with the
+// site. The budget is per discovered route, bounded by MAX_ROUTES, so it scales as pages are added
+// instead of flaking against a fixed timeout.
+const MILLISECONDS_PER_ROUTE: number = 50_000
+
+// Scan the site's semantic regions - chrome and content alike - but not a framework's dev-only overlay,
+// which lives in a separate portal outside them and would otherwise raise findings about the framework.
+// Only regions actually present are included, so a page carrying just <main> scans cleanly rather than
+// erroring on a missing include target.
+const REGIONS: readonly string[] = ['header', 'main', 'footer']
+
+// A path ending in an extension is a static asset, not a page: axe has nothing to say about it and
+// `goto` would download it.
+const STATIC_ASSET: RegExp = /\.[a-z\d]+$/i
+
+const scopedAxe = async (page: Page): Promise<AxeBuilder> => {
+  const builder: AxeBuilder = new AxeBuilder({ page })
+  for (const region of REGIONS) {
+    if ((await page.locator(region).count()) > 0) {
+      builder.include(region)
+    }
+  }
+  return builder
+}
+
+const parseUrl = (href: string, origin: string): URL | null => {
+  try {
+    return new URL(href, origin)
+  } catch {
+    return null
+  }
+}
+
+// Reduce an href to a same-origin page path, or null to skip it: an external link, a route the project
+// declared out of scope, a static asset, or a bare anchor resolving to a page already queued.
+const toRoute = (href: string, origin: string): string | null => {
+  const url: URL | null = parseUrl(href, origin)
+  if (url?.origin !== origin) {
+    return null
+  }
+  const routePath: string = url.pathname
+  const isSkipped: boolean = SKIPPED_ROUTE_PREFIXES.some((prefix: string): boolean =>
+    routePath.startsWith(prefix),
+  )
+  return isSkipped || STATIC_ASSET.test(routePath) ? null : routePath
+}
+
+/* eslint-disable functional/immutable-data -- a breadth-first crawl over a live site needs a frontier
+   that shrinks as it is read and a visited set that grows; both are confined to discoverRoutes below
+   and escape only as the list it returns */
+const enqueueRoutes = (
+  hrefs: readonly string[],
+  origin: string,
+  seen: Set<string>,
+  queue: string[],
+): void => {
+  for (const href of hrefs) {
+    const route: string | null = toRoute(href, origin)
+    if (route !== null && !seen.has(route)) {
+      seen.add(route)
+      queue.push(route)
+    }
+  }
+}
+
+const discoverRoutes = async (page: Page, origin: string): Promise<readonly string[]> => {
+  const seen: Set<string> = new Set<string>(['/'])
+  const reachable: string[] = []
+  const queue: string[] = ['/']
+  while (queue.length > 0 && seen.size < MAX_ROUTES) {
+    const routePath: string | undefined = queue.shift()
+    if (routePath === undefined) {
+      break
+    }
+    const response: Response | null = await page.goto(`${origin}${routePath}`)
+    if (response?.ok() !== true) {
+      // A link can point at a not-yet-built route; it answers outside the layout, so skip it entirely
+      // rather than scanning a page the project never rendered.
+      continue
+    }
+    reachable.push(routePath)
+    const hrefs: readonly string[] = await page
+      .locator('a[href]')
+      .evaluateAll((anchors: readonly Element[]): readonly string[] =>
+        anchors.map((anchor: Element): string => anchor.getAttribute('href') ?? ''),
+      )
+    enqueueRoutes(hrefs, origin, seen, queue)
+  }
+  return reachable
+}
+/* eslint-enable functional/immutable-data -- the crawl above is the only place this spec mutates */
+
+const expectNoContrastViolation = async (page: Page, label: string): Promise<void> => {
+  const builder: AxeBuilder = await scopedAxe(page)
+  const scan: AxeResults = await builder.withRules(['color-contrast']).analyze()
+  expect(scan.violations, label).toEqual([])
+}
+
+// The site chrome renders from one global stylesheet identically on every page, so its hover and focus
+// contrast is the same wherever it appears; main holds the per-page content whose state contrast can
+// differ. Scanning these scopes separately covers the chrome once and the content per route, instead of
+// re-scanning identical chrome on every page - which on a content-rich site is thousands of redundant
+// axe runs that blow the timeout and exhaust the tab.
+const CHROME_CONTROLS: string = 'header a, header button, footer a, footer button'
+const MAIN_CONTROLS: string = 'main a, main button'
+
+const scanInteractiveStates = async (
+  page: Page,
+  label: string,
+  selector: string,
+): Promise<void> => {
+  const controls: readonly Locator[] = await page.locator(selector).all()
+  for (const control of controls) {
+    await control.hover()
+    await expectNoContrastViolation(page, `hover contrast on ${label}`)
+    await control.focus()
+    await expectNoContrastViolation(page, `focus contrast on ${label}`)
+  }
+}
+
+const scanRoute = async (page: Page, origin: string, route: string): Promise<void> => {
+  await page.goto(`${origin}${route}`)
+  const builder: AxeBuilder = await scopedAxe(page)
+  const defaultScan: AxeResults = await builder.analyze()
+  expect(defaultScan.violations, `default-state a11y on ${route}`).toEqual([])
+  await scanInteractiveStates(page, route, MAIN_CONTROLS)
+}
+
+test.describe('Accessibility sweep', () => {
+  test('every reachable public page passes axe in default, hover, and focus states', async ({
+    page,
+    baseURL,
+  }) => {
+    const origin: string = baseURL ?? ''
+    expect(origin, 'the ploaness Playwright config must declare a server URL').not.toEqual('')
+    const routes: readonly string[] = await discoverRoutes(page, origin)
+    expect(routes.length, 'no public routes were discovered').toBeGreaterThan(0)
+    test.setTimeout(routes.length * MILLISECONDS_PER_ROUTE)
+    if (routes.length >= MAX_ROUTES) {
+      console.warn(
+        `a11y sweep hit the ${String(MAX_ROUTES)}-route cap; remaining pages not scanned`,
+      )
+    }
+    // The chrome is identical site-wide, so sweep its interactive states once, on the first route.
+    const [first] = routes
+    if (first !== undefined) {
+      await page.goto(`${origin}${first}`)
+      await scanInteractiveStates(page, 'site chrome', CHROME_CONTROLS)
+    }
+    for (const route of routes) {
+      await scanRoute(page, origin, route)
+    }
+  })
+})

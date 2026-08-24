@@ -70,12 +70,16 @@ const declaredBy = (packageName: string): Record<string, unknown> => {
     : {}
 }
 
-// The packages every project's own specs import, so every project must declare them. The rest of the
-// pinned set is matched when declared and never forced on a project that has no use for it.
+// The packages a project's specs import, so every project must declare them. The rest of the pinned set
+// is matched when declared and never forced on a project that has no use for it. The two Playwright
+// packages are here because ploaness now ships a spec that imports them: the managed accessibility
+// sweep is not optional, so neither is resolving what it imports.
 const REQUIRED_TEST_LIBRARIES: ReadonlySet<string> = new Set<string>([
   'vitest',
   '@vitest/coverage-v8',
   'typescript',
+  '@playwright/test',
+  '@axe-core/playwright',
 ])
 
 const expectedTestLibraries = (): Readonly<Record<string, string>> => {
@@ -97,6 +101,7 @@ export const wiring = (context: Context): GateResult => {
     packageJson: context.packageJson,
     eslintConfig: readText(path.join(context.root, 'eslint.config.mjs')),
     vitestConfig: readText(path.join(context.root, 'vitest.config.mts')),
+    playwrightConfig: readText(path.join(context.root, 'playwright.config.ts')),
     workspaceFile: readText(path.join(context.root, 'pnpm-workspace.yaml')) ?? '',
     declaredExclusions: context.settings.declaredExclusions,
     isExistingPath: (relativePath: string): boolean =>

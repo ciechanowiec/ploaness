@@ -96,6 +96,28 @@ export const assets = (context: Context): GateResult => {
     : passed(`${String(parsed.assets.length)} managed path(s) match the catalogue`)
 }
 
+/**
+ * The paths ploaness owns in this working tree, minus any the project has taken over.
+ *
+ * A gate that measures the project's own code asks for this, because a file the project cannot edit is
+ * not the project's to answer for. The managed accessibility sweep carries a scoped lint exemption its
+ * crawl needs, and counting that against a consumer's suppression budget would spend a fifth of a small
+ * project's allowance on a decision the project did not make and cannot undo.
+ * @param context the resolved project environment.
+ * @returns every managed path ploaness materialises, as repository-relative paths.
+ */
+export const managedPaths = (context: Context): ReadonlySet<string> => {
+  const owned: ReadonlySet<string> = new Set(unmanagedPaths(context))
+  return new Set(
+    catalogue()
+      .assets.filter(
+        (asset: ManagedAsset): boolean =>
+          asset.disposition !== 'FORBIDDEN' && !owned.has(asset.path),
+      )
+      .map((asset: ManagedAsset): string => asset.path),
+  )
+}
+
 /** One change `ploaness sync` made to the working tree. */
 export interface SyncChange {
   readonly path: string

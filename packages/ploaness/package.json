@@ -22,6 +22,14 @@
       "types": "./vitest.d.ts",
       "default": "./vitest.js"
     },
+    "./playwright": {
+      "types": "./playwright.d.ts",
+      "default": "./playwright.js"
+    },
+    "./a11y": {
+      "types": "./a11y.d.ts",
+      "default": "./a11y.js"
+    },
     "./biome": "./biome.json",
     "./tsconfig": "./tsconfig.json",
     "./package.json": "./package.json",
@@ -31,10 +39,14 @@
     "ploaness": "./bin.js"
   },
   "files": [
+    "a11y.d.ts",
+    "a11y.js",
     "bin.js",
     "biome.json",
     "eslint.d.ts",
     "eslint.js",
+    "playwright.d.ts",
+    "playwright.js",
     "tsconfig.json",
     "vitest.d.ts",
     "vitest.js"

@@ -14,14 +14,19 @@
     "./dependency-cruiser": "./dependency-cruiser.json",
     "./knip": "./knip.json",
     "./package.json": "./package.json",
-    "./eslint-core": "./eslint-core.js"
+    "./eslint-core": "./eslint-core.js",
+    "./playwright": "./playwright.js",
+    "./a11y": "./a11y.js"
   },
   "files": [
+    "a11y.js",
     "biome.json",
     "dependency-cruiser.json",
     "eslint-core.js",
     "eslint.js",
     "knip.json",
+    "playwright.js",
+    "project-settings.js",
     "stylelint.json",
     "tsconfig.json",
     "vitest.js"

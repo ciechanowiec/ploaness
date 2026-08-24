@@ -27,7 +27,8 @@ ploaness governs all of the following domains:
 - **Harness wiring:** the scripts, CI invocation, tool-config inheritance, and test-library
   versions through which the project installs ploaness. A project that rewrites `verify`, appends rules
   after the harness ESLint config, redeclares a Biome section, overrides a compiler option, replaces the
-  vitest config, or drops extended verification out of CI fails this domain rather than passing quietly.
+  vitest or Playwright config, or drops extended verification out of CI fails this domain rather than
+  passing quietly.
   So does one that runs verification with `--enforce=false`, tolerates its failure with
   `continue-on-error`, redefines a pinned version through an install override, or silences the
   vulnerability gate through `pnpm.auditConfig`. A setting may make the harness stricter and never
@@ -55,9 +56,17 @@ ploaness governs all of the following domains:
   it lets every package in the resolved set execute code at install time. A vulnerability is resolved by upgrading the
   package. Record an exception only when no upgrade exists, and record it in full: the advisory, why
   the project cannot reach it, and the date it was added. An exception that suppresses nothing fails.
+- **Accessibility:** a sweep ploaness pins into `tests/e2e/a11y.e2e.spec.ts` crawls every public route
+  reachable from the home page and runs axe on each, in its default state and with every interactive
+  control driven into `:hover` and `:focus`. It is a managed file: edit it and the assets gate reports
+  drift. What the project declares about it is the origin (`ploaness.serverUrl`) and any further route
+  prefix the crawl must not follow (`ploaness.accessibilitySkipRoutes`, which adds to `/admin` and
+  `/api` rather than replacing them). A finding is a defect in the page, never in the sweep: repair the
+  markup or the contrast rather than narrowing what is scanned.
 - **Suppressions:** the suppression count is capped against the size of the source. Every run reports
   the count and the distance left. When the ceiling is reached, the way to spend a suppression is to
-  remove another one - not to raise the ceiling, which no setting can do.
+  remove another one - not to raise the ceiling, which no setting can do. A suppression inside a managed
+  file is ploaness's and is not counted, so it is also not yours to remove.
 - **Assets and documentation:** image integrity, documentation references, config references, and
   the agent skill manifest.
 - **Repository assurance:** secret scanning, container and workflow linting, test execution with

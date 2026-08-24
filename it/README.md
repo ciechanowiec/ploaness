@@ -44,6 +44,8 @@ needle from the rule name - `no-unbounded-find`, not merely `payload-rules`.
 | `fail-report-only-ci` | `--enforce=false` added to the CI invocation | `wiring`, naming `not a pass` |
 | `fail-vitest-config-swapped` | `vitest.config.mts` replaced with a local config | `wiring`, naming the file |
 | `fail-pinned-override` | an override redefining a version ploaness pins | `wiring`, naming `pins` |
+| `fail-playwright-config-swapped` | `playwright.config.ts` replaced with a local config | `wiring`, naming the file |
+| `pass-managed-suppression` | `maxSuppressions: 0` with only the managed sweep's suppression present | nothing; a managed file's suppression is not the project's to spend |
 | `pass-section-project-text` | project prose added below the managed block | nothing; the project owns that text |
 
 The two `commit-` cases named above exist because both rules diverged from the governing standard once:

@@ -17,6 +17,7 @@ import {
 } from '@ploaness/governance'
 import { type Context, trackedFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
+import { managedPaths } from './assets.js'
 
 interface ScannedFile {
   readonly file: string
@@ -29,11 +30,16 @@ const isUnderSourceRoots = (file: string, sourceRoots: readonly string[]): boole
 /** Count suppressions and source lines across the project's own code. */
 export const suppressions = (context: Context): GateResult => {
   const excluded: readonly string[] = context.settings.typographyExclusions
+  // A managed file is ploaness's, byte for byte, and the project can neither remove a suppression
+  // inside it nor be asked to justify one. Its lines are left out of the denominator for the same
+  // reason: a ceiling earned by code the project did not write would be an allowance, not a measure.
+  const managed: ReadonlySet<string> = managedPaths(context)
   // A tracked path is not always a regular file: a symlink and a submodule gitlink both appear here.
   const files: readonly string[] = trackedFiles(context.root).filter((file: string): boolean => {
     const full: string = path.join(context.root, file)
     return (
       isUnderSourceRoots(file, context.settings.sourceRoots) &&
+      !managed.has(file) &&
       isGovernedCode(file, excluded) &&
       existsSync(full) &&
       statSync(full).isFile()

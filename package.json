@@ -47,11 +47,11 @@
     ],
     "javascriptAllowlist": [
       {
-        "pattern": "^packages/config/(eslint|eslint-core|vitest)\\.js$",
+        "pattern": "^packages/config/[a-z0-9-]+\\.js$",
         "reason": "analyzer configuration, loaded as JavaScript by the tools that read it"
       },
       {
-        "pattern": "^packages/ploaness/(bin|eslint|vitest)\\.js$",
+        "pattern": "^packages/ploaness/[a-z0-9-]+\\.js$",
         "reason": "package entry shims, loaded as JavaScript by the resolver"
       },
       {

@@ -58,6 +58,16 @@ export interface Settings {
   /** An argv prefix wrapping the test runner, for a project that runs its suite against a scratch database. */
   readonly testWrapper: readonly string[]
   /**
+   * The origin the end-to-end suite drives. The port a project serves on is a fact ploaness cannot
+   * know, and naming it weakens no rule: the suite, its browser and its assertions are unchanged.
+   */
+  readonly serverUrl: string
+  /**
+   * Route prefixes the accessibility crawl must not follow, on top of the ones every Payload project
+   * carries. A project that mounts its admin panel elsewhere has to say so or the crawl walks into it.
+   */
+  readonly accessibilitySkipRoutes: readonly string[]
+  /**
    * Placeholder environment supplied to the gates that must IMPORT the project to analyse it. A Payload
    * config validates `process.env` at module scope, so a purely static analyser cannot load it in a bare
    * shell. These values are never connected to and never read as real configuration; they only let the
@@ -94,6 +104,13 @@ const DEFAULT_JAVASCRIPT_ALLOWLIST: readonly string[] = [
 ]
 
 const DEFAULT_SOURCE_ROOTS: readonly string[] = ['src', 'tests', 'scripts']
+
+const DEFAULT_SERVER_URL: string = 'http://localhost:3000'
+
+// Payload's admin panel and REST API. Neither is a public page, both are reachable from a link on one,
+// and axe run against the admin bundle judges Payload's markup rather than the project's. A project
+// that moved either route adds its own; no project may take these away.
+const DEFAULT_SKIPPED_ROUTES: readonly string[] = ['/admin', '/api']
 
 // Roles that carry no unit-test seam in any Payload application: framework glue verified end to end,
 // generated files, and operational data scripts. A project adds to this; it never shrinks it.
@@ -259,6 +276,10 @@ export const readSettings = (packageJson: unknown): Settings => {
     raw['coverageExclude'],
     'coverageExclude',
   )
+  const declaredRoutes: readonly DeclaredExclusion[] = asDeclaredExclusions(
+    raw['accessibilitySkipRoutes'],
+    'accessibilitySkipRoutes',
+  )
   return {
     // Additive, like every other list field. Replacing the default let a project declare `["src"]` and
     // silently drop `tests` and `scripts` from the conventions, payload-rules, suppressions, css and
@@ -268,7 +289,12 @@ export const readSettings = (packageJson: unknown): Settings => {
     ],
     unmanagedAssets: asUnmanagedAssets(raw['unmanagedAssets']),
     typographyExclusions: [...DEFAULT_TYPOGRAPHY_EXCLUSIONS, ...honoured(declaredTypography)],
-    declaredExclusions: [...declaredTypography, ...declaredJavascript, ...declaredCoverage],
+    declaredExclusions: [
+      ...declaredTypography,
+      ...declaredJavascript,
+      ...declaredCoverage,
+      ...declaredRoutes,
+    ],
     javascriptAllowlist: [...DEFAULT_JAVASCRIPT_ALLOWLIST, ...honoured(declaredJavascript)],
     coverageExclude: [...DEFAULT_COVERAGE_EXCLUDE, ...honoured(declaredCoverage)],
     // Only a stricter budget is honoured. A project could otherwise declare a budget large enough to
@@ -284,6 +310,8 @@ export const readSettings = (packageJson: unknown): Settings => {
     secretAllowlist: asSecretAllowlist(raw['secretAllowlist']),
     pretest: asStringArray(raw['pretest'], []),
     testWrapper: asStringArray(raw['testWrapper'], []),
+    serverUrl: typeof raw['serverUrl'] === 'string' ? raw['serverUrl'] : DEFAULT_SERVER_URL,
+    accessibilitySkipRoutes: [...DEFAULT_SKIPPED_ROUTES, ...honoured(declaredRoutes)],
     analysisEnv: { ...DEFAULT_ANALYSIS_ENV, ...asStringRecord(raw['analysisEnv']) },
   }
 }
@@ -310,7 +338,12 @@ export const findConvenienceExclusions = (
           'an exclusion is granted by file role, so the role must be written down',
       ]
     }
-    return !PATTERN_METACHARACTERS.test(entry.pattern) && isExistingPath(entry.pattern)
+    // A repo-relative path never begins with a slash, so a pattern that does is a URL route rather
+    // than a file and the single-file test has nothing to say about it. Without this a project that
+    // skipped `/media` in the crawl would be refused by a repository that happens to have a `media`
+    // directory, which is a finding about the wrong thing entirely.
+    const isRoute: boolean = entry.pattern.startsWith('/')
+    return !(isRoute || PATTERN_METACHARACTERS.test(entry.pattern)) && isExistingPath(entry.pattern)
       ? [
           `${entry.setting} entry "${entry.pattern}" names one existing file rather than a role; ` +
             'exclude the role that file plays, or test it',

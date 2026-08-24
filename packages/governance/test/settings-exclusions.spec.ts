@@ -51,6 +51,78 @@ describe('findConvenienceExclusions', () => {
     const entries: readonly DeclaredExclusion[] = [entry(), entry({ reason: '' })]
     expect(findConvenienceExclusions(entries, isMissing)).toHaveLength(1)
   })
+
+  // A skipped crawl route is a URL, and a repository that happens to carry a directory of the same name
+  // would otherwise turn a legitimate declaration into a finding about the wrong thing entirely.
+  it('does not judge a route prefix as though it named a file', () => {
+    const route: DeclaredExclusion = entry({
+      setting: 'accessibilitySkipRoutes',
+      pattern: '/media',
+    })
+    expect(findConvenienceExclusions([route], isPresent)).toEqual([])
+  })
+
+  it('still requires a route prefix to state why the crawl skips it', () => {
+    const route: DeclaredExclusion = entry({
+      setting: 'accessibilitySkipRoutes',
+      pattern: '/media',
+      reason: '',
+    })
+    expect(findConvenienceExclusions([route], isPresent)[0]).toContain('states no reason')
+  })
+})
+
+// The accessibility sweep is a managed file, so these two settings are the whole of what a project may
+// say about it. Both must fail closed: a malformed value leaves the crawl scanning more, never less.
+describe('the accessibility sweep settings', () => {
+  it('serves the crawl a default origin when the project declares none', () => {
+    expect(readSettings({}).serverUrl).toBe('http://localhost:3000')
+  })
+
+  it('takes the origin a project declares, which ploaness cannot know', () => {
+    const settings: Settings = readSettings({ ploaness: { serverUrl: 'http://localhost:4000' } })
+    expect(settings.serverUrl).toBe('http://localhost:4000')
+  })
+
+  it('skips the Payload admin panel and REST API without being asked', () => {
+    expect(readSettings({}).accessibilitySkipRoutes).toEqual(['/admin', '/api'])
+  })
+
+  it('adds a declared route prefix to the shipped ones rather than replacing them', () => {
+    const routes: readonly string[] = readSettings({
+      ploaness: {
+        accessibilitySkipRoutes: [
+          { pattern: '/preview', reason: 'requires an authenticated session' },
+        ],
+      },
+    }).accessibilitySkipRoutes
+    expect(routes).toContain('/preview')
+    expect(routes).toContain('/admin')
+  })
+
+  it('cannot drop a shipped route prefix by declaring a narrower list', () => {
+    const routes: readonly string[] = readSettings({
+      ploaness: { accessibilitySkipRoutes: [{ pattern: '/preview', reason: 'authenticated' }] },
+    }).accessibilitySkipRoutes
+    expect(routes).toContain('/api')
+  })
+
+  it('does not honour a route prefix that states no reason', () => {
+    const routes: readonly string[] = readSettings({
+      ploaness: { accessibilitySkipRoutes: ['/preview'] },
+    }).accessibilitySkipRoutes
+    expect(routes).not.toContain('/preview')
+  })
+
+  it('records an unhonoured route prefix, so the wiring gate can report it', () => {
+    const settings: Settings = readSettings({
+      ploaness: { accessibilitySkipRoutes: ['/preview'] },
+    })
+    const settingNames: readonly string[] = settings.declaredExclusions.map(
+      (found: DeclaredExclusion): string => found.setting,
+    )
+    expect(settingNames).toContain('accessibilitySkipRoutes')
+  })
 })
 
 const declare = (value: unknown): Settings => readSettings({ ploaness: { coverageExclude: value } })

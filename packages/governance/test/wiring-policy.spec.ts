@@ -25,6 +25,7 @@ const wiredInputs = (overrides: Record<string, unknown> = {}): WiringInputs => (
   packageJson: WIRED_PACKAGE_JSON,
   eslintConfig: "import ploaness from 'ploaness/eslint'\n\nexport default ploaness\n",
   vitestConfig: "import ploaness from 'ploaness/vitest'\n\nexport default ploaness\n",
+  playwrightConfig: "import ploaness from 'ploaness/playwright'\n\nexport default ploaness\n",
   workspaceFile: '',
   declaredExclusions: [],
   isExistingPath: (): boolean => false,
@@ -301,6 +302,28 @@ describe('the vitest config', () => {
       wiredInputs({ vitestConfig: undefined }),
     ).map((violation: WiringViolation): string => violation.reason)
     expect(reasons.some((reason: string) => reason.includes('missing'))).toBe(true)
+  })
+})
+
+// ploaness ships the accessibility sweep as a managed spec, so the config that runs it is owned the same
+// way the vitest config is: a project that rewrote it could drop `forbidOnly` and pass on one green test.
+describe('the playwright config', () => {
+  it('rejects a config that is not the bare re-export', () => {
+    const playwrightConfig: string =
+      "import { defineConfig } from '@playwright/test'\n\n" +
+      'export default defineConfig({ forbidOnly: false })\n'
+    const locations: readonly string[] = findWiringViolations(
+      wiredInputs({ playwrightConfig }),
+    ).map((violation: WiringViolation): string => violation.location)
+    expect(locations).toContain('playwright.config.ts')
+  })
+
+  // Absent is a defect rather than an opt-out: the sweep is a managed file every project receives.
+  it('reports the file as missing when it is absent', () => {
+    const reasons: readonly string[] = findWiringViolations(
+      wiredInputs({ playwrightConfig: undefined }),
+    ).map((violation: WiringViolation): string => violation.reason)
+    expect(reasons.some((reason: string): boolean => reason.includes('missing'))).toBe(true)
   })
 })
 

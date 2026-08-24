@@ -19,10 +19,10 @@ const ESLINT_STUB: string = `import ploaness from 'ploaness/eslint'
 export default ploaness
 `
 
-// Biome resolves a relative glob against the config that declares it, so the file-selection block has to
 // The indent every JSON file ploaness writes uses, matching the shipped formatter setting.
 const JSON_INDENT: number = 2
 
+// Biome resolves a relative glob against the config that declares it, so the file-selection block has to
 // sit at the project root even though ploaness owns its contents. The wiring gate enforces it verbatim.
 const biomeStub = (sourceRoots: readonly string[]): string =>
   `${JSON.stringify(
@@ -45,11 +45,14 @@ const TSCONFIG_STUB: string = `${JSON.stringify(
 
 const VITEST_STUB: string = `import ploaness from 'ploaness/vitest'\n\nexport default ploaness\n`
 
+const PLAYWRIGHT_STUB: string = `import ploaness from 'ploaness/playwright'\n\nexport default ploaness\n`
+
 const stubs = (context: Context): Readonly<Record<string, string>> => ({
   'eslint.config.mjs': ESLINT_STUB,
   'biome.json': biomeStub(context.settings.sourceRoots),
   'tsconfig.json': TSCONFIG_STUB,
   'vitest.config.mts': VITEST_STUB,
+  'playwright.config.ts': PLAYWRIGHT_STUB,
 })
 
 const patchPackageJson = (context: Context): readonly string[] => {

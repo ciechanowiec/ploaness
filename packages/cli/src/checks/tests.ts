@@ -4,15 +4,7 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { type Context, resolveProjectTool } from '../context.js'
-import {
-  asFindings,
-  failed,
-  fromRun,
-  type GateResult,
-  passed,
-  type RunResult,
-  run,
-} from '../exec.js'
+import { asFindings, failed, fromRun, type GateResult, type RunResult, run } from '../exec.js'
 
 // A Payload suite needs a database before it can boot, and how the project obtains one is a fact ploaness
 // cannot know. The project declares it; the thresholds and the gate itself stay ploaness's.
@@ -84,8 +76,13 @@ export const tests = (context: Context): GateResult =>
 
 /** Run the Playwright end-to-end suite. */
 export const endToEnd = (context: Context): GateResult => {
+  // Not optional, and no longer treated as such. ploaness ships the accessibility sweep as a managed
+  // spec, so a project with no Playwright config is a project whose managed files are missing rather
+  // than one that opted out; reporting a pass here would hide that behind a green gate.
   if (!existsSync(path.join(context.root, 'playwright.config.ts'))) {
-    return passed('the project declares no Playwright suite')
+    return failed('playwright.config.ts is missing, so the end-to-end suite cannot run', [
+      'run `ploaness init` to write it, then `ploaness sync` to materialise the managed specs',
+    ])
   }
   return withPretest(context, (): GateResult => {
     const playwright: string | undefined = resolveProjectToolOrUndefined(

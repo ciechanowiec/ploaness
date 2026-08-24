@@ -346,6 +346,23 @@ edit_json "$scratch/fail-unexplained-exclusion/package.json" ploaness.typography
 commit_case fail-unexplained-exclusion 'feat(fixture): exclude a path without a reason' "$CONFORMING_BODY"
 expect fail-unexplained-exclusion wiring FAIL 'states no reason'
 
+new_case fail-playwright-config-swapped
+printf "import { defineConfig } from '@playwright/test'\n\nexport default defineConfig({ forbidOnly: false })\n" \
+    > "$scratch/fail-playwright-config-swapped/playwright.config.ts"
+commit_case fail-playwright-config-swapped 'feat(fixture): replace the owned playwright config' \
+    "$CONFORMING_BODY"
+expect fail-playwright-config-swapped wiring FAIL 'playwright.config.ts'
+
+# ploaness ships the accessibility sweep as a managed spec, and that spec carries the one scoped lint
+# exemption its crawl needs. A consumer can neither remove it nor be asked to justify it, so it must not
+# spend a budget that on a small project is four or five in total. A ceiling of zero proves the joint:
+# the only suppression in this tree is the one inside the file ploaness owns.
+new_case pass-managed-suppression
+edit_json "$scratch/pass-managed-suppression/package.json" ploaness.maxSuppressions 0
+commit_case pass-managed-suppression 'feat(fixture): forbid every suppression the project owns' \
+    "$CONFORMING_BODY"
+expect pass-managed-suppression suppressions PASS
+
 # Text the project owns below the block is not ploaness's to judge, so adding some must not fail.
 new_case pass-section-project-text
 printf '\n## Project notes\n\nThe project owns everything below the managed block.\n' \
