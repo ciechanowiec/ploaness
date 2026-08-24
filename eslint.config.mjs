@@ -10,6 +10,7 @@ import {
   compose,
   guidelineRules,
   immutabilityBlock,
+  NO_INHERITANCE,
   NO_LITERAL_ASSERTIONS,
   prettierLast,
   typeAwareParsing,
@@ -56,7 +57,10 @@ export default compose(
     files: [SPECS],
     rules: {
       // The literal-assertion ban, which the shipped config applies to a Payload project's tests.
-      'no-restricted-syntax': ['error', ...NO_LITERAL_ASSERTIONS],
+      // `NO_INHERITANCE` is spread in beside it because this key REPLACES the base setting rather than
+      // adding to it, so naming only the assertion selectors here silently disarmed the inheritance ban
+      // in every spec - the exact trap `eslint-core.js` documents.
+      'no-restricted-syntax': [...NO_INHERITANCE, ...NO_LITERAL_ASSERTIONS],
       // A test's expected value IS its specification. Naming it moves the specification away from the
       // assertion that reads it, which makes the test harder to check by eye rather than easier - the
       // opposite of what the bare-number ban exists to achieve. This is a role distinction, not a
