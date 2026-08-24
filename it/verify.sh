@@ -192,7 +192,7 @@ drop_text "$scratch/fail-collection-access/src/collections/Posts.ts" "  access: 
   },
 "
 commit_case fail-collection-access 'feat(fixture): omit the collection access rules' "$CONFORMING_BODY"
-expect fail-collection-access payload-rules FAIL require-collection-access
+expect fail-collection-access payload-rules FAIL require-complete-access
 
 new_case fail-commit-message
 commit_case fail-commit-message 'wip' ''
@@ -309,6 +309,21 @@ node -e '
 ' "$scratch/fail-install-scripts/pnpm-workspace.yaml"
 commit_case fail-install-scripts 'feat(fixture): drop the install-script allowlist' "$CONFORMING_BODY"
 expect fail-install-scripts install-scripts FAIL 'onlyBuiltDependencies'
+
+# Payload fills the missing operations in during sanitisation, so a partial access block is invisible
+# once the app boots. The rule this replaced accepted one operation out of four.
+new_case fail-partial-access
+drop_text "$scratch/fail-partial-access/src/collections/Posts.ts" "    create: (): boolean => false,
+"
+commit_case fail-partial-access 'feat(fixture): leave one operation to the defaults' "$CONFORMING_BODY"
+expect fail-partial-access payload-rules FAIL require-complete-access
+
+# Globals were covered by no rule at all before this.
+new_case fail-global-access
+drop_text "$scratch/fail-global-access/src/globals/Header.ts" "    update: (): boolean => false,
+"
+commit_case fail-global-access 'feat(fixture): leave a global update undeclared' "$CONFORMING_BODY"
+expect fail-global-access payload-rules FAIL require-complete-access
 
 # Text the project owns below the block is not ploaness's to judge, so adding some must not fail.
 new_case pass-section-project-text

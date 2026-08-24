@@ -112,20 +112,66 @@ describe('no-deep-relative-imports', () => {
   })
 })
 
-describe('require-collection-access', () => {
+const COMPLETE_ACCESS: string =
+  'access: { create: admins, read: anyone, update: admins, delete: admins }'
+
+describe('require-complete-access', () => {
   it('flags a collection that declares no access', () => {
     const source: string = "export const Posts: CollectionConfig = { slug: 'posts', fields: [] }"
-    expect(rulesOf(source)).toEqual(['require-collection-access'])
+    expect(rulesOf(source)).toEqual(['require-complete-access'])
   })
 
-  it('accepts a collection that declares access', () => {
-    const source: string =
-      "export const Posts: CollectionConfig = { slug: 'posts', access: { read: () => true }, fields: [] }"
+  it('accepts a collection that decides every operation', () => {
+    const source: string = `export const Posts: CollectionConfig = { slug: 'posts', ${COMPLETE_ACCESS} }`
     expect(rulesOf(source)).toEqual([])
   })
 
-  it('ignores a file that declares no collection', () => {
+  // The rule this replaced checked only that the word `access` appeared somewhere in the file, so a
+  // block deciding one operation out of four passed while Payload filled the rest with its defaults.
+  it('flags a partial access block', () => {
+    const source: string =
+      "export const Posts: CollectionConfig = { slug: 'posts', access: { read: anyone }, fields: [] }"
+    expect(rulesOf(source)).toEqual(['require-complete-access'])
+  })
+
+  it('names the operations that were left to the defaults', () => {
+    const source: string =
+      "export const Posts: CollectionConfig = { slug: 'posts', access: { read: anyone, create: admins } }"
+    expect(findPayloadViolations(source)[0]?.reason).toContain('update, delete')
+  })
+
+  // A field-level access block sits inside `fields`, so it must not be read as the collection's own.
+  it('does not accept a field-level access block in place of the collection one', () => {
+    const source: string = [
+      "export const Users: CollectionConfig = { slug: 'users', fields: [",
+      '  { name: "roles", access: { read: a, create: a, update: a, delete: a } },',
+      '] }',
+    ].join('\n')
+    expect(rulesOf(source)).toEqual(['require-complete-access'])
+  })
+
+  it('ignores a file that declares no config', () => {
     expect(rulesOf('export const value = 1')).toEqual([])
+  })
+})
+
+// Globals were covered by no rule at all: the old check looked for CollectionConfig only.
+describe('require-complete-access on a global', () => {
+  it('flags a global that declares no access', () => {
+    const source: string = "export const Header: GlobalConfig = { slug: 'header', fields: [] }"
+    expect(rulesOf(source)).toEqual(['require-complete-access'])
+  })
+
+  it('accepts a global that decides read and update', () => {
+    const source: string =
+      "export const Header: GlobalConfig = { slug: 'header', access: { read: anyone, update: admins } }"
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it('flags a global that decides only read', () => {
+    const source: string =
+      "export const Header: GlobalConfig = { slug: 'header', access: { read: anyone } }"
+    expect(findPayloadViolations(source)[0]?.reason).toContain('update')
   })
 })
 
@@ -163,7 +209,7 @@ describe('prose is never mistaken for code', () => {
   })
 })
 
-describe('require-collection-access precision', () => {
+describe('require-complete-access precision', () => {
   it('ignores an array of already-defined collections', () => {
     const source: string = 'export const collections: CollectionConfig[] = [Users, Media]'
     expect(rulesOf(source)).toEqual([])
@@ -171,7 +217,7 @@ describe('require-collection-access precision', () => {
 
   it('still flags a real collection definition', () => {
     const source: string = "export const Users: CollectionConfig = { slug: 'users', fields: [] }"
-    expect(rulesOf(source)).toEqual(['require-collection-access'])
+    expect(rulesOf(source)).toEqual(['require-complete-access'])
   })
 })
 
@@ -183,5 +229,78 @@ describe('stripComments', () => {
 
   it('leaves string literals untouched', () => {
     expect(stripComments("const url = 'https://example.com'")).toContain('https://example.com')
+  })
+})
+
+const withAuth = (auth: string): string =>
+  `export const Users: CollectionConfig = { slug: 'users', ${COMPLETE_ACCESS}, auth: ${auth} }`
+
+// Payload locks nothing by default, so an auth collection that says only `auth: true` accepts password
+// guesses at whatever rate a client can manage.
+describe('require-auth-hardening', () => {
+  it('flags the bare enable', () => {
+    expect(rulesOf(withAuth('true'))).toEqual(['require-auth-hardening'])
+  })
+
+  it('accepts a collection that caps attempts and locks the account', () => {
+    expect(rulesOf(withAuth('{ maxLoginAttempts: 5, lockTime: 600 }'))).toEqual([])
+  })
+
+  it('flags an auth block that caps attempts but never locks', () => {
+    expect(findPayloadViolations(withAuth('{ maxLoginAttempts: 5 }'))[0]?.reason).toContain(
+      'lockTime',
+    )
+  })
+
+  it('leaves a collection without auth alone', () => {
+    const source: string = `export const Posts: CollectionConfig = { slug: 'posts', ${COMPLETE_ACCESS} }`
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  // `auth` also appears inside a field's admin config; only the collection's own counts.
+  it('does not read a nested auth key as the one the collection declares', () => {
+    const source: string = [
+      `export const Posts: CollectionConfig = { slug: 'posts', ${COMPLETE_ACCESS},`,
+      '  fields: [{ name: "x", custom: { auth: true } }] }',
+    ].join('\n')
+    expect(rulesOf(source)).toEqual([])
+  })
+})
+
+// A draft is unpublished content, and `?draft=true` serves it to whoever the read rule admits.
+describe('no-anonymous-draft-reads', () => {
+  it('flags a drafts collection whose read is unconditionally true', () => {
+    const source: string = [
+      "export const Posts: CollectionConfig = { slug: 'posts',",
+      '  versions: { drafts: true },',
+      '  access: { create: admins, read: () => true, update: admins, delete: admins } }',
+    ].join('\n')
+    expect(rulesOf(source)).toContain('no-anonymous-draft-reads')
+  })
+
+  it('accepts a drafts collection whose read is delegated to a helper', () => {
+    const source: string = [
+      "export const Posts: CollectionConfig = { slug: 'posts',",
+      '  versions: { drafts: true },',
+      '  access: { create: admins, read: authenticatedOrPublished, update: admins, delete: admins } }',
+    ].join('\n')
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  // Without drafts there is nothing unpublished to leak, so a public read is a decision, not a defect.
+  it('leaves a public read alone when the collection has no drafts', () => {
+    const source: string =
+      "export const Posts: CollectionConfig = { slug: 'posts', " +
+      'access: { create: a, read: () => true, update: a, delete: a } }'
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it('flags a global with drafts enabled and an unconditional read', () => {
+    const source: string = [
+      "export const Header: GlobalConfig = { slug: 'header',",
+      '  versions: { drafts: true },',
+      '  access: { read: () => true, update: admins } }',
+    ].join('\n')
+    expect(rulesOf(source)).toContain('no-anonymous-draft-reads')
   })
 })

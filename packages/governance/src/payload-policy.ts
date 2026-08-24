@@ -164,6 +164,9 @@ const constructAt = (source: string, index: number, output: string): Skipped | u
 
 // `/*`, `*/`, and `//` are each two characters wide.
 const LAST_CHARACTER: number = -1
+const NOT_FOUND: number = -1
+// A key opens the literal or follows a comma, which is what keeps a colon inside a value out of it.
+const TOP_LEVEL_KEY: RegExp = /(?:^|[{,])\s*([a-z_$][\w$]*)\s*:/gi
 const BLOCK_COMMENT_DELIMITER: number = 2
 
 // The needles are literal call expressions such as `payload.find(`, so the dot and the parenthesis must
@@ -410,23 +413,190 @@ const findDeepRelativeImports = (source: string): readonly PayloadViolation[] =>
 // means public read. That is a security decision, so ploaness requires it to be written down rather than
 // arrived at by omission.
 const COLLECTION_CONFIG: RegExp = /:\s*CollectionConfig(?=[=,)\s]|$)/
-const ACCESS_DECLARATION: RegExp = /(?:^|[\s,{])access\s*:/
+const GLOBAL_CONFIG: RegExp = /:\s*GlobalConfig(?=[=,)\s]|$)/
 
-const findUndeclaredAccess = (source: string): readonly PayloadViolation[] => {
-  const marker: number = source.search(COLLECTION_CONFIG)
-  if (marker === -1 || ACCESS_DECLARATION.test(source)) {
+/** The operations a collection must decide for itself rather than inherit. */
+const COLLECTION_OPERATIONS: readonly string[] = ['create', 'read', 'update', 'delete']
+
+/** A global has no create or delete: it exists from the moment it is configured. */
+const GLOBAL_OPERATIONS: readonly string[] = ['read', 'update']
+
+/** One kind of Payload config, and what a complete access block on it looks like. */
+interface ConfigKind {
+  readonly label: string
+  readonly declaration: RegExp
+  readonly operations: readonly string[]
+}
+
+const CONFIG_KINDS: readonly ConfigKind[] = [
+  { label: 'CollectionConfig', declaration: COLLECTION_CONFIG, operations: COLLECTION_OPERATIONS },
+  { label: 'GlobalConfig', declaration: GLOBAL_CONFIG, operations: GLOBAL_OPERATIONS },
+]
+
+// The keys sitting directly inside the object literal that opens after `index`. `topLevelSlice` elides
+// every nested structure, which is what keeps a field-level `access:` from being read as the
+// collection-level one.
+const topLevelKeys = (source: string, index: number): readonly string[] => {
+  const open: number = source.indexOf('{', index)
+  if (open === -1) {
     return []
   }
-  return [
-    {
-      line: lineOf(source, marker),
-      rule: 'require-collection-access',
-      reason:
-        'a CollectionConfig must declare access explicitly; omitting it inherits Payload ' +
-        'defaults, which allow public read',
-    },
-  ]
+  const body: string | undefined = balancedArguments(source, open)
+  if (body === undefined) {
+    return []
+  }
+  return [...topLevelSlice(`{${body}}`).matchAll(TOP_LEVEL_KEY)].map(
+    (match: RegExpExecArray): string => match[1] ?? '',
+  )
 }
+
+// Where a key sits directly inside the outermost object literal, rather than inside something nested
+// in it. Searching the text instead would find a field-level `access` block and read it as the
+// collection's own, which is exactly the omission this rule exists to catch.
+const depthOneKeyIndex = (text: string, key: string): number => {
+  const pattern: RegExp = new RegExp(String.raw`^${key}\s*:`)
+  return scanDelimited<number>(
+    text,
+    0,
+    (found: number, step: ScanStep): Folded<number> =>
+      step.depth === 1 && pattern.test(text.slice(step.index))
+        ? { state: step.index, stop: true }
+        : { state: found, stop: false },
+    NOT_FOUND,
+  )
+}
+
+// The operations declared inside the config's own `access` block, as opposed to any nested one.
+const declaredOperations = (source: string, index: number): readonly string[] => {
+  const open: number = source.indexOf('{', index)
+  if (open === -1) {
+    return []
+  }
+  const body: string | undefined = balancedArguments(source, open)
+  if (body === undefined) {
+    return []
+  }
+  const wrapped: string = `{${body}}`
+  const accessAt: number = depthOneKeyIndex(wrapped, 'access')
+  return accessAt === NOT_FOUND ? [] : topLevelKeys(wrapped, accessAt)
+}
+
+// The raw text of a depth-one key's value, from the colon to the end of the enclosing literal. Callers
+// narrow it further; what matters here is that a nested key of the same name cannot be picked up.
+const depthOneValue = (wrapped: string, key: string): string | undefined => {
+  const at: number = depthOneKeyIndex(wrapped, key)
+  if (at === NOT_FOUND) {
+    return undefined
+  }
+  const colon: number = wrapped.indexOf(':', at)
+  return colon === NOT_FOUND ? undefined : wrapped.slice(colon + 1)
+}
+
+const wrappedBody = (source: string, index: number): string | undefined => {
+  const open: number = source.indexOf('{', index)
+  if (open === NOT_FOUND) {
+    return undefined
+  }
+  const body: string | undefined = balancedArguments(source, open)
+  return body === undefined ? undefined : `{${body}}`
+}
+
+// Payload locks nothing by default: without a login-attempt cap and a lock time, an auth collection
+// accepts guesses at whatever rate a client can make them. `auth: true` is the bare enable, so it is
+// the case this rule most needs to catch.
+const AUTH_HARDENING_KEYS: readonly string[] = ['maxLoginAttempts', 'lockTime']
+
+const findUnhardenedAuth = (source: string): readonly PayloadViolation[] => {
+  const marker: number = source.search(COLLECTION_CONFIG)
+  const wrapped: string | undefined = marker === NOT_FOUND ? undefined : wrappedBody(source, marker)
+  if (wrapped === undefined) {
+    return []
+  }
+  const value: string | undefined = depthOneValue(wrapped, 'auth')
+  if (value === undefined) {
+    return []
+  }
+  const declared: readonly string[] = value.trimStart().startsWith('{')
+    ? topLevelKeys(value, 0)
+    : []
+  const missing: readonly string[] = AUTH_HARDENING_KEYS.filter(
+    (key: string): boolean => !declared.includes(key),
+  )
+  return missing.length === 0
+    ? []
+    : [
+        {
+          line: lineOf(source, marker),
+          rule: 'require-auth-hardening',
+          reason:
+            `an auth collection must declare ${AUTH_HARDENING_KEYS.join(' and ')}; ` +
+            `${missing.join(' and ')} left to the Payload defaults means a login attempt is never ` +
+            'capped and an account is never locked',
+        },
+      ]
+}
+
+// A draft is unpublished content. With versions.drafts enabled, `?draft=true` serves it to whoever the
+// read rule admits - so a read that is unconditionally true publishes every draft to anyone.
+const ALWAYS_TRUE_READ: RegExp = /read\s*:\s*\(\s*\)\s*=>\s*true/
+const DRAFTS_ENABLED: RegExp = /drafts\s*:\s*(?:true|\{)/
+
+const isDraftExposed = (wrapped: string): boolean => {
+  const versions: string | undefined = depthOneValue(wrapped, 'versions')
+  if (versions === undefined || !DRAFTS_ENABLED.test(versions)) {
+    return false
+  }
+  const access: string | undefined = depthOneValue(wrapped, 'access')
+  return access !== undefined && ALWAYS_TRUE_READ.test(access)
+}
+
+const findAnonymousDraftReads = (source: string): readonly PayloadViolation[] =>
+  CONFIG_KINDS.flatMap((kind: ConfigKind): readonly PayloadViolation[] => {
+    const marker: number = source.search(kind.declaration)
+    const wrapped: string | undefined =
+      marker === NOT_FOUND ? undefined : wrappedBody(source, marker)
+    if (wrapped === undefined || !isDraftExposed(wrapped)) {
+      return []
+    }
+    return [
+      {
+        line: lineOf(source, marker),
+        rule: 'no-anonymous-draft-reads',
+        reason:
+          `a ${kind.label} with drafts enabled must not grant an unconditionally true read; ` +
+          'an unauthenticated client would fetch unpublished drafts through ?draft=true',
+      },
+    ]
+  })
+
+// Payload fills the missing operations in during sanitisation, so a partial access block is invisible
+// the moment the app boots - and its default for a non-auth collection is public read. Checking that
+// the word `access` appears somewhere in the file, which is what this rule used to do, accepted a block
+// that declared one operation out of four.
+const findUndeclaredAccess = (source: string): readonly PayloadViolation[] =>
+  CONFIG_KINDS.flatMap((kind: ConfigKind): readonly PayloadViolation[] => {
+    const marker: number = source.search(kind.declaration)
+    if (marker === -1) {
+      return []
+    }
+    const declared: readonly string[] = declaredOperations(source, marker)
+    const missing: readonly string[] = kind.operations.filter(
+      (operation: string): boolean => !declared.includes(operation),
+    )
+    if (missing.length === 0) {
+      return []
+    }
+    return [
+      {
+        line: lineOf(source, marker),
+        rule: 'require-complete-access',
+        reason:
+          `a ${kind.label} must declare access for ${kind.operations.join(', ')}; ` +
+          `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} left to the Payload ` +
+          'defaults, which allow public read',
+      },
+    ]
+  })
 
 /**
  * Return every Payload usage defect in one source file: an unbounded Local API read, a bypassed access
@@ -443,5 +613,7 @@ export const findPayloadViolations = (source: string): readonly PayloadViolation
     ...findOverrideAccess(code),
     ...findDeepRelativeImports(code),
     ...findUndeclaredAccess(code),
+    ...findUnhardenedAuth(code),
+    ...findAnonymousDraftReads(code),
   ]
 }

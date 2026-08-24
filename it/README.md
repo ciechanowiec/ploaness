@@ -24,7 +24,7 @@ needle from the rule name - `no-unbounded-find`, not merely `payload-rules`.
 | `pass` | none | nothing; twelve gates PASS |
 | `fail-wiring` | `scripts.verify` rewritten to `echo ok` | `wiring`, naming `scripts.verify` |
 | `fail-unbounded-find` | `depth` and `limit` dropped from a `payload.find` | `payload-rules`, naming `no-unbounded-find` |
-| `fail-collection-access` | `access` dropped from a collection | `payload-rules`, naming `require-collection-access` |
+| `fail-collection-access` | `access` dropped from a collection | `payload-rules`, naming `require-complete-access` |
 | `fail-commit-message` | a commit with a non-conventional header | `commit-history` |
 | `fail-asset-drift` | an edit to the PINNED `.editorconfig` | `assets`, naming `.editorconfig` |
 | `fail-section-drift` | an edit inside the managed block of `AGENTS.md` | `assets`, naming the drifted block |
@@ -35,6 +35,8 @@ needle from the rule name - `no-unbounded-find`, not merely `payload-rules`.
 | `fail-typography-css` | an em dash in a stylesheet | `conventions`, naming `em dash` |
 | `fail-suppressions` | `maxSuppressions: 0` plus one suppression | `suppressions`, naming `ceiling` |
 | `fail-generated-denial` | the write denial removed from `.claude/settings.json` | `generated-denial`, naming `no write denial` |
+| `fail-partial-access` | one operation dropped from a collection's access block | `payload-rules`, naming `require-complete-access` |
+| `fail-global-access` | `update` dropped from a global's access block | `payload-rules`, naming `require-complete-access` |
 | `fail-install-scripts` | the install-script allowlist removed | `install-scripts`, naming `onlyBuiltDependencies` |
 | `fail-report-only-ci` | `--enforce=false` added to the CI invocation | `wiring`, naming `not a pass` |
 | `fail-vitest-config-swapped` | `vitest.config.mts` replaced with a local config | `wiring`, naming the file |

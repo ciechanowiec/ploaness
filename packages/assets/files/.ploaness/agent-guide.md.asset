@@ -38,8 +38,15 @@ ploaness governs all of the following domains:
 - **Source:** formatting, fast lint, type-aware lint, strict type checking, type coverage, typography,
   source conventions, committed whitespace and encoding, style sheets, and module architecture. Test
   code is source code and passes the same checks.
-- **Payload usage:** bounded Local API reads, explicit access control on every collection, no
-  access-control override, and no parent-relative imports.
+- **Payload usage:** bounded Local API reads, no access-control override, no parent-relative imports,
+  and access control decided rather than inherited: every collection decides create, read, update and
+  delete, every global decides read and update, and an auth collection caps login attempts and locks
+  the account. Payload fills what a config omits during sanitisation, and its default is public read,
+  so a partial access block is invisible once the application boots.
+- **Drafts:** a collection or global with `versions.drafts` enabled must not grant a read that admits
+  anyone, because `?draft=true` then serves unpublished content to an unauthenticated client. The gate
+  catches the inline always-true form; a read delegated to a helper is yours to judge, and the helper
+  must require authentication or published status.
 - **Generated output:** the Payload types and admin import map must match the configuration that
   produces them.
 - **Dependencies:** licenses, known vulnerabilities, available stable updates, the maximum permitted
