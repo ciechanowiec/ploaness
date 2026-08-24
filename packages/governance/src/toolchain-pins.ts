@@ -9,7 +9,7 @@
 // the human-readable version beside it. Never write a bare tag here: the spec rejects one.
 
 /** An analyzer ploaness runs in a container rather than installing from the registry. */
-export type ContainerTool = 'gitleaks' | 'hadolint' | 'actionlint'
+export type ContainerTool = 'gitleaks' | 'hadolint' | 'actionlint' | 'shellcheck'
 
 /** The exact image each containerised analyzer runs, by digest. */
 export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
@@ -22,6 +22,10 @@ export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
   // actionlint 1.7.7
   actionlint:
     'rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667',
+  // shellcheck 0.11.0. The standard makes a check a repository implements itself into its source code,
+  // and the ploaness verification command is a shell script that no analyzer read.
+  shellcheck:
+    'koalaman/shellcheck@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d',
 }
 
 /** Matches a reference that names image bytes, and only such a reference. */

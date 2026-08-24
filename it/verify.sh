@@ -96,69 +96,27 @@ expect() {
     echo "ok $name: $gate is $verdict${needle:+ (${needle})}"
 }
 
+# Each mutation is a program in `it/lib/`, not a string passed to `node -e`. Inline, they were code no
+# formatter, linter, or type checker read - the same blind spot the staged asset bodies exist to close.
+lib="$(cd "$(dirname "$0")" && pwd)/lib"
+
 edit_json() {
-    node -e '
-      const { readFileSync, writeFileSync } = require("node:fs")
-      const [file, pointer, value] = process.argv.slice(1)
-      const parsed = JSON.parse(readFileSync(file, "utf8"))
-      const keys = pointer.split(".")
-      let cursor = parsed
-      // Create a missing parent rather than crashing: a case that sets `ploaness.maxSuppressions` on a
-      // fixture that declares no `ploaness` key is setting it for the first time, which is the point.
-      for (const key of keys.slice(0, -1)) {
-        if (typeof cursor[key] !== "object" || cursor[key] === null) { cursor[key] = {} }
-        cursor = cursor[key]
-      }
-      // argv is text. A value that parses as JSON is stored as JSON, so a numeric ceiling of 0 is
-      // written as 0 and not as "0", which the settings reader would drop as malformed.
-      let parsedValue = value
-      try { parsedValue = JSON.parse(value) } catch { parsedValue = value }
-      cursor[keys.at(-1)] = parsedValue
-      writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`)
-    ' "$@"
+    node "$lib/edit-json.mjs" "$@"
 }
 
-# Reads the file fully before writing, because a shell append that redirects a file into itself never
-# terminates: the redirect keeps extending the very file the reader is still consuming.
 duplicate_file() {
-    node -e '
-      const { readFileSync, writeFileSync } = require("node:fs")
-      const [file] = process.argv.slice(1)
-      const text = readFileSync(file, "utf8")
-      writeFileSync(file, `${text}\n${text}`)
-    ' "$@"
+    node "$lib/duplicate-file.mjs" "$@"
 }
 
 # Reads one non-blank line out of the managed body ploaness ships. A fixture that restated the managed
 # text in its own words is a second copy of a value ploaness owns, and it degrades into a silent no-op
 # the moment ploaness rewords the block - which is exactly the defect this suite exists to catch.
 managed_line() {
-    node -e '
-      const { readFileSync } = require("node:fs")
-      const [file, index] = process.argv.slice(1)
-      const lines = readFileSync(file, "utf8")
-        .split("\n")
-        .filter((line) => line.trim().length > 0)
-      const line = lines[Number(index)]
-      if (line === undefined) {
-        console.error(`the managed body has no non-blank line ${index}`)
-        process.exit(1)
-      }
-      process.stdout.write(line)
-    ' "$@"
+    node "$lib/managed-line.mjs" "$@"
 }
 
 drop_text() {
-    node -e '
-      const { readFileSync, writeFileSync } = require("node:fs")
-      const [file, needle] = process.argv.slice(1)
-      const text = readFileSync(file, "utf8")
-      if (!text.includes(needle)) {
-        console.error(`the fixture no longer contains ${needle}; the mutation would be a no-op`)
-        process.exit(1)
-      }
-      writeFileSync(file, text.replace(needle, ""))
-    ' "$@"
+    node "$lib/drop-text.mjs" "$@"
 }
 
 CONFORMING_BODY='The fixture exercises the packed harness from outside the workspace, which is the
@@ -301,17 +259,7 @@ expect fail-pinned-override wiring FAIL 'pins'
 
 # Left undeclared, every package in the resolved set may run code during install.
 new_case fail-install-scripts
-node -e '
-  const { readFileSync, writeFileSync } = require("node:fs")
-  const file = process.argv[1]
-  const kept = readFileSync(file, "utf8")
-    .split("\n")
-    .filter((line, index, lines) => {
-      const start = lines.indexOf("onlyBuiltDependencies:")
-      return start === -1 || index < start || !(index === start || /^\s+-\s/.test(line))
-    })
-  writeFileSync(file, kept.join("\n"))
-' "$scratch/fail-install-scripts/pnpm-workspace.yaml"
+node "$lib/drop-install-allowlist.mjs" "$scratch/fail-install-scripts/pnpm-workspace.yaml"
 commit_case fail-install-scripts 'feat(fixture): drop the install-script allowlist' "$CONFORMING_BODY"
 expect fail-install-scripts install-scripts FAIL 'onlyBuiltDependencies'
 
@@ -384,13 +332,7 @@ expect fail-ecosystem-version wiring FAIL 'ploaness pins it'
 
 # The same pin, absent: a project with no Postgres is not asked to grow one.
 new_case pass-ecosystem-absent
-node -e '
-  const { readFileSync, writeFileSync } = require("node:fs")
-  const file = process.argv[1]
-  const parsed = JSON.parse(readFileSync(file, "utf8"))
-  delete parsed.devDependencies.pg
-  writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`)
-' "$scratch/pass-ecosystem-absent/package.json"
+node "$lib/delete-dependency.mjs" "$scratch/pass-ecosystem-absent/package.json" pg
 commit_case pass-ecosystem-absent 'feat(fixture): drop a package ploaness pins but never requires' \
     "$CONFORMING_BODY"
 expect pass-ecosystem-absent wiring PASS
@@ -406,13 +348,7 @@ expect fail-types-version wiring FAIL 'ploaness pins it'
 # The required set is derived from the pin file, so a pinned package the project never declares is a
 # missing dependency rather than an entry that quietly enforces nothing.
 new_case fail-missing-pin
-node -e '
-  const { readFileSync, writeFileSync } = require("node:fs")
-  const file = process.argv[1]
-  const parsed = JSON.parse(readFileSync(file, "utf8"))
-  delete parsed.devDependencies["@types/node"]
-  writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`)
-' "$scratch/fail-missing-pin/package.json"
+node "$lib/delete-dependency.mjs" "$scratch/fail-missing-pin/package.json" '@types/node'
 commit_case fail-missing-pin 'feat(fixture): drop a package ploaness pins' "$CONFORMING_BODY"
 expect fail-missing-pin wiring FAIL 'missing'
 

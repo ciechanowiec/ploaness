@@ -8,12 +8,15 @@ describe('CONTAINER_IMAGES', () => {
     expect(findUnpinnedImages(CONTAINER_IMAGES)).toEqual([])
   })
 
-  it('declares an image for every tool the gates run in a container', () => {
+  // shellcheck is here without a gate of its own: no governed project is required to ship a shell
+  // script, so there is nothing for a gate to run. What runs it is the ploaness verification command,
+  // over the scripts that implement ploaness's own checks - which the standard makes source code.
+  it('declares an image for every containerised analyzer', () => {
     expect(
       Object.keys(CONTAINER_IMAGES).toSorted((left: string, right: string): number =>
         left.localeCompare(right),
       ),
-    ).toEqual(['actionlint', 'gitleaks', 'hadolint'])
+    ).toEqual(['actionlint', 'gitleaks', 'hadolint', 'shellcheck'])
   })
 })
 

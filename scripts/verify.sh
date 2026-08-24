@@ -37,51 +37,13 @@ gate() {
     step "gate $1" sh -c "$ploaness gate $1"
 }
 
-# Biome cannot read a shipped body where it lives: the `.asset` suffix hides the language, and the root
-# config excludes that whole directory because most bodies there are prose rather than code. The one
-# body that IS code therefore reached a consumer unformatted, and the first thing to report it was that
-# consumer's own `biome` gate - which turns a ploaness packaging defect into something that reads as the
-# project's problem.
-#
-# So the bodies are staged under the paths they will occupy in a consumer, beside the consumer-facing
-# config a consumer actually receives, and checked there. Piping them through `--stdin-file-path` was
-# tried first and cannot work: that mode reports "the contents aren't fixed" and exits non-zero for
-# every input, clean or not.
-check_asset_bodies() {
-    stage="$(mktemp -d)"
-    # The shipped config declares `root: false`, because in a consumer it is extended rather than used
-    # directly. Biome ignores a non-root config's settings and silently formats with its own defaults,
-    # so the staged stand-in for the consumer's root config has that flag removed.
-    node -e '
-      const { readFileSync, writeFileSync } = require("node:fs")
-      const [source, destination] = process.argv.slice(1)
-      const config = JSON.parse(readFileSync(source, "utf8"))
-      delete config.root
-      writeFileSync(destination, JSON.stringify(config, null, 2))
-    ' "$root/packages/ploaness/biome.json" "$stage/biome.json"
-    # Named one by one rather than as the whole directory: the config sits there too, and Biome would
-    # otherwise judge a file this repository generates and does not format.
-    staged_paths=''
-    for body in $(find packages/assets/files -name '*.ts.asset' | sort); do
-        relative="${body#packages/assets/files/}"
-        relative="${relative%.asset}"
-        mkdir -p "$stage/$(dirname "$relative")"
-        cp "$body" "$stage/$relative"
-        staged_paths="$staged_paths $relative"
-    done
-    status=0
-    (cd "$stage" && "$root/node_modules/.bin/biome" check $staged_paths) || status=1
-    rm -rf "$stage"
-    return "$status"
-}
-
 before="$(fingerprint)"
 
 step build      pnpm run build
 step typecheck  pnpm run typecheck
 step lint       pnpm run lint
 step lint:eslint pnpm run lint:eslint
-step lint:assets check_asset_bodies
+step lint:assets sh "$root/scripts/lib/check-asset-bodies.sh"
 
 # Three analyzers the `ploaness verify` gates run against a Payload layout. Their rules are about a
 # repository's shape, so they apply here unchanged; only the globs differ, which is what the `-repo`
@@ -95,6 +57,16 @@ cli_bin="$root/packages/cli/node_modules/.bin"
 step arch "$cli_bin/depcruise" packages scripts \
     --config packages/config/dependency-cruiser-repo.json
 step knip "$cli_bin/knip" --config packages/config/knip-repo.json
+
+# The standard makes a check a repository implements itself into its source code, held to the same rules
+# as everything else - and these scripts were read by nothing. The image is pinned by digest beside the
+# other containerised analyzers, and the run is at shellcheck's own default severity: an `info` finding
+# is a finding, because a check has two verdicts and neither of them is a warning.
+shellcheck_image="$(node --input-type=module -e \
+    "import { CONTAINER_IMAGES } from '$root/packages/governance/dist/index.js'
+     process.stdout.write(CONTAINER_IMAGES.shellcheck)")"
+step shellcheck docker run --rm -v "$root:/mnt" "$shellcheck_image" \
+    scripts/verify.sh scripts/lib/check-asset-bodies.sh scripts/pack-local.sh it/verify.sh
 
 # The specs are exempt for the reason AGENTS.md records: `--strict` counts every type assertion as
 # uncovered, and a spec exists to construct inputs the production types cannot express. Reaching 100%
@@ -134,7 +106,7 @@ gate linear-history
 after="$(fingerprint)"
 if [ "$before" != "$after" ]; then
     failures=$((failures + 1))
-    printf '\n!!! the verification rewrote a tracked file. Review and commit `git status`, then rerun.\n'
+    printf '\n!!! the verification rewrote a tracked file. Review and commit what git status shows, then rerun.\n'
 fi
 
 printf '\n'

@@ -57,6 +57,10 @@
       {
         "pattern": "^packages/(ploaness|assets)/build\\.mjs$",
         "reason": "build scripts run by node directly, before any TypeScript is compiled"
+      },
+      {
+        "pattern": "^(it|scripts)/lib/[a-z0-9-]+\\.mjs$",
+        "reason": "verification-script helpers run by node directly, outside any TypeScript build"
       }
     ]
   }
