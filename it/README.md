@@ -28,6 +28,8 @@ needle from the rule name - `no-unbounded-find`, not merely `payload-rules`.
 | `fail-commit-message` | a commit with a non-conventional header | `commit-history` |
 | `fail-asset-drift` | an edit to the PINNED `.editorconfig` | `assets`, naming `.editorconfig` |
 | `fail-section-drift` | an edit inside the managed block of `AGENTS.md` | `assets`, naming the drifted block |
+| `pass-agent-reference` | a `GEMINI.md` that points at `AGENTS.md` | nothing; a reference is what the file is for |
+| `fail-agent-reference` | a `GEMINI.md` that states a rule of its own | `assets`, naming `instructions of its own` |
 | `fail-section-duplicated` | a second copy of the managed block | `assets`, asking for a hand repair |
 | `fail-commit-junk-word` | a junk word later in the subject, not first | `commit-history`, naming `low-effort` |
 | `fail-commit-revert-type` | a `revert:` header | `commit-history`, naming `invalid header` |

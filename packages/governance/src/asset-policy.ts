@@ -3,7 +3,7 @@
 // inside the package and be resolved through node_modules the way an ESLint or Biome config can. Those
 // files are materialised into the consumer tree by `ploaness sync` and policed here.
 //
-// Four dispositions:
+// Five dispositions:
 //   PINNED    - ploaness owns the content; the file must exist and match byte for byte.
 //   SEED      - ploaness writes it once when absent; the project owns it thereafter and may edit it.
 //   FORBIDDEN - the path must not exist, because ploaness supplies that configuration itself and a
@@ -12,9 +12,18 @@
 //               it. Neither PINNED nor SEED fits a file both parties must write: pinning it would forbid
 //               the project its own agent instructions, and seeding it would let the contract statement
 //               drift the moment ploaness changed.
+//   REFERENCE - the path need not exist, but if it does it carries nothing but a pointer at AGENTS.md.
+//               This is for the entry-point file a coding agent other than Claude reads. PINNED cannot
+//               express it: pinning would force a project to carry an entry point for a tool it does
+//               not use, and FORBIDDEN would bar it from using that tool at all. What the rule refuses
+//               is a second set of instructions - the standard says the root instruction file holds the
+//               rules and a tool-specific one only points at it, so two agents cannot be told two
+//               different things. The form of the pointer is the tool's own: `@AGENTS.md` is Claude's
+//               import syntax and means nothing to Cursor, so the check reads for the NAME rather than
+//               demanding one spelling and forcing a file the tool cannot act on.
 
 /** How ploaness treats a path in the consumer working tree. */
-export type Disposition = 'PINNED' | 'SEED' | 'FORBIDDEN' | 'SECTION'
+export type Disposition = 'PINNED' | 'SEED' | 'FORBIDDEN' | 'SECTION' | 'REFERENCE'
 
 /** One catalogue entry: a repo-relative path and the disposition ploaness applies to it. */
 export interface ManagedAsset {
@@ -49,6 +58,7 @@ const DISPOSITIONS: ReadonlySet<string> = new Set<string>([
   'SEED',
   'FORBIDDEN',
   'SECTION',
+  'REFERENCE',
 ])
 
 // A guard rather than a set membership test followed by an assertion. Both say the same thing; only
@@ -202,30 +212,30 @@ const checkSection = (asset: ManagedAsset, state: AssetState): AssetViolation | 
       }
 }
 
-/**
- * Judge one managed path against its disposition.
- * @param asset the catalogue entry.
- * @param state the working-tree and shipped content for that path.
- * @returns a violation, or undefined when the path conforms.
- */
-export const checkAsset = (asset: ManagedAsset, state: AssetState): AssetViolation | undefined => {
-  if (asset.disposition === 'FORBIDDEN') {
-    return state.isPresent
-      ? {
-          path: asset.path,
-          reason:
-            'ploaness supplies this configuration, so a working-tree copy shadows it; delete the file',
-        }
-      : undefined
-  }
+// One checker per disposition, rather than a chain of tests inside `checkAsset`. Five dispositions
+// carried that chain past the complexity cap, and the cap is never raised - so the shape changed. Each
+// checker decides the absent case for itself, because that is precisely where the dispositions differ:
+// a missing PINNED file is a defect, a missing REFERENCE file is a project that uses one agent.
+const missing = (asset: ManagedAsset): AssetViolation => ({
+  path: asset.path,
+  reason: 'managed file is missing; run `ploaness sync`',
+})
+
+const checkForbidden = (asset: ManagedAsset, state: AssetState): AssetViolation | undefined =>
+  state.isPresent
+    ? {
+        path: asset.path,
+        reason:
+          'ploaness supplies this configuration, so a working-tree copy shadows it; delete the file',
+      }
+    : undefined
+
+const checkSeed = (asset: ManagedAsset, state: AssetState): AssetViolation | undefined =>
+  state.isPresent ? undefined : missing(asset)
+
+const checkPinned = (asset: ManagedAsset, state: AssetState): AssetViolation | undefined => {
   if (!state.isPresent) {
-    return { path: asset.path, reason: 'managed file is missing; run `ploaness sync`' }
-  }
-  if (asset.disposition === 'SEED') {
-    return undefined
-  }
-  if (asset.disposition === 'SECTION') {
-    return checkSection(asset, state)
+    return missing(asset)
   }
   return state.actual === state.expected
     ? undefined
@@ -234,6 +244,57 @@ export const checkAsset = (asset: ManagedAsset, state: AssetState): AssetViolati
         reason: 'managed file drifted from the ploaness copy; run `ploaness sync`',
       }
 }
+
+/** The instruction file every other one points at. */
+const ROOT_INSTRUCTION_FILE: string = 'AGENTS.md'
+
+// Every line that says anything must say the same thing: read AGENTS.md. A line that does not name it
+// is this file stating a rule of its own, which is what makes two agents answerable to two contracts.
+const checkReference = (asset: ManagedAsset, state: AssetState): AssetViolation | undefined => {
+  // Optional, unlike every other disposition: a project that uses no coding agent but Claude carries no
+  // entry point for one, and requiring the file would be ploaness deciding which tools it uses.
+  if (!state.isPresent) {
+    return undefined
+  }
+  const stated: readonly string[] = (state.actual ?? '')
+    .split('\n')
+    .map((line: string): string => line.trim())
+    .filter((line: string): boolean => line.length > 0)
+  if (stated.length === 0) {
+    return {
+      path: asset.path,
+      reason: `is empty; a tool-specific instruction file points at ${ROOT_INSTRUCTION_FILE}`,
+    }
+  }
+  return stated.every((line: string): boolean => line.includes(ROOT_INSTRUCTION_FILE))
+    ? undefined
+    : {
+        path: asset.path,
+        reason:
+          `states instructions of its own; a tool-specific instruction file carries nothing but a ` +
+          `reference to ${ROOT_INSTRUCTION_FILE}, so no two agents are held to two contracts`,
+      }
+}
+
+type AssetChecker = (asset: ManagedAsset, state: AssetState) => AssetViolation | undefined
+
+const CHECKERS: Readonly<Record<Disposition, AssetChecker>> = {
+  FORBIDDEN: checkForbidden,
+  PINNED: checkPinned,
+  REFERENCE: checkReference,
+  SECTION: (asset: ManagedAsset, state: AssetState): AssetViolation | undefined =>
+    state.isPresent ? checkSection(asset, state) : missing(asset),
+  SEED: checkSeed,
+}
+
+/**
+ * Judge one managed path against its disposition.
+ * @param asset the catalogue entry.
+ * @param state the working-tree facts for that path.
+ * @returns a violation, or undefined when the path conforms.
+ */
+export const checkAsset = (asset: ManagedAsset, state: AssetState): AssetViolation | undefined =>
+  CHECKERS[asset.disposition](asset, state)
 
 /**
  * Judge every catalogue entry the project has not explicitly taken over.
@@ -271,6 +332,11 @@ export type SyncAction = 'write' | 'delete' | 'skip' | 'splice'
 export const syncAction = (asset: ManagedAsset, isPresent: boolean): SyncAction => {
   if (asset.disposition === 'FORBIDDEN') {
     return isPresent ? 'delete' : 'skip'
+  }
+  // Never written, in either state. Creating one would hand the project an entry point for a tool it
+  // may not use, and rewriting one would replace a pointer the tool understands with a guess.
+  if (asset.disposition === 'REFERENCE') {
+    return 'skip'
   }
   if (asset.disposition === 'SEED') {
     return isPresent ? 'skip' : 'write'

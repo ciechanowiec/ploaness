@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   type AssetState,
+  type AssetViolation,
   applyManagedSection,
   checkAsset,
   findAssetViolations,
@@ -205,5 +206,54 @@ describe('splicing a managed section', () => {
   it('is always spliced, whether or not the file already exists', () => {
     expect(syncAction(agents, true)).toBe('splice')
     expect(syncAction(agents, false)).toBe('splice')
+  })
+})
+
+// The standard puts the rules in the root instruction file and lets a tool-specific one carry only a
+// reference to it. ploaness pinned CLAUDE.md and constrained nothing else, so a project could hand
+// Gemini or Cursor a second, contradicting set of instructions and no gate would say a word.
+const holding = (actual: string | undefined): AssetState => ({
+  isPresent: actual !== undefined,
+  actual,
+  expected: undefined,
+})
+
+describe('a tool-specific instruction file', () => {
+  const reference: ManagedAsset = { path: 'GEMINI.md', disposition: 'REFERENCE' }
+
+  // A project that uses only one agent carries only its entry point. Requiring the file would make
+  // ploaness decide which tools the project uses.
+  it('accepts the file being absent', () => {
+    expect(checkAsset(reference, holding(undefined))).toBeUndefined()
+  })
+
+  it('accepts a bare reference to the root instruction file', () => {
+    expect(checkAsset(reference, holding('@AGENTS.md\n'))).toBeUndefined()
+  })
+
+  // The pointer's form is the tool's own: `@AGENTS.md` is Claude's import syntax and means nothing to
+  // Cursor, so the rule reads for the name rather than demanding one spelling.
+  it('accepts a reference written in the tool own words', () => {
+    const prose: string = 'Follow the rules in AGENTS.md at the repository root.\n'
+    expect(checkAsset(reference, holding(prose))).toBeUndefined()
+  })
+
+  it('rejects a file that states a rule of its own', () => {
+    const found: AssetViolation | undefined = checkAsset(
+      reference,
+      holding('See AGENTS.md.\n\nAlways use tabs for indentation.\n'),
+    )
+    expect(found?.reason).toContain('instructions of its own')
+  })
+
+  it('rejects an empty file, which points at nothing', () => {
+    expect(checkAsset(reference, holding(''))?.reason).toContain('is empty')
+  })
+
+  // ploaness writes neither state: creating one would hand the project an entry point for a tool it may
+  // not use, and rewriting one would replace a pointer the tool understands with a guess.
+  it('is never written by sync, present or absent', () => {
+    expect(syncAction(reference, true)).toBe('skip')
+    expect(syncAction(reference, false)).toBe('skip')
   })
 })

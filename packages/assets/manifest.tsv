@@ -25,6 +25,16 @@ CLAUDE.md	PINNED
 # a scan list, so this one check has to run rather than read. It is PINNED for the same reason every
 # other rule is the harness's: a check the project can edit is not a rule.
 tests/e2e/a11y.e2e.spec.ts	PINNED
+# The entry-point file a coding agent other than Claude reads. None is required - a project that uses
+# only one agent carries only its file - but one that exists carries nothing but a pointer at AGENTS.md.
+# The standard puts the rules in the root instruction file and lets a tool-specific one only reference
+# it, so two agents working the same repository cannot be answering to two different contracts.
+GEMINI.md	REFERENCE
+.cursorrules	REFERENCE
+.windsurfrules	REFERENCE
+.clinerules	REFERENCE
+.github/copilot-instructions.md	REFERENCE
+
 .stylelintrc.json	FORBIDDEN
 .dependency-cruiser.json	FORBIDDEN
 knip.json	FORBIDDEN

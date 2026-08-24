@@ -42,12 +42,15 @@ const shippedBody = (assetPath: string): string | undefined => {
 }
 
 // A PINNED or SEED entry with no shipped body would otherwise be reported as drift in the consumer's
-// tree, blaming the project for a ploaness packaging mistake.
+// tree, blaming the project for a ploaness packaging mistake. FORBIDDEN and REFERENCE entries have no
+// body by definition: ploaness writes neither, it only judges what it finds.
+const BODILESS: ReadonlySet<string> = new Set<string>(['FORBIDDEN', 'REFERENCE'])
+
 const packagingDefects = (assets: readonly ManagedAsset[]): readonly string[] =>
   assets
     .filter(
       (asset: ManagedAsset): boolean =>
-        asset.disposition !== 'FORBIDDEN' && !existsSync(bodyPath(asset.path)),
+        !(BODILESS.has(asset.disposition) || existsSync(bodyPath(asset.path))),
     )
     .map(
       (asset: ManagedAsset): string =>

@@ -211,6 +211,21 @@ drop_text "$scratch/fail-section-drift/AGENTS.md" \
 commit_case fail-section-drift 'feat(fixture): edit the managed section' "$CONFORMING_BODY"
 expect fail-section-drift assets FAIL 'managed block drifted'
 
+# A tool-specific instruction file may exist or not, but one that exists points at AGENTS.md and states
+# nothing else. Two agents answering to two contracts is the failure; both cases are asserted, because a
+# rule that only ever passed would be indistinguishable from one that was never wired in.
+new_case pass-agent-reference
+printf 'Follow the rules in AGENTS.md at the repository root.\n' \
+    > "$scratch/pass-agent-reference/GEMINI.md"
+commit_case pass-agent-reference 'feat(fixture): point Gemini at the root instructions' "$CONFORMING_BODY"
+expect pass-agent-reference assets PASS
+
+new_case fail-agent-reference
+printf 'See AGENTS.md.\n\nAlways use tabs for indentation in this project.\n' \
+    > "$scratch/fail-agent-reference/GEMINI.md"
+commit_case fail-agent-reference 'feat(fixture): give Gemini rules of its own' "$CONFORMING_BODY"
+expect fail-agent-reference assets FAIL 'instructions of its own'
+
 # Ambiguous markers are a separate verdict from drift, because they are the one managed-file defect
 # `ploaness sync` cannot repair: the gate must send the project to a human rather than round a loop.
 new_case fail-section-duplicated

@@ -88,7 +88,11 @@ ploaness governs all of the following domains:
   remove another one - not to raise the ceiling, which no setting can do. A suppression inside a managed
   file is ploaness's and is not counted, so it is also not yours to remove.
 - **Assets and documentation:** image integrity, documentation references, config references, and
-  the agent skill manifest.
+  the agent skill manifest. `AGENTS.md` holds the rules; the entry-point file any other coding agent
+  reads - `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `.clinerules`,
+  `.github/copilot-instructions.md` - is optional, and one that exists carries nothing but a pointer at
+  `AGENTS.md`. Write the pointer in whatever form that tool understands. Anything else in the file is a
+  second contract, and two agents answering to two contracts is the thing this refuses.
 - **Repository assurance:** secret scanning, container and workflow linting, test execution with
   per-file coverage, commit-message policy, commit typography, and linear history.
 
