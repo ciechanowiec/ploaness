@@ -325,6 +325,13 @@ drop_text "$scratch/fail-global-access/src/globals/Header.ts" "    update: (): b
 commit_case fail-global-access 'feat(fixture): leave a global update undeclared' "$CONFORMING_BODY"
 expect fail-global-access payload-rules FAIL require-complete-access
 
+# A range on a package a gate depends on lets an upstream release change a verdict while the project
+# stays unchanged, which is what pinning the toolchain exists to prevent.
+new_case fail-ranged-toolchain
+edit_json "$scratch/fail-ranged-toolchain/package.json" devDependencies.vitest '^4.1.11'
+commit_case fail-ranged-toolchain 'feat(fixture): loosen a pinned toolchain version' "$CONFORMING_BODY"
+expect fail-ranged-toolchain wiring FAIL 'ploaness pins it'
+
 # Text the project owns below the block is not ploaness's to judge, so adding some must not fail.
 new_case pass-section-project-text
 printf '\n## Project notes\n\nThe project owns everything below the managed block.\n' \

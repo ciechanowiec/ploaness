@@ -18,7 +18,22 @@ import { failed, type GateResult, passed } from '../exec.js'
 // resolve `vitest` unless the project declares it, so these cannot move into the harness and are pinned
 // instead. A package the harness merely resolves for itself - the React plugin, for instance - must NOT
 // appear: declaring it in the consumer would be an unused dependency, which the knip gate rightly fails.
-const TEST_LIBRARY_NAMES: readonly string[] = ['vitest', '@vitest/coverage-v8']
+// Every package whose version changes what a gate does. The standard pins the toolchain to an exact
+// version so an upstream release cannot change a verdict while the project stays unchanged - and a
+// caret range on any of these is exactly that. The expected version is read from ploaness's own
+// manifests below, so there is no second literal to drift.
+const TEST_LIBRARY_NAMES: readonly string[] = [
+  'vitest',
+  '@vitest/coverage-v8',
+  'typescript',
+  'jsdom',
+  'fast-check',
+  '@testing-library/react',
+  '@testing-library/jest-dom',
+  '@testing-library/user-event',
+  '@playwright/test',
+  '@axe-core/playwright',
+]
 
 const WORKFLOW_DIRECTORY: string = path.join('.github', 'workflows')
 
@@ -55,6 +70,14 @@ const declaredBy = (packageName: string): Record<string, unknown> => {
     : {}
 }
 
+// The packages every project's own specs import, so every project must declare them. The rest of the
+// pinned set is matched when declared and never forced on a project that has no use for it.
+const REQUIRED_TEST_LIBRARIES: ReadonlySet<string> = new Set<string>([
+  'vitest',
+  '@vitest/coverage-v8',
+  'typescript',
+])
+
 const expectedTestLibraries = (): Readonly<Record<string, string>> => {
   const declared: Record<string, unknown> = Object.assign(
     {},
@@ -79,6 +102,7 @@ export const wiring = (context: Context): GateResult => {
     tsconfig: readText(path.join(context.root, 'tsconfig.json')),
     workflows: readWorkflows(context.root),
     expectedTestLibraries: expectedTestLibraries(),
+    requiredTestLibraries: REQUIRED_TEST_LIBRARIES,
     requiredBiomeFiles: requiredBiomeFiles(context.settings.sourceRoots),
   })
   return violations.length > 0

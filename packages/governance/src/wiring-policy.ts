@@ -41,6 +41,8 @@ export interface WiringInputs {
    * a harness bump moves the expectation in one place.
    */
   readonly expectedTestLibraries: Readonly<Record<string, string>>
+  /** The subset every project must declare, because its own specs import them. */
+  readonly requiredTestLibraries: ReadonlySet<string>
   /** The `files` block the consumer's biome.json must declare, from {@link requiredBiomeFiles}. */
   readonly requiredBiomeFiles: Readonly<Record<string, unknown>>
 }
@@ -435,28 +437,38 @@ const checkSilencedAdvisories = (packageJson: unknown): readonly WiringViolation
     }),
   )
 
+// Two obligations, not one. A project must DECLARE the few packages every project uses, because under
+// the strict pnpm layout its own specs could not resolve them otherwise. Every other pinned package
+// must MATCH when the project declares it, but is not forced on a project that has no use for it -
+// requiring a declaration there would manufacture a dependency the dead-code gate then reports as
+// unused. Either way no pinned version can float, which is the point.
 const checkTestLibraries = (
   packageJson: Record<string, unknown>,
   expected: Readonly<Record<string, string>>,
+  required: ReadonlySet<string>,
 ): readonly WiringViolation[] => {
   const declared: Record<string, string> = declaredDependencies(packageJson)
   return Object.entries(expected).flatMap(
     ([name, version]: readonly [string, string]): readonly WiringViolation[] => {
       const found: string | undefined = declared[name]
       if (found === undefined) {
-        return [
-          {
-            location: `package.json devDependencies.${name}`,
-            reason: `missing; specs import it directly, so the project must declare it at ${version}`,
-          },
-        ]
+        return required.has(name)
+          ? [
+              {
+                location: `package.json devDependencies.${name}`,
+                reason: `missing; specs import it directly, so the project must declare it at ${version}`,
+              },
+            ]
+          : []
       }
       return found === version
         ? []
         : [
             {
               location: `package.json devDependencies.${name}`,
-              reason: `is "${found}" but ploaness was built against "${version}"`,
+              reason:
+                `is "${found}" but ploaness pins it at "${version}"; ` +
+                'a range lets an upstream release change a verdict',
             },
           ]
     },
@@ -478,7 +490,7 @@ export const findWiringViolations = (inputs: WiringInputs): readonly WiringViola
       REQUIRED_SCRIPTS,
       'package.json scripts',
     ),
-    ...checkTestLibraries(packageJson, inputs.expectedTestLibraries),
+    ...checkTestLibraries(packageJson, inputs.expectedTestLibraries, inputs.requiredTestLibraries),
     ...checkPinnedOverrides(inputs.workspaceFile, inputs.expectedTestLibraries),
     ...checkSilencedAdvisories(inputs.packageJson),
     ...checkReexport(inputs.eslintConfig, 'eslint.config.mjs', 'ploaness/eslint'),

@@ -33,7 +33,8 @@ const wiredInputs = (overrides: Record<string, unknown> = {}): WiringInputs => (
     ...REQUIRED_TSCONFIG_PATHS,
   }),
   workflows: [{ name: 'verify.yml', content: 'run: ploaness verify --extended' }],
-  expectedTestLibraries: { vitest: '4.1.11' },
+  expectedTestLibraries: { vitest: '4.1.11', jsdom: '30.0.1' },
+  requiredTestLibraries: new Set<string>(['vitest']),
   requiredBiomeFiles: BIOME_FILES,
   ...overrides,
 })
@@ -331,5 +332,52 @@ describe('install configuration that undoes a pin', () => {
       (violation: WiringViolation): string => violation.reason,
     )
     expect(reasons.some((reason: string) => reason.includes('vulnerabilityAllowlist'))).toBe(true)
+  })
+})
+
+// The standard pins the toolchain to an exact version so an upstream release cannot change a verdict
+// while the project stays unchanged. A caret range on a package a gate depends on is exactly that.
+describe('the pinned toolchain', () => {
+  it('rejects a declared version that differs from the pin', () => {
+    const packageJson: Record<string, unknown> = {
+      ...WIRED_PACKAGE_JSON,
+      devDependencies: { ploaness: '1.0.0', vitest: '4.1.11', jsdom: '29.0.0' },
+    }
+    const reasons: readonly string[] = findWiringViolations(wiredInputs({ packageJson })).map(
+      (violation: WiringViolation): string => violation.reason,
+    )
+    expect(reasons.some((reason: string) => reason.includes('ploaness pins it'))).toBe(true)
+  })
+
+  it('rejects a range where the pin is exact', () => {
+    const packageJson: Record<string, unknown> = {
+      ...WIRED_PACKAGE_JSON,
+      devDependencies: { ploaness: '1.0.0', vitest: '4.1.11', jsdom: '^30.0.1' },
+    }
+    const locations: readonly string[] = findWiringViolations(wiredInputs({ packageJson })).map(
+      (violation: WiringViolation): string => violation.location,
+    )
+    expect(locations).toContain('package.json devDependencies.jsdom')
+  })
+
+  // Forcing a declaration on a project that has no use for the package would manufacture a dependency
+  // the dead-code gate then reports as unused.
+  it('does not force a pinned package on a project that declares none', () => {
+    const packageJson: Record<string, unknown> = {
+      ...WIRED_PACKAGE_JSON,
+      devDependencies: { ploaness: '1.0.0', vitest: '4.1.11' },
+    }
+    expect(findWiringViolations(wiredInputs({ packageJson }))).toEqual([])
+  })
+
+  it('still requires the packages every project imports', () => {
+    const packageJson: Record<string, unknown> = {
+      ...WIRED_PACKAGE_JSON,
+      devDependencies: { ploaness: '1.0.0' },
+    }
+    const reasons: readonly string[] = findWiringViolations(wiredInputs({ packageJson })).map(
+      (violation: WiringViolation): string => violation.reason,
+    )
+    expect(reasons.some((reason: string) => reason.includes('missing'))).toBe(true)
   })
 })

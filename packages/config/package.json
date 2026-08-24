@@ -30,9 +30,14 @@
     "build": "node --version > /dev/null"
   },
   "dependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@eslint-community/eslint-plugin-eslint-comments": "4.7.2",
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.62.1",
     "@ploaness/governance": "1.0.0",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.6",
     "@vitejs/plugin-react": "6.1.0",
     "@vitest/eslint-plugin": "1.6.27",
     "eslint-config-prettier": "10.1.8",
@@ -43,6 +48,8 @@
     "eslint-plugin-sonarjs": "4.2.0",
     "eslint-plugin-testing-library": "7.16.2",
     "eslint-plugin-unicorn": "73.0.0",
+    "fast-check": "4.9.0",
+    "jsdom": "30.0.1",
     "stylelint-config-standard": "40.0.0",
     "typescript-eslint": "8.67.0",
     "vitest": "4.1.11"

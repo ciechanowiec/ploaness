@@ -7,8 +7,9 @@
     "payload": "3.88.0"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "4.1.11",
     "ploaness": "1.0.0",
-    "vitest": "4.1.11",
-    "@vitest/coverage-v8": "4.1.11"
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
   }
 }

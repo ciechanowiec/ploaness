@@ -65,6 +65,7 @@ endif::[]
 . The https://payloadcms.com[Payload CMS^] project declares the https://www.npmjs.com/package/payload[`payload` package^] among its dependencies. Every rule _ploaness_ applies is a rule about https://payloadcms.com[Payload CMS^].
 . Three xref:#gates[gates] run their analyzer in a container: xref:#secrets-gate[`secrets`], xref:#docker-gate[`docker`], and xref:#actions-gate[`actions`]. Each analyzer needs a reachable Docker daemon, and each image is pinned by digest so an upstream release can't change a verdict.
 . Two xref:#gates[gates] read a public service by design and fail when it's unreachable: xref:#vulnerabilities-gate[`vulnerabilities`] reads the advisory database, and `deps` reads the package registry.
+. _ploaness_ pins every package whose version changes what a xref:#gates[gate] does: `vitest`, `@vitest/coverage-v8`, `typescript`, `jsdom`, `fast-check`, the `@testing-library` packages, `@playwright/test`, and `@axe-core/playwright`. A https://payloadcms.com[Payload CMS^] project declares `vitest`, `@vitest/coverage-v8` and `typescript` itself, because its own specs import them; it declares the rest only if it uses them, and at the pinned version when it does. A range on any of them lets an upstream release change a verdict while the project stays unchanged, so the xref:#wiring-gate[`wiring` gate] rejects one.
 
 [[installation]]
 === Installation
