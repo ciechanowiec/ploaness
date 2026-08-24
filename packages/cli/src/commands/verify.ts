@@ -8,6 +8,7 @@ import {
   beginGate,
   type GateOutcome,
   reportGate,
+  reportHalt,
   reportHeader,
   reportNote,
   reportVerdict,
@@ -36,9 +37,11 @@ const timeGate = async (gate: Gate, context: Context): Promise<GateOutcome> => {
 const identifierWidth = (gates: readonly Gate[]): number =>
   gates.reduce((widest: number, gate: Gate): number => Math.max(widest, gate.id.length), 0)
 
-// The run stops at a failing preflight, so it is a sequence with an exit rather than a plain map: the
-// preflight gate decides whether ploaness may judge this project at all, and continuing past a failure
-// there would produce a page of findings about a contract the project never agreed to.
+// The run stops at a failing precondition gate, so it is a sequence with an exit rather than a plain
+// map. `preflight` decides whether ploaness may judge this project at all; `wiring` decides whether the
+// thing being judged is the one ploaness thinks it is. Continuing past either produces verdicts about a
+// setup nobody governs - and a green column under a red wiring line reads as reassurance it has not
+// earned.
 const runGates = async (
   gates: readonly Gate[],
   context: Context,
@@ -51,7 +54,8 @@ const runGates = async (
   beginGate(gate, width)
   const outcome: GateOutcome = await timeGate(gate, context)
   reportGate(outcome, width)
-  if (gate.id === 'preflight' && !outcome.result.ok) {
+  if (gate.isPrecondition === true && !outcome.result.ok) {
+    reportHalt(gate, gates.length - 1)
     return [outcome]
   }
   return [outcome, ...(await runGates(rest, context, width))]
