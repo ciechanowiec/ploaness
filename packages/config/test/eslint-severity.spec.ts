@@ -200,7 +200,18 @@ const banStatus = async (blocks: readonly FlatBlock[]): Promise<BanStatus> => {
   }
 }
 
-describe('flat config severity', () => {
+// Every test in this file loads a flat config, and loading one resolves the whole toolchain that config
+// declares - typescript-eslint and nine plugins. The cost is paid once per file, by whichever test
+// imports first, and the suite is shuffled: which test pays is decided by the seed rather than by what
+// the test does. Under Vitest's five-second default three of them timed out on a busy machine and
+// passed on the next run of the same tree, which is the one thing a check may not do.
+//
+// Declared here rather than raised in the shipped Vitest config. That default is a threshold ploaness
+// owns for a consumer's suite, and no consumer spec loads an analyzer in order to assert about it. The
+// limit is still a limit: a genuine hang fails here as it did before.
+const CONFIG_LOAD: { readonly timeout: number } = { timeout: 30_000 }
+
+describe('flat config severity', CONFIG_LOAD, () => {
   it('leaves no rule of the shipped config at warning severity', async () => {
     expect(warningRules(await shippedConfig())).toEqual([])
   })
@@ -210,7 +221,7 @@ describe('flat config severity', () => {
   })
 })
 
-describe('inheritance ban survives every no-restricted-syntax block', () => {
+describe('inheritance ban survives every no-restricted-syntax block', CONFIG_LOAD, () => {
   it('keeps the ban in every such block of the shipped config', async () => {
     const status: BanStatus = await banStatus(await shippedConfig())
     expect(status.blocks).toBeGreaterThan(0)
@@ -227,7 +238,7 @@ describe('inheritance ban survives every no-restricted-syntax block', () => {
 // The same trap as the inheritance ban, in a different key. `eslint.js` scoped
 // `no-restricted-properties` to `src/**` for the process.env rule and, by naming the key at all,
 // replaced the build-wide mock ban across a project's entire source tree.
-describe('mock ban survives every no-restricted-properties block', () => {
+describe('mock ban survives every no-restricted-properties block', CONFIG_LOAD, () => {
   it('keeps the ban in every such block of the shipped config', async () => {
     const status: BanStatus = await mockBanStatus(await shippedConfig())
     expect(status.blocks).toBeGreaterThan(0)
@@ -240,7 +251,7 @@ describe('mock ban survives every no-restricted-properties block', () => {
   })
 })
 
-describe('the determinism selectors reach the block that lints the suite', () => {
+describe('the determinism selectors reach the block that lints the suite', CONFIG_LOAD, () => {
   it.each(['NO_TEST_ORDER_ESCAPE', 'NO_NETWORK_GUARD_ESCAPE'])(
     'carries %s into the shipped config',
     async (exportName: string) => {
