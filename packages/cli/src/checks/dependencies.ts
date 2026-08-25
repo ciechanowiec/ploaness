@@ -203,8 +203,8 @@ const lookUpEach = async (names: readonly string[]): Promise<ReadonlyMap<string,
   )
 
 /**
- * Fail when a declared dependency is two or more majors behind its latest release; warn on any lesser
- * lag. This is the one gate that needs the network, and it is fail-closed: it cannot prove freshness
+ * Fail when a declared dependency is two or more majors behind its latest release; report any lesser
+ * lag as an available update. This gate is fail-closed: it cannot prove freshness
  * without the registry, so it fails rather than passing silently. A dependency the registry does not
  * publish at all - a private or workspace-linked package - is reported rather than judged, because a
  * public "latest" it has no claim to would be a fabricated comparison.
@@ -235,8 +235,8 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
       `${String(report.failures.length)} dependency/dependencies are two or more majors behind`,
       [
         ...report.failures.map((finding: FreshnessFinding): string => describeFinding(finding)),
-        ...report.warnings.map(
-          (finding: FreshnessFinding): string => `warning ${describeFinding(finding)}`,
+        ...report.updates.map(
+          (finding: FreshnessFinding): string => `update ${describeFinding(finding)}`,
         ),
         ...notes,
       ],
@@ -246,8 +246,8 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
     `${String(statuses.length)} declared coordinate(s) across ${String(manifests.length)} ` +
       `manifest(s) are within the freshness bound`,
     [
-      ...report.warnings.map(
-        (finding: FreshnessFinding): string => `warning ${describeFinding(finding)}`,
+      ...report.updates.map(
+        (finding: FreshnessFinding): string => `update ${describeFinding(finding)}`,
       ),
       ...notes,
     ],

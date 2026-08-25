@@ -1,5 +1,5 @@
-// Run-log presentation. A verification prints one line per gate as it completes, then the findings of
-// every gate that failed, so a long run is readable while it happens and actionable when it ends.
+// Run-log presentation. A verification prints one line per gate as it completes, then any failure
+// findings or passing update report, so a long run is readable while it happens and actionable when it ends.
 //
 // Every line goes to stdout, failures included. The run log is this command's product, and a caller that
 // redirects stdout alone must not receive a list of passing gates while each failure leaves on the other
@@ -15,7 +15,6 @@ import type { Gate } from './gates.js'
 
 const PASS: string = 'PASS'
 const FAIL: string = 'FAIL'
-const WARN: string = 'WARN'
 
 /** One completed gate, what it found, and how long it took. */
 export interface GateOutcome {
@@ -33,7 +32,6 @@ const BOLD: string = `${CSI}1m`
 const DIM: string = `${CSI}2m`
 const GREEN: string = `${CSI}32m`
 const RED: string = `${CSI}31m`
-const YELLOW: string = `${CSI}33m`
 const CLEAR_LINE: string = `\r${CSI}2K`
 
 // Referenced by code point for the same reason the typography ban is: a source file that spells the
@@ -46,13 +44,11 @@ const BALLOT_X: string = String.fromCodePoint(BALLOT_X_MARK)
 const SYMBOLS: Readonly<Record<string, string>> = {
   [PASS]: CHECK_MARK,
   [FAIL]: BALLOT_X,
-  [WARN]: '!',
 }
 
 const COLOURS: Readonly<Record<string, string>> = {
   [PASS]: GREEN,
   [FAIL]: RED,
-  [WARN]: YELLOW,
 }
 
 // NO_COLOR and FORCE_COLOR are the conventions every other tool in the pipeline already honours, so a
@@ -85,12 +81,7 @@ const line = (text: string): void => {
 const paint = (text: string, colour: string): string =>
   IS_RICH ? `${colour}${text}${RESET}` : text
 
-const verdictOf = (result: GateResult): string => {
-  if (!result.ok) {
-    return FAIL
-  }
-  return result.findings.length > 0 ? WARN : PASS
-}
+const verdictOf = (result: GateResult): string => (result.ok ? PASS : FAIL)
 
 const MILLISECONDS_PER_SECOND: number = 1000
 
@@ -128,18 +119,20 @@ export const beginGate = (gate: Gate, width: number): void => {
   write(`  ${paint('.', DIM)} ${gate.id.padEnd(width)}  ${paint('running', DIM)}`)
 }
 
-// A failing gate prints its findings where it failed, not at the end of the run. Extended verification
-// is thirty-seven gates and several minutes; deferring the reason put it minutes away from the line
-// that announced it, so a reader watching a run learned that something broke long before learning what.
-// The closing verdict still names the gate, which is what makes the block above findable afterwards.
+// A gate prints its findings or update report where it ran, not at the end of the run. Extended
+// verification is thirty-seven gates and several minutes; deferring the detail puts it minutes away from
+// the line that announced it. The closing verdict still names every failed gate.
 const reportGateFindings = (outcome: GateOutcome): void => {
   const verdict: string = verdictOf(outcome.result)
-  if (verdict === PASS) {
+  if (outcome.result.findings.length === 0) {
     return
   }
-  const heading: string = `${verdict}  ${outcome.gate.id} - ${outcome.gate.title}`
+  const heading: string = outcome.result.ok
+    ? `${outcome.gate.id} - update report`
+    : `${verdict}  ${outcome.gate.id} - ${outcome.gate.title}`
+  const colour: string = outcome.result.ok ? DIM : (COLOURS[verdict] ?? RESET)
   line('')
-  line(`  ${paint(heading, COLOURS[verdict] ?? RESET)}`)
+  line(`  ${paint(heading, colour)}`)
   line(`  ${paint('-'.repeat(heading.length), DIM)}`)
   for (const finding of outcome.result.findings) {
     line(`  ${finding}`)
@@ -205,7 +198,6 @@ export const reportVerdict = (
   )
   const counts: string = [
     `${String(tally(outcomes, PASS))} passed`,
-    `${String(tally(outcomes, WARN))} warned`,
     `${String(failures.length)} failed`,
   ].join('  ')
   const mode: string = isExtended ? 'Extended verification' : 'Default verification'

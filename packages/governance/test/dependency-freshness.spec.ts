@@ -56,13 +56,13 @@ describe('classifyFreshness', () => {
     expect(classifyFreshness('16.2.9', '19.0.0')).toBe('fail')
   })
 
-  it('warns one major behind (the boundary below the threshold)', () => {
-    expect(classifyFreshness('18.0.0', '19.0.0')).toBe('warn')
+  it('reports an update one major behind (the boundary below the threshold)', () => {
+    expect(classifyFreshness('18.0.0', '19.0.0')).toBe('update')
   })
 
-  it('warns for a minor or patch behind the same major', () => {
-    expect(classifyFreshness('2.4.0', '2.5.2')).toBe('warn')
-    expect(classifyFreshness('2.5.1', '2.5.2')).toBe('warn')
+  it('reports an update for a minor or patch behind the same major', () => {
+    expect(classifyFreshness('2.4.0', '2.5.2')).toBe('update')
+    expect(classifyFreshness('2.5.1', '2.5.2')).toBe('update')
   })
 
   it('is ok when level with or ahead of latest', () => {
@@ -70,17 +70,17 @@ describe('classifyFreshness', () => {
     expect(classifyFreshness('3.0.0', '2.5.2')).toBe('ok')
   })
 
-  it('treats 0.x on the literal major, so a minor bump only warns', () => {
-    expect(classifyFreshness('0.35.2', '0.35.3')).toBe('warn')
+  it('treats 0.x on the literal major, so a minor bump only enters the update report', () => {
+    expect(classifyFreshness('0.35.2', '0.35.3')).toBe('update')
     expect(classifyFreshness('0.35.2', '0.35.2')).toBe('ok')
-    expect(classifyFreshness('0.35.2', '1.0.0')).toBe('warn')
+    expect(classifyFreshness('0.35.2', '1.0.0')).toBe('update')
     expect(classifyFreshness('0.35.2', '2.0.0')).toBe('fail')
   })
 
   it('orders a prerelease below the same core release', () => {
-    expect(classifyFreshness('1.0.0-rc.1', '1.0.0')).toBe('warn')
+    expect(classifyFreshness('1.0.0-rc.1', '1.0.0')).toBe('update')
     expect(classifyFreshness('1.0.0', '1.0.0-rc.1')).toBe('ok')
-    expect(classifyFreshness('1.0.0-rc.1', '1.0.0-rc.2')).toBe('warn')
+    expect(classifyFreshness('1.0.0-rc.1', '1.0.0-rc.2')).toBe('update')
     expect(classifyFreshness('1.0.0-rc.1', '1.0.0-rc.1')).toBe('ok')
   })
 
@@ -91,13 +91,13 @@ describe('classifyFreshness', () => {
 
   it('classifies a biome $schema pseudo-dependency the same way', () => {
     expect(classifyFreshness('2.5.2', '2.5.2')).toBe('ok')
-    expect(classifyFreshness('2.5.2', '2.6.0')).toBe('warn')
+    expect(classifyFreshness('2.5.2', '2.6.0')).toBe('update')
     expect(classifyFreshness('2.5.2', '4.0.0')).toBe('fail')
   })
 })
 
 describe('findFreshnessViolations', () => {
-  it('partitions failures and warnings and drops ok statuses', () => {
+  it('partitions failures and available updates and drops ok statuses', () => {
     const report: FreshnessReport = findFreshnessViolations([
       makeStatus('graphql', '16.14.2', '17.0.1'),
       makeStatus('old', '17.0.0', '19.0.0'),
@@ -106,14 +106,14 @@ describe('findFreshnessViolations', () => {
     expect(report.failures).toEqual([
       { name: 'old', owner: '.', current: '17.0.0', latest: '19.0.0', verdict: 'fail' },
     ])
-    expect(report.warnings).toEqual([
-      { name: 'graphql', owner: '.', current: '16.14.2', latest: '17.0.1', verdict: 'warn' },
+    expect(report.updates).toEqual([
+      { name: 'graphql', owner: '.', current: '16.14.2', latest: '17.0.1', verdict: 'update' },
     ])
   })
 
   it('returns empty groups for a fully fresh set', () => {
     const report: FreshnessReport = findFreshnessViolations([makeStatus('fresh', '1.0.0', '1.0.0')])
-    expect(report).toEqual({ failures: [], warnings: [] })
+    expect(report).toEqual({ failures: [], updates: [] })
   })
 })
 

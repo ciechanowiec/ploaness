@@ -4,7 +4,7 @@
 //
 // Policy: a declared dependency (transitive deps never count) whose current major version is
 // MAJOR_FAIL_THRESHOLD or more behind the latest published major FAILS the build; any lesser lag (a
-// single major behind, or a minor/patch behind) is a non-failing WARNING. The Biome config `$schema`
+// single major behind, or a minor/patch behind) appears in the non-failing update report. The Biome config `$schema`
 // URL version is fed through the same classifier as a pseudo-dependency. There is no exemption list:
 // every declared dependency is held to the same bar, so a deliberately old pin that falls two majors
 // behind must be bumped or the pin dropped.
@@ -12,7 +12,7 @@
 import { declaredDependencies } from './json-shapes.js'
 
 /** The build impact of a dependency's drift from its latest published release. */
-export type FreshnessVerdict = 'ok' | 'warn' | 'fail'
+export type FreshnessVerdict = 'ok' | 'update' | 'fail'
 
 /** Major-version gap (`latest.major - current.major`) at or above which the gate FAILS the build. */
 export const MAJOR_FAIL_THRESHOLD: number = 2
@@ -80,10 +80,10 @@ const compareCore = (left: ParsedVersion, right: ParsedVersion): number => {
  * Classify how far a current version has drifted from the latest published version. Unclassifiable
  * inputs (a version that does not parse, such as `workspace:*` or an absent latest) are `ok` and
  * silently skipped. Otherwise the verdict is `fail` when the latest major is MAJOR_FAIL_THRESHOLD or
- * more ahead, `warn` when the current is strictly behind by any lesser amount (a single major, or a
+ * more ahead, `update` when the current is strictly behind by any lesser amount (a single major, or a
  * minor/patch), and `ok` when the current is level with or ahead of the latest. Because the major gap
  * uses the literal `major` field, a `0.x` package is compared on that leading `0` (so `0.35.2` to
- * `0.35.3` warns, and only a jump to `2.x` fails).
+ * `0.35.3` needs an update, and only a jump to `2.x` fails).
  * @param current the version currently declared/installed.
  * @param latest the latest version published to the registry.
  * @returns the freshness verdict for the pair.
@@ -97,7 +97,7 @@ export const classifyFreshness = (current: string, latest: string): FreshnessVer
   if (latestVersion.major - currentVersion.major >= MAJOR_FAIL_THRESHOLD) {
     return 'fail'
   }
-  return compareCore(currentVersion, latestVersion) < 0 ? 'warn' : 'ok'
+  return compareCore(currentVersion, latestVersion) < 0 ? 'update' : 'ok'
 }
 
 /** One dependency, plugin, or parent as some manifest of the repository declares it. */
@@ -149,18 +149,18 @@ export const collectCoordinates = (
 
 /** A dependency status that classified as a non-`ok` verdict, carried through for reporting. */
 export interface FreshnessFinding extends DependencyStatus {
-  readonly verdict: 'warn' | 'fail'
+  readonly verdict: 'update' | 'fail'
 }
 
-/** The failing and warning findings for a set of dependency statuses; `ok` statuses are omitted. */
+/** The failures and available updates for a set of dependency statuses; `ok` statuses are omitted. */
 export interface FreshnessReport {
   readonly failures: readonly FreshnessFinding[]
-  readonly warnings: readonly FreshnessFinding[]
+  readonly updates: readonly FreshnessFinding[]
 }
 
 /**
- * Partition dependency statuses into build-failing and warning findings, dropping the `ok` ones. A
- * `fail` verdict (two or more majors behind) lands in `failures`; any lesser lag lands in `warnings`.
+ * Partition dependency statuses into build-failing findings and the update report, dropping the `ok`
+ * ones. A `fail` verdict lands in `failures`; any lesser lag lands in `updates`.
  * @param statuses the declared dependencies (and `$schema` pseudo-dependencies) to classify.
  * @returns the grouped findings; both arrays are empty when every status is fresh.
  */
@@ -178,9 +178,9 @@ export const findFreshnessViolations = (statuses: readonly DependencyStatus[]): 
       verdict: classifyFreshness(status.current, status.latest),
     }),
   )
-  const withVerdict = (verdict: 'fail' | 'warn'): readonly FreshnessFinding[] =>
+  const withVerdict = (verdict: 'fail' | 'update'): readonly FreshnessFinding[] =>
     judged
       .filter((entry: JudgedStatus): boolean => entry.verdict === verdict)
       .map((entry: JudgedStatus): FreshnessFinding => ({ ...entry.status, verdict }))
-  return { failures: withVerdict('fail'), warnings: withVerdict('warn') }
+  return { failures: withVerdict('fail'), updates: withVerdict('update') }
 }

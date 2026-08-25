@@ -3,8 +3,8 @@
 // Its summary is what satisfies the reporting rule. `reportGate` prints a gate's summary on every run,
 // pass or fail, so putting the count and the headroom there makes the trend readable before the ceiling
 // is reached without adding a reporting path of its own. Findings stay empty while the project is
-// within budget: a passing gate that carried findings would render as a warning, and a warning severity
-// does not exist here.
+// within budget because the summary already carries the whole report; passing findings are reserved for
+// a separate informational report such as dependency freshness.
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import {

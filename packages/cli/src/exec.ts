@@ -5,13 +5,13 @@ import { type SpawnSyncReturns, spawnSync } from 'node:child_process'
 /** The outcome of one gate. */
 export interface GateResult {
   readonly ok: boolean
-  /** Lines the user must act on when the gate fails, or notable warnings when it passes. */
+  /** Lines the user must act on when the gate fails, or an informational report when it passes. */
   readonly findings: readonly string[]
   /** One line summarising what the gate observed. */
   readonly summary: string
 }
 
-/** A passing result, optionally carrying non-failing warnings. */
+/** A passing result, optionally carrying a non-failing report. */
 export const passed = (summary: string, findings: readonly string[] = []): GateResult => ({
   ok: true,
   findings,

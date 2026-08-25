@@ -93,11 +93,8 @@ expect() {
         failures=$((failures + 1))
         return
     fi
-    # A gate that passes WITH findings prints `[WARN]` and still exits zero, so the exit status alone
-    # reads it as a pass while the marker grep would not find one. Both markers are accepted for a pass,
-    # because both mean the gate ran and did not fail.
     if [ "$verdict" = PASS ]; then
-        marker="\[PASS\] $gate\|\[WARN\] $gate"
+        marker="\[PASS\] $gate"
     else
         marker="\[$verdict\] $gate"
     fi

@@ -208,8 +208,9 @@ one: once it is published, only a fresh history satisfies the rule.
 A run stops at the first failing gate and names how many gates it did not reach, so it reports the
 findings of one gate rather than of all of them. Repair that gate and rerun. Nothing below a failing
 gate has been verified: a gate is free to leave the tree in a shape the next one misreads, and a column
-of passes beneath a failure describes a state nobody established. A warning does not stop a run - an
-available dependency update is reported and carries on - because a warning is not a failure.
+of passes beneath a failure describes a state nobody established. A passing freshness gate still prints
+its update report, because an available version below the failure bound is information rather than a
+third verdict.
 
 `--enforce=false` is the exception, and the reason the flag exists. A report-only run carries on past a
 failing gate, so one run lists every finding a project has instead of handing them over one rerun at a
