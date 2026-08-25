@@ -9,17 +9,29 @@
 # by a consumer project, not by a fixture.
 set -eu
 
+# The gate report has two formats, and the ASCII one carries the `[PASS] <id>` token every assertion
+# below greps for. `report.ts` chooses the rich format whenever FORCE_COLOR is set, TTY or not - which
+# CI images commonly export - so every one of these assertions would fail on a verdict that was correct.
+# Declared here rather than assumed, because the greps are a contract with that format.
+NO_COLOR=1
+export NO_COLOR
+unset FORCE_COLOR
+
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 tarballs="$root/dist-tarballs"
 failures=0
 
-for package in ploaness ploaness-cli ploaness-config ploaness-assets ploaness-governance; do
-    if [ ! -f "$tarballs/$package-1.0.0.tgz" ]; then
-        echo "missing $tarballs/$package-1.0.0.tgz; run scripts/pack-local.sh first" >&2
-        exit 1
-    fi
-done
+# Counted rather than named. The five package names and the version `1.0.0` were both written out here,
+# a second copy of what `packages/` and its manifests already say - so a version bump would have failed
+# this suite with "missing tarball, run pack-local.sh first", which would not have been true.
+expected_tarballs="$(find "$root/packages" -maxdepth 2 -name package.json | wc -l | tr -d ' ')"
+actual_tarballs="$(find "$tarballs" -maxdepth 1 -name '*.tgz' 2>/dev/null | wc -l | tr -d ' ')"
+if [ "$actual_tarballs" != "$expected_tarballs" ]; then
+    echo "found $actual_tarballs tarball(s) in $tarballs, expected $expected_tarballs;" >&2
+    echo "run scripts/pack-local.sh first" >&2
+    exit 1
+fi
 
 # Fixtures live under the home directory so a Docker-backed gate could mount them later: a macOS daemon
 # shares the home directory and need not share the system temporary directory, and an unshared source
@@ -81,7 +93,15 @@ expect() {
         failures=$((failures + 1))
         return
     fi
-    if ! printf '%s' "$output" | grep -q "\[$verdict\] $gate"; then
+    # A gate that passes WITH findings prints `[WARN]` and still exits zero, so the exit status alone
+    # reads it as a pass while the marker grep would not find one. Both markers are accepted for a pass,
+    # because both mean the gate ran and did not fail.
+    if [ "$verdict" = PASS ]; then
+        marker="\[PASS\] $gate\|\[WARN\] $gate"
+    else
+        marker="\[$verdict\] $gate"
+    fi
+    if ! printf '%s' "$output" | grep -q "$marker"; then
         echo "FAILED $name: gate $gate exited correctly but did not report [$verdict] $gate" >&2
         echo "$output" | sed 's/^/    /' >&2
         failures=$((failures + 1))
@@ -158,8 +178,12 @@ only arrangement that resolves the way a published install does.'
 # The pass case: the untouched scaffold must satisfy every gate that judges a project's own shape.
 new_case pass
 commit_case pass 'feat(fixture): add the ploaness integration consumer' "$CONFORMING_BODY"
+# `install-scripts` is here because its only other fixture is a failure case, and this file's own
+# reasoning applies symmetrically: a rule that only ever failed proves as little as one that only ever
+# passed - neither tells you the gate is wired to the scaffold at all.
 for gate in preflight wiring assets conventions editorconfig suppressions generated-denial \
-            payload-rules config-refs require-full-history commit-history linear-history; do
+            payload-rules config-refs install-scripts require-full-history commit-history \
+            linear-history; do
     expect pass "$gate" PASS
 done
 
@@ -335,8 +359,12 @@ expect fail-unexplained-exclusion wiring FAIL 'states no reason'
 # The standard pins the toolchain so an upstream release cannot change a verdict while the project
 # stays unchanged. A range on an application dependency is that same hole one layer down: the build,
 # the suite and the end-to-end run all execute against something nobody wrote down.
+#
+# The caret is on the PINNED version, so the range is the only defect the fixture carries. Written
+# against `^16.3.1` the case failed for two reasons at once - a range, and a version that is not the
+# pinned one - and a fixture with two reasons to fail does not prove which rule caught it.
 new_case fail-ranged-dependency
-edit_json "$scratch/fail-ranged-dependency/package.json" dependencies.next '^16.3.1'
+edit_json "$scratch/fail-ranged-dependency/package.json" dependencies.next '^16.3.2'
 commit_case fail-ranged-dependency 'feat(fixture): declare a dependency as a range' "$CONFORMING_BODY"
 expect fail-ranged-dependency wiring FAIL 'which is a range'
 

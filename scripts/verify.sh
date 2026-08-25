@@ -15,10 +15,18 @@ set -eu
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
-ploaness="node $root/packages/cli/dist/bin.js"
+ploaness_bin="$root/packages/cli/dist/bin.js"
 
+# Written through a file rather than as one pipeline. POSIX `sh` has no `pipefail`, so a failure in
+# `git ls-files` or in the middle `git hash-object` was reported as the exit status of the LAST stage -
+# and the fingerprint would then describe a truncated stream while claiming to describe the tree. That
+# value is the whole of the tracked-tree guarantee, so it may not be computed from a masked failure.
 fingerprint() {
-    git ls-files -z | xargs -0 git hash-object | git hash-object --stdin
+    fingerprint_list="$(mktemp)"
+    git ls-files -z > "$fingerprint_list"
+    xargs -0 git hash-object < "$fingerprint_list" > "$fingerprint_list.hashes"
+    git hash-object --stdin < "$fingerprint_list.hashes"
+    rm -f "$fingerprint_list" "$fingerprint_list.hashes"
 }
 
 # Reported on the way out of a failing run as well as at the end of a passing one. A check that failed
@@ -48,8 +56,11 @@ step() {
     exit 1
 }
 
+# argv, not a shell string. The interpreter path was interpolated into `sh -c`, where the inner shell
+# re-splits it - so a checkout under a path containing a space broke all seventeen gate invocations,
+# while every other command in this file was already passed properly.
 gate() {
-    step "gate $1" sh -c "$ploaness gate $1"
+    step "gate $1" node "$ploaness_bin" gate "$1"
 }
 
 before="$(fingerprint)"
@@ -80,8 +91,12 @@ step knip "$cli_bin/knip" --config packages/config/knip-repo.json
 shellcheck_image="$(node --input-type=module -e \
     "import { CONTAINER_IMAGES } from '$root/packages/governance/dist/index.js'
      process.stdout.write(CONTAINER_IMAGES.shellcheck)")"
-step shellcheck docker run --rm -v "$root:/mnt" "$shellcheck_image" \
-    scripts/verify.sh scripts/lib/check-asset-bodies.sh scripts/pack-local.sh it/verify.sh
+# Discovered from the tracked tree rather than enumerated. The list was correct at the time it was
+# written, which is the only time an enumeration is correct: a script added later is a script nothing
+# reads, and this repository already learned that lesson from the JavaScript allowlist.
+shellcheck_targets="$(git ls-files '*.sh' | tr '\n' ' ')"
+# shellcheck disable=SC2086 # the target list is deliberately word-split into separate arguments
+step shellcheck docker run --rm -v "$root:/mnt" "$shellcheck_image" $shellcheck_targets
 
 # The specs are exempt for the reason AGENTS.md records: `--strict` counts every type assertion as
 # uncovered, and a spec exists to construct inputs the production types cannot express. Reaching 100%
@@ -94,7 +109,10 @@ step type-coverage "$cli_bin/type-coverage" \
     --ignore-files 'vitest.config.mts' \
     --ignore-files 'vitest.setup.ts'
 
-# The gates whose rules are about a repository's shape, in the order `gates.ts` runs them.
+# The gates whose rules are about a repository's shape, in this file's own order: the reads that need
+# nothing but the tree first, then the ones that need a registry or a container. `gates.ts` orders them
+# differently, because it is ordering a Payload project's run rather than this one - and the comment
+# here used to claim it followed that order, which it has not for some time.
 gate biome-schema
 gate conventions
 gate editorconfig

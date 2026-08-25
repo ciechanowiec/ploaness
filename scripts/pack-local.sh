@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env sh
 # Pack every ploaness package into dist-tarballs/, so a consumer can install the harness before it is
 # published. Five unpublished packages cannot be installed by name; the consumer points a pnpm override
 # at each tarball instead. That block is removed once the packages are on npm, and it is the only thing
@@ -13,8 +13,11 @@ rm -f "$out"/*.tgz
 
 pnpm -r --filter './packages/**' run build
 
-for package in governance config assets cli ploaness; do
-  (cd "$root/packages/$package" && pnpm pack --pack-destination "$out" >/dev/null)
+# Discovered from the workspace rather than named. The list was a second copy of what `packages/`
+# already contains, and `pnpm -r` above builds whatever is there - so a sixth package would have been
+# built here and then never packed, with nothing to say so.
+for manifest in "$root"/packages/*/package.json; do
+  (cd "$(dirname "$manifest")" && pnpm pack --pack-destination "$out" >/dev/null)
 done
 
 echo "packed into $out:"
