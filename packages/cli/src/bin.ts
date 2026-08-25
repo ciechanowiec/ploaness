@@ -63,13 +63,37 @@ const COMMANDS: Readonly<Record<string, CommandRunner>> = {
     commitMessage(context, rest[0], rest[1]),
 }
 
-// The flags this binary accepts, in full. Anything else beginning with a dash is refused rather than
-// ignored: `--extend` silently ran default verification, and `--enforce=FALSE` silently enforced, which
-// are the two ways a caller can believe it asked for something it did not get.
-const KNOWN_FLAGS: ReadonlySet<string> = new Set<string>(['--extended', '--enforce=false'])
+// Each command owns its grammar. A global allowlist rejected the documented `commit-message --all` and
+// `--range` modes while accepting `--extended` on commands that do not use it; checking the whole shape
+// also stops extra positional arguments and single-dash options from disappearing silently.
+const VERIFY_OPTIONS: ReadonlySet<string> = new Set<string>(['--extended', '--enforce=false'])
+const RANGE_ARGUMENT_COUNT: number = 2
 
-const unknownFlags = (argv: readonly string[]): readonly string[] =>
-  argv.filter((token: string): boolean => token.startsWith('--') && !KNOWN_FLAGS.has(token))
+const hasDistinctMembersOf = (values: readonly string[], allowed: ReadonlySet<string>): boolean =>
+  values.every((value: string): boolean => allowed.has(value)) &&
+  new Set<string>(values).size === values.length
+
+const isCommitMessageArguments = (rest: readonly string[]): boolean => {
+  const [mode, value] = rest
+  if (mode === '--all') {
+    return rest.length === 1
+  }
+  if (mode === '--range') {
+    return rest.length === RANGE_ARGUMENT_COUNT && value !== undefined && !value.startsWith('-')
+  }
+  return rest.length === 1 && mode !== undefined && !mode.startsWith('-')
+}
+
+const acceptsArguments: Readonly<Record<string, (rest: readonly string[]) => boolean>> = {
+  verify: (rest: readonly string[]): boolean => hasDistinctMembersOf(rest, VERIFY_OPTIONS),
+  format: (rest: readonly string[]): boolean => rest.length === 0,
+  sync: (rest: readonly string[]): boolean => rest.length === 0,
+  init: (rest: readonly string[]): boolean => rest.length === 0,
+  gates: (rest: readonly string[]): boolean => rest.length === 0,
+  gate: (rest: readonly string[]): boolean =>
+    rest.length === 1 && rest[0] !== undefined && !rest[0].startsWith('-'),
+  'commit-message': isCommitMessageArguments,
+}
 
 const main = async (): Promise<number> => {
   const argv: readonly string[] = process.argv.slice(ARGV_COMMAND_OFFSET)
@@ -84,9 +108,10 @@ const main = async (): Promise<number> => {
     console.error(`unknown command "${command}"\n\n${USAGE}`)
     return 1
   }
-  const flags: readonly string[] = unknownFlags(argv)
-  if (flags.length > 0) {
-    console.error(`unknown option(s): ${flags.join(', ')}\n\n${USAGE}`)
+  const accepts: ((rest: readonly string[]) => boolean) | undefined = acceptsArguments[command]
+  const isAccepted: boolean = accepts?.(rest) ?? false
+  if (!isAccepted) {
+    console.error(`invalid arguments for "${command}"\n\n${USAGE}`)
     return 1
   }
   const runCommand: CommandRunner | undefined = COMMANDS[command]
@@ -94,7 +119,7 @@ const main = async (): Promise<number> => {
     console.error(`unknown command "${command}"\n\n${USAGE}`)
     return 1
   }
-  const isEnforce: boolean = !argv.includes('--enforce=false')
+  const isEnforce: boolean = !rest.includes('--enforce=false')
   return await runCommand(createContext(process.cwd(), isEnforce), rest)
 }
 

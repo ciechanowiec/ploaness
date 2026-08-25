@@ -113,6 +113,28 @@ expect() {
     echo "ok $name: $gate is $verdict${needle:+ (${needle})}"
 }
 
+# Assert an ordinary CLI command's exit status and one piece of its report. Gate assertions use the
+# structured marker above; commands such as `commit-message` and `init` deliberately have no gate marker.
+expect_command() {
+    name="$1"
+    verdict="$2"
+    needle="$3"
+    shift 3
+    directory="$scratch/$name"
+    if output="$(cd "$directory" && "$@" 2>&1)"; then
+        actual=PASS
+    else
+        actual=FAIL
+    fi
+    if [ "$actual" != "$verdict" ] || ! printf '%s' "$output" | grep -q "$needle"; then
+        echo "FAILED $name: command was $actual, expected $verdict mentioning \"$needle\"" >&2
+        echo "$output" | sed 's/^/    /' >&2
+        failures=$((failures + 1))
+        return
+    fi
+    echo "ok $name: command is $verdict ($needle)"
+}
+
 # The network guard runs inside the suite rather than inside a gate, so proving it needs a spec rather
 # than an `expect`. The fixture's own vitest runs that spec, in the node environment and without
 # coverage: neither the DOM nor the thresholds is what these two cases are about. No commit is made for
@@ -183,6 +205,18 @@ for gate in preflight wiring assets conventions editorconfig suppressions genera
             linear-history; do
     expect pass "$gate" PASS
 done
+
+# The two history modes are options of `commit-message`, not global CLI flags. A global allowlist once
+# rejected both documented forms before their handler could read them.
+expect_command pass PASS 'commit message(s) conform' \
+    ./node_modules/.bin/ploaness commit-message --all
+expect_command pass PASS 'commit message(s) conform' \
+    ./node_modules/.bin/ploaness commit-message --range HEAD
+
+# Options are command-specific: a known option on the wrong command, and any unknown single-dash option,
+# are invalid rather than positional text a handler silently ignores.
+expect_command pass FAIL 'invalid arguments' ./node_modules/.bin/ploaness gates --extended
+expect_command pass FAIL 'invalid arguments' ./node_modules/.bin/ploaness gates -x
 
 # Each failing case is the pass case minus exactly one guarantee.
 new_case fail-wiring
