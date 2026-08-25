@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  type AuxiliaryServer,
   type DeclaredExclusion,
   findConvenienceExclusions,
   findUnreachedExclusions,
@@ -189,5 +190,58 @@ describe('reading declared exclusions', () => {
 
   it('keeps the shipped defaults whatever the project declares', () => {
     expect(declare([]).coverageExclude.length).toBeGreaterThan(0)
+  })
+})
+
+// A project cannot edit the re-exported Playwright config, so this is the only way it can say that its
+// own specs drive something besides the application. It is a fact rather than a carve-out: nothing here
+// can narrow a gate, and an entry ploaness cannot act on is dropped rather than half-honoured.
+describe('the auxiliary servers a project declares', () => {
+  it('starts nothing beside the application when the project declares none', () => {
+    expect(readSettings({}).auxiliaryServers).toEqual([])
+  })
+
+  it('carries a declared server through, because ploaness cannot know a project needs one', () => {
+    const declared: AuxiliaryServer = {
+      command: 'storybook dev -p 6006 --no-open --quiet',
+      url: 'http://localhost:6006',
+    }
+    const settings: Settings = readSettings({ ploaness: { auxiliaryServers: [declared] } })
+    expect(settings.auxiliaryServers).toEqual([declared])
+  })
+
+  it('drops an entry naming no command, which would leave the run waiting out a dead port', () => {
+    const settings: Settings = readSettings({
+      ploaness: { auxiliaryServers: [{ url: 'http://localhost:6006' }] },
+    })
+    expect(settings.auxiliaryServers).toEqual([])
+  })
+
+  it('drops an entry naming no url, which would start a server nothing waits for', () => {
+    const settings: Settings = readSettings({
+      ploaness: { auxiliaryServers: [{ command: 'storybook dev' }] },
+    })
+    expect(settings.auxiliaryServers).toEqual([])
+  })
+
+  it('keeps the sound entries beside a malformed one rather than dropping the whole list', () => {
+    const settings: Settings = readSettings({
+      ploaness: {
+        auxiliaryServers: [
+          { command: 'storybook dev', url: 'http://localhost:6006' },
+          { command: ' '.repeat(3), url: 'http://localhost:7007' },
+        ],
+      },
+    })
+    expect(settings.auxiliaryServers).toEqual([
+      { command: 'storybook dev', url: 'http://localhost:6006' },
+    ])
+  })
+
+  it('reads nothing from a value that is not a list, so a typo starts no process', () => {
+    const settings: Settings = readSettings({
+      ploaness: { auxiliaryServers: { command: 'storybook dev', url: 'http://localhost:6006' } },
+    })
+    expect(settings.auxiliaryServers).toEqual([])
   })
 })

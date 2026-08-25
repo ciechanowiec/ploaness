@@ -428,6 +428,9 @@ xref:#extended-verification[] adds the following six gates to xref:#default-veri
       { "path": "tests/fixtures/stripe-webhook.json", "reason": "fake test key the checkout fixture asserts on" }
     ],
     "serverUrl": "http://localhost:3000",
+    "auxiliaryServers": [
+      { "command": "storybook dev -p 6006 --no-open --quiet", "url": "http://localhost:6006" }
+    ],
     "pretest": ["pnpm", "run", "db:ensure"],
     "testWrapper": ["pnpm", "run", "db:scratch", "--"],
     "analysisEnv": { "STRIPE_KEY": "placeholder" }
@@ -503,6 +506,10 @@ xref:#extended-verification[] adds the following six gates to xref:#default-veri
 | `http://localhost:3000`
 | The origin the xref:#e2e-gate[`e2e`] gate drives, for a https://payloadcms.com[Payload CMS^] project that serves on another port.
 
+| [[auxiliary-servers]]`auxiliaryServers`
+| empty
+| Servers the xref:#e2e-gate[`e2e`] gate starts beside the application, for a https://payloadcms.com[Payload CMS^] project whose own specs drive one. Each entry states the `command` and the `url`. An entry missing either is dropped.
+
 | [[skip-routes]]`accessibilitySkipRoutes`
 | `/admin`, `/api`
 | Route prefixes xref:#accessibility-sweep[the accessibility sweep] doesn't follow. Each entry states the `pattern` and the `reason`, as any other xref:#declared-exclusion[] does.
@@ -510,6 +517,7 @@ xref:#extended-verification[] adds the following six gates to xref:#default-veri
 . xref:#pretest[`pretest`] and xref:#test-wrapper[`testWrapper`] exist because a https://payloadcms.com[Payload CMS^] project can need a database before a xref:#gates[gate] can run. How the https://payloadcms.com[Payload CMS^] project reaches that database is a fact _ploaness_ can't know. Declaring either key changes only the route to the database, never a gate or a threshold.
 . xref:#pretest[`pretest`] and xref:#test-wrapper[`testWrapper`] are the two keys no check verifies. Both are arbitrary argument lists, and a wrapper that swallows the exit code of the process it wraps is indistinguishable from one that passes it through until it runs. So the rule is stated in `.ploaness/agent-guide.md` instead: the wrapper passes the child's exit code through unchanged, doesn't retry, doesn't filter output, and doesn't decide what runs, and the xref:#pretest[] command provisions rather than editing the tree under verification. Either key used to turn a failing run into a passing one is a bypass, and no xref:#finding[] reports it.
 . xref:#server-url[`serverUrl`] and xref:#skip-routes[`accessibilitySkipRoutes`] are the whole of what a https://payloadcms.com[Payload CMS^] project declares about xref:#accessibility-sweep[the accessibility sweep], because the sweep itself is xref:#pinned-file[pinned]. Neither weakens it: the port is a fact _ploaness_ can't know, and the route prefixes add to the two that a https://payloadcms.com[Payload CMS^] project always carries rather than replacing them. The admin panel and the REST API are skipped by default because neither is a public page, and https://payloadcms.com[Payload CMS^] renders the markup behind both.
+. xref:#auxiliary-servers[`auxiliaryServers`] adds a server to the end-to-end run rather than replacing the one under test. The application is still started first and still answers at xref:#server-url[], so xref:#accessibility-sweep[the accessibility sweep] crawls the same origin whatever a https://payloadcms.com[Payload CMS^] project declares here, and no threshold, ban, or xref:#pinned-file[pinned] spec changes. It exists because `playwright.config.ts` is a bare re-export that a https://payloadcms.com[Payload CMS^] project can't extend, so a project whose own specs drive a component workshop or a second service had no way to say so at all.
 . xref:#analysis-env[`analysisEnv`] exists because a https://payloadcms.com[Payload CMS^] configuration module reads `process.env` as soon as the module loads, which a reader that only inspects the source files can't satisfy in a bare shell. The values are placeholders, and a xref:#gates[gate] that runs the application, such as xref:#build-gate[`build`], xref:#tests-gate[`tests`], or xref:#e2e-gate[`e2e`], uses the real environment instead.
 . [[suppression-ceiling,the suppression ceiling]]The _suppression ceiling_ is `2` plus one for every
 `500` non-blank lines of the https://payloadcms.com[Payload CMS^] project's own source. It is a density

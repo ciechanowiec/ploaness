@@ -33,6 +33,7 @@
     "knip.json",
     "pins.json",
     "playwright.js",
+    "project-settings.d.ts",
     "project-settings.js",
     "stylelint.json",
     "tsconfig.json",

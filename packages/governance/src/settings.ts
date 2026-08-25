@@ -37,6 +37,22 @@ export interface UnmanagedAsset {
   readonly reason: string
 }
 
+/**
+ * A server the project's own end-to-end specs need beside the application under test.
+ *
+ * It carries no `reason`, unlike an exclusion. An exclusion without one is dropped because a dropped
+ * exclusion widens what a gate judges, which is the safe direction to fail in; a dropped server would
+ * instead leave a spec failing against a port nothing is listening on, which is a confusing failure
+ * rather than a strict one. This is a fact ploaness cannot know, like {@link Settings.serverUrl}, not a
+ * carve-out the project has to justify.
+ */
+export interface AuxiliaryServer {
+  /** The command that starts it, as Playwright takes it: one string rather than an argv list. */
+  readonly command: string
+  /** The origin Playwright waits for before the suite starts. */
+  readonly url: string
+}
+
 /** The parameters a consuming project may declare under the `ploaness` key of its package.json. */
 export interface Settings {
   /** Directories holding first-party source, used by the convention and coverage gates. */
@@ -75,6 +91,14 @@ export interface Settings {
    * know, and naming it weakens no rule: the suite, its browser and its assertions are unchanged.
    */
   readonly serverUrl: string
+  /**
+   * Servers the end-to-end run starts beside the application, for a project whose own specs drive one.
+   * The application under test is unchanged, and so is every rule applied to it: a declared server is
+   * added to the run rather than substituted for it, and the pinned accessibility sweep still drives
+   * {@link Settings.serverUrl}. Which auxiliary process a project's specs need is a fact ploaness
+   * cannot know, and the re-exported Playwright config leaves the project no other way to say so.
+   */
+  readonly auxiliaryServers: readonly AuxiliaryServer[]
   /**
    * Route prefixes the accessibility crawl must not follow, on top of the ones every Payload project
    * carries. A project that mounts its admin panel elsewhere has to say so or the crawl walks into it.
@@ -175,6 +199,19 @@ const asUnmanagedAssets = (raw: unknown): readonly UnmanagedAsset[] =>
         const path: string = asText(record['path'])
         const reason: string = asText(record['reason'])
         return path.length > 0 && reason.trim().length > 0 ? [{ path, reason }] : []
+      })
+    : []
+
+// Both halves are load-bearing: a command with no url gives Playwright nothing to wait for, and a url
+// with no command names a server nobody starts. An incomplete entry is dropped rather than half-honoured,
+// because starting a process the suite then cannot reach is the one outcome worse than not starting it.
+const asAuxiliaryServers = (raw: unknown): readonly AuxiliaryServer[] =>
+  isArray(raw)
+    ? raw.flatMap((entry: unknown): readonly AuxiliaryServer[] => {
+        const record: Record<string, unknown> = asRecord(entry)
+        const command: string = asText(record['command']).trim()
+        const url: string = asText(record['url']).trim()
+        return command.length > 0 && url.length > 0 ? [{ command, url }] : []
       })
     : []
 
@@ -306,6 +343,7 @@ export const readSettings = (packageJson: unknown): Settings => {
     pretest: asStringArray(raw['pretest'], []),
     testWrapper: asStringArray(raw['testWrapper'], []),
     serverUrl: typeof raw['serverUrl'] === 'string' ? raw['serverUrl'] : DEFAULT_SERVER_URL,
+    auxiliaryServers: asAuxiliaryServers(raw['auxiliaryServers']),
     accessibilitySkipRoutes: [...DEFAULT_SKIPPED_ROUTES, ...honoured(declaredRoutes)],
     analysisEnv: { ...DEFAULT_ANALYSIS_ENV, ...asStringRecord(raw['analysisEnv']) },
   }
