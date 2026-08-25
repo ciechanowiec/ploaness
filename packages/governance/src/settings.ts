@@ -307,11 +307,12 @@ const readDeclaredLists = (raw: Record<string, unknown>): DeclaredLists => ({
  */
 export const readSettings = (packageJson: unknown): Settings => {
   const raw: Record<string, unknown> = asRecord(asRecord(packageJson)['ploaness'])
-  const { typography, javascript, coverage, routes }: DeclaredLists = readDeclaredLists(raw)
-  const declaredTypography: readonly DeclaredExclusion[] = typography
-  const declaredJavascript: readonly DeclaredExclusion[] = javascript
-  const declaredCoverage: readonly DeclaredExclusion[] = coverage
-  const declaredRoutes: readonly DeclaredExclusion[] = routes
+  const {
+    typography: declaredTypography,
+    javascript: declaredJavascript,
+    coverage: declaredCoverage,
+    routes: declaredRoutes,
+  }: DeclaredLists = readDeclaredLists(raw)
   return {
     // Additive, like every other list field. Replacing the default let a project declare `["src"]` and
     // silently drop `tests` and `scripts` from the conventions, payload-rules, suppressions, css and
