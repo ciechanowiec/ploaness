@@ -5,7 +5,27 @@
   "reportDescriptionlessDisables": true,
   "reportNeedlessDisables": true,
   "reportInvalidScopeDisables": true,
+  "$comment": "at-rule-no-unknown lists the Tailwind v4 at-rules because they are a CSS dialect a Payload project may legitimately be written in, not a carve-out for one repository's files. A project that uses no Tailwind never writes one, so the list costs it nothing, and a typo such as @theem still fails. The whole list is named rather than the subset one project happened to need: a missing entry sends the next project back to a config file it is not allowed to own, which is the wall this list exists to remove. import-notation follows for the same reason and is not a relaxation - Tailwind v4 mandates the string form (@import \"tailwindcss\"), so the url form the standard config wants cannot be written at all; the rule still enforces one notation, and the one it enforces is now the one that can exist.",
   "rules": {
+    "at-rule-no-unknown": [
+      true,
+      {
+        "ignoreAtRules": [
+          "apply",
+          "config",
+          "custom-variant",
+          "plugin",
+          "reference",
+          "slot",
+          "source",
+          "tailwind",
+          "theme",
+          "utility",
+          "variant"
+        ]
+      }
+    ],
+    "import-notation": "string",
     "selector-pseudo-class-no-unknown": [true, { "ignorePseudoClasses": ["global", "local"] }],
     "custom-property-pattern": null,
     "selector-class-pattern": null,

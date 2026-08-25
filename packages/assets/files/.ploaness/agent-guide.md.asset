@@ -54,6 +54,10 @@ ploaness governs all of the following domains:
 - **Repository files:** managed, seeded, and forbidden paths, and an unchanged committable tree during
   verification. Five paths must not exist at all, because ploaness supplies each of those configurations
   itself: `.stylelintrc.json`, `.dependency-cruiser.json`, `knip.json`, `.gitleaks.toml`, and `plugins`.
+  The Stylelint configuration ploaness supplies accepts Tailwind v4 as written - every at-rule it
+  defines, and the `@import "tailwindcss"` string form it mandates - so a project styled with Tailwind
+  needs no configuration of its own. A misspelled at-rule still fails: this is an allowance for a CSS
+  dialect, not the rule turned off.
   Writing one to quiet a finding is the reflex this forbids; answer the finding in the source instead.
 - **Source:** formatting, fast lint, type-aware lint, strict type checking, type coverage, typography,
   source conventions, committed whitespace and encoding, style sheets, and module architecture. Test

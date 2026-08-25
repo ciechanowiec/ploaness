@@ -204,8 +204,8 @@ xref:#default-verification[] runs the following 31 gates.
 | [[suppressions-gate]]`suppressions`
 | The suppression count against xref:#suppression-ceiling[the suppression ceiling], over the https://payloadcms.com[Payload CMS^] project's own files rather than the xref:#managed-files[managed] ones.
 
-| `css`
-| Stylelint.
+| [[css-gate]]`css`
+| Stylelint over every style sheet under the source roots. Tailwind v4 is accepted as written: its at-rules and its mandatory `@import "tailwindcss"` string form both pass, so a https://payloadcms.com[Payload CMS^] project styled with it needs no configuration of its own, which is just as well because `.stylelintrc.json` is xref:#forbidden-file[forbidden]. A misspelled at-rule still fails.
 
 | `arch`
 | dependency-cruiser.
