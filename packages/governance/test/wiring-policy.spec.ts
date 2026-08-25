@@ -45,6 +45,9 @@ const wiredInputs = (overrides: Record<string, unknown> = {}): WiringInputs => (
 const locations = (inputs: Parameters<typeof findWiringViolations>[0]): readonly string[] =>
   findWiringViolations(inputs).map((violation) => violation.location)
 
+const reasonFor = (inputs: Parameters<typeof findWiringViolations>[0], location: string): string =>
+  findWiringViolations(inputs).find((violation) => violation.location === location)?.reason ?? ''
+
 describe('a correctly wired project', () => {
   it('reports nothing', () => {
     expect(findWiringViolations(wiredInputs())).toEqual([])
@@ -137,6 +140,17 @@ describe('the Biome file-selection block', () => {
     })
     expect(locations(wiredInputs({ biomeConfig }))).toContain('biome.json files')
   })
+
+  // The assertion is on an absence because the defect was one: `init` seeds a stub only where the
+  // project has no biome.json, and this finding is unreachable until biome.json has parsed. Naming
+  // that command sent a real consumer round a loop - run it, watch it report the file left alone,
+  // fail on the same line - which is what `sync.ts` refuses to do for a managed file.
+  it('does not instruct running init, which leaves an existing file alone', () => {
+    const biomeConfig: string = JSON.stringify({ extends: ['ploaness/biome'] })
+    expect(reasonFor(wiredInputs({ biomeConfig }), 'biome.json files')).not.toContain(
+      'run `ploaness init`',
+    )
+  })
 })
 
 describe('the tsconfig path keys', () => {
@@ -155,6 +169,18 @@ describe('the tsconfig path keys', () => {
       exclude: [],
     })
     expect(locations(wiredInputs({ tsconfig }))).toContain('tsconfig.json exclude')
+  })
+
+  // The same loop the biome block above was sending a project round: unreachable until tsconfig.json
+  // has parsed, so the file it told the project to have written already exists.
+  it('does not instruct running init, which leaves an existing file alone', () => {
+    const tsconfig: string = JSON.stringify({
+      extends: 'ploaness/tsconfig.json',
+      exclude: ['node_modules'],
+    })
+    expect(reasonFor(wiredInputs({ tsconfig }), 'tsconfig.json include')).not.toContain(
+      'run `ploaness init`',
+    )
   })
 })
 

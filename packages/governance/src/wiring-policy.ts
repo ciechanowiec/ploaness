@@ -274,6 +274,10 @@ const checkBiome = (
       reason: 'ploaness owns this section; remove the local override',
     }),
   )
+  // The advice has to name a repair it can actually perform. This finding is only reachable once
+  // biome.json has parsed, so the file always exists - and `init` seeds a stub only where the project
+  // has none, reporting `left alone because it already exists` otherwise. Sending the project to `init`
+  // therefore sent it round a loop: run the command, watch it change nothing, fail on the same line.
   const wrongFiles: readonly WiringViolation[] =
     JSON.stringify(parsed['files']) === JSON.stringify(requiredFiles)
       ? []
@@ -281,7 +285,8 @@ const checkBiome = (
           {
             location: 'biome.json files',
             reason:
-              'must declare the ploaness file-selection block verbatim; run `ploaness init` to write it',
+              'must declare the ploaness file-selection block verbatim; edit it to match, because ' +
+              '`ploaness init` seeds this file only into a project that has none',
           },
         ]
   return [...missingExtends, ...overriddenSections, ...wrongFiles]
@@ -325,7 +330,10 @@ const checkTsconfig = (config: string | undefined): readonly WiringViolation[] =
     .map(
       ([key]: readonly [string, unknown]): WiringViolation => ({
         location: `tsconfig.json ${key}`,
-        reason: 'must declare the ploaness value verbatim; run `ploaness init` to write it',
+        // Same loop as the biome block above: this is reachable only once tsconfig.json has parsed.
+        reason:
+          'must declare the ploaness value verbatim; edit it to match, because `ploaness init` ' +
+          'seeds this file only into a project that has none',
       }),
     )
   return [...wrongExtends, ...overriddenOptions, ...wrongPaths]
