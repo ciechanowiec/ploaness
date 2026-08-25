@@ -202,6 +202,18 @@ Shipping a spec makes the end-to-end suite mandatory, so `playwright.config.ts` 
 wiring gate requires as a bare re-export, and the `e2e` gate no longer reports a pass for a project that
 declares no suite.
 
+Requiring that re-export also took away the only seam the file had, and the harness that took it owes
+what it carried. A project's own Playwright config used to open by loading `.env`, which is what let a
+spec helper seed through `getPayload`: a Payload config validates `process.env` at module scope, so
+importing that helper boots the configuration before a browser or a server is involved, and the failure
+lands at spec collection rather than in a test. Next reads those files itself, so the application under
+test never showed the gap. `playwright.js` now reads them, over the order `environment-files.ts`
+declares - the order is the whole of the meaning, since `process.loadEnvFile` never replaces a value
+already set, and it is stated in `governance` rather than at the call site because a list in
+`packages/config` is measured by no coverage floor. Vitest is the same shape with a different answer
+and needs no change: `vitest.setup.ts` is a seam the project still owns, which is exactly the asymmetry
+that made the Playwright side impossible to fix from a consumer.
+
 ### Roles this repository declares
 
 The `ploaness` key of `package.json` carries two exclusions, each a role rather than a convenience:

@@ -285,7 +285,12 @@ scanner's configuration outside the working tree with the scanner's own rules st
 only add a named exception and never replaces anything. And a Payload configuration reads `process.env`
 as the module loads, which a gate that only imports the project cannot satisfy in a bare shell;
 `analysisEnv` supplies placeholders for exactly those gates, while the gates that run the application
-use the real environment.
+use the real environment. That environment reaches the end-to-end run through the Playwright
+configuration, which reads `.env.local` and then `.env` into its own process before a spec is
+collected, because a helper seeding through `getPayload` loads the Payload config at import time and
+the bare re-export leaves the project nowhere to read them itself. Neither file replaces a variable
+that is already set, so a value exported by CI or a service container still outranks both. Vitest
+needs no equivalent: `vitest.setup.ts` is a seam the project still owns.
 
 ## Layer 6: Rules No Check Verifies
 

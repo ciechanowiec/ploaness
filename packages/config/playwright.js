@@ -9,8 +9,21 @@
 // application, both declared under the `ploaness` key of its package.json rather than by editing this
 // file. Neither reaches a rule: they say where the application answers and what else has to be running,
 // and every threshold, ban and pinned spec above is the same whatever they say.
+import { existsSync } from 'node:fs'
 import { defineConfig, devices } from '@playwright/test'
+import { runEnvironmentFiles } from '@ploaness/governance'
 import { projectSettings } from './project-settings.js'
+
+// Read before anything else, because a spec module is what needs it. Playwright evaluates this config
+// in the runner and again in every worker, which makes it the one place a value reaches both the pass
+// that collects the specs and the processes that run them - and collection is already too late to be
+// safe: a helper that seeds a user through `getPayload` evaluates the project's Payload config at
+// import time, and that config validates `process.env` at module scope. Nothing else here reads these
+// variables; the specs and the application do. A `globalSetup` hook would not serve, because it runs
+// in a process of its own and its environment never reaches a worker.
+for (const file of runEnvironmentFiles(existsSync)) {
+  process.loadEnvFile(file)
+}
 
 const isContinuousIntegration = Boolean(process.env.CI)
 
