@@ -278,6 +278,8 @@ new_case fail-section-duplicated
 duplicate_file "$scratch/fail-section-duplicated/AGENTS.md"
 commit_case fail-section-duplicated 'feat(fixture): duplicate the managed section' "$CONFORMING_BODY"
 expect fail-section-duplicated assets FAIL 'repair the markers by hand'
+expect_command fail-section-duplicated FAIL 'Repair the markers by hand' \
+    ./node_modules/.bin/ploaness init
 
 # A junk word is rejected anywhere in the subject, not only as its first word. The gate accepted
 # `fix: clear the tmp directory` until the anchor came off, so this case pins the unanchored form.

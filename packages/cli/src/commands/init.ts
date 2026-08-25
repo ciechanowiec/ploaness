@@ -91,7 +91,10 @@ export const init = (context: Context): number => {
     console.info(`  ${note}`)
   }
   // `sync` writes the managed files and merges the write denial into the runtime settings.
-  sync(context)
+  const syncExit: number = sync(context)
+  if (syncExit !== 0) {
+    return syncExit
+  }
   console.info(
     '\nReview every change, then run `pnpm install` followed by `ploaness verify`. A pre-existing' +
       '\nconfig was not overwritten: replace its contents with the ploaness stub yourself.',
