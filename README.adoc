@@ -129,7 +129,7 @@ pnpm exec ploaness init
 | Command | Behavior
 
 | [[default-verification,default verification]]`ploaness verify`
-| Runs the xref:#default-gates[31 default verification gates].
+| Runs the xref:#default-gates[32 default verification gates].
 
 | [[extended-verification,extended verification]]`ploaness verify --extended`
 | Runs xref:#default-verification[] and the xref:#extended-gates[6 extended verification gates] as well.
@@ -165,7 +165,7 @@ pnpm exec ploaness init
 [[default-gates]]
 === Default Verification Gates
 
-xref:#default-verification[] runs the following 31 gates.
+xref:#default-verification[] runs the following 32 gates.
 
 [cols="2,5"]
 |===

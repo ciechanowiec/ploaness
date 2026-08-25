@@ -120,7 +120,7 @@ export const beginGate = (gate: Gate, width: number): void => {
 }
 
 // A gate prints its findings or update report where it ran, not at the end of the run. Extended
-// verification is thirty-seven gates and several minutes; deferring the detail puts it minutes away from
+// verification is thirty-eight gates and several minutes; deferring the detail puts it minutes away from
 // the line that announced it. The closing verdict still names every failed gate.
 const reportGateFindings = (outcome: GateOutcome): void => {
   const verdict: string = verdictOf(outcome.result)
