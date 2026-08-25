@@ -21,7 +21,7 @@ Payload CMS projects. It requires Node 26+ and pnpm 11+.
 - `packages/assets` (`@ploaness/assets`) - `manifest.tsv` and the bodies of the managed files.
 - `packages/cli` (`@ploaness/cli`) - all I/O: the gates, the commands, process invocation.
 - `packages/ploaness` (`ploaness`) - the consumer-facing meta package. Re-exports every entry point.
-- `it/` - consumer fixtures, deliberately outside the workspace. See `it/README.md`.
+- `it/` - consumer fixtures, deliberately outside the workspace. See `it/verify.sh`.
 
 The governance/CLI split is the load-bearing one. A rule expressed as a pure function over already-read
 strings can be unit-tested exhaustively and cheaply; the same rule expressed as a gate that reads its own
@@ -193,7 +193,7 @@ Test the joint, not the value. A spec asserting that a constant equals its own l
 spec asserting that two modules still agree about that constant catches the drift that actually happens.
 
 Do not treat a failing fixture under `it/` as a broken build: most fixtures are supposed to fail, each on
-its own named gate. `it/README.md` holds the table, beside the script that defines them.
+its own named gate. `it/verify.sh` defines them, and each case carries the reason it exists.
 
 ## Commit & Pull Request Guidelines
 
