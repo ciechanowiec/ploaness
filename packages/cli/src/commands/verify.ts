@@ -1,6 +1,7 @@
 // Verification: run the gates in order and report one verdict. A gate that throws is a failed gate, not
 // a crashed run, because a tool that cannot start is indistinguishable from a tool that found a defect:
 // either way the project is not verified.
+import { endsRun } from '@ploaness/governance'
 import type { Context } from '../context.js'
 import { failed, type GateResult } from '../exec.js'
 import { type Gate, gatesFor } from '../gates.js'
@@ -37,13 +38,8 @@ const timeGate = async (gate: Gate, context: Context): Promise<GateOutcome> => {
 const identifierWidth = (gates: readonly Gate[]): number =>
   gates.reduce((widest: number, gate: Gate): number => Math.max(widest, gate.id.length), 0)
 
-// The run stops at the first failing gate, so it is a sequence with an exit rather than a plain map.
-//
-// It once continued, on the reasoning that one run should report every finding rather than the first.
-// What that produced was a page of green below a red line, which reads as reassurance the run has not
-// earned: past a failing gate the tree is unverified, and every later verdict describes a state nobody
-// has established. A gate is also free to leave the tree in a shape the next gate misreads. Reporting
-// one finding at a time costs a rerun per defect and says only what is true.
+// A sequence with an exit rather than a plain map, because a run does not always reach the end. The
+// rule that decides is `endsRun`, in governance; this supplies the outcome and the mode.
 const runGates = async (
   gates: readonly Gate[],
   context: Context,
@@ -56,8 +52,15 @@ const runGates = async (
   beginGate(gate, width)
   const outcome: GateOutcome = await timeGate(gate, context)
   reportGate(outcome, width)
-  if (!outcome.result.ok) {
-    reportHalt(gate, rest.length)
+  const isPrecondition: boolean = gate.isPrecondition === true
+  if (
+    endsRun({
+      isFailure: !outcome.result.ok,
+      isPrecondition,
+      isEnforced: context.isEnforced,
+    })
+  ) {
+    reportHalt(gate, rest.length, isPrecondition)
     return [outcome]
   }
   return [outcome, ...(await runGates(rest, context, width))]

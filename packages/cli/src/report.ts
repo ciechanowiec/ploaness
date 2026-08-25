@@ -168,11 +168,14 @@ export const reportGate = (outcome: GateOutcome, width: number): void => {
  * is what tells a reader that the gates below the failing one were not merely quiet.
  * @param gate the gate that failed.
  * @param skipped how many gates were not reached.
+ * @param isPrecondition whether this gate stops a run in either mode, which is a different thing to
+ *   say than that the run was enforcing.
  */
-export const reportHalt = (gate: Gate, skipped: number): void => {
+export const reportHalt = (gate: Gate, skipped: number, isPrecondition: boolean): void => {
   const headline: string = `halted at ${gate.id}: ${String(skipped)} gate(s) not run`
-  const aside: string =
-    'repair the finding above and rerun; nothing below a failing gate has been verified'
+  const aside: string = isPrecondition
+    ? `nothing below a failing ${gate.id} can be judged, so even a report-only run stops here`
+    : 'repair the finding above and rerun; nothing below a failing gate has been verified'
   line('')
   line(`  ${paint(headline, COLOURS[FAIL] ?? RESET)}`)
   line(`  ${paint(aside, DIM)}`)

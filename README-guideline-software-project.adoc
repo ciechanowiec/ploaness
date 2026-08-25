@@ -86,7 +86,7 @@ This section defines the terms the guideline uses and states the qualities requi
 
 . [[check]]A _check_ is an automated verification with exactly two verdicts: pass and fail. Any outcome other than a pass, including the failure of the check itself to run, is a fail. A warning severity doesn't exist in a xref:#governed-repository[governed repository].
 . [[harness]]A _harness_ is the complete set of xref:#check[checks] of a xref:#governed-repository[governed repository].
-. [[verification-command,the verification command]]A _verification command_ is a command of the xref:#governed-repository[governed repository] that covers every xref:#check[check] and runs the checks in a fixed order. It stops at the first check that fails and fails with it, so one run reports one failing check. The verdict of the verification command is the verdict of the whole xref:#harness[harness].
+. [[verification-command,the verification command]]A _verification command_ is a command of the xref:#governed-repository[governed repository] that covers every xref:#check[check] and runs the checks in a fixed order. It stops at the first check that fails and fails with it, so one run reports one failing check. The xref:#report-only[report-only mode] is the exception. The verdict of the verification command is the verdict of the whole xref:#harness[harness].
 . [[file-role,a file role]]A _file role_ is a category that a xref:#governed-repository[governed repository] can determine from a file itself and uses to include or exclude the file from xref:#check[checks].
 
 [[check-qualities]]
@@ -113,7 +113,7 @@ The xref:#harness[harness] stays beyond the xref:#governed-repository[governed r
 
 . The xref:#harness[harness] decides which xref:#check[checks] run, how strict they must be, and what they exclude. The harness configuration lives outside the xref:#governed-repository[governed repository], or in a xref:#generated-files[generated file] that the regeneration check binds. The governed repository sets only what the harness leaves open.
 . The xref:#harness[harness] rejects any setting of the xref:#governed-repository[governed repository] that skips a xref:#check[check], lowers its severity, narrows its scope, or swaps the configuration it reads. Exceptions come only from the harness: a xref:#suppressions[suppression], an exclusion by xref:#file-role[file role], or a stricter cap.
-. The xref:#verification-command[verification command] fails on any finding. A report-only mode helps a software project repository adopt the harness. No run in that mode is a pass.
+. The xref:#verification-command[verification command] fails on any finding. [[report-only,the report-only mode]]A _report-only mode_ helps a software project repository adopt the harness: it carries on past a failing xref:#check[check] rather than stopping, so one run lists every finding, and it exits without failing. It stops only where a failure leaves nothing below it to judge. No run in that mode is a pass.
 
 [[governed-repository-organization]]
 == Governed Repository Organization
