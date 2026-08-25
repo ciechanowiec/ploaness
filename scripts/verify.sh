@@ -16,12 +16,25 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
 ploaness="node $root/packages/cli/dist/bin.js"
-failures=0
 
 fingerprint() {
     git ls-files -z | xargs -0 git hash-object | git hash-object --stdin
 }
 
+# Reported on the way out of a failing run as well as at the end of a passing one. A check that failed
+# after rewriting a source file leaves two problems, and the one nobody looked for is the file: `git
+# status` would show it, but only to someone who thought to look.
+report_tree() {
+    if [ "$before" != "$(fingerprint)" ]; then
+        printf '\n!!! the verification rewrote a tracked file. Review and commit what git status shows, then rerun.\n'
+        return 1
+    fi
+    return 0
+}
+
+# The run stops at the first failing check. It once carried on and counted, which produced a page of
+# passes below a failure - and nothing below a failing check has been verified, so those passes describe
+# a state nobody established.
 step() {
     label="$1"
     shift
@@ -29,8 +42,10 @@ step() {
     if "$@"; then
         return 0
     fi
-    failures=$((failures + 1))
     printf '!!! %s FAILED\n' "$label"
+    report_tree || true
+    printf '\nhalted at %s: the checks below it did not run\n' "$label"
+    exit 1
 }
 
 gate() {
@@ -103,16 +118,8 @@ gate require-full-history
 gate commit-history
 gate linear-history
 
-after="$(fingerprint)"
-if [ "$before" != "$after" ]; then
-    failures=$((failures + 1))
-    printf '\n!!! the verification rewrote a tracked file. Review and commit what git status shows, then rerun.\n'
+if ! report_tree; then
+    exit 1
 fi
 
-printf '\n'
-if [ "$failures" -eq 0 ]; then
-    printf 'verified: every check passed\n'
-    exit 0
-fi
-printf '%s check(s) failed\n' "$failures"
-exit 1
+printf '\nverified: every check passed\n'

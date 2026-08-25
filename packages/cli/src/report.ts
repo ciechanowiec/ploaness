@@ -165,13 +165,14 @@ export const reportGate = (outcome: GateOutcome, width: number): void => {
  * Say why the run stopped, and how many gates it did not reach.
  *
  * Silence here would read as the run having finished, which is the one thing it did not do: the count
- * is what tells a reader the green lines above are not the whole story.
- * @param gate the precondition gate that failed.
+ * is what tells a reader that the gates below the failing one were not merely quiet.
+ * @param gate the gate that failed.
  * @param skipped how many gates were not reached.
  */
 export const reportHalt = (gate: Gate, skipped: number): void => {
   const headline: string = `halted at ${gate.id}: ${String(skipped)} gate(s) not run`
-  const aside: string = `a verdict below a failing ${gate.id} would describe a setup ploaness does not govern`
+  const aside: string =
+    'repair the finding above and rerun; nothing below a failing gate has been verified'
   line('')
   line(`  ${paint(headline, COLOURS[FAIL] ?? RESET)}`)
   line(`  ${paint(aside, DIM)}`)

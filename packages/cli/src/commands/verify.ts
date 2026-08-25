@@ -37,11 +37,13 @@ const timeGate = async (gate: Gate, context: Context): Promise<GateOutcome> => {
 const identifierWidth = (gates: readonly Gate[]): number =>
   gates.reduce((widest: number, gate: Gate): number => Math.max(widest, gate.id.length), 0)
 
-// The run stops at a failing precondition gate, so it is a sequence with an exit rather than a plain
-// map. `preflight` decides whether ploaness may judge this project at all; `wiring` decides whether the
-// thing being judged is the one ploaness thinks it is. Continuing past either produces verdicts about a
-// setup nobody governs - and a green column under a red wiring line reads as reassurance it has not
-// earned.
+// The run stops at the first failing gate, so it is a sequence with an exit rather than a plain map.
+//
+// It once continued, on the reasoning that one run should report every finding rather than the first.
+// What that produced was a page of green below a red line, which reads as reassurance the run has not
+// earned: past a failing gate the tree is unverified, and every later verdict describes a state nobody
+// has established. A gate is also free to leave the tree in a shape the next gate misreads. Reporting
+// one finding at a time costs a rerun per defect and says only what is true.
 const runGates = async (
   gates: readonly Gate[],
   context: Context,
@@ -54,8 +56,8 @@ const runGates = async (
   beginGate(gate, width)
   const outcome: GateOutcome = await timeGate(gate, context)
   reportGate(outcome, width)
-  if (gate.isPrecondition === true && !outcome.result.ok) {
-    reportHalt(gate, gates.length - 1)
+  if (!outcome.result.ok) {
+    reportHalt(gate, rest.length)
     return [outcome]
   }
   return [outcome, ...(await runGates(rest, context, width))]

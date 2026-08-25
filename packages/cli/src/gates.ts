@@ -1,6 +1,12 @@
-// The ordered gate registry. Order is deliberate: the cheap structural checks that tell a project it is
+// The ordered gate registry. The run stops at the first failing gate, so order decides which finding a
+// project sees first and is deliberate twice over: the cheap structural checks that tell a project it is
 // not wired correctly run before the expensive ones that would otherwise fail confusingly, and the tree
 // fingerprint is taken before anything that could rewrite a file and read back after everything has run.
+//
+// `preflight` and `wiring` lead for the reason that outlasted their old precondition flag. `preflight`
+// decides whether ploaness may judge this project at all, and `wiring` decides whether it is judging the
+// project ploaness thinks it is. Past a failing `wiring` the toolchain, the configurations, and the
+// pinned versions are no longer the ones ploaness vouches for, so nothing below it means what it says.
 
 import { assets } from './checks/assets.js'
 import { actions, containers, secrets } from './checks/containers.js'
@@ -39,27 +45,13 @@ export interface Gate {
   readonly title: string
   /** True when the gate belongs to extended verification only. */
   readonly isExtended: boolean
-  /**
-   * True when a failure here makes every later gate meaningless rather than merely unreported. A
-   * precondition gate stops the run: `preflight` decides whether ploaness may judge this project at
-   * all, and `wiring` decides whether it is judging the project ploaness thinks it is. Past a failing
-   * `wiring` the toolchain, the configurations, and the pinned versions are no longer the ones ploaness
-   * vouches for, so a page of passes below it would describe a setup nobody governs.
-   */
-  readonly isPrecondition?: boolean
   readonly run: (context: Context) => GateResult | Promise<GateResult>
 }
 
 /** Default verification: the gates that run on every invocation. */
 const DEFAULT_GATES: readonly Gate[] = [
-  {
-    id: 'preflight',
-    title: 'supported Payload project',
-    isExtended: false,
-    isPrecondition: true,
-    run: preflight,
-  },
-  { id: 'wiring', title: 'harness wiring', isExtended: false, isPrecondition: true, run: wiring },
+  { id: 'preflight', title: 'supported Payload project', isExtended: false, run: preflight },
+  { id: 'wiring', title: 'harness wiring', isExtended: false, run: wiring },
   { id: 'assets', title: 'managed files', isExtended: false, run: assets },
   { id: 'tree-snapshot', title: 'working-tree fingerprint', isExtended: false, run: treeSnapshot },
   { id: 'types', title: 'strict type check', isExtended: false, run: types },
