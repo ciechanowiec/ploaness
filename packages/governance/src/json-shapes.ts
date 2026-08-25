@@ -77,3 +77,18 @@ export const asOptionalText = (raw: unknown): string | undefined =>
  * @returns the value at that key, or undefined when the value is not an object.
  */
 export const readKey = (raw: unknown, key: string): unknown => asRecord(raw)[key]
+
+/**
+ * Every package a manifest declares, whichever block it sits in.
+ *
+ * Three modules asked this question and three of them answered it, which is the shape of a drift rather
+ * than of a helper: the CLI's preflight copy read the versions as unknowns and its freshness copy read
+ * them as strings, so the two disagreed about what a manifest declaring a non-string version had said.
+ * It lives here because the question is about the shape of a parsed manifest and not about any one rule.
+ * @param packageJson the parsed manifest.
+ * @returns the declared name-to-version pairs, a devDependency winning a name declared in both blocks.
+ */
+export const declaredDependencies = (packageJson: unknown): Record<string, string> => ({
+  ...asStringRecord(readKey(packageJson, 'dependencies')),
+  ...asStringRecord(readKey(packageJson, 'devDependencies')),
+})

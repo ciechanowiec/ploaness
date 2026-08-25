@@ -2,11 +2,14 @@ import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import {
   classifyFreshness,
+  collectCoordinates,
+  type DeclaredCoordinate,
   type DependencyStatus,
   type FreshnessReport,
   type FreshnessVerdict,
   findFreshnessViolations,
   MAJOR_FAIL_THRESHOLD,
+  type ManifestSource,
   parseVersion,
 } from '../src/dependency-freshness.js'
 
@@ -150,5 +153,50 @@ describe('dependency-freshness properties (fast-check)', () => {
         },
       ),
     )
+  })
+})
+
+describe('collectCoordinates', () => {
+  it('reads a coordinate out of every manifest, not only the first', () => {
+    const manifests: readonly ManifestSource[] = [
+      { path: 'package.json', packageJson: { dependencies: { next: '16.3.2' } } },
+      { path: 'packages/config/package.json', packageJson: { devDependencies: { knip: '5.0.0' } } },
+    ]
+    expect(
+      collectCoordinates(manifests).map((one: DeclaredCoordinate): string => one.name),
+    ).toEqual(['next', 'knip'])
+  })
+
+  it('attributes a coordinate to the manifest that declares it', () => {
+    const manifests: readonly ManifestSource[] = [
+      { path: 'packages/cli/package.json', packageJson: { dependencies: { knip: '5.0.0' } } },
+    ]
+    expect(collectCoordinates(manifests)[0]?.owner).toBe('packages/cli/package.json')
+  })
+
+  // Two manifests may pin the same analyzer at different versions, and collapsing them would drop
+  // whichever of the two is the stale one - which is the whole finding.
+  it('keeps two manifests declaring the same name apart', () => {
+    const manifests: readonly ManifestSource[] = [
+      { path: 'a/package.json', packageJson: { dependencies: { knip: '5.0.0' } } },
+      { path: 'b/package.json', packageJson: { dependencies: { knip: '7.0.0' } } },
+    ]
+    expect(
+      collectCoordinates(manifests).map((one: DeclaredCoordinate): string => one.current),
+    ).toEqual(['5.0.0', '7.0.0'])
+  })
+
+  it('reads both dependency blocks of one manifest', () => {
+    const manifests: readonly ManifestSource[] = [
+      {
+        path: 'package.json',
+        packageJson: { dependencies: { next: '16.3.2' }, devDependencies: { vitest: '4.1.11' } },
+      },
+    ]
+    expect(collectCoordinates(manifests)).toHaveLength(2)
+  })
+
+  it('reads nothing out of a manifest that could not be parsed', () => {
+    expect(collectCoordinates([{ path: 'package.json', packageJson: undefined }])).toEqual([])
   })
 })

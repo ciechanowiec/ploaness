@@ -5,7 +5,7 @@
 // the size cap, which is the cap doing its job: they answer different questions and share only the
 // helpers below.
 import { findOverrides, type OverrideEntry } from './install-policy.js'
-import { asOptionalText, asRecord, asStringRecord } from './json-shapes.js'
+import { asOptionalText, asRecord, asStringRecord, declaredDependencies } from './json-shapes.js'
 import type { WiringViolation } from './wiring-violation.js'
 
 /** What a project must declare and at which version, plus the invariants those pins imply. */
@@ -23,14 +23,6 @@ export interface VersionInputs {
   /** The contents of pnpm-workspace.yaml, or an empty string when the project ships none. */
   readonly workspaceFile: string
 }
-
-/** Every package a project declares, whichever block it sits in. */
-export const declaredDependencies = (
-  packageJson: Record<string, unknown>,
-): Record<string, string> => ({
-  ...asStringRecord(packageJson['dependencies']),
-  ...asStringRecord(packageJson['devDependencies']),
-})
 
 // Which block a package is actually declared in. A finding that named `devDependencies` for a package
 // sitting in `dependencies` sent the reader to the wrong half of the file - and the framework pins,

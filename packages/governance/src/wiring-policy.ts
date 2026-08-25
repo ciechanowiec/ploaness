@@ -1,7 +1,7 @@
 import { findSilencedAdvisories } from './install-policy.js'
-import { asRecord, asStringRecord, isArray } from './json-shapes.js'
+import { asRecord, asStringRecord, declaredDependencies, isArray } from './json-shapes.js'
 import { type DeclaredExclusion, findConvenienceExclusions } from './settings.js'
-import { declaredDependencies, findVersionViolations } from './version-policy.js'
+import { findVersionViolations } from './version-policy.js'
 import type { WiringViolation } from './wiring-violation.js'
 // Anti-bypass policy: the module that exists because npm has no lifecycle.
 //

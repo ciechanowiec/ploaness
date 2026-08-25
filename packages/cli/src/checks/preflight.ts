@@ -2,16 +2,11 @@
 // judge a project that is not one. Running anyway would produce a verdict about a contract the project
 // never agreed to.
 
-import { asRecord } from '@ploaness/governance'
+import { declaredDependencies } from '@ploaness/governance'
 import type { Context } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 const MINIMUM_NODE_MAJOR: number = 26
-
-const declaredDependencies = (packageJson: unknown): Record<string, unknown> => {
-  const root: Record<string, unknown> = asRecord(packageJson)
-  return { ...asRecord(root['dependencies']), ...asRecord(root['devDependencies']) }
-}
 
 // The two questions preflight asks about the project itself, separated from the runtime question so
 // neither has to accumulate into a shared list.

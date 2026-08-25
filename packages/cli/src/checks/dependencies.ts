@@ -2,11 +2,13 @@
 // or upgrade something: a true signal about your change. Freshness is bounded rather than banned, because
 // "a newer version exists" is not a property of your change, but "the version I declared is two majors
 // behind" is, and that is a real liability.
+import path from 'node:path'
 import {
   type Advisory,
   asRecord,
-  asStringRecord,
   asText,
+  collectCoordinates,
+  type DeclaredCoordinate,
   type DependencyStatus,
   type FreshnessFinding,
   type FreshnessReport,
@@ -16,9 +18,10 @@ import {
   isRecord,
   judgeVulnerabilities,
   type LicensedPackage,
+  type ManifestSource,
   type VulnerabilityReport,
 } from '@ploaness/governance'
-import type { Context } from '../context.js'
+import { type Context, readJson, trackedFiles } from '../context.js'
 import { failed, type GateResult, passed, type RunResult, run } from '../exec.js'
 
 interface PnpmLicenseEntry {
@@ -64,13 +67,20 @@ export const licenses = (context: Context): GateResult => {
     : passed(`all ${String(packages.length)} dependency licenses are within policy`)
 }
 
-const declaredDependencies = (packageJson: unknown): Record<string, string> => {
-  const root: Record<string, unknown> = asRecord(packageJson)
-  return asStringRecord({
-    ...asRecord(root['dependencies']),
-    ...asRecord(root['devDependencies']),
-  })
-}
+const MANIFEST_NAME: string = 'package.json'
+
+// Every manifest the repository tracks, not only the root one. A workspace declares its toolchain across
+// several of them, and reading the root alone left every analyzer ploaness itself runs on unmeasured.
+// Git tracks nothing under node_modules, so the tracked list is already the right set.
+const manifestSources = (context: Context): readonly ManifestSource[] =>
+  trackedFiles(context.root)
+    .filter((file: string): boolean => file === MANIFEST_NAME || file.endsWith(`/${MANIFEST_NAME}`))
+    .map(
+      (file: string): ManifestSource => ({
+        path: file,
+        packageJson: readJson(path.join(context.root, file)),
+      }),
+    )
 
 // The registry exposes two documents per package: the packument root and, per version, a version
 // document. `/{name}/latest` is the version document for the `latest` dist-tag and costs a few kilobytes,
@@ -145,18 +155,21 @@ interface Sorted {
 }
 
 const sortLookups = (
-  declared: Record<string, string>,
-  results: readonly (readonly [string, Lookup])[],
+  coordinates: readonly DeclaredCoordinate[],
+  lookups: ReadonlyMap<string, Lookup>,
 ): Sorted => {
   const namesWhere = (kind: Lookup['kind']): readonly string[] =>
-    results
+    [...lookups]
       .filter(([, lookup]: readonly [string, Lookup]): boolean => lookup.kind === kind)
       .map(([name]: readonly [string, Lookup]): string => name)
-  const statuses: readonly DependencyStatus[] = results.flatMap(
-    ([name, lookup]: readonly [string, Lookup]): readonly DependencyStatus[] =>
-      lookup.kind === 'version'
-        ? [{ name, owner: 'package.json', current: declared[name] ?? '', latest: lookup.version }]
-        : [],
+  const statuses: readonly DependencyStatus[] = coordinates.flatMap(
+    (coordinate: DeclaredCoordinate): readonly DependencyStatus[] => {
+      const lookup: Lookup | undefined = lookups.get(coordinate.name)
+      if (lookup?.kind !== 'version') {
+        return []
+      }
+      return [{ ...coordinate, latest: lookup.version }]
+    },
   )
   return {
     statuses,
@@ -165,8 +178,26 @@ const sortLookups = (
   }
 }
 
+// The manifest leads the line because it is what the reader has to open. The standard asks the update
+// report to name it for every coordinate, and a workspace pinning one analyzer in two places is exactly
+// the case where the bare package name says nothing about where to make the change.
 const describeFinding = (finding: FreshnessFinding): string =>
-  `${finding.name}: declared ${finding.current}, latest ${finding.latest}`
+  `${finding.owner} ${finding.name}: declared ${finding.current}, latest ${finding.latest}`
+
+// One lookup per distinct name, fanned back out across the coordinates that share it. A workspace
+// declaring the same analyzer in three manifests must not ask the registry three times.
+const lookUpEach = async (names: readonly string[]): Promise<ReadonlyMap<string, Lookup>> =>
+  new Map(
+    await Promise.all(
+      names.map(async (name: string): Promise<readonly [string, Lookup]> => {
+        try {
+          return [name, await latestVersion(name)]
+        } catch {
+          return [name, { kind: 'unreachable' }]
+        }
+      }),
+    ),
+  )
 
 /**
  * Fail when a declared dependency is two or more majors behind its latest release; warn on any lesser
@@ -176,18 +207,15 @@ const describeFinding = (finding: FreshnessFinding): string =>
  * public "latest" it has no claim to would be a fabricated comparison.
  */
 export const dependencyFreshness = async (context: Context): Promise<GateResult> => {
-  const declared: Record<string, string> = declaredDependencies(context.packageJson)
-  const names: readonly string[] = Object.keys(declared)
-  const results: readonly (readonly [string, Lookup])[] = await Promise.all(
-    names.map(async (name: string): Promise<readonly [string, Lookup]> => {
-      try {
-        return [name, await latestVersion(name)]
-      } catch {
-        return [name, { kind: 'unreachable' }]
-      }
-    }),
+  const manifests: readonly ManifestSource[] = manifestSources(context)
+  const coordinates: readonly DeclaredCoordinate[] = collectCoordinates(manifests)
+  const names: readonly string[] = [
+    ...new Set(coordinates.map((coordinate: DeclaredCoordinate): string => coordinate.name)),
+  ]
+  const { statuses, unreachable, unpublished }: Sorted = sortLookups(
+    coordinates,
+    await lookUpEach(names),
   )
-  const { statuses, unreachable, unpublished }: Sorted = sortLookups(declared, results)
   if (unreachable.length > 0) {
     return failed('the npm registry was unreachable, so freshness cannot be proven', [
       `no "latest" resolved for: ${unreachable.slice(0, MAX_LISTED_NAMES).join(', ')}`,
@@ -211,12 +239,16 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
       ],
     )
   }
-  return passed(`${String(statuses.length)} declared dependencies are within the freshness bound`, [
-    ...report.warnings.map(
-      (finding: FreshnessFinding): string => `warning ${describeFinding(finding)}`,
-    ),
-    ...notes,
-  ])
+  return passed(
+    `${String(statuses.length)} declared coordinate(s) across ${String(manifests.length)} ` +
+      `manifest(s) are within the freshness bound`,
+    [
+      ...report.warnings.map(
+        (finding: FreshnessFinding): string => `warning ${describeFinding(finding)}`,
+      ),
+      ...notes,
+    ],
+  )
 }
 
 // The npm-v6 audit shape `pnpm audit --json` emits: advisories keyed by id, each carrying the module,

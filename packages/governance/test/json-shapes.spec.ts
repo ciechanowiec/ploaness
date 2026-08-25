@@ -4,6 +4,7 @@ import {
   asRecord,
   asStringRecord,
   asText,
+  declaredDependencies,
   isArray,
   isRecord,
   readKey,
@@ -100,5 +101,27 @@ describe('asOptionalText', () => {
 
   it('keeps an empty string, which is a declared value', () => {
     expect(asOptionalText('')).toBe('')
+  })
+})
+
+describe('declaredDependencies', () => {
+  it('merges both dependency blocks into one reading', () => {
+    expect(
+      declaredDependencies({ dependencies: { next: '16.3.2' }, devDependencies: { pg: '8.23.0' } }),
+    ).toEqual({ next: '16.3.2', pg: '8.23.0' })
+  })
+
+  it('lets the development block decide a name declared in both', () => {
+    expect(
+      declaredDependencies({ dependencies: { pg: '8.0.0' }, devDependencies: { pg: '8.23.0' } }),
+    ).toEqual({ pg: '8.23.0' })
+  })
+
+  it('drops a declaration whose version is not text, which no manifest can install', () => {
+    expect(declaredDependencies({ dependencies: { pg: 8 } })).toEqual({})
+  })
+
+  it('reads nothing out of a value that is not a manifest', () => {
+    expect(declaredDependencies(undefined)).toEqual({})
   })
 })
