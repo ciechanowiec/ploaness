@@ -95,8 +95,8 @@ ploaness governs all of the following domains:
   reachable from the home page and runs axe on each. A route's default state is scanned in full; the
   `:hover` and `:focus` states of its interactive controls are scanned for contrast alone, which is the
   defect those states actually hide. Site chrome is swept once, because one stylesheet renders it
-  everywhere, and the content of `main` is swept per route. The crawl stops at 50 routes and reports that
-  it did, so on a larger site a pass does not describe every page. It is a managed file: edit it and the
+  everywhere, and the content of `main` is swept per route. The crawl stops and fails at 50 routes, so a
+  passing sweep never describes a site whose remaining pages were silently left unread. It is a managed file: edit it and the
   assets gate reports drift. What the project declares about it is the origin (`ploaness.serverUrl`) and
   any further route prefix the crawl must not follow (`ploaness.accessibilitySkipRoutes`, which adds to
   `/admin` and `/api` rather than replacing them). A finding is a defect in the page, never in the sweep:

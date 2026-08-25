@@ -17,7 +17,8 @@ import { SKIPPED_ROUTE_PREFIXES } from 'ploaness/a11y'
 // which is a transitive package no project declares.
 type AxeResults = Awaited<ReturnType<AxeBuilder['analyze']>>
 
-// Safety valve so a runaway crawl cannot hang CI. Hitting it is reported, never silent.
+// Safety valve so a runaway crawl cannot hang CI. Hitting it fails, because a pass must describe every
+// reachable route rather than only the prefix that fit below the cap.
 const MAX_ROUTES: number = 50
 
 // The sweep scans every interactive control in three states on every route, so its cost grows with the
@@ -75,21 +76,33 @@ const enqueueRoutes = (
   origin: string,
   seen: Set<string>,
   queue: string[],
-): void => {
+): boolean => {
+  let isCapped: boolean = false
   for (const href of hrefs) {
     const route: string | null = toRoute(href, origin)
     if (route !== null && !seen.has(route)) {
-      seen.add(route)
-      queue.push(route)
+      if (seen.size >= MAX_ROUTES) {
+        isCapped = true
+      } else {
+        seen.add(route)
+        queue.push(route)
+      }
     }
   }
+  return isCapped
 }
 
-const discoverRoutes = async (page: Page, origin: string): Promise<readonly string[]> => {
+interface RouteDiscovery {
+  readonly routes: readonly string[]
+  readonly isCapped: boolean
+}
+
+const discoverRoutes = async (page: Page, origin: string): Promise<RouteDiscovery> => {
   const seen: Set<string> = new Set<string>(['/'])
   const reachable: string[] = []
   const queue: string[] = ['/']
-  while (queue.length > 0 && seen.size < MAX_ROUTES) {
+  let isCapped: boolean = false
+  while (queue.length > 0) {
     const routePath: string | undefined = queue.shift()
     if (routePath === undefined) {
       break
@@ -106,9 +119,9 @@ const discoverRoutes = async (page: Page, origin: string): Promise<readonly stri
       .evaluateAll((anchors: readonly Element[]): readonly string[] =>
         anchors.map((anchor: Element): string => anchor.getAttribute('href') ?? ''),
       )
-    enqueueRoutes(hrefs, origin, seen, queue)
+    isCapped = enqueueRoutes(hrefs, origin, seen, queue) || isCapped
   }
-  return reachable
+  return { routes: reachable, isCapped }
 }
 /* eslint-enable functional/immutable-data -- the crawl above is the only place this spec mutates */
 
@@ -155,14 +168,15 @@ test.describe('Accessibility sweep', () => {
   }) => {
     const origin: string = baseURL ?? ''
     expect(origin, 'the ploaness Playwright config must declare a server URL').not.toEqual('')
-    const routes: readonly string[] = await discoverRoutes(page, origin)
+    const discovery: RouteDiscovery = await discoverRoutes(page, origin)
+    const routes: readonly string[] = discovery.routes
     expect(routes.length, 'no public routes were discovered').toBeGreaterThan(0)
+    expect(
+      discovery.isCapped,
+      `a11y sweep reached the ${String(MAX_ROUTES)}-route cap; raise the harness limit only after ` +
+        'measuring the resulting run time',
+    ).toBe(false)
     test.setTimeout(routes.length * MILLISECONDS_PER_ROUTE)
-    if (routes.length >= MAX_ROUTES) {
-      console.warn(
-        `a11y sweep hit the ${String(MAX_ROUTES)}-route cap; remaining pages not scanned`,
-      )
-    }
     // The chrome is identical site-wide, so sweep its interactive states once, on the first route.
     const [first] = routes
     if (first !== undefined) {
