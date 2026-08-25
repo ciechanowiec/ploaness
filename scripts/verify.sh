@@ -57,7 +57,7 @@ step() {
 }
 
 # argv, not a shell string. The interpreter path was interpolated into `sh -c`, where the inner shell
-# re-splits it - so a checkout under a path containing a space broke all seventeen gate invocations,
+# re-splits it - so a checkout under a path containing a space broke every one of the gate invocations,
 # while every other command in this file was already passed properly.
 gate() {
     step "gate $1" node "$ploaness_bin" gate "$1"
@@ -115,6 +115,7 @@ step type-coverage "$cli_bin/type-coverage" \
 # here used to claim it followed that order, which it has not for some time.
 gate biome-schema
 gate conventions
+gate tailwind-tokens
 gate editorconfig
 gate suppressions
 gate config-refs

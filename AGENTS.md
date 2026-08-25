@@ -48,10 +48,10 @@ scope, not an oversight, and it must not be worked around by weakening `prefligh
 What substitutes for it reimplements no rule. `ploaness gate <id>` builds its context from the working
 directory and never runs `preflight`, so every gate whose rule is about a repository's shape rather than
 about Payload runs here unchanged. `scripts/verify.sh` is that list, and `pnpm run verify` runs it:
-`biome-schema`, `conventions`, `editorconfig`, `suppressions`, `config-refs`, `docs`, `skills`,
-`image-assets`, `licenses`, `vulnerabilities`, `install-scripts`, `deps`, `actions`, `secrets`,
-`require-full-history`, `commit-history`, and `linear-history`, around the build, the type check, the
-lint, and the unit suite. That order is the script's own - the reads that need nothing but the tree
+`biome-schema`, `conventions`, `tailwind-tokens`, `editorconfig`, `suppressions`, `config-refs`,
+`docs`, `skills`, `image-assets`, `licenses`, `vulnerabilities`, `install-scripts`, `deps`, `actions`,
+`secrets`, `require-full-history`, `commit-history`, and `linear-history`, around the build, the type
+check, the lint, and the unit suite. That order is the script's own - the reads that need nothing but the tree
 first, then the ones that need a registry or a container - and is not the order `gates.ts` runs them in,
 which is ordering a Payload project's run rather than this one.
 
