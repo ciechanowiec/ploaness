@@ -25,13 +25,13 @@
     "build": "tsc --build"
   },
   "dependencies": {
-    "@biomejs/biome": "2.5.9",
+    "@biomejs/biome": "2.5.10",
     "@ploaness/assets": "1.0.0",
     "@ploaness/config": "1.0.0",
     "@ploaness/governance": "1.0.0",
     "@vitest/coverage-v8": "4.1.11",
     "dependency-cruiser": "18.2.0",
-    "eslint": "10.8.1",
+    "eslint": "10.9.1",
     "knip": "6.32.2",
     "stylelint": "17.14.1",
     "tsx": "4.23.12",

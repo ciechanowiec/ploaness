@@ -91,6 +91,21 @@ Nothing runs those two legs but a person. This repository ships no workflow, so 
 here over an empty set. That is worth knowing when reading a green tree: it says the last person to run
 the legs saw them pass, not that they pass now.
 
+### TypeScript is held at 6 by the lint pass, not by inertia
+
+The update report names `typescript 7.0.2` and will keep naming it. It is not taken, and the reason is a
+hard one rather than a preference: `typescript-eslint`, on its own latest release, declares a peer range
+of `>=4.8.4 <6.1.0`, and the type-aware pass refuses outright with `typescript-eslint does not support
+TS 7.0`. `tsc --build` itself succeeds on 7, so a run that only compiled would look like a clean
+upgrade; it is `pnpm run lint:eslint` that fails, which is why the attempt has to reach that step before
+it is believed.
+
+The standard resolves a finding by upgrading rather than by excusing, and here no upgrade exists yet:
+the move is to raise `typescript` and `typescript-eslint` together, the moment the latter declares 7.
+Until then the gap is one major, which the freshness bound reports and does not fail. Worth watching
+rather than filing away - if TypeScript 8 ships first, the gap reaches the bound with still no upgrade
+path, and every consumer fails on a pin none of them can move.
+
 ### The repository is linted by the config it publishes
 
 `packages/config/eslint.js` carries every cap and ban the governing standard states, and for a long
