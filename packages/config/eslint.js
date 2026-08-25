@@ -26,6 +26,7 @@ import {
   NO_FAST_CHECK_SEED,
   NO_INHERITANCE,
   NO_LITERAL_ASSERTIONS,
+  NO_MOCK_PROPERTIES,
   NO_NETWORK_GUARD_ESCAPE,
   NO_TEST_ORDER_ESCAPE,
   prettierLast,
@@ -184,8 +185,13 @@ export default compose(
     files: ['src/**/*.ts'],
     ignores: ['src/lib/environment.ts'],
     rules: {
+      // `NO_MOCK_PROPERTIES` is spread in beside the env rule because this key REPLACES the base
+      // setting rather than adding to it - naming only the env restriction here switched the
+      // build-wide mock ban off across the whole of `src/`, which is the trap `eslint-core.js`
+      // documents for `no-restricted-syntax` and which this key falls into identically.
       'no-restricted-properties': [
         'error',
+        ...NO_MOCK_PROPERTIES,
         {
           object: 'process',
           property: 'env',

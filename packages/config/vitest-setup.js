@@ -100,9 +100,21 @@ install(dns.promises, 'lookup', toLookupAttempt)
 
 // The hole the socket guard does not cover. The resolver family queries a nameserver over UDP without
 // ever creating a socket, which is how an SRV lookup leaves the machine with nothing to intercept.
+//
+// The module-level `dns.resolve*` functions are bound to a default Resolver instance, so patching them
+// leaves `new dns.Resolver().resolveSrv(...)` reaching `Resolver.prototype` untouched - the exact hole
+// this block exists to close, one constructor away. The prototypes are guarded too.
+const resolverOwners = [
+  dns,
+  dns.promises,
+  dns.Resolver?.prototype,
+  dns.promises.Resolver?.prototype,
+].filter((owner) => owner !== undefined)
+
 for (const method of RESOLVER_METHODS) {
-  install(dns, method, toResolveAttempt)
-  install(dns.promises, method, toResolveAttempt)
+  for (const owner of resolverOwners) {
+    install(owner, method, toResolveAttempt)
+  }
 }
 
 // Left replaceable, unlike the two above. A DOM test environment swaps the globals between files, and a

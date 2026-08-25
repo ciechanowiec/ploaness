@@ -15,6 +15,7 @@ interface FlatBlock {
 }
 
 const RESTRICTED_SYNTAX: string = 'no-restricted-syntax'
+const RESTRICTED_PROPERTIES: string = 'no-restricted-properties'
 
 const specDirectory: string = path.dirname(fileURLToPath(import.meta.url))
 const configPackage: string = path.join(specDirectory, '..')
@@ -82,10 +83,50 @@ const selectorsIn = (setting: unknown): readonly string[] =>
         .filter((selector: string): boolean => selector.length > 0)
     : []
 
-const restrictedSyntaxSettings = (blocks: readonly FlatBlock[]): readonly unknown[] =>
+const settingsFor = (blocks: readonly FlatBlock[], rule: string): readonly unknown[] =>
   blocks
-    .map((block: FlatBlock): unknown => block.rules?.[RESTRICTED_SYNTAX])
+    .map((block: FlatBlock): unknown => block.rules?.[rule])
     .filter((setting: unknown): boolean => setting !== undefined && !isOff(setting))
+
+const restrictedSyntaxSettings = (blocks: readonly FlatBlock[]): readonly unknown[] =>
+  settingsFor(blocks, RESTRICTED_SYNTAX)
+
+// `no-restricted-properties` entries are objects rather than selector strings, so the mock ban is read
+// by the pair it actually bans: `vi.fn`, `vi.mock`, and the rest.
+const mockedMemberIn = (entry: unknown): string => {
+  const record: Record<string, unknown> | undefined = asRecord(entry)
+  const object: unknown = record?.['object']
+  const property: unknown = record?.['property']
+  return typeof object === 'string' && typeof property === 'string' ? `${object}.${property}` : ''
+}
+
+const mockedMembersIn = (setting: unknown): readonly string[] =>
+  Array.isArray(setting)
+    ? setting
+        .slice(1)
+        .map((entry: unknown): string => mockedMemberIn(entry))
+        .filter((member: string): boolean => member.length > 0)
+    : []
+
+/** How the mock ban stands across one config: how many blocks set the key, and what is missing. */
+const mockBanStatus = async (blocks: readonly FlatBlock[]): Promise<BanStatus> => {
+  const settings: readonly unknown[] = settingsFor(blocks, RESTRICTED_PROPERTIES)
+  const core: unknown = await import(pathToFileURL(path.join(configPackage, 'eslint-core.js')).href)
+  const exported: unknown = asRecord(core)?.['NO_MOCK_PROPERTIES']
+  const entries: readonly unknown[] = Array.isArray(exported)
+    ? (exported as readonly unknown[])
+    : []
+  // A placeholder severity in front, so this reads the same shape `mockedMembersIn` sees in a rule
+  // setting - where the severity is the first element and the entries follow it.
+  const expected: readonly string[] = mockedMembersIn(['error', ...entries])
+  return {
+    blocks: settings.length,
+    missing: settings.flatMap((setting: unknown): readonly string[] => {
+      const present: readonly string[] = mockedMembersIn(setting)
+      return expected.filter((member: string): boolean => !present.includes(member))
+    }),
+  }
+}
 
 const shippedConfig = (): Promise<readonly FlatBlock[]> =>
   loadBlocks(path.join(configPackage, 'eslint.js'))
@@ -165,6 +206,22 @@ describe('inheritance ban survives every no-restricted-syntax block', () => {
   it('keeps the ban in every such block of the workspace config', async () => {
     const status: BanStatus = await banStatus(await workspaceConfig())
     expect(status.blocks).toBeGreaterThan(0)
+    expect(status.missing).toEqual([])
+  })
+})
+
+// The same trap as the inheritance ban, in a different key. `eslint.js` scoped
+// `no-restricted-properties` to `src/**` for the process.env rule and, by naming the key at all,
+// replaced the build-wide mock ban across a project's entire source tree.
+describe('mock ban survives every no-restricted-properties block', () => {
+  it('keeps the ban in every such block of the shipped config', async () => {
+    const status: BanStatus = await mockBanStatus(await shippedConfig())
+    expect(status.blocks).toBeGreaterThan(0)
+    expect(status.missing).toEqual([])
+  })
+
+  it('keeps the ban in every such block of the workspace config', async () => {
+    const status: BanStatus = await mockBanStatus(await workspaceConfig())
     expect(status.missing).toEqual([])
   })
 })

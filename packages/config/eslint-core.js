@@ -64,6 +64,16 @@ const MOCKING_PACKAGES = [
 const INHERITANCE_MESSAGE =
   'Add behavior by composing objects, not by inheriting. Inherit only from a base the ' +
   'language or a dependency requires.'
+// The mock ban as ENTRIES rather than as a finished rule setting, for the reason the comment above
+// `NO_INHERITANCE` gives: a scoped block that sets `no-restricted-properties` REPLACES this rather than
+// adding to it. `eslint.js` set that key for `src/**` to the process.env rule alone, which switched the
+// build-wide mock ban off across a project's whole source tree without a word anywhere saying so.
+const NO_MOCK_PROPERTIES = MOCKING_VI_METHODS.map((property) => ({
+  object: 'vi',
+  property,
+  message: NO_MOCKS_MESSAGE,
+}))
+
 const NO_INHERITANCE = [
   'error',
   {
@@ -95,16 +105,6 @@ const NO_LITERAL_ASSERTIONS = [
     message: LITERAL_ASSERTION_MESSAGE,
   },
 ]
-
-/** The caps the governing standard states, in one place both configs read. */
-export const CAPS = Object.freeze({
-  maxLinesPerFile: MAX_LINES_PER_FILE,
-  maxLinesPerCallable: MAX_LINES_PER_FUNCTION,
-  maxParameters: MAX_PARAMS,
-  maxComplexity: COMPLEXITY_MAX,
-  maxDepth: MAX_DEPTH,
-  minNameLength: MIN_NAME_LENGTH,
-})
 
 /** Re-exported so a caller declares no plugin version of its own. */
 export const compose = tseslint.config
@@ -339,14 +339,7 @@ export const guidelineRules = {
   'jsdoc/require-returns': 'off',
 
   // No mocks - ban the mocking entry points and libraries build-wide.
-  'no-restricted-properties': [
-    'error',
-    ...MOCKING_VI_METHODS.map((property) => ({
-      object: 'vi',
-      property,
-      message: NO_MOCKS_MESSAGE,
-    })),
-  ],
+  'no-restricted-properties': ['error', ...NO_MOCK_PROPERTIES],
   'no-restricted-imports': [
     'error',
     { paths: MOCKING_PACKAGES.map((name) => ({ name, message: NO_MOCKS_MESSAGE })) },
@@ -418,6 +411,29 @@ const NO_NETWORK_GUARD_ESCAPE = [
   },
   {
     selector: "AssignmentExpression[left.object.name='globalThis'][left.property.name='fetch']",
+    message:
+      'Do not replace the global fetch. Point the test at a real component on this machine instead.',
+  },
+  // The bare assignment is not the only way to replace it, and it is the least likely one to be
+  // reached for by someone working around the guard on purpose. `globalThis.fetch` is the one property
+  // the guard leaves configurable - a DOM environment swaps the globals between files and a frozen
+  // fetch would break that - so these three routes to it are named as well.
+  {
+    selector:
+      "CallExpression[callee.object.name='Object'][callee.property.name='defineProperty']" +
+      "[arguments.0.name='globalThis'][arguments.1.value='fetch']",
+    message:
+      'Do not redefine the global fetch. Point the test at a real component on this machine instead.',
+  },
+  {
+    selector:
+      "CallExpression[callee.object.name='Reflect'][callee.property.name='set']" +
+      "[arguments.0.name='globalThis'][arguments.1.value='fetch']",
+    message:
+      'Do not replace the global fetch. Point the test at a real component on this machine instead.',
+  },
+  {
+    selector: "AssignmentExpression[left.object.name='global'][left.property.name='fetch']",
     message:
       'Do not replace the global fetch. Point the test at a real component on this machine instead.',
   },
@@ -507,12 +523,10 @@ export const immutabilityBlock = (files, ignores) => ({
 
 /** The shared selectors, re-exported so a scoped block can spread rather than restate them. */
 export {
-  MOCKING_PACKAGES,
-  MOCKING_VI_METHODS,
   NO_FAST_CHECK_SEED,
   NO_INHERITANCE,
   NO_LITERAL_ASSERTIONS,
-  NO_MOCKS_MESSAGE,
+  NO_MOCK_PROPERTIES,
   NO_NETWORK_GUARD_ESCAPE,
   NO_TEST_ORDER_ESCAPE,
 }

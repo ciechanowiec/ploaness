@@ -41,8 +41,8 @@
       "ignoreUnresolved": ["next"]
     },
     "packages/assets": {
-      "entry": [],
-      "project": ["*.mjs"]
+      "entry": ["test/**/*.spec.ts"],
+      "project": ["*.mjs", "test/**/*.ts"]
     },
     "packages/governance": {
       "entry": ["test/**/*.spec.ts"],
