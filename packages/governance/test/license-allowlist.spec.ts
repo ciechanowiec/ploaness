@@ -35,6 +35,24 @@ describe('license allowlist', () => {
     expect(isLicenseAllowed('MIT AND Apache-2.0')).toBe(true)
   })
 
+  // An operand that is itself a group is the case the parenthesis bookkeeping exists for, and it was
+  // the one case never asserted: the expressions below both open and close a parenthesis at the ends
+  // without being enclosed by them, which the old net-balance test could not tell from a real wrap.
+  it('evaluates a parenthesised operand as a group rather than unwrapping the whole expression', () => {
+    expect(isLicenseAllowed('(MIT) OR (ISC)')).toBe(true)
+    expect(isLicenseAllowed('(MIT AND ISC) OR (Apache-2.0)')).toBe(true)
+    expect(isLicenseAllowed('(MIT OR Apache-2.0) AND (ISC OR MIT)')).toBe(true)
+  })
+
+  // The same defect in the direction that matters: read as a top-level OR, the expression below found
+  // `MIT` among pieces that were never operands and passed a conjunct nothing permits.
+  it('refuses a conjunct that is a group of disallowed licenses', () => {
+    expect(isLicenseAllowed('(MIT OR GPL-3.0-only) AND (GPL-3.0-only OR AGPL-3.0-only)')).toBe(
+      false,
+    )
+    expect(isLicenseAllowed('(GPL-3.0-only) AND (MIT)')).toBe(false)
+  })
+
   it('returns only the disallowed packages', () => {
     const violations: readonly LicensedPackage[] = findLicenseViolations([
       { name: 'good', license: 'MIT' },

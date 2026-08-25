@@ -56,16 +56,34 @@ const isAllowedId = (id: string): boolean =>
 const OR: string = ' OR '
 const AND: string = ' AND '
 
-// How far a fragment leaves the parentheses open, so an operator inside a group is not split on.
-const balanceOf = (text: string): number =>
+/** Where a scan of the parentheses stands: the depth reached, and the lowest depth passed through. */
+interface ParenthesisDepth {
+  readonly depth: number
+  readonly lowest: number
+}
+
+const stepDepth = (depth: number, character: string): number => {
+  if (character === '(') {
+    return depth + 1
+  }
+  return character === ')' ? depth - 1 : depth
+}
+
+// Both figures come from one walk, because the two questions below are about the same characters: how
+// far a fragment leaves the parentheses open, and whether it ever closed a group it had not opened.
+const walkParentheses = (text: string): ParenthesisDepth =>
   // Only the two parentheses are counted, and neither of them decomposes.
   // eslint-disable-next-line @typescript-eslint/no-misused-spread -- see the note above
-  [...text].reduce((depth: number, character: string): number => {
-    if (character === '(') {
-      return depth + 1
-    }
-    return character === ')' ? depth - 1 : depth
-  }, 0)
+  [...text].reduce(
+    (state: ParenthesisDepth, character: string): ParenthesisDepth => {
+      const depth: number = stepDepth(state.depth, character)
+      return { depth, lowest: Math.min(state.lowest, depth) }
+    },
+    { depth: 0, lowest: 0 },
+  )
+
+// How far a fragment leaves the parentheses open, so an operator inside a group is not split on.
+const balanceOf = (text: string): number => walkParentheses(text).depth
 
 // Where the operator occurs at parenthesis depth zero, which is the only place it separates operands.
 // An occurrence inside a group belongs to that group: in `(MIT OR Apache-2.0) AND ISC` the OR is the
@@ -84,9 +102,22 @@ const splitOutside = (expression: string, operator: string): readonly string[] =
   )
 }
 
+// Whether the outer parentheses enclose the WHOLE expression, rather than opening one group and closing
+// a different one. A net balance of zero does not answer that, and answering it that way was wrong in
+// both directions: `(MIT) OR (ISC)` also nets to zero, and stripping its outer characters left
+// `MIT) OR (ISC`, where the early `)` drives the running depth negative so no operator sits at depth
+// zero any more. Such an expression was then read as one unrecognised id and rejected - while
+// `(MIT OR GPL-3.0-only) AND (GPL-3.0-only OR AGPL-3.0-only)` split at two ORs that were never
+// top-level, found `MIT` among the pieces, and passed. The lowest depth the inner text reaches is what
+// separates the two cases.
+const isWhollyEnclosed = (inner: string): boolean => {
+  const walk: ParenthesisDepth = walkParentheses(inner)
+  return walk.depth === 0 && walk.lowest === 0
+}
+
 const unwrap = (expression: string): string => {
   const trimmed: string = expression.trim()
-  return trimmed.startsWith('(') && trimmed.endsWith(')') && balanceOf(trimmed.slice(1, -1)) === 0
+  return trimmed.startsWith('(') && trimmed.endsWith(')') && isWhollyEnclosed(trimmed.slice(1, -1))
     ? unwrap(trimmed.slice(1, -1))
     : trimmed
 }
