@@ -7,6 +7,7 @@
 // bundle may grow. There is no field that turns a gate off, because "do not disable the failing check"
 // is the contract rather than a preference.
 
+import { BUNDLE_BUDGET_BYTES } from './bundle-budget.js'
 import { matchesGlob, matchesRole } from './file-roles.js'
 // Only string-valued entries survive `asStringRecord`: a non-string would reach `spawn` as a
 // malformed environment.
@@ -89,9 +90,10 @@ export interface Settings {
   readonly analysisEnv: Readonly<Record<string, string>>
 }
 
-const BYTES_PER_KIB: number = 1024
-const DEFAULT_BUDGET_KIB: number = 900
-const DEFAULT_BUNDLE_BUDGET_BYTES: number = DEFAULT_BUDGET_KIB * BYTES_PER_KIB
+// Imported rather than recomputed. The same three lines stood here and in `bundle-budget.ts`, which is
+// the module that owns this number - two arithmetic expressions that had to agree, in a package whose
+// own guidance says a value stated twice will not stay stated twice.
+const DEFAULT_BUNDLE_BUDGET_BYTES: number = BUNDLE_BUDGET_BYTES
 
 // The two variables Payload itself requires of every project. They are defaults rather than a hard-coded
 // environment, so a project whose config demands more can add to them, but no project has to restate what
@@ -115,7 +117,14 @@ const DEFAULT_JAVASCRIPT_ALLOWLIST: readonly string[] = [
   String.raw`importMap\.js$`,
 ]
 
-const DEFAULT_SOURCE_ROOTS: readonly string[] = ['src', 'tests', 'scripts']
+/**
+ * The directories a project holds first-party source in unless it says otherwise.
+ *
+ * Exported because `config-references.ts` built its own alternation out of the same names, and a
+ * project that declared an extra source root got its config carve-outs left unchecked while the two
+ * lists drifted apart in silence.
+ */
+export const DEFAULT_SOURCE_ROOTS: readonly string[] = ['src', 'tests', 'scripts']
 
 const DEFAULT_SERVER_URL: string = 'http://localhost:3000'
 

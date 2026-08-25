@@ -29,7 +29,11 @@ export interface EditorconfigViolation {
 }
 
 const FIRST_LINE: number = 1
-const BOM: string = '﻿'
+// Named by code point rather than written out, for the reason `banned-typography.ts` gives about the
+// characters IT bans: a source file that spells an invisible character invites a tool to normalise it
+// away - and here that tool would silently disarm the very rule this constant implements.
+const BYTE_ORDER_MARK: number = 0xfe_ff
+const BOM: string = String.fromCodePoint(BYTE_ORDER_MARK)
 
 /**
  * Read the `[*]` section of an `.editorconfig`.

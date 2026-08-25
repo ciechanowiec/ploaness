@@ -19,10 +19,11 @@ export const GENERATED_ARTEFACTS: readonly string[] = [
 /**
  * The deny rules a runtime must carry for a set of generated artefacts.
  *
- * The artefacts are a parameter rather than the constant above, because two different sets need the
- * same rule: a governed Payload project denies what Payload generates, and the ploaness repository
- * denies the asset bodies and shipped configs its own build regenerates. Closing over one of them would
- * have meant a second copy of this function for the other.
+ * The artefacts are a parameter rather than the constant above so the rule stays a statement about a
+ * SET of generated paths rather than about Payload's three. What ploaness governs is one such set; the
+ * ploaness repository denies its own regenerated asset bodies through the same shaped list, written by
+ * hand in `.claude/settings.json` because nothing here runs `ploaness sync`. Closing over the constant
+ * would have made the rule untestable against any set but that one.
  * @param artefacts the repo-relative paths a generator owns.
  * @returns the Edit and Write denials the runtime settings must carry.
  */

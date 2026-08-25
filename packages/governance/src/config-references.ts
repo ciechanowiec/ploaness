@@ -11,10 +11,26 @@
 // config legitimately uses those and existence-checking them would make the gate lie. A leading `!`
 // (Biome negation) is stripped before the path is returned.
 
-// A quoted string whose content, after an optional leading `!`, starts with a source directory and ends
-// with a file extension. The three quote styles cover JSON (`"`) and JS/TS config literals (`'`, `` ` ``).
-const LITERAL_SOURCE_PATH: RegExp =
-  /(['"`])(!?(?:src|tests|scripts|public)\/[^'"`\n]*?\.[A-Za-z0-9]+)\1/g
+// The directories a carve-out may name. `DEFAULT_SOURCE_ROOTS` is imported rather than restated - the
+// three names were written out here as a second alternation, so a change to either list left the other
+// describing a project that no longer exists. `public` is added on top because a config legitimately
+// carves out a static asset, and no source root claims that directory.
+const CARVE_OUT_DIRECTORIES: readonly string[] = [...DEFAULT_SOURCE_ROOTS, 'public']
+
+import { DEFAULT_SOURCE_ROOTS } from './settings.js'
+import { escapeForRegex } from './text-escapes.js'
+
+// A quoted string whose content, after an optional leading `!`, starts with one of those directories and
+// ends with a file extension. The three quote styles cover JSON (`"`) and JS/TS config literals
+// (`'`, `` ` ``).
+const CARVE_OUT_ALTERNATION: string = CARVE_OUT_DIRECTORIES.map((directory: string): string =>
+  escapeForRegex(directory),
+).join('|')
+
+const LITERAL_SOURCE_PATH: RegExp = new RegExp(
+  String.raw`(['"\`])(!?(?:${CARVE_OUT_ALTERNATION})/[^'"\`\n]*?\.[A-Za-z0-9]+)\1`,
+  'g',
+)
 
 // Glob and regex metacharacters. A token carrying any of these is a pattern, not a concrete path, so it
 // cannot be existence-checked and is dropped.
