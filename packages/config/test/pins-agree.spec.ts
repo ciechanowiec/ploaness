@@ -5,6 +5,7 @@
 // wiring failure while this repository ran `pnpm@11.9.0`, so the `fail-package-manager` fixture proved a
 // version the harness did not use, and nothing anywhere would have said so.
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { minimumNodeMajor, pinnedPnpmVersion } from '@ploaness/governance'
@@ -78,5 +79,38 @@ describe('the Node floor ploaness pins', () => {
   it('is the major this repository runs on, as .nvmrc records it', () => {
     const nvmrc: string = readFileSync(path.join(workspaceRoot, '.nvmrc'), 'utf8').trim()
     expect(Number(nvmrc)).toBe(minimumNodeMajor(enginesOf(pins)['node']))
+  })
+})
+
+// `vite` is pinned for a reason the other ecosystem entries do not share: ploaness's own vitest resolves
+// a vite of its own, and @vitejs/plugin-react declares vite as a PEER. A project declaring a different
+// version installs a second one and the plugin loads against the wrong instance. The pin only closes
+// that while it names the version ploaness itself resolves - and vitest's own range moves it without
+// asking, so the two were free to drift the moment the pin was written.
+const versionOfResolved = (specifier: string, from: string): string => {
+  const resolveFrom: NodeJS.Require = createRequire(
+    createRequire(from).resolve(`${specifier}/package.json`),
+  )
+  const manifest: Record<string, unknown> = readJson(resolveFrom.resolve('vite/package.json'))
+  return manifest['version'] as string
+}
+
+const groupVersions = (name: string): Record<string, string> => {
+  const groups: readonly unknown[] = pins['groups'] as readonly unknown[]
+  const group: unknown = groups.find(
+    (entry: unknown): boolean => (entry as Record<string, unknown>)['name'] === name,
+  )
+  return (group as Record<string, unknown>)['versions'] as Record<string, string>
+}
+
+describe('the vite version ploaness pins', () => {
+  it('is the one this repository resolves through its own test runner', () => {
+    expect(groupVersions('ecosystem')['vite']).toBe(
+      versionOfResolved('vitest', path.join(configPackage, 'package.json')),
+    )
+  })
+
+  it('is pinned to one exact version, so a consumer declares the same instance', () => {
+    expect(groupVersions('ecosystem')['vite']).toMatch(/^\d+\.\d+\.\d+$/)
   })
 })

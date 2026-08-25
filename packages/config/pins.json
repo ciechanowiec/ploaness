@@ -33,12 +33,13 @@
     {
       "name": "ecosystem",
       "required": false,
-      "why": "Packages a Payload project commonly reaches for, none of which every project needs: a database driver and its types, a loader for .env, and a cross-platform way to set a variable in a package script. ploaness owns the version of each so no two governed projects disagree about one, and forces none of them on a project that has no use for it.",
+      "why": "Packages a Payload project commonly reaches for, none of which every project needs: a database driver and its types, a loader for .env, a cross-platform way to set a variable in a package script, and the bundler a project reaches for when it runs Storybook or a Vite build. ploaness owns the version of each so no two governed projects disagree about one, and forces none of them on a project that has no use for it. Being popular is not what earns a place here, or this list would become a catalogue of every library a project might like: a package belongs when its version can change what a gate decides, or when a second copy of it in one tree is a defect rather than waste. `vite` is the clearest case of the second. ploaness's own vitest and React plugin resolve a vite of their own, so a project declaring a different one installs two - and @vitejs/plugin-react declares vite as a PEER, which makes the mismatch a loading failure rather than mere duplication. ploaness cannot close that by declaring vite itself, because under the strict layout a project's own build cannot reach ploaness's copy; only the project can declare the instance its build loads, which is exactly what a pin is for.",
       "versions": {
         "pg": "8.23.0",
         "@types/pg": "8.23.1",
         "dotenv": "17.4.2",
-        "cross-env": "10.1.0"
+        "cross-env": "10.1.0",
+        "vite": "8.2.2"
       }
     }
   ]
