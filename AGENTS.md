@@ -7,8 +7,7 @@ Follow the repository contract from general to specific:
 1. Follow `README-guideline-software-project.adoc`.
 2. Follow the project-owned instructions in this file.
 
-Both layers are binding. The project-owned instructions may strengthen but never weaken the software-project
-guideline.
+Both layers are binding. The project-owned instructions may strengthen but never weaken the software-project guideline.
 
 ## Project Structure & Module Organization
 

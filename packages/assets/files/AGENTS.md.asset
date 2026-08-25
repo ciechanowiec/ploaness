@@ -1,14 +1,11 @@
 <!-- BEGIN PLOANESS MANAGED INSTRUCTIONS -->
-## ploaness harness
+## Ploaness harness
 
 Follow the repository contract from general to specific:
 
 1. Follow `README-guideline-software-project.adoc`.
-2. Follow the ploaness-specific contract in `.ploaness/agent-guide.md`.
+2. Follow the complete Ploaness contract in `.ploaness/agent-guide.md`.
 3. Follow the project-owned instructions below this managed block.
 
-Every layer is binding, and a later layer may strengthen but never weaken an earlier one. The inherited
-harness is the executable enforcement of this contract. Do not weaken, replace, duplicate, or independently
-version anything ploaness owns. Use only the write commands declared in `.ploaness/agent-guide.md`, review
-their edits, and complete the verification workflow that the agent guide requires before finishing.
+Every layer is binding, and a later layer may strengthen but never weaken an earlier one. The inherited harness is the executable enforcement of this contract. Do not weaken, replace, duplicate, or version what Ploaness owns.
 <!-- END PLOANESS MANAGED INSTRUCTIONS -->
