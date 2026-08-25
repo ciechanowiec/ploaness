@@ -51,12 +51,14 @@ about Payload runs here unchanged. `scripts/verify.sh` is that list, and `pnpm r
 `biome-schema`, `conventions`, `editorconfig`, `suppressions`, `config-refs`, `docs`, `skills`,
 `image-assets`, `licenses`, `vulnerabilities`, `install-scripts`, `deps`, `actions`, `secrets`,
 `require-full-history`, `commit-history`, and `linear-history`, around the build, the type check, the
-lint, and the unit suite.
+lint, and the unit suite. That order is the script's own - the reads that need nothing but the tree
+first, then the ones that need a registry or a container - and is not the order `gates.ts` runs them in,
+which is ordering a Payload project's run rather than this one.
 
 Three analyzers the shipped gates point at a Payload layout run here against this workspace instead,
 because only their globs are project-shaped: dependency-cruiser through
-`packages/config/dependency-cruiser-repo.json`, knip through `knip-repo.json`, and `type-coverage` over
-`tsconfig.lint.json`. The framework-neutral half of the architecture contract lives in
+`packages/config/dependency-cruiser-repo.json`, knip through `packages/config/knip-repo.json`, and
+`type-coverage` over `tsconfig.lint.json`. The framework-neutral half of the architecture contract lives in
 `dependency-cruiser-core.json` and is shared with what a consumer receives, for the reason
 `eslint-core.js` exists. Each `-repo` config is named that way because `.dependency-cruiser.json` and
 `knip.json` are FORBIDDEN paths in a governed project; a file with either name here would read as a
@@ -70,9 +72,10 @@ that implement these checks, which the standard makes source code of this reposi
 in a digest-pinned image declared in `toolchain-pins.ts` beside the three the gates use.
 
 What remains genuinely inapplicable is `preflight`, `wiring`, and `assets`, which judge a consumer's
-installation of ploaness; `payload-generated` and `payload-rules`, which are about Payload; `css`,
-`docker`, `bundle`, and `e2e`, for which this repository has no stylesheet, Dockerfile, client bundle,
-or browser. Everything else is on. A gate that ploaness cannot turn on itself is a gate this repository
+installation of ploaness; `payload-generated`, `payload-rules`, and `generated-denial`, which are about
+Payload - the last of those denies write access to the three artefacts `payload generate` owns, and this
+repository has none of them; `css`, `docker`, `bundle`, and `e2e`, for which this repository has no
+stylesheet, Dockerfile, client bundle, or browser. Everything else is on. A gate that ploaness cannot turn on itself is a gate this repository
 is not held to, so prefer adding one here over asserting that it cannot apply - `arch` was absent on
 that reasoning, and a module cycle grew in `packages/governance` where nothing was looking.
 
@@ -83,6 +86,10 @@ commit rather than silently repaired.
 Three legs are required before a change is finished: `pnpm run verify` for the harness's own source,
 `pnpm run it` for its behaviour as an installed package, and a real consumer project for the gates that
 shell out to a toolchain.
+
+Nothing runs those three but a person. This repository ships no workflow, so `gate actions` passes here
+over an empty set and the three legs are a discipline rather than a check. That is worth knowing when
+reading a green tree: it says the last person to run them saw them pass, not that they pass now.
 
 ### The repository is linted by the config it publishes
 
@@ -111,8 +118,9 @@ for syntax a JavaScript file cannot carry. Clearing that run replaced two `proce
 thrown errors, a `delete` with a rebuilt object, and a hand-written wrapper in the network guard with a
 Proxy - which also stopped the guard from having to copy `dns.lookup`'s promisify symbol by hand.
 
-Do not clear a new finding with a suppression while the budget is the thing standing between this
-repository and the ceiling. `ploaness gate suppressions` reports where it stands.
+Do not clear a new finding with a suppression while a structural fix exists. `ploaness gate
+suppressions` reports where the budget stands; a comfortable margin is not permission to spend it,
+because the margin is what a genuinely unavoidable suppression will need later.
 
 Note what the ceiling does NOT count: it measures files whose extension is code, so a shell script's
 `# shellcheck disable=` is free. Resolve a shell finding structurally rather than by directive - that is
