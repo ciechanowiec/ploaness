@@ -14,6 +14,7 @@ import {
   type FreshnessReport,
   findFreshnessViolations,
   findLicenseViolations,
+  HARNESS_EXCEPTIONS,
   isArray,
   isRecord,
   judgeVulnerabilities,
@@ -319,6 +320,7 @@ export const vulnerabilities = (context: Context): GateResult => {
     advisories,
     context.settings.vulnerabilityAllowlist,
     context.settings.vulnerabilitySeverity,
+    HARNESS_EXCEPTIONS,
   )
   const findings: readonly string[] = [
     ...report.unsuppressed.map(

@@ -270,7 +270,7 @@ default, so a typo can never widen a rule.
 | `bundleBudgetBytes` | `921600` | The ceiling on gzipped client JavaScript. Only a smaller value is honoured. |
 | `maxSuppressions` | the earned ceiling | A stricter ceiling; `0` permits none. A looser value is ignored. |
 | `vulnerabilitySeverity` | `moderate` | The severity that fails the gate. Only a stricter value is honoured. |
-| `vulnerabilityAllowlist` | empty | `advisory`, `reason`, and `addedOn`. An entry missing one is dropped. |
+| `vulnerabilityAllowlist` | empty | `advisory`, `reason`, and `addedOn`. An entry missing one is dropped. An advisory carried by ploaness's own dependencies is recorded by ploaness, not here. |
 | `secretAllowlist` | empty | Fake credentials committed as fixtures. `path` and `reason`. |
 | `serverUrl` | `http://localhost:3000` | The origin the end-to-end suite drives. |
 | `auxiliaryServers` | empty | Servers the end-to-end run starts beside the application. `command` and `url`. An entry missing either is dropped. The application is still started first and still answers at `serverUrl`. |

@@ -485,7 +485,11 @@ xref:#extended-verification[] adds the following six gates to xref:#default-veri
 | empty
 | Advisories the https://payloadcms.com[Payload CMS^] project can't reach. Each entry records the
   `advisory`, the `reason`, and the `addedOn` date. An entry missing any of the three is dropped, and an
-  entry that suppresses nothing fails the gate.
+  entry that suppresses nothing fails the gate. An advisory carried by _ploaness_'s own dependencies
+  doesn't belong here: _ploaness_ records those itself, at the same bar, because a project can't repair
+  a manifest it doesn't own and every project would otherwise carry the same entry. When one of those
+  goes stale the xref:#vulnerabilities-gate[gate] says to upgrade the harness rather than to edit
+  `package.json`.
 
 | `secretAllowlist`
 | empty
