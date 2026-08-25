@@ -45,6 +45,10 @@ const wiredInputs = (overrides: Record<string, unknown> = {}): WiringInputs => (
 const locations = (inputs: Parameters<typeof findWiringViolations>[0]): readonly string[] =>
   findWiringViolations(inputs).map((violation) => violation.location)
 
+// The mandated block is typed as an opaque record, and these cases need one of its lists. Asserting is
+// what a spec is permitted to do that production code is not, which is why type coverage exempts tests.
+const biomeIncludes = (): readonly string[] => BIOME_FILES['includes'] as readonly string[]
+
 const reasonFor = (inputs: Parameters<typeof findWiringViolations>[0], location: string): string =>
   findWiringViolations(inputs).find((violation) => violation.location === location)?.reason ?? ''
 
@@ -145,6 +149,34 @@ describe('the Biome file-selection block', () => {
   // project has no biome.json, and this finding is unreachable until biome.json has parsed. Naming
   // that command sent a real consumer round a loop - run it, watch it report the file left alone,
   // fail on the same line - which is what `sync.ts` refuses to do for a managed file.
+  // Both blocks are in the rule's hands, so the finding names the entries rather than asking the
+  // reader to diff two fifteen-entry lists by eye. A real consumer was one carve-out short and the
+  // message said only that the block must match, which is a defect found with a script, not an eye.
+  it('names the entry a project is missing', () => {
+    const biomeConfig: string = JSON.stringify({
+      extends: ['ploaness/biome'],
+      files: {
+        ...BIOME_FILES,
+        includes: biomeIncludes().filter(
+          (entry: string): boolean => entry !== '!src/payload-types.ts',
+        ),
+      },
+    })
+    expect(reasonFor(wiredInputs({ biomeConfig }), 'biome.json files')).toContain(
+      'add "!src/payload-types.ts"',
+    )
+  })
+
+  it('names the entry a project added that ploaness does not declare', () => {
+    const biomeConfig: string = JSON.stringify({
+      extends: ['ploaness/biome'],
+      files: { ...BIOME_FILES, includes: [...biomeIncludes(), 'docs/**/*'] },
+    })
+    expect(reasonFor(wiredInputs({ biomeConfig }), 'biome.json files')).toContain(
+      'remove "docs/**/*"',
+    )
+  })
+
   it('does not instruct running init, which leaves an existing file alone', () => {
     const biomeConfig: string = JSON.stringify({ extends: ['ploaness/biome'] })
     expect(reasonFor(wiredInputs({ biomeConfig }), 'biome.json files')).not.toContain(
@@ -173,14 +205,16 @@ describe('the tsconfig path keys', () => {
 
   // The same loop the biome block above was sending a project round: unreachable until tsconfig.json
   // has parsed, so the file it told the project to have written already exists.
-  it('does not instruct running init, which leaves an existing file alone', () => {
+  // Printed rather than described, for the reason the biome block is: unreachable until tsconfig.json
+  // exists, so the reader is editing a value and has to be shown it.
+  it('prints the value a project must declare', () => {
     const tsconfig: string = JSON.stringify({
       extends: 'ploaness/tsconfig.json',
       exclude: ['node_modules'],
     })
-    expect(reasonFor(wiredInputs({ tsconfig }), 'tsconfig.json include')).not.toContain(
-      'run `ploaness init`',
-    )
+    const reason: string = reasonFor(wiredInputs({ tsconfig }), 'tsconfig.json include')
+    expect(reason).toContain(JSON.stringify(REQUIRED_TSCONFIG_PATHS['include']))
+    expect(reason).not.toContain('run `ploaness init`')
   })
 })
 

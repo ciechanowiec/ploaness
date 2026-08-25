@@ -244,6 +244,39 @@ const checkReexport = (
       ]
 }
 
+// What a consumer has to change, named entry by entry.
+//
+// The finding used to say the block "must match" and stop there. Both blocks are right here, so the
+// reader was being asked to diff two fifteen-entry lists by eye to find the one carve-out a newer
+// ploaness added - and the advice it offered instead, `ploaness init`, cannot repair a file that
+// already exists, which is the only state this finding is reachable in.
+const listOf = (value: unknown): readonly string[] =>
+  isArray(value) ? value.map((entry: unknown): string => JSON.stringify(entry)) : []
+
+const describeBiomeDrift = (
+  declared: unknown,
+  required: Readonly<Record<string, unknown>>,
+): string => {
+  const declaredIncludes: readonly string[] = listOf(asRecord(declared)['includes'])
+  const requiredIncludes: readonly string[] = listOf(required['includes'])
+  const missing: readonly string[] = requiredIncludes.filter(
+    (entry: string): boolean => !declaredIncludes.includes(entry),
+  )
+  const unexpected: readonly string[] = declaredIncludes.filter(
+    (entry: string): boolean => !requiredIncludes.includes(entry),
+  )
+  const parts: readonly string[] = [
+    ...(missing.length > 0 ? [`add ${missing.join(', ')}`] : []),
+    ...(unexpected.length > 0 ? [`remove ${unexpected.join(', ')}`] : []),
+  ]
+  // Same entries, different block: the order, or `ignoreUnknown`. Naming no entry would leave the
+  // reader exactly where the old wording did, so say which of the two it is.
+  return parts.length === 0
+    ? 'declares the ploaness includes entries in another order, or another "ignoreUnknown"; the ' +
+        'block is required verbatim'
+    : `${parts.join(' and ')} in the includes block, which ploaness requires verbatim`
+}
+
 const checkBiome = (
   config: string | undefined,
   requiredFiles: Readonly<Record<string, unknown>>,
@@ -274,19 +307,13 @@ const checkBiome = (
       reason: 'ploaness owns this section; remove the local override',
     }),
   )
-  // The advice has to name a repair it can actually perform. This finding is only reachable once
-  // biome.json has parsed, so the file always exists - and `init` seeds a stub only where the project
-  // has none, reporting `left alone because it already exists` otherwise. Sending the project to `init`
-  // therefore sent it round a loop: run the command, watch it change nothing, fail on the same line.
   const wrongFiles: readonly WiringViolation[] =
     JSON.stringify(parsed['files']) === JSON.stringify(requiredFiles)
       ? []
       : [
           {
             location: 'biome.json files',
-            reason:
-              'must declare the ploaness file-selection block verbatim; edit it to match, because ' +
-              '`ploaness init` seeds this file only into a project that has none',
+            reason: describeBiomeDrift(parsed['files'], requiredFiles),
           },
         ]
   return [...missingExtends, ...overriddenSections, ...wrongFiles]
@@ -328,12 +355,11 @@ const checkTsconfig = (config: string | undefined): readonly WiringViolation[] =
         JSON.stringify(parsed[key]) !== JSON.stringify(value),
     )
     .map(
-      ([key]: readonly [string, unknown]): WiringViolation => ({
+      ([key, value]: readonly [string, unknown]): WiringViolation => ({
         location: `tsconfig.json ${key}`,
-        // Same loop as the biome block above: this is reachable only once tsconfig.json has parsed.
-        reason:
-          'must declare the ploaness value verbatim; edit it to match, because `ploaness init` ' +
-          'seeds this file only into a project that has none',
+        // Printed rather than described, for the reason the biome block above is: this is reachable
+        // only once tsconfig.json exists, so the reader is editing a value and needs to see it.
+        reason: `must declare the ploaness value verbatim: ${JSON.stringify(value)}`,
       }),
     )
   return [...wrongExtends, ...overriddenOptions, ...wrongPaths]
