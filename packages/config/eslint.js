@@ -247,7 +247,7 @@ export default compose(
   //    (query by role/text); assertions use the @testing-library/jest-dom matchers, which a project
   //    registers in a `vitest.setup.ts` of its own if it writes component tests.
   //    Scoped to the Vitest suite (`tests/int` + `tests/unit`); Playwright e2e specs use a different
-  //    runner (and its own `forbidOnly` in CI), so these Vitest/RTL rules do not apply there.
+  //    runner (and its own unconditional `forbidOnly`), so these Vitest/RTL rules do not apply there.
   {
     files: ['tests/int/**/*.ts', 'tests/int/**/*.tsx', 'tests/unit/**/*.ts', 'tests/unit/**/*.tsx'],
     plugins: { vitest: vitestPlugin, 'testing-library': testingLibrary },
