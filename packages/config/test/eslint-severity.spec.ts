@@ -7,7 +7,10 @@
 // block named the same key with only the assertion selectors in it.
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { Linter } from 'eslint'
 import { describe, expect, it } from 'vitest'
+
+type LintMessage = ReturnType<Linter['verify']>[number]
 
 /** The part of a flat-config block these assertions read. */
 interface FlatBlock {
@@ -150,6 +153,17 @@ const sharedSelectors = async (exportName: string): Promise<readonly string[]> =
 
 const inheritanceSelectors = (): Promise<readonly string[]> => sharedSelectors('NO_INHERITANCE')
 
+const lintRestrictedSyntax = (code: string, selectors: readonly string[]): readonly LintMessage[] =>
+  new Linter().verify(code, {
+    languageOptions: { ecmaVersion: 2024, sourceType: 'module' },
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...selectors.map((selector: string): Readonly<Record<string, string>> => ({ selector })),
+      ],
+    },
+  })
+
 // The determinism groups differ from the inheritance ban in where they belong: they govern specs, so
 // they are spread into the block that lints the suite rather than into every block. What would drift is
 // the spread going missing on a later edit, which is what this reads.
@@ -244,4 +258,18 @@ describe('the determinism selectors reach the block that lints the suite', () =>
       expect(carriedSomewhere(await workspaceConfig(), selectors)).toEqual([])
     },
   )
+
+  it.each([
+    ['a raw datagram import', "import dgram from 'node:dgram'"],
+    ['a dynamic child-process import', "const child = await import('node:child_process')"],
+    ['a CommonJS worker import', "const threads = require('node:worker_threads')"],
+    [
+      'a cluster loaded through process',
+      "const cluster = process.getBuiltinModule('node:cluster')",
+    ],
+    ['a global worker', "const worker = new Worker('worker.js')"],
+  ])('rejects %s', async (_what: string, code: string) => {
+    const selectors: readonly string[] = await sharedSelectors('NO_NETWORK_GUARD_ESCAPE')
+    expect(lintRestrictedSyntax(code, selectors)).toHaveLength(1)
+  })
 })

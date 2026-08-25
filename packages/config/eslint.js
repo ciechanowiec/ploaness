@@ -278,6 +278,16 @@ export default compose(
     },
   },
 
+  // Playwright has its own runner, but a spec body can still create an unguarded Node transport before
+  // it asks the browser to do anything. The Vitest-specific integrity rules do not fit here; the network
+  // escape ban does, and carries the same selectors rather than a second list.
+  {
+    files: ['tests/e2e/**/*.ts', 'tests/e2e/**/*.tsx'],
+    rules: {
+      'no-restricted-syntax': [...NO_INHERITANCE, ...NO_NETWORK_GUARD_ESCAPE],
+    },
+  },
+
   // ── Formatting is Biome's job - disable every conflicting stylistic rule (must stay last) ────
   prettierLast,
 )

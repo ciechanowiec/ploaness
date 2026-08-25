@@ -109,7 +109,9 @@ ploaness governs all of the following domains:
   loopback included, because a resolver sends a packet to a nameserver rather than reading a hosts file,
   which is why a `mongodb+srv://` connection string cannot be used from a test. A service that exists
   only outside the machine is exercised through a local component that implements its protocol; there is
-  no setting that widens the guard, because widening it is the thing the rule forbids. The suite also
+  no setting that widens the guard, because widening it is the thing the rule forbids. Raw datagrams,
+  child or cluster processes, and workers are rejected by the lint pass because each creates a transport
+  or runtime outside the installed guard. The suite also
   runs shuffled - both the files and the tests within them - under a seed ploaness owns, so a test that
   only passed in the order its file happened to be written in now fails. Repair the coupling: make each
   test establish what it needs. `it.concurrent`, `it.sequential`, and `vi.setConfig` are rejected,
@@ -293,9 +295,8 @@ enforces. These are decided by reading the code against the wording below, not b
 - Every wait a test performs is bounded by a timeout sized so that its expiry signals a defect of the
   code rather than the speed of the machine. The reach beyond this machine is a check now; how long a
   test is willing to wait is still a reading.
-- A test that shells out to another program reaches whatever that program reaches. The network guard
-  sits inside the test's own process and sees none of it, so a spec that runs a downloader is off the
-  machine however green it reports.
+- A test does not shell out, start a worker, or open a raw datagram. Each leaves the guarded runtime, so
+  the lint pass rejects the API before the suite runs.
 - A callable does not return null, and does not accept null, where an optional or result type says the
   same thing. A callable that cannot do its job fails immediately with an error that says what went
   wrong, rather than falling back silently to a default.

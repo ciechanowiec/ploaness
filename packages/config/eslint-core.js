@@ -399,9 +399,45 @@ const NO_FAST_CHECK_SEED = [
 
 // The two determinism mechanisms the shipped Vitest config installs, and the ways a spec could reach
 // past them. Neither is a substitute for the mechanism: the network guard is installed non-configurable
-// and the sequence block is out of a project's reach entirely. They exist so the attempt reads as a
-// finding rather than as code that quietly does nothing.
+// and the sequence block is out of a project's reach entirely. Raw datagrams and a new process or worker
+// do not pass through the patched runtime, so those entry points are refused statically instead of being
+// wrapped incompletely. The selectors make every escape attempt a finding before the suite runs.
 const NO_NETWORK_GUARD_ESCAPE = [
+  {
+    selector:
+      'ImportDeclaration[source.value=/^(?:node:)?(?:child_process|cluster|dgram|worker_threads)$/]',
+    message:
+      'Tests may not import datagram, process, or worker APIs, because they run outside the network ' +
+      'guard. Use a real component on this machine from the guarded test runtime.',
+  },
+  {
+    selector:
+      'ImportExpression[source.value=/^(?:node:)?(?:child_process|cluster|dgram|worker_threads)$/]',
+    message:
+      'Tests may not dynamically import datagram, process, or worker APIs, because they run outside ' +
+      'the network guard.',
+  },
+  {
+    selector:
+      "CallExpression[callee.name='require']" +
+      '[arguments.0.value=/^(?:node:)?(?:child_process|cluster|dgram|worker_threads)$/]',
+    message:
+      'Tests may not require datagram, process, or worker APIs, because they run outside the network ' +
+      'guard.',
+  },
+  {
+    selector:
+      "CallExpression[callee.object.name='process'][callee.property.name='getBuiltinModule']" +
+      '[arguments.0.value=/^(?:node:)?(?:child_process|cluster|dgram|worker_threads)$/]',
+    message:
+      'Tests may not load datagram, process, or worker builtins, because they run outside the network ' +
+      'guard.',
+  },
+  {
+    selector: 'NewExpression[callee.name=/^(?:SharedWorker|Worker)$/]',
+    message:
+      'Tests may not create a worker, because its isolated runtime does not carry the network guard.',
+  },
   {
     selector:
       "AssignmentExpression[left.object.property.name='prototype'][left.property.name='connect']",

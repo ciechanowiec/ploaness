@@ -136,6 +136,10 @@ all made non-writable and non-configurable so a spec cannot put the originals ba
 were checks, and `README-guideline-software-project.adoc` says a rule automation can verify reliably
 belongs in a check rather than in an instruction file.
 
+Raw datagrams, child or cluster processes, and workers do not pass through a setup file installed in the
+test runtime. `NO_NETWORK_GUARD_ESCAPE` therefore bans those entry points in test code instead of
+pretending a wrapper in this process can govern another transport or runtime.
+
 That file may import node builtins and `@ploaness/governance`, and NOTHING else. It lives inside
 `node_modules/@ploaness/config`, so a `vitest`, `fast-check`, or `@testing-library/*` reached from there
 is the harness's copy rather than the project's: a hook, a matcher, or a global seed registered against
