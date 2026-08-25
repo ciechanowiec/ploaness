@@ -71,25 +71,31 @@ const toRoute = (href: string, origin: string): string | null => {
 /* eslint-disable functional/immutable-data -- a breadth-first crawl over a live site needs a frontier
    that shrinks as it is read and a visited set that grows; both are confined to discoverRoutes below
    and escape only as the list it returns */
-const enqueueRoutes = (
-  hrefs: readonly string[],
-  origin: string,
-  seen: Set<string>,
-  queue: string[],
-): boolean => {
-  let isCapped: boolean = false
+// The frontier, the visited set and the routes the cap refused, passed as one value because they are
+// one thing: the state of a single crawl. Threading them as separate parameters put this function over
+// the parameter cap the moment the refused set joined them.
+interface CrawlState {
+  readonly seen: Set<string>
+  readonly queue: string[]
+  readonly dropped: Set<string>
+}
+
+// Routes refused by the cap are collected rather than counted, so the caller learns THAT the crawl was
+// truncated from a set it can also read. Returning a boolean instead named a verb after a predicate,
+// which the shipped lint rules reject and which read as though enqueueing were the question asked.
+const enqueueRoutes = (hrefs: readonly string[], origin: string, state: CrawlState): void => {
   for (const href of hrefs) {
     const route: string | null = toRoute(href, origin)
-    if (route !== null && !seen.has(route)) {
-      if (seen.size >= MAX_ROUTES) {
-        isCapped = true
-      } else {
-        seen.add(route)
-        queue.push(route)
-      }
+    if (route === null || state.seen.has(route) || state.dropped.has(route)) {
+      continue
+    }
+    if (state.seen.size >= MAX_ROUTES) {
+      state.dropped.add(route)
+    } else {
+      state.seen.add(route)
+      state.queue.push(route)
     }
   }
-  return isCapped
 }
 
 interface RouteDiscovery {
@@ -98,12 +104,14 @@ interface RouteDiscovery {
 }
 
 const discoverRoutes = async (page: Page, origin: string): Promise<RouteDiscovery> => {
-  const seen: Set<string> = new Set<string>(['/'])
+  const state: CrawlState = {
+    seen: new Set<string>(['/']),
+    queue: ['/'],
+    dropped: new Set<string>(),
+  }
   const reachable: string[] = []
-  const queue: string[] = ['/']
-  let isCapped: boolean = false
-  while (queue.length > 0) {
-    const routePath: string | undefined = queue.shift()
+  while (state.queue.length > 0) {
+    const routePath: string | undefined = state.queue.shift()
     if (routePath === undefined) {
       break
     }
@@ -119,9 +127,9 @@ const discoverRoutes = async (page: Page, origin: string): Promise<RouteDiscover
       .evaluateAll((anchors: readonly Element[]): readonly string[] =>
         anchors.map((anchor: Element): string => anchor.getAttribute('href') ?? ''),
       )
-    isCapped = enqueueRoutes(hrefs, origin, seen, queue) || isCapped
+    enqueueRoutes(hrefs, origin, state)
   }
-  return { routes: reachable, isCapped }
+  return { routes: reachable, isCapped: state.dropped.size > 0 }
 }
 /* eslint-enable functional/immutable-data -- the crawl above is the only place this spec mutates */
 
