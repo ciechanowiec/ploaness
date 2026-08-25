@@ -130,6 +130,12 @@ gate secrets
 
 step test pnpm run test
 
+# A package harness is not proven by its workspace layout alone. Pack the five published packages and
+# install them into the isolated fixture, so the verification command covers the same resolution path a
+# consumer receives. `pnpm run it` remains a declared subset for iterating on this leg by itself.
+step pack pnpm run pack:local
+step integration pnpm run it
+
 # History gates last: they need no build, and a history failure is repaired differently from a source
 # failure. `require-full-history` first, because the other two are meaningless on a shallow clone.
 gate require-full-history

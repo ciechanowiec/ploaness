@@ -83,13 +83,13 @@ A tracked-tree fingerprint brackets the whole run. A verification that rewrote a
 describe a tree nobody committed, so `build` regenerating a stale asset body is reported as a failure to
 commit rather than silently repaired.
 
-Three legs are required before a change is finished: `pnpm run verify` for the harness's own source,
-`pnpm run it` for its behaviour as an installed package, and a real consumer project for the gates that
-shell out to a toolchain.
+Two legs are required before a change is finished: `pnpm run verify`, which covers the harness's source
+and calls `pnpm run it` against the packed packages, and a real consumer project for the gates that shell
+out to a Payload toolchain. `pnpm run it` remains available as a declared subset while iterating.
 
-Nothing runs those three but a person. This repository ships no workflow, so `gate actions` passes here
-over an empty set and the three legs are a discipline rather than a check. That is worth knowing when
-reading a green tree: it says the last person to run them saw them pass, not that they pass now.
+Nothing runs those two legs but a person. This repository ships no workflow, so `gate actions` passes
+here over an empty set. That is worth knowing when reading a green tree: it says the last person to run
+the legs saw them pass, not that they pass now.
 
 ### The repository is linted by the config it publishes
 
