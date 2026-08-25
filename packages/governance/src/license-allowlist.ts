@@ -1,6 +1,6 @@
 // License allowlist policy for dependencies. The pure logic - the allowlist and the SPDX-expression
-// evaluator - lives here so it is unit-tested; the CLI that shells out to pnpm and exits is in
-// scripts/check-licenses.ts.
+// evaluator - lives here so it is unit-tested; the `licenses` gate in
+// packages/cli/src/checks/dependencies.ts shells out to pnpm and reports.
 
 // The two groups are arrays rather than sets so the allowlist can be assembled with a single
 // constructor call. Merging two sets would want `Set.prototype.union`, which the ES2023 lib target does

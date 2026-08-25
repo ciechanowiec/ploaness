@@ -1,5 +1,5 @@
 // Image-asset integrity policy: the pure, unit-tested logic behind the repo-wide gate
-// (check-image-assets.ts, run via `pnpm run lint:image-assets`, part of `verify`). Given the bytes of a
+// (`image-assets`, in packages/cli/src/checks/integrity.ts). Given the bytes of a
 // tracked image, it reports whether the image is structurally broken - corrupt or truncated - so a
 // committed asset that will not render cannot ship. This is the class of defect that a 200 response and
 // a passing a11y sweep both miss: the original failure was a seeded PNG whose header parsed but whose

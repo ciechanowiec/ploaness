@@ -1,6 +1,7 @@
 // Shared AI-typography ban: characters a human rarely types but language models love, each mapped to
 // the plain ASCII a human would actually write. One source of truth, consumed by both the file gate
-// (check-conventions.ts) and the commit-message gate (check-commit-message.ts). Every banned character is
+// (`conventions`, in packages/cli/src/checks/conventions.ts) and the history gate (`commit-history`, in
+// packages/cli/src/checks/history.ts). Every banned character is
 // referenced via its code point only, so neither this module nor its callers trip the check on
 // themselves.
 

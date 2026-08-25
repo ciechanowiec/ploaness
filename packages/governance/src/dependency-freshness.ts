@@ -27,8 +27,8 @@ export interface ParsedVersion {
 
 // A leading range operator (`^ ~ >= <= = v`) or whitespace is tolerated, then the numeric core is
 // read into positional groups (major, minor, patch, prerelease); an optional `-prerelease` tag is
-// captured and build metadata after `+` is ignored. The core mirrors the `$schema` version regex in
-// check-biome-schema.ts.
+// captured and build metadata after `+` is ignored. The core mirrors the `$schema` version regex the
+// `biome-schema` gate uses in packages/cli/src/checks/toolchain.ts.
 const VERSION_PATTERN: RegExp = /^[\sv^~>=<]*(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([^+\s]+))?/
 
 /**

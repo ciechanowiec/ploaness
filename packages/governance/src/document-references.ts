@@ -1,5 +1,5 @@
 // Doc-rot policy: the pure logic that finds references in the agent docs (AGENTS.md, CLAUDE.md) which
-// no longer match reality. The CLI that reads the files and exits is in scripts/check-documentation.ts.
+// no longer match reality. The `docs` gate in packages/cli/src/checks/references.ts reads the files.
 //
 // Two reference kinds are validated, both chosen to be HIGH-SIGNAL and false-positive-free:
 //   1. Script references - a backticked npm-script token (`lint:arch`, `verify:full`, `knip`, ...) or a

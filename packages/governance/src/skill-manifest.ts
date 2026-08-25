@@ -1,5 +1,5 @@
 // Skill-manifest policy: the pure rules that validate a Claude Code SKILL.md's frontmatter contract.
-// The CLI that walks the filesystem and exits is in scripts/check-skills.ts.
+// The `skills` gate in packages/cli/src/checks/references.ts walks the filesystem.
 //
 // Scope is deliberately the HIGH-SIGNAL, false-positive-free subset of an agentic-skill linter: the
 // frontmatter Claude Code actually relies on to DISCOVER and INVOKE a skill. Body style (line length,

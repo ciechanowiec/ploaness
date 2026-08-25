@@ -1,7 +1,7 @@
 // Config-reference integrity policy: the pure logic that finds LITERAL source-file paths carved out of
 // (or into) a tool config - a Biome `includes`, an ESLint `ignores`, a Vitest `coverageExclude` - that
-// no longer exist on disk. The CLI that reads the config files and probes the filesystem is in
-// scripts/check-config-references.ts.
+// no longer exist on disk. The `config-refs` gate in packages/cli/src/checks/references.ts reads the
+// config files and probes the filesystem.
 //
 // This is the sibling of the doc-rot gate (document-references.ts), applied to configs instead of docs,
 // and chosen to be HIGH-SIGNAL and false-positive-free. A quoted token is only checked when it is

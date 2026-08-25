@@ -1,6 +1,6 @@
 // Bundle-size budget policy: the pure logic - the byte ceiling and the sum-vs-budget evaluation - lives
-// here so it is unit-tested; the CLI that walks `.next/static`, gzips each chunk, and exits is in
-// scripts/check-bundle-size.ts.
+// here so it is unit-tested; the `bundle` gate in packages/cli/src/checks/integrity.ts walks
+// `.next/static`, gzips each chunk, and reports.
 //
 // Why this is a DETERMINISTIC gate (unlike Lighthouse, which this repo deliberately omits): gzipped
 // byte counts of built JS are a fixed function of the source + pinned dependency and Node versions, so

@@ -1,5 +1,5 @@
-// Pure commit-message logic, extracted from the check-commit-message.ts CLI entry so it can be unit- and
-// coverage-tested without mocking git or the filesystem (the entry keeps all I/O). It enforces
+// Pure commit-message logic, kept out of the `commit-history` gate in packages/cli/src/checks/history.ts
+// so it can be unit- and coverage-tested without a fixture repository (that gate keeps all I/O). It enforces
 // Conventional Commits headers, subject quality, the shared AI-typography ban, the AI-agent
 // attribution ban (no co-author trailer, session id, or generated-by signature naming an agent), and a
 // mandatory body explaining WHY for non-trivial changes (>2 files or >50 changed lines).

@@ -2,7 +2,7 @@
 // agent, or which agent session, produced a change. Commit messages therefore carry no co-authorship
 // trailer, vendor sign-off email, session identifier, or generated-by signature that attributes the
 // change to an AI agent. This module is the single source of truth for the known attribution patterns;
-// the commit-message gate (check-commit-message.ts) consumes it. Only structured attribution markers
+// the `commit-history` gate in packages/cli/src/checks/history.ts consumes it. Only structured attribution markers
 // are matched, never a bare product name in prose: this repository ships agent instructions and
 // documents such tools by name, so a commit like "docs: explain the claude code skill" must pass.
 
