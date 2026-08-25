@@ -5,7 +5,13 @@
 // defect the staged asset bodies exist to close - code shipped where nothing can see it.
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const [file, pointer, value] = process.argv.slice(2)
+// node and this script's own path precede the caller's arguments.
+const ARGUMENT_OFFSET = 2
+
+// The indent every JSON file in this repository is written with.
+const JSON_INDENT = 2
+
+const [file, pointer, value] = process.argv.slice(ARGUMENT_OFFSET)
 const parsed = JSON.parse(readFileSync(file, 'utf8'))
 const keys = pointer.split('.')
 
@@ -30,4 +36,4 @@ const asValue = (raw) => {
 }
 
 parentOf(parsed)[keys.at(-1)] = asValue(value)
-writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`)
+writeFileSync(file, `${JSON.stringify(parsed, null, JSON_INDENT)}\n`)

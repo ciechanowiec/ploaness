@@ -35,23 +35,25 @@ const refuse = (attempt) => {
   }
 }
 
-const guard = (original, toAttempt) => {
-  const guarded = function guardedByPloaness(...callArguments) {
-    refuse(toAttempt(callArguments))
-    return Reflect.apply(original, this, callArguments)
-  }
-  // Carried over rather than left behind: `dns.lookup` announces its promisified shape through a symbol
-  // property, and a wrapper without it turns `promisify(dns.lookup)` into a different function.
-  Object.defineProperties(guarded, Object.getOwnPropertyDescriptors(original))
-  Object.defineProperty(guarded, GUARD_MARK, { value: true })
-  return guarded
-}
+// A proxy rather than a wrapper function, for two reasons that both come from what is being wrapped.
+// `net.Socket.prototype.connect` is a method, so the receiver has to reach the original - and a proxy
+// forwards it without the wrapper ever naming `this`. And `dns.lookup` announces its promisified shape
+// through a symbol property, which a hand-written wrapper has to remember to copy and a proxy carries
+// by construction, along with the function's name and arity.
+const guard = (original, toAttempt) =>
+  new Proxy(original, {
+    apply: (target, receiver, callArguments) => {
+      refuse(toAttempt(callArguments))
+      return Reflect.apply(target, receiver, callArguments)
+    },
+    has: (target, key) => key === GUARD_MARK || Reflect.has(target, key),
+  })
 
 // Installed non-writable and non-configurable, so a project setup file or a spec body cannot put the
 // original back. Installing it twice is not a no-op but an error, which is what the mark check prevents.
 const install = (owner, key, toAttempt) => {
   const original = owner[key]
-  if (typeof original !== 'function' || GUARD_MARK in original) {
+  if (typeof original !== 'function' || Reflect.has(original, GUARD_MARK)) {
     return
   }
   Object.defineProperty(owner, key, {
@@ -98,14 +100,22 @@ install(dns.promises, 'lookup', toLookupAttempt)
 
 // The hole the socket guard does not cover. The resolver family queries a nameserver over UDP without
 // ever creating a socket, which is how an SRV lookup leaves the machine with nothing to intercept.
-RESOLVER_METHODS.forEach((method) => {
+for (const method of RESOLVER_METHODS) {
   install(dns, method, toResolveAttempt)
   install(dns.promises, method, toResolveAttempt)
-})
+}
 
 // Left replaceable, unlike the two above. A DOM test environment swaps the globals between files, and a
 // non-configurable `fetch` would break that swap. This layer exists for the message it produces; if it
 // is replaced, the socket guard still refuses the request one layer down.
-if (typeof globalThis.fetch === 'function' && !(GUARD_MARK in globalThis.fetch)) {
-  globalThis.fetch = guard(globalThis.fetch, toFetchAttempt)
+// Read through Reflect rather than as a bare name: a runtime without it would make the bare name a
+// reference error rather than an absence to skip over.
+const currentFetch = Reflect.get(globalThis, 'fetch')
+if (typeof currentFetch === 'function' && !Reflect.has(currentFetch, GUARD_MARK)) {
+  Object.defineProperty(globalThis, 'fetch', {
+    value: guard(currentFetch, toFetchAttempt),
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  })
 }

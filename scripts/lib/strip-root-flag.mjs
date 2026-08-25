@@ -6,6 +6,12 @@
 // checked against it.
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const [source, destination] = process.argv.slice(2)
+// node and this script's own path precede the caller's arguments.
+const ARGUMENT_OFFSET = 2
+
+// The indent every JSON file in this repository is written with.
+const JSON_INDENT = 2
+
+const [source, destination] = process.argv.slice(ARGUMENT_OFFSET)
 const { root: _root, ...config } = JSON.parse(readFileSync(source, 'utf8'))
-writeFileSync(destination, `${JSON.stringify(config, null, 2)}\n`)
+writeFileSync(destination, `${JSON.stringify(config, null, JSON_INDENT)}\n`)

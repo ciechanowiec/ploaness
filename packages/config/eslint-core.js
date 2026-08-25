@@ -17,6 +17,7 @@ import jsdoc from 'eslint-plugin-jsdoc'
 import regexp from 'eslint-plugin-regexp'
 import sonarjs from 'eslint-plugin-sonarjs'
 import unicorn from 'eslint-plugin-unicorn'
+import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 const COMPLEXITY_MAX = 8
@@ -446,6 +447,52 @@ const NO_TEST_ORDER_ESCAPE = [
       "Do not reconfigure the runner from a spec. The sequence and its seed are the harness's.",
   },
 ]
+
+/**
+ * The same contract, applied to a file that is JavaScript rather than TypeScript.
+ *
+ * A check a repository implements itself is source code of that repository, so the programs that
+ * implement one are held to the code rules like anything else - and a build script or a runtime shim
+ * cannot be TypeScript, because the tool that loads it reads it as JavaScript. The rule list is not
+ * restated here: it is the same object, minus the four rules that ask for syntax a JavaScript file
+ * cannot carry, and with the bare-number ban expressed through the base rule because the typed variant
+ * reads type information such a file does not have. The allowlist it reads is the same one.
+ * @param files the glob patterns this block governs.
+ * @returns a flat-config block.
+ */
+export const javascriptBlock = (files) => ({
+  files,
+  extends: [tseslint.configs.disableTypeChecked],
+  // Declared rather than inferred. `no-undef` is off for every TypeScript file here because the
+  // compiler decides that question; on a JavaScript file the rule is live, and it has to be told which
+  // names the runtime supplies. These programs run on node without a CommonJS wrapper.
+  languageOptions: { globals: globals.nodeBuiltin },
+  rules: {
+    ...guidelineRules,
+    // Re-applied AFTER the rule list above. `extends` places the disabling block BEFORE the block's own
+    // rules, so spreading the list on top would switch every type-aware rule back on for a file that has
+    // no type information for one to read - which fails the run outright rather than reporting.
+    ...tseslint.configs.disableTypeChecked.rules,
+    // A JavaScript file has nowhere to write a return type, a parameter type, or a variable annotation.
+    '@typescript-eslint/explicit-function-return-type': 'off',
+    '@typescript-eslint/explicit-module-boundary-types': 'off',
+    '@typescript-eslint/typedef': 'off',
+    // The typed variant understands enums and type indexes, which is why it is the one TypeScript reads;
+    // here there are none, and the base rule expresses the same allowlist.
+    '@typescript-eslint/no-magic-numbers': 'off',
+    'no-magic-numbers': [
+      'error',
+      {
+        ignore: STRUCTURAL_NUMBERS,
+        ignoreArrayIndexes: true,
+        ignoreDefaultValues: true,
+        ignoreClassFieldInitialValues: true,
+        enforceConst: true,
+        detectObjects: false,
+      },
+    ],
+  },
+})
 
 /** No `let`, no in-place mutation. The caller supplies the files and the generated-role exemptions. */
 export const immutabilityBlock = (files, ignores) => ({

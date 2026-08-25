@@ -8,26 +8,25 @@
 //
 // The `.asset` suffix exists because npm strips a packed `.npmrc` and renames a packed `.gitignore`.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pairedAssets, parseManifest } from '@ploaness/governance'
 
-const packageRoot = dirname(fileURLToPath(import.meta.url))
-const workspaceRoot = join(packageRoot, '..', '..')
+const packageRoot = path.dirname(fileURLToPath(import.meta.url))
+const workspaceRoot = path.join(packageRoot, '..', '..')
 
-const manifest = parseManifest(readFileSync(join(packageRoot, 'manifest.tsv'), 'utf8'))
+const manifest = parseManifest(readFileSync(path.join(packageRoot, 'manifest.tsv'), 'utf8'))
 if (manifest.problems.length > 0) {
-  console.error(`manifest.tsv is malformed:\n  ${manifest.problems.join('\n  ')}`)
-  process.exit(1)
+  throw new Error(`manifest.tsv is malformed:\n  ${manifest.problems.join('\n  ')}`)
 }
 
 // A missing root file is fatal rather than skipped: the pairing is derived from the manifest, so a path
 // with no root twin means either the file was deleted or a new managed path needs declaring as authored
 // directly as an asset. Skipping would ship the previous body forever.
 const generated = pairedAssets(manifest.assets).map((pair) => {
-  const source = join(workspaceRoot, pair.rootPath)
-  const target = join(packageRoot, pair.assetPath)
-  mkdirSync(dirname(target), { recursive: true })
+  const source = path.join(workspaceRoot, pair.rootPath)
+  const target = path.join(packageRoot, pair.assetPath)
+  mkdirSync(path.dirname(target), { recursive: true })
   writeFileSync(target, readFileSync(source))
   return pair.assetPath
 })

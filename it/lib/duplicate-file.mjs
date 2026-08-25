@@ -4,6 +4,9 @@
 // never terminates: the redirect keeps extending the very file the reader is still consuming.
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const [file] = process.argv.slice(2)
+// node and this script's own path precede the caller's arguments.
+const ARGUMENT_OFFSET = 2
+
+const [file] = process.argv.slice(ARGUMENT_OFFSET)
 const text = readFileSync(file, 'utf8')
 writeFileSync(file, `${text}\n${text}`)

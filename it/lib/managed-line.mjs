@@ -5,13 +5,15 @@
 // exactly the defect this suite exists to catch.
 import { readFileSync } from 'node:fs'
 
-const [file, index] = process.argv.slice(2)
+// node and this script's own path precede the caller's arguments.
+const ARGUMENT_OFFSET = 2
+
+const [file, index] = process.argv.slice(ARGUMENT_OFFSET)
 const lines = readFileSync(file, 'utf8')
   .split('\n')
   .filter((line) => line.trim().length > 0)
 const line = lines[Number(index)]
 if (line === undefined) {
-  console.error(`the managed body has no non-blank line ${index}`)
-  process.exit(1)
+  throw new Error(`the managed body has no non-blank line ${index}`)
 }
 process.stdout.write(line)

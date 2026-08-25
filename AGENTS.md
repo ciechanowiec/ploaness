@@ -100,6 +100,17 @@ rather than obeyed. Three of those findings were defects rather than style - a s
 wrapped onto a second line had silently disarmed itself, a boolean-returning function was named as
 though it returned data, and `.filter(fn)` over `git ls-files` crashed on a symlink.
 
+The JavaScript half took longer. `eslint.config.mjs` ignored every `.js` and `.mjs` file, which is right
+for an analyzer config and a `bin` shim - they carry no type information for a type-aware pass to read -
+but wrong for the programs that IMPLEMENT a check: the fixture mutations in `it/lib/`, the asset-body
+staging helper, the two package build scripts, and the setup file that installs the network guard. The
+standard makes each of those source code of this repository, and Biome alone was reading them, which
+covers the complexity cap and nothing else. `CHECK_PROGRAMS` in `eslint.config.mjs` names them and
+`javascriptBlock` in `eslint-core.js` holds them to the same rule list, minus the four rules that ask
+for syntax a JavaScript file cannot carry. Clearing that run replaced two `process.exit(1)` calls with
+thrown errors, a `delete` with a rebuilt object, and a hand-written wrapper in the network guard with a
+Proxy - which also stopped the guard from having to copy `dns.lookup`'s promisify symbol by hand.
+
 Do not clear a new finding with a suppression while the budget is the thing standing between this
 repository and the ceiling. `ploaness gate suppressions` reports where it stands.
 

@@ -2,9 +2,12 @@
 // beneath it, leaving every other block intact.
 import { readFileSync, writeFileSync } from 'node:fs'
 
+// node and this script's own path precede the caller's arguments.
+const ARGUMENT_OFFSET = 2
+
 const ALLOWLIST_KEY = 'onlyBuiltDependencies:'
 
-const [file] = process.argv.slice(2)
+const [file] = process.argv.slice(ARGUMENT_OFFSET)
 const lines = readFileSync(file, 'utf8').split('\n')
 const start = lines.indexOf(ALLOWLIST_KEY)
 const kept = lines.filter(

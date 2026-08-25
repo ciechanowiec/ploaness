@@ -5,10 +5,12 @@
 // those reports green while testing nothing.
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const [file, needle] = process.argv.slice(2)
+// node and this script's own path precede the caller's arguments.
+const ARGUMENT_OFFSET = 2
+
+const [file, needle] = process.argv.slice(ARGUMENT_OFFSET)
 const text = readFileSync(file, 'utf8')
 if (!text.includes(needle)) {
-  console.error(`the fixture no longer contains ${needle}; the mutation would be a no-op`)
-  process.exit(1)
+  throw new Error(`the fixture no longer contains ${needle}; the mutation would be a no-op`)
 }
 writeFileSync(file, text.replace(needle, ''))
