@@ -59,7 +59,11 @@ export interface DiffStat {
  * @returns the first non-blank line as `header` and the remaining prose as `body` (both may be empty).
  */
 export const parseMessage = (raw: string): ParsedMessage => {
-  const lines: readonly string[] = (raw.split(SCISSORS)[0] ?? '')
+  // Line endings are normalised before anything reads a line. `HEADER_PATTERN` ends in `.+$` with no
+  // `m` flag, and `.` does not cross a `\r`, so on a machine with `core.autocrlf=true` every commit was
+  // rejected as an invalid header - naming the header pattern rather than the one character that
+  // actually differed. The trailing-period check was defeated by the same `\r`.
+  const lines: readonly string[] = (raw.replaceAll('\r\n', '\n').split(SCISSORS)[0] ?? '')
     .split('\n')
     .filter((line: string): boolean => !line.startsWith('#'))
   const headerIndex: number = lines.findIndex((line: string): boolean => line.trim().length > 0)

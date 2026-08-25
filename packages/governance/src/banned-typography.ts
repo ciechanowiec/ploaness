@@ -56,15 +56,31 @@ export interface TypographyViolation {
   readonly replacement: string
 }
 
+const BY_CHARACTER: ReadonlyMap<string, BannedCharacter> = new Map(
+  BANNED_CHARACTERS.map((banned: BannedCharacter): readonly [string, BannedCharacter] => [
+    banned.char,
+    banned,
+  ]),
+)
+
+// Every occurrence, at its own column, in the order it is read.
+//
+// This used to run `indexOf` once per banned character, which reported only the FIRST of each on a
+// line - so a line with two em dashes produced one finding, and clearing a file took as many runs as
+// it had repeats. Walking the line by code point fixes the count and the column together: `indexOf`
+// returns a UTF-16 offset, so a column after an emoji named a position the editor does not have.
 const violationsInLine = (line: string, lineNumber: number): readonly TypographyViolation[] =>
-  BANNED_CHARACTERS.flatMap((banned: BannedCharacter): readonly TypographyViolation[] => {
-    const column: number = line.indexOf(banned.char)
-    return column === -1
+  // Code points are the unit wanted here: a banned character is one code point, and a column counted
+  // in code units names a position no editor agrees with.
+  // eslint-disable-next-line @typescript-eslint/no-misused-spread -- see the note above
+  [...line].flatMap((character: string, index: number): readonly TypographyViolation[] => {
+    const banned: BannedCharacter | undefined = BY_CHARACTER.get(character)
+    return banned === undefined
       ? []
       : [
           {
             line: lineNumber,
-            column: column + 1,
+            column: index + 1,
             label: banned.label,
             replacement: banned.replacement,
           },
@@ -73,11 +89,12 @@ const violationsInLine = (line: string, lineNumber: number): readonly Typography
 
 /**
  * Scans text for banned AI-typography, reporting 1-based line and column positions.
- * @param text the content to scan, with lines separated by "\n".
+ * @param text the content to scan, with lines separated by "\n" or "\r\n".
  * @returns one violation per banned character found, in reading order.
  */
 export const findTypographyViolations = (text: string): readonly TypographyViolation[] =>
   text
+    .replaceAll('\r\n', '\n')
     .split('\n')
     .flatMap((line: string, index: number): readonly TypographyViolation[] =>
       violationsInLine(line, index + 1),

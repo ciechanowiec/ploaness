@@ -9,6 +9,7 @@
 // scanner's configuration itself, outside the working tree, from entries the project declares. The
 // rendered config always extends the tool's default rules, so a declared entry can only add a named
 // exception and can never replace or disable what the scanner already looks for.
+import { escapeForRegex } from './text-escapes.js'
 
 /** One committed fake credential, and the reason it is committed. */
 export interface SecretException {
@@ -17,11 +18,46 @@ export interface SecretException {
   readonly reason: string
 }
 
-const escapeForRegex = (value: string): string =>
-  value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
+// The characters a TOML basic string cannot carry literally: its two delimiters, and every control
+// character. Named by code point rather than written out, for the reason `banned-typography.ts` gives:
+// a source file that spells an invisible character invites a tool to normalise it away.
+const FIRST_PRINTABLE: number = 0x20
+const HEX_RADIX: number = 16
+const UNICODE_ESCAPE_DIGITS: number = 4
 
+const asHex = (codePoint: number): string =>
+  codePoint.toString(HEX_RADIX).padStart(UNICODE_ESCAPE_DIGITS, '0')
+
+const NAMED_ESCAPES: ReadonlyMap<string, string> = new Map([
+  ['\\', '\\\\'],
+  ['"', String.raw`\"`],
+  ['\n', String.raw`\n`],
+  ['\r', String.raw`\r`],
+  ['\t', String.raw`\t`],
+])
+
+// `Number(...)` rather than a fallback: `codePointAt` is typed as possibly undefined, an empty string
+// yields NaN, and `NaN < FIRST_PRINTABLE` is false - so the character passes through as itself without
+// a branch no input can reach.
+const escapeCharacter = (character: string): string => {
+  const named: string | undefined = NAMED_ESCAPES.get(character)
+  if (named !== undefined) {
+    return named
+  }
+  const codePoint: number = Number(character.codePointAt(0))
+  return codePoint < FIRST_PRINTABLE ? String.raw`\u${asHex(codePoint)}` : character
+}
+
+// A basic TOML string, which is the only string form that escapes anything. Both fields go through it.
+//
+// The path used to be rendered into a multi-line LITERAL string, which escapes nothing at all, so a
+// path containing the `'''` delimiter would have closed the string early and left the remainder as
+// syntax. The regex escaping the path already carries is no help there: it protects the scanner's
+// pattern, not TOML's quoting. A doubled backslash reaches the scanner as the single one it wants.
 const escapeForToml = (value: string): string =>
-  value.replaceAll('\\', '\\\\').replaceAll('"', String.raw`\"`)
+  // An escape is decided per code point, and a decomposed emoji is re-joined unchanged either way.
+  // eslint-disable-next-line @typescript-eslint/no-misused-spread -- see the note above
+  [...value].map((character: string): string => escapeCharacter(character)).join('')
 
 /**
  * Render a scanner configuration from the declared exceptions.
@@ -40,7 +76,7 @@ export const renderGitleaksConfig = (exceptions: readonly SecretException[]): st
     [
       '[[allowlists]]',
       `description = "${escapeForToml(exception.reason)}"`,
-      `paths = ['''^${escapeForRegex(exception.path)}$''']`,
+      `paths = ["^${escapeForToml(escapeForRegex(exception.path))}$"]`,
       '',
     ].join('\n'),
   )

@@ -5,6 +5,7 @@
 #   SEED      ploaness writes it once when absent; the project owns it afterwards.
 #   FORBIDDEN the path must not exist, because ploaness supplies that configuration itself.
 #   SECTION   ploaness owns the marked block at the top; the project owns the text below it.
+#   REFERENCE the path need not exist; if it does it carries nothing but a pointer at AGENTS.md.
 #
 # Project documentation belongs to the consuming project. The governing standard and the agent guide are
 # the exceptions, because together they declare the contract every agent is held to. CLAUDE.md is a fixed

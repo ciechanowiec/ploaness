@@ -96,10 +96,14 @@ const occurrences = (content: string, marker: string): number => content.split(m
  * starts. The block must lead the file and appear exactly once: a contract an agent reaches only after
  * scrolling past the project's own prose is not the first thing it reads, and a second copy would let
  * one block drift while the other stayed current.
- * @param content the whole file as it currently stands in the working tree.
+ * @param rawContent the whole file as it currently stands in the working tree.
  * @returns which of the three states the file is in.
  */
-export const readManagedSection = (content: string): SectionState => {
+export const readManagedSection = (rawContent: string): SectionState => {
+  // Line endings are normalised before the markers are looked for. The begin marker is required to be
+  // followed by `\n`, so on a CRLF checkout every SECTION file reported "the managed block does not
+  // begin the file" and told the reader to repair markers that were already correct.
+  const content: string = rawContent.replaceAll('\r\n', '\n')
   const begins: number = occurrences(content, SECTION_BEGIN)
   const ends: number = occurrences(content, SECTION_END)
   if (begins === 0 && ends === 0) {
@@ -126,11 +130,15 @@ export const readManagedSection = (content: string): SectionState => {
  * An existing block is replaced where it stands, so the project text below it is carried through
  * byte for byte. A file with no block gets one at the very top, because the contract has to be the
  * first thing an agent reads.
- * @param content the current file, or the empty string when it does not exist yet.
+ * @param rawContent the current file, or the empty string when it does not exist yet.
  * @param block the block ploaness ships, markers included.
  * @returns the spliced file, or undefined when the markers are too ambiguous to edit safely.
  */
-export const applyManagedSection = (content: string, block: string): string | undefined => {
+export const applyManagedSection = (rawContent: string, block: string): string | undefined => {
+  // Normalised here as well, and for a sharper reason than in the reader: the block length below is
+  // measured on the normalised text, so slicing the raw one would cut at the wrong offset by exactly
+  // the number of carriage returns the block contained.
+  const content: string = rawContent.replaceAll('\r\n', '\n')
   const state: SectionState = readManagedSection(content)
   if (state.kind === 'malformed') {
     return undefined
@@ -156,7 +164,10 @@ const readManifestRow = (index: number, line: string): ParsedRow => {
   if (path === undefined || disposition === undefined || !isDisposition(disposition)) {
     return {
       asset: undefined,
-      problem: `manifest line ${String(index + 1)}: expected "<path>", a tab, then PINNED, SEED, FORBIDDEN, or SECTION`,
+      // Rendered from DISPOSITIONS rather than written out. The list was spelled a third time here and
+      // had already drifted: REFERENCE was missing, so a typo in a REFERENCE row produced advice that
+      // contradicted the set the parser actually accepts.
+      problem: `manifest line ${String(index + 1)}: expected "<path>", a tab, then ${[...DISPOSITIONS].join(', ')}`,
     }
   }
   return { asset: { path, disposition }, problem: undefined }
