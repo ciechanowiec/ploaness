@@ -8,6 +8,40 @@
 //
 // An array narrows to a record, as it did before: `typeof [] === 'object'`, and a manifest key holding
 // an array is read by whichever caller cares, not refused here.
+import { stripComments } from './source-text.js'
+
+/** A parsed document, or the reason it could not be parsed. */
+export interface ParsedJson {
+  readonly value: unknown
+  /** Undefined when the text parsed; the parser's own message otherwise. */
+  readonly problem: string | undefined
+}
+
+// A trailing comma is legal in JSONC and in nothing `JSON.parse` accepts, so it is removed after the
+// comments are, when a comma followed only by whitespace and a closing bracket can be recognised.
+const TRAILING_COMMA: RegExp = /,(?=\s*[\]}])/g
+
+/**
+ * Parse JSON that may carry comments and trailing commas.
+ *
+ * `tsconfig.json` legally carries both, and so does a Biome config - which meant the rules that judge
+ * them threw a SyntaxError out of a pure function on a project scaffolded by `create-payload-app`. The
+ * gate that caught it is a precondition, so the whole run halted saying only that the gate "could not
+ * run". Comments are stripped by the same reader the source rules use rather than by a second regex,
+ * because the hard part is not finding `//` but knowing when it is inside a string.
+ * @param text the document to read.
+ * @returns the parsed value, or the reason it could not be parsed.
+ */
+export const parseJsonc = (text: string): ParsedJson => {
+  try {
+    return {
+      value: JSON.parse(stripComments(text).replaceAll(TRAILING_COMMA, '')),
+      problem: undefined,
+    }
+  } catch (error: unknown) {
+    return { value: undefined, problem: error instanceof Error ? error.message : String(error) }
+  }
+}
 
 /**
  * Whether a parsed value can be read as an object with string keys.

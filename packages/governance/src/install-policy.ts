@@ -9,8 +9,14 @@
 // at the top level of a workspace file, which is where they must appear to take effect.
 import { readKey } from './json-shapes.js'
 
-/** The install-config keys that can redefine a resolved version. */
-const OVERRIDE_KEYS: readonly string[] = [
+/**
+ * The install-config keys that can redefine a resolved version.
+ *
+ * Exported because `version-policy.ts` reads the same four keys out of package.json, where they are an
+ * escape from a pin rather than a workspace-wide one. It carried its own copy of this list, in a module
+ * that already imports this one - two arrays that had to stay equal, in the same gate.
+ */
+export const OVERRIDE_KEYS: readonly string[] = [
   'overrides',
   'resolutions',
   'patchedDependencies',
@@ -27,6 +33,8 @@ const SILENCING_KEYS: readonly string[] = ['ignoreCves', 'ignoreGhsas']
 export interface OverrideEntry {
   readonly key: string
   readonly packageName: string
+  /** What the override resolves to, which decides whether it redefines a version or an artefact. */
+  readonly specifier: string
 }
 
 const isTopLevelKey = (line: string, key: string): boolean =>
@@ -61,11 +69,22 @@ export const findOverrides = (workspaceFile: string): readonly OverrideEntry[] =
       .map((line: string): string => line.trim())
       .filter((line: string): boolean => line.length > 0 && !line.startsWith('#'))
       .flatMap((line: string): readonly OverrideEntry[] => {
-        const separator: number = line.lastIndexOf(':')
+        // The FIRST colon, not the last. A YAML value carries colons of its own - `npm:preact@10`,
+        // `link:../fork`, `git+ssh://...` - and splitting at the last one read `react: npm:preact@10`
+        // as a package called "react: npm", which then matched nothing in the pinned set. Every alias
+        // form, which is exactly how a pinned package is swapped for another, walked straight through
+        // the rule that exists to catch it.
+        const separator: number = line.indexOf(':')
         if (separator === -1) {
           return []
         }
-        return [{ key, packageName: withoutQuotes(line.slice(0, separator).trim()) }]
+        return [
+          {
+            key,
+            packageName: withoutQuotes(line.slice(0, separator).trim()),
+            specifier: withoutQuotes(line.slice(separator + 1).trim()),
+          },
+        ]
       }),
   )
 }

@@ -4,7 +4,7 @@
 // ploaness with; this judges the numbers beside its dependencies. The two were one file until it passed
 // the size cap, which is the cap doing its job: they answer different questions and share only the
 // helpers below.
-import { findOverrides, type OverrideEntry } from './install-policy.js'
+import { findOverrides, OVERRIDE_KEYS, type OverrideEntry } from './install-policy.js'
 import { asOptionalText, asRecord, asStringRecord, declaredDependencies } from './json-shapes.js'
 import type { WiringViolation } from './wiring-violation.js'
 
@@ -36,14 +36,39 @@ const blockOf = (packageJson: Record<string, unknown>, name: string): string | u
     : undefined
 }
 
-const describeFound = (found: string | undefined): string =>
+/**
+ * How a finding names what it actually found.
+ *
+ * Exported because `wiring-policy.ts` reported the same thing in the same words with its own copy of
+ * this function, and the two modules already share this direction of import.
+ * @param found the declared value, or undefined when the key is absent.
+ * @returns `missing`, or the value in quotes.
+ */
+export const describeFound = (found: string | undefined): string =>
   found === undefined ? 'missing' : `"${found}"`
+
+// The harness's own packages, pointed at a local artefact. A consumer verifying ploaness before it is
+// published resolves them from a tarball, and that is the arrangement `it/verify.sh` exists to exercise
+// - so the rule has to permit it deliberately. It permitted it by accident until now: the override
+// reader split the line at its LAST colon, so `ploaness: "file:../ploaness-1.0.0.tgz"` parsed as a
+// package called `ploaness: "file` and matched nothing. Repairing the reader turned an accident into a
+// finding, which is the right time to say what was actually intended.
+const HARNESS_SCOPE: string = '@ploaness/'
+const HARNESS_PACKAGE: string = 'ploaness'
+const LOCAL_ARTEFACT: RegExp = /^(?:file|link|workspace):/
+
+const isHarnessTarball = (entry: OverrideEntry): boolean =>
+  (entry.packageName === HARNESS_PACKAGE || entry.packageName.startsWith(HARNESS_SCOPE)) &&
+  LOCAL_ARTEFACT.test(entry.specifier)
 
 const overrideViolation = (
   entry: OverrideEntry,
   expected: Readonly<Record<string, string>>,
   declared: Record<string, string>,
 ): readonly WiringViolation[] => {
+  if (isHarnessTarball(entry)) {
+    return []
+  }
   const location: string = `pnpm-workspace.yaml ${entry.key}.${entry.packageName}`
   if (Object.hasOwn(expected, entry.packageName)) {
     return [
@@ -127,16 +152,11 @@ const checkEngines = (
   )
 }
 
-// Three ways left to change what a pinned version installs without changing the version. An override or
-// resolution in package.json rather than the workspace file; a patch, which swaps a package's code while
-// its version says otherwise; and a package extension, which rewrites a manifest the resolver then obeys.
-// None of them is visible in the dependency block a reader checks, which is what makes them worth naming.
-const ESCAPE_KEYS: readonly string[] = [
-  'overrides',
-  'resolutions',
-  'patchedDependencies',
-  'packageExtensions',
-]
+// The same four keys `install-policy.ts` reads out of the workspace file, read here out of package.json
+// instead: an override or resolution declared locally; a patch, which swaps a package's code while its
+// version says otherwise; and a package extension, which rewrites a manifest the resolver then obeys.
+// None is visible in the dependency block a reader checks, which is what makes them worth naming - and
+// the list is imported rather than restated, because two copies of it in one gate will not stay equal.
 
 // A patch is keyed by `name@version`, and a scoped name begins with the same character, so the split is
 // on the last `@` rather than the first.
@@ -146,7 +166,7 @@ const packageNameOf = (key: string): string => {
 }
 
 const escapeEntries = (packageJson: Record<string, unknown>): readonly (readonly string[])[] =>
-  ESCAPE_KEYS.flatMap((key: string): readonly (readonly string[])[] =>
+  OVERRIDE_KEYS.flatMap((key: string): readonly (readonly string[])[] =>
     [packageJson, asRecord(packageJson['pnpm'])].flatMap(
       (holder: Record<string, unknown>): readonly (readonly string[])[] =>
         Object.keys(asRecord(holder[key])).map((entry: string): readonly string[] => [key, entry]),
@@ -181,13 +201,35 @@ const NON_REGISTRY: RegExp = /^(?:file|link|workspace|catalog|git\+[a-z]+|git|gi
 // end-to-end run all execute against something nobody wrote down. `*` and an empty specifier are the
 // widest ranges of all rather than exceptions to the rule.
 const RANGE_OPERATOR: RegExp = /^\s*(?:[\^~><=*]|$)/
-const RANGE_UNION: RegExp = /\|\||\s-\s|\sx$|\.x/
+// A union, a hyphen range, or an `x` standing in for a whole version component. Each `x` form is
+// anchored at a component boundary: written unanchored, `.x` also matched a legitimate exact
+// prerelease such as `1.0.0-canary.x1` and reported it as a range.
+const RANGE_UNION: RegExp = /\|\||\s-\s|(?:^|[.\s])x(?:[.\s]|$)/
+
+// An exact version begins with a digit. Everything else that is neither a range operator nor a
+// non-registry specifier is a DIST TAG - `latest`, `next`, `beta` - which is the widest range of all:
+// it resolves to whatever the publisher moved the tag to since the project last installed. The rule
+// used to test only for range syntax, so every dist tag passed as though it were a pinned version.
+const EXACT_VERSION: RegExp = /^\d/
+
+// An `npm:` alias names a registry package like any other declaration - `npm:preact@^10` carries a
+// range, and reading past the whole prefix let it through. Only the version half is judged, by the same
+// rule; the alias itself is a naming decision the project is entitled to make.
+const NPM_ALIAS: string = 'npm:'
 
 const isExactVersion = (specifier: string): boolean => {
+  if (specifier.startsWith(NPM_ALIAS)) {
+    const aliased: string = specifier.slice(NPM_ALIAS.length)
+    const at: number = aliased.lastIndexOf('@')
+    return at > 0 && isExactVersion(aliased.slice(at + 1))
+  }
   if (NON_REGISTRY.test(specifier)) {
     return true
   }
-  return !(RANGE_OPERATOR.test(specifier) || RANGE_UNION.test(specifier))
+  if (RANGE_OPERATOR.test(specifier) || RANGE_UNION.test(specifier)) {
+    return false
+  }
+  return EXACT_VERSION.test(specifier)
 }
 
 const checkExactVersions = (packageJson: Record<string, unknown>): readonly WiringViolation[] =>

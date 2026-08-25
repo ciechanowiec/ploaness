@@ -1,7 +1,16 @@
+import { GENERATED_ARTEFACTS } from './generated-denial.js'
 import { findSilencedAdvisories } from './install-policy.js'
-import { asRecord, asStringRecord, declaredDependencies, isArray } from './json-shapes.js'
+import {
+  asRecord,
+  asStringRecord,
+  declaredDependencies,
+  isArray,
+  type ParsedJson,
+  parseJsonc,
+} from './json-shapes.js'
 import { type DeclaredExclusion, findConvenienceExclusions } from './settings.js'
-import { findVersionViolations } from './version-policy.js'
+import { escapeForRegex } from './text-escapes.js'
+import { describeFound, findVersionViolations } from './version-policy.js'
 import type { WiringViolation } from './wiring-violation.js'
 // Anti-bypass policy: the module that exists because npm has no lifecycle.
 //
@@ -109,8 +118,10 @@ export const requiredBiomeFiles = (
     '*.config.ts',
     '*.config.mts',
     'vitest.setup.ts',
-    '!src/payload-types.ts',
-    '!src/app/(payload)/admin/importMap.js',
+    // Derived from the artefact list rather than written out. The two lists had to name the same paths
+    // and did not: `src/payload-generated-schema.ts` was denied to an agent and still handed to the
+    // formatter, so a generator and a formatter took turns rewriting one file.
+    ...GENERATED_ARTEFACTS.map((artefact: string): string => `!${artefact}`),
     '!**/.next',
     '!**/node_modules',
   ],
@@ -161,9 +172,6 @@ const checkDependency = (packageJson: Record<string, unknown>): readonly WiringV
         },
       ]
 
-const describeFound = (found: string | undefined): string =>
-  found === undefined ? 'missing' : `"${found}"`
-
 const checkExactEntries = (
   actual: Record<string, string>,
   required: Readonly<Record<string, string>>,
@@ -187,20 +195,27 @@ const checkExactEntries = (
 // A flat ESLint config is an array, so a consumer can append a block that switches rules back off after
 // the harness config has been spread in. Requiring the file to be a bare re-export makes any addition
 // surface as a wiring violation instead of a silent downgrade.
+//
 // Comments and blank lines are dropped first, so the pattern below describes only the two statements
 // the file may contain. Expressing the preamble inside the pattern made it backtrack on a long file.
+// A block comment counts as a comment: the filter read `//` alone, so a file opening with the `/* */`
+// header a generator writes failed as though it carried a local override.
+const BLOCK_COMMENT: RegExp = /\/\*[\s\S]*?\*\//g
 const COMMENT_OR_BLANK: RegExp = /^\s*(?:\/\/.*)?$/
 // A config file the harness owns may contain nothing but an import of the shipped value and its
 // default re-export. Anything more is a local block that overrides what ploaness supplies.
-const reexportPattern = (specifier: string): RegExp => {
-  const escaped: string = specifier.replace('/', String.raw`\/`)
-  return new RegExp(
-    String.raw`^import\s+(\w+)\s+from\s+['"]${escaped}['"];?\s*export\s+default\s+\1;?$`,
+const reexportPattern = (specifier: string): RegExp =>
+  new RegExp(
+    String.raw`^import\s+(\w+)\s+from\s+['"]${escapeForRegex(specifier)}['"];?\s*export\s+default\s+\1;?$`,
   )
-}
 
+// Line endings are normalised before anything reads a line. `.` does not cross a `\r`, so on a CRLF
+// checkout every comment line survived the filter and every re-export check failed on a file that was
+// correct - a whole platform's worth of false findings from one character nobody prints.
 const withoutPreamble = (config: string): string =>
   config
+    .replaceAll('\r\n', '\n')
+    .replaceAll(BLOCK_COMMENT, '')
     .split('\n')
     .filter((line: string): boolean => !COMMENT_OR_BLANK.test(line))
     .join('\n')
@@ -236,7 +251,11 @@ const checkBiome = (
   if (config === undefined) {
     return [{ location: 'biome.json', reason: `missing; must extend ${REQUIRED_BIOME_EXTENDS}` }]
   }
-  const parsed: Record<string, unknown> = asRecord(JSON.parse(config))
+  const read: ParsedJson = parseJsonc(config)
+  if (read.problem !== undefined) {
+    return [{ location: 'biome.json', reason: `is not valid JSON: ${read.problem}` }]
+  }
+  const parsed: Record<string, unknown> = asRecord(read.value)
   const extendsValue: unknown = parsed['extends']
   const missingExtends: readonly WiringViolation[] =
     isArray(extendsValue) && extendsValue.includes(REQUIRED_BIOME_EXTENDS)
@@ -274,7 +293,11 @@ const checkTsconfig = (config: string | undefined): readonly WiringViolation[] =
       { location: 'tsconfig.json', reason: `missing; must extend ${REQUIRED_TSCONFIG_EXTENDS}` },
     ]
   }
-  const parsed: Record<string, unknown> = asRecord(JSON.parse(config))
+  const read: ParsedJson = parseJsonc(config)
+  if (read.problem !== undefined) {
+    return [{ location: 'tsconfig.json', reason: `is not valid JSON: ${read.problem}` }]
+  }
+  const parsed: Record<string, unknown> = asRecord(read.value)
   const wrongExtends: readonly WiringViolation[] =
     parsed['extends'] === REQUIRED_TSCONFIG_EXTENDS
       ? []
