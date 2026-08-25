@@ -13,6 +13,8 @@ import {
   NO_FAST_CHECK_SEED,
   NO_INHERITANCE,
   NO_LITERAL_ASSERTIONS,
+  NO_NETWORK_GUARD_ESCAPE,
+  NO_TEST_ORDER_ESCAPE,
   prettierLast,
   testIntegrityRules,
   typeAwareParsing,
@@ -68,7 +70,13 @@ export default compose(
       // `NO_INHERITANCE` is spread in beside it because this key REPLACES the base setting rather than
       // adding to it, so naming only the assertion selectors here silently disarmed the inheritance ban
       // in every spec - the exact trap `eslint-core.js` documents.
-      'no-restricted-syntax': [...NO_INHERITANCE, ...NO_LITERAL_ASSERTIONS, ...NO_FAST_CHECK_SEED],
+      'no-restricted-syntax': [
+        ...NO_INHERITANCE,
+        ...NO_LITERAL_ASSERTIONS,
+        ...NO_FAST_CHECK_SEED,
+        ...NO_TEST_ORDER_ESCAPE,
+        ...NO_NETWORK_GUARD_ESCAPE,
+      ],
       // A test's expected value IS its specification. Naming it moves the specification away from the
       // assertion that reads it, which makes the test harder to check by eye rather than easier - the
       // opposite of what the bare-number ban exists to achieve. This is a role distinction, not a

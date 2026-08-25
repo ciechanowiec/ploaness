@@ -12,6 +12,7 @@ import { COVERAGE_INCLUDE } from '@ploaness/governance'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 import { projectSettings as settings } from './project-settings.js'
+import { DETERMINISTIC_SEQUENCE, harnessSetupFile, projectSetupFiles } from './vitest-core.js'
 
 export default defineConfig({
   plugins: [react()],
@@ -19,7 +20,12 @@ export default defineConfig({
   resolve: { tsconfigPaths: true },
   test: {
     environment: 'jsdom',
-    setupFiles: ['./vitest.setup.ts'],
+    // The harness file first, and `sequence.setupFiles: 'list'` makes that ordering binding rather
+    // than incidental: it installs the network guard, which has to be in place before a project's own
+    // setup runs. A project cannot reach either entry - its vitest.config.mts is a bare re-export of
+    // this file, and the `tests` gate builds its own argv.
+    setupFiles: [harnessSetupFile(), ...projectSetupFiles()],
+    sequence: DETERMINISTIC_SEQUENCE,
     include: [
       'tests/int/**/*.int.spec.ts',
       'tests/int/**/*.int.spec.tsx',

@@ -26,6 +26,8 @@ import {
   NO_FAST_CHECK_SEED,
   NO_INHERITANCE,
   NO_LITERAL_ASSERTIONS,
+  NO_NETWORK_GUARD_ESCAPE,
+  NO_TEST_ORDER_ESCAPE,
   prettierLast,
   testIntegrityRules,
   typeAwareParsing,
@@ -236,7 +238,8 @@ export default compose(
   //    quietly stop a test from running or asserting. These rules make that a build failure: no `.only`
   //    (which silently skips every other test), no `.skip`/`xit`, no commented-out specs, and every
   //    test must contain a real assertion. The testing-library rules keep component tests user-facing
-  //    (query by role/text); assertions use the @testing-library/jest-dom matchers from vitest.setup.
+  //    (query by role/text); assertions use the @testing-library/jest-dom matchers, which a project
+  //    registers in a `vitest.setup.ts` of its own if it writes component tests.
   //    Scoped to the Vitest suite (`tests/int` + `tests/unit`); Playwright e2e specs use a different
   //    runner (and its own `forbidOnly` in CI), so these Vitest/RTL rules do not apply there.
   {
@@ -246,7 +249,13 @@ export default compose(
       // A test must actually run and actually assert. The rules live in eslint-core.js, because the
       // ploaness repository's own suite is held to them too.
       ...testIntegrityRules,
-      'no-restricted-syntax': [...NO_INHERITANCE, ...NO_LITERAL_ASSERTIONS, ...NO_FAST_CHECK_SEED],
+      'no-restricted-syntax': [
+        ...NO_INHERITANCE,
+        ...NO_LITERAL_ASSERTIONS,
+        ...NO_FAST_CHECK_SEED,
+        ...NO_TEST_ORDER_ESCAPE,
+        ...NO_NETWORK_GUARD_ESCAPE,
+      ],
 
       // React Testing Library: test components the way a user experiences them.
       'testing-library/await-async-queries': 'error',

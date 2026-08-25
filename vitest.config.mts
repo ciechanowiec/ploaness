@@ -1,3 +1,4 @@
+import { DETERMINISTIC_SEQUENCE, harnessSetupFile } from '@ploaness/config/vitest-core'
 import { defineConfig } from 'vitest/config'
 
 // ploaness governs itself. The governance layer is pure, so it is measured on line and branch coverage
@@ -5,8 +6,11 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     include: ['packages/*/test/**/*.spec.ts'],
-    // The fixed fast-check seed the property specs are written against.
-    setupFiles: ['./vitest.setup.ts'],
+    // The harness file first, which installs the network guard; then this repository's own, which
+    // carries the fast-check seed. Both halves are what a consumer receives, composed against this
+    // layout rather than restated for it.
+    setupFiles: [harnessSetupFile(), './vitest.setup.ts'],
+    sequence: DETERMINISTIC_SEQUENCE,
     coverage: {
       provider: 'v8',
       reporter: ['text'],

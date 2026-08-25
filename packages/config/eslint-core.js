@@ -384,16 +384,66 @@ export const testIntegrityRules = {
   'vitest/prefer-hooks-on-top': 'error', // setup before assertions, so reading order matches run order.
 }
 
-// Property tests must stay deterministic: the fixed global seed in the suite's setup file is the only
-// seed. A per-call override reintroduces a gate whose verdict changes between two runs of an unchanged
-// repository, which is the one thing a check may never do.
+// Property tests must stay deterministic: one seed decides the whole suite, and a per-call override
+// reintroduces a gate whose verdict changes between two runs of an unchanged repository, which is the
+// one thing a check may never do.
+//
+// Setting that global seed is the project's job, in its own `vitest.setup.ts`. It cannot be done from
+// the shipped setup file: that file lives inside node_modules, and a `fast-check` reached from there is
+// a different module record from the one the suite loads, so configuring it would configure nothing. The
+// message therefore says whose job it is rather than claiming ploaness has already done it.
 const NO_FAST_CHECK_SEED = [
   {
     selector:
       "CallExpression[callee.object.name='fc'][callee.property.name='assert'] > " +
       "ObjectExpression > Property[key.name='seed']",
     message:
-      'Do not set a per-call fast-check seed. Property tests use the fixed global seed in the suite setup.',
+      'Do not set a per-call fast-check seed. Set one global seed in vitest.setup.ts, so a failing ' +
+      'property is reproducible by rerunning.',
+  },
+]
+
+// The two determinism mechanisms the shipped Vitest config installs, and the ways a spec could reach
+// past them. Neither is a substitute for the mechanism: the network guard is installed non-configurable
+// and the sequence block is out of a project's reach entirely. They exist so the attempt reads as a
+// finding rather than as code that quietly does nothing.
+const NO_NETWORK_GUARD_ESCAPE = [
+  {
+    selector:
+      "AssignmentExpression[left.object.property.name='prototype'][left.property.name='connect']",
+    message:
+      'Do not reinstall a socket method. A test reaches no network beyond the machine it runs on, ' +
+      "and the guard that decides that is the harness's.",
+  },
+  {
+    selector: "AssignmentExpression[left.object.name='globalThis'][left.property.name='fetch']",
+    message:
+      'Do not replace the global fetch. Point the test at a real component on this machine instead.',
+  },
+]
+
+// Ordering is decided once, by the shipped sequence block. A per-test escape reintroduces exactly the
+// coupling the shuffle exists to find, and `vi.setConfig` reintroduces the per-run seed.
+// `describe.shuffle` is deliberately absent from this list: it only strengthens.
+const NO_TEST_ORDER_ESCAPE = [
+  {
+    selector:
+      "MemberExpression[object.name=/^(?:it|test|describe|suite)$/][property.name='sequential']",
+    message:
+      'Do not pin one test to declaration order. A test reaches its verdict whatever order the suite ' +
+      'runs in; if this one cannot, the coupling is the defect.',
+  },
+  {
+    selector:
+      "MemberExpression[object.name=/^(?:it|test|describe|suite)$/][property.name='concurrent']",
+    message:
+      'Do not run tests concurrently. Interleaving makes order-coupling harder to see rather than ' +
+      'impossible to have.',
+  },
+  {
+    selector: "CallExpression[callee.object.name='vi'][callee.property.name='setConfig']",
+    message:
+      "Do not reconfigure the runner from a spec. The sequence and its seed are the harness's.",
   },
 ]
 
@@ -416,4 +466,6 @@ export {
   NO_INHERITANCE,
   NO_LITERAL_ASSERTIONS,
   NO_MOCKS_MESSAGE,
+  NO_NETWORK_GUARD_ESCAPE,
+  NO_TEST_ORDER_ESCAPE,
 }

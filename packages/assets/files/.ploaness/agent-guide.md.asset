@@ -101,6 +101,19 @@ ploaness governs all of the following domains:
   any further route prefix the crawl must not follow (`ploaness.accessibilitySkipRoutes`, which adds to
   `/admin` and `/api` rather than replacing them). A finding is a defect in the page, never in the sweep:
   repair the markup or the contrast rather than narrowing what is scanned.
+- **Test determinism:** two rules of the governing standard that used to be prose and are now checks.
+  The suite runs under a network guard the shipped setup file installs before any setup of yours: a
+  socket, a DNS lookup, or a fetch that leaves this machine fails the test that made it, naming the
+  destination and quoting the rule. Loopback passes, so does an address this machine itself carries, and
+  so does a unix socket - a database on `127.0.0.1` is the intended case. Every resolver query fails,
+  loopback included, because a resolver sends a packet to a nameserver rather than reading a hosts file,
+  which is why a `mongodb+srv://` connection string cannot be used from a test. A service that exists
+  only outside the machine is exercised through a local component that implements its protocol; there is
+  no setting that widens the guard, because widening it is the thing the rule forbids. The suite also
+  runs shuffled - both the files and the tests within them - under a seed ploaness owns, so a test that
+  only passed in the order its file happened to be written in now fails. Repair the coupling: make each
+  test establish what it needs. `it.concurrent`, `it.sequential`, and `vi.setConfig` are rejected,
+  because each one buys a green run by reintroducing the coupling the shuffle exists to find.
 - **Suppressions:** the suppression count is capped against the size of the source: two, plus one for
   every 500 non-blank lines of the project's own code. Every run reports the count and the distance left.
   When the ceiling is reached, the way to spend a suppression is to remove another one - not to raise the
@@ -277,8 +290,12 @@ enforces. These are decided by reading the code against the wording below, not b
   implements a protocol is real; a class inside the test tree whose answers a test sets is a
   substitute, whatever it is called. The bans on the known mocking libraries cover the named cases, not
   a hand-rolled fake.
-- A test reaches no network beyond the machine it runs on, and every wait it performs is bounded by a
-  timeout sized so that its expiry signals a defect of the code rather than the speed of the machine.
+- Every wait a test performs is bounded by a timeout sized so that its expiry signals a defect of the
+  code rather than the speed of the machine. The reach beyond this machine is a check now; how long a
+  test is willing to wait is still a reading.
+- A test that shells out to another program reaches whatever that program reaches. The network guard
+  sits inside the test's own process and sees none of it, so a spec that runs a downloader is off the
+  machine however green it reports.
 - A callable does not return null, and does not accept null, where an optional or result type says the
   same thing. A callable that cannot do its job fails immediately with an error that says what went
   wrong, rather than falling back silently to a default.

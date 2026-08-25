@@ -108,6 +108,27 @@ Note what the ceiling does NOT count: it measures files whose extension is code,
 why the asset-body check is a script rather than a function, and why the fixture mutations are programs
 in `it/lib/` rather than arguments to `node -e`.
 
+### The suite runs under the guard it ships
+
+`packages/config/vitest-setup.js` is loaded ahead of every other setup file, here and in a consumer. It
+installs the network guard - `net.Socket.prototype.connect`, the DNS lookups, and the resolver family,
+all made non-writable and non-configurable so a spec cannot put the originals back - and the shipped
+`sequence` block shuffles the suite under a fixed seed. Both were prose in the agent guide until they
+were checks, and `README-guideline-software-project.adoc` says a rule automation can verify reliably
+belongs in a check rather than in an instruction file.
+
+That file may import node builtins and `@ploaness/governance`, and NOTHING else. It lives inside
+`node_modules/@ploaness/config`, so a `vitest`, `fast-check`, or `@testing-library/*` reached from there
+is the harness's copy rather than the project's: a hook, a matcher, or a global seed registered against
+one of those attaches to a module instance the suite never loads, and fails by doing nothing. Resolving
+from the project root does not rescue it either, because that yields a package's CommonJS entry while
+the suite loads its ESM one. This is why the fast-check seed stays in a project's own `vitest.setup.ts`
+and why `NO_FAST_CHECK_SEED` says whose job it is instead of claiming ploaness has done it.
+
+Every decision the guard makes is in `packages/governance/src/network-policy.ts`, where it can be
+unit-tested against the three `connect` overloads without opening a socket. What is left in the setup
+file is the interception, which is the one part that cannot be pure.
+
 ### Test code and the two measurements it is not held to
 
 Test code passes the same static-analysis checks as production code: tsc at full strictness, every

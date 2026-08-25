@@ -261,7 +261,7 @@ xref:#default-verification[] runs the following 31 gates.
 | Dead code, unused files, and unused dependencies.
 
 | [[tests-gate]]`tests`
-| The test suite and its coverage thresholds.
+| The test suite and its coverage thresholds, under xref:#test-determinism[].
 
 | `tree-verify`
 | The working tree is unchanged since the xref:#tree-snapshot-gate[`tree-snapshot` gate] ran.
@@ -332,6 +332,35 @@ xref:#extended-verification[] adds the following six gates to xref:#default-veri
 . The xref:#require-complete-access-rule[`require-complete-access` rule] guards a security decision rather than a matter of style. https://payloadcms.com[Payload CMS^] fills the operations a config leaves out during sanitisation, and its default grants public read, so a partial `access` block is invisible the moment the application boots. A collection meant to be readable by anyone declares that in writing, one operation at a time.
 . `no-anonymous-draft-reads` covers what follows from that. A draft is unpublished content, and `?draft=true` serves it to whoever the read rule admits, so a read that is unconditionally true publishes every draft. Only the inline always-true form is detectable from the source; a read delegated to a helper is a judgement `.ploaness/agent-guide.md` states in prose.
 . The xref:#payload-rules-gate[`payload-rules` gate] reads a call by scanning for its matching bracket and skipping over string literals, so a call spread across several lines or nested inside another one still reads correctly. Only a call on `payload`, `req.payload`, or `this.payload` counts, which is what leaves an unrelated `array.find(...)` alone.
+
+[[test-determinism]]
+=== Test Determinism
+
+. A test produces the same verdict on every run, and two rules of the governing standard decide whether it can. _ploaness_ enforces both from the xref:#tests-gate[`tests`] gate rather than describing them, because both are reliably checkable and a rule an inspection has to catch is a rule that gets through.
+. [[network-guard,the network guard]]The _network guard_ is installed by a setup file _ploaness_ loads ahead of any setup file the https://payloadcms.com[Payload CMS^] project wrote. A socket, a DNS lookup, or a `fetch` that leaves the machine fails the test that made it, naming the destination and quoting the rule it broke.
++
+[cols="2,5"]
+|===
+| Reach | Verdict
+
+| Loopback, in any spelling
+| Allowed. `127.0.0.0/8`, `::1`, an IPv4-mapped loopback, the unspecified address, `localhost` and any name beneath it. A database on `127.0.0.1` is what this case exists for.
+
+| An address the machine itself carries
+| Allowed. A test that connects to the machine's own routable address is still on the machine it runs on.
+
+| A unix socket path
+| Allowed. A path is not a network: both ends are the same machine by construction.
+
+| Any other host
+| Refused, including a private address of another machine, a container gateway, and a bare service name. A name that is not loopback is refused on its face rather than resolved, because the resolution is itself the thing being refused.
+
+| Any resolver query
+| Refused whatever host it names, `localhost` included. The resolver family sends a packet to a nameserver instead of reading a hosts file, so a `mongodb+srv://` connection string can't be used from a test.
+|===
+. No setting widens the xref:#network-guard[], because widening it is what the rule forbids. A service that exists only outside the machine is exercised through a local component that implements its protocol.
+. The suite runs shuffled - the files, and the tests within each file - under a seed _ploaness_ owns. A test that passed only in the order its file happened to be written in now fails, which is the coupling the shuffle exists to find. The seed is fixed rather than drawn, because a xref:#gates[gate] whose verdict changes between two runs of an unchanged repository is not a check.
+. `it.concurrent`, `it.sequential`, and `vi.setConfig` are rejected by the lint pass. Each buys a green run by reintroducing the coupling the shuffle reports.
 
 [[managed-files]]
 == Managed Files

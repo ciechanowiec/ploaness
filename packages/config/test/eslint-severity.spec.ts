@@ -96,9 +96,32 @@ const workspaceConfig = (): Promise<readonly FlatBlock[]> =>
 // `NO_INHERITANCE` already carries its own leading severity, which is why every caller spreads it as
 // the whole setting rather than prefixing one. Reading the exported constant rather than restating its
 // selectors is what makes this a test of the joint between the two configs and the shared layer.
-const inheritanceSelectors = async (): Promise<readonly string[]> => {
+const sharedSelectors = async (exportName: string): Promise<readonly string[]> => {
   const core: unknown = await import(pathToFileURL(path.join(configPackage, 'eslint-core.js')).href)
-  return selectorsIn(asRecord(core)?.['NO_INHERITANCE'])
+  const exported: unknown = asRecord(core)?.[exportName]
+  const entries: readonly unknown[] = Array.isArray(exported)
+    ? (exported as readonly unknown[])
+    : []
+  // `selectorsIn` drops the leading severity, which `NO_INHERITANCE` carries and the newer groups do
+  // not. A placeholder in front of both makes the two shapes read the same way here.
+  return selectorsIn(['error', ...entries])
+}
+
+const inheritanceSelectors = (): Promise<readonly string[]> => sharedSelectors('NO_INHERITANCE')
+
+// The determinism groups differ from the inheritance ban in where they belong: they govern specs, so
+// they are spread into the block that lints the suite rather than into every block. What would drift is
+// the spread going missing on a later edit, which is what this reads.
+const carriedSomewhere = (
+  blocks: readonly FlatBlock[],
+  selectors: readonly string[],
+): readonly string[] => {
+  const present: ReadonlySet<string> = new Set(
+    restrictedSyntaxSettings(blocks).flatMap((setting: unknown): readonly string[] =>
+      selectorsIn(setting),
+    ),
+  )
+  return selectors.filter((selector: string): boolean => !present.has(selector))
 }
 
 /** How the inheritance ban stands across one config: how many blocks set the key, and what is missing. */
@@ -144,4 +167,24 @@ describe('inheritance ban survives every no-restricted-syntax block', () => {
     expect(status.blocks).toBeGreaterThan(0)
     expect(status.missing).toEqual([])
   })
+})
+
+describe('the determinism selectors reach the block that lints the suite', () => {
+  it.each(['NO_TEST_ORDER_ESCAPE', 'NO_NETWORK_GUARD_ESCAPE'])(
+    'carries %s into the shipped config',
+    async (exportName: string) => {
+      const selectors: readonly string[] = await sharedSelectors(exportName)
+      expect(selectors.length).toBeGreaterThan(0)
+      expect(carriedSomewhere(await shippedConfig(), selectors)).toEqual([])
+    },
+  )
+
+  it.each(['NO_TEST_ORDER_ESCAPE', 'NO_NETWORK_GUARD_ESCAPE'])(
+    'carries %s into the workspace config',
+    async (exportName: string) => {
+      const selectors: readonly string[] = await sharedSelectors(exportName)
+      expect(selectors.length).toBeGreaterThan(0)
+      expect(carriedSomewhere(await workspaceConfig(), selectors)).toEqual([])
+    },
+  )
 })

@@ -15,6 +15,10 @@
     "./knip": "./knip.json",
     "./package.json": "./package.json",
     "./eslint-core": "./eslint-core.js",
+    "./vitest-core": {
+      "types": "./vitest-core.d.ts",
+      "default": "./vitest-core.js"
+    },
     "./playwright": "./playwright.js",
     "./a11y": "./a11y.js",
     "./pins": "./pins.json"
@@ -32,6 +36,9 @@
     "project-settings.js",
     "stylelint.json",
     "tsconfig.json",
+    "vitest-core.d.ts",
+    "vitest-core.js",
+    "vitest-setup.js",
     "vitest.js"
   ],
   "scripts": {
