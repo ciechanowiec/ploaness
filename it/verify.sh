@@ -96,6 +96,39 @@ expect() {
     echo "ok $name: $gate is $verdict${needle:+ (${needle})}"
 }
 
+# The network guard runs inside the suite rather than inside a gate, so proving it needs a spec rather
+# than an `expect`. The fixture's own vitest runs that spec, in the node environment and without
+# coverage: neither the DOM nor the thresholds is what these two cases are about. No commit is made for
+# them, because nothing here reads the history.
+#
+# The assertion is on the rule sentence, not merely on failure. An unguarded run would fail the remote
+# case too - on a DNS error - and a case that cannot tell those two apart proves nothing.
+expect_suite() {
+    name="$1"
+    verdict="$2"
+    needle="$3"
+    directory="$scratch/$name"
+    if output="$(cd "$directory" && ./node_modules/.bin/vitest run --environment=node \
+        tests/unit/network-guard.unit.spec.ts 2>&1)"; then
+        actual=PASS
+    else
+        actual=FAIL
+    fi
+    if [ "$actual" != "$verdict" ]; then
+        echo "FAILED $name: the suite was $actual, expected $verdict" >&2
+        echo "$output" | sed 's/^/    /' >&2
+        failures=$((failures + 1))
+        return
+    fi
+    if [ -n "$needle" ] && ! printf '%s' "$output" | grep -q "$needle"; then
+        echo "FAILED $name: the suite was $verdict but never mentioned \"$needle\"" >&2
+        echo "$output" | sed 's/^/    /' >&2
+        failures=$((failures + 1))
+        return
+    fi
+    echo "ok $name: the suite is $verdict${needle:+ (${needle})}"
+}
+
 # Each mutation is a program in `it/lib/`, not a string passed to `node -e`. Inline, they were code no
 # formatter, linter, or type checker read - the same blind spot the staged asset bodies exist to close.
 lib="$(cd "$(dirname "$0")" && pwd)/lib"
@@ -415,6 +448,54 @@ printf '\n## Project notes\n\nThe project owns everything below the managed bloc
 commit_case pass-section-project-text 'feat(fixture): add project text below the managed section' \
     "$CONFORMING_BODY"
 expect pass-section-project-text assets PASS
+
+# The network guard, from both sides. A database on loopback is the case the guard exists to leave
+# alone, and a host beyond the machine is the case it exists to refuse.
+new_case pass-guard-allows-loopback
+mkdir -p "$scratch/pass-guard-allows-loopback/tests/unit"
+cat > "$scratch/pass-guard-allows-loopback/tests/unit/network-guard.unit.spec.ts" <<'LOOPBACK'
+import net from 'node:net'
+import { expect, it } from 'vitest'
+
+const LOOPBACK: string = ['127', '0', '0', '1'].join('.')
+
+it('reaches a server listening on this machine', async () => {
+  const server: net.Server = net.createServer((socket: net.Socket): void => {
+    socket.end()
+  })
+  const port: number = await new Promise<number>((resolve: (value: number) => void): void => {
+    server.listen(0, LOOPBACK, (): void => {
+      const address: net.AddressInfo | string | null = server.address()
+      resolve(typeof address === 'object' && address !== null ? address.port : 0)
+    })
+  })
+  const reached: boolean = await new Promise<boolean>(
+    (resolve: (value: boolean) => void, reject: (reason: Error) => void): void => {
+      const client: net.Socket = net.connect(port, LOOPBACK)
+      client.on('connect', (): void => {
+        client.end()
+        resolve(true)
+      })
+      client.on('error', reject)
+    },
+  )
+  server.close()
+  expect(reached).toBe(true)
+})
+LOOPBACK
+expect_suite pass-guard-allows-loopback PASS 'passed'
+
+new_case fail-guard-blocks-remote
+mkdir -p "$scratch/fail-guard-blocks-remote/tests/unit"
+cat > "$scratch/fail-guard-blocks-remote/tests/unit/network-guard.unit.spec.ts" <<'REMOTE'
+import { expect, it } from 'vitest'
+
+it('reaches a host beyond this machine', async () => {
+  const response: Response = await fetch('https://ploaness.invalid/')
+  expect(response.ok).toBe(true)
+})
+REMOTE
+expect_suite fail-guard-blocks-remote FAIL 'no network beyond the machine'
 
 echo
 if [ "$failures" -eq 0 ]; then
