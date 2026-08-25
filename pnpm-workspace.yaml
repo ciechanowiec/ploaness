@@ -14,6 +14,15 @@ engineStrict: true
 # install time. Left undeclared, every package in the resolved set would be allowed to.
 onlyBuiltDependencies: []
 
+# The same answer, said where pnpm asks for it. `onlyBuiltDependencies` already denies every build
+# script, but pnpm asks separately about each package that declares one and writes a placeholder into
+# this file when nobody answers - which is a prompt rather than a setting, and not something to commit.
+# esbuild is the only package in the resolved set that asks. It arrives under vite and ships its
+# platform binary as an optional package rather than fetching one, so denying the script costs nothing:
+# the suite, the build and the analyzers all run without it.
+allowBuilds:
+  esbuild: false
+
 # deepmerge-ts 7 has a stack-exhaustion advisory (GHSA-ggr8-5vv4-36mx) and eslint-plugin-functional,
 # which is on its latest release, still declares `^7.1.5`. The standard resolves a finding by upgrading
 # the package and reaches for an allowlist only when no upgrade exists, so the patched major is forced
