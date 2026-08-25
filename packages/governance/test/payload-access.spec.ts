@@ -97,7 +97,8 @@ describe('a key is a key, not a suffix of one', () => {
   })
 
   it('accepts auth that declares both hardening keys', () => {
-    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} auth: { maxLoginAttempts: 5, lockTime: 600 } }`
+    const hardened: string = 'auth: { maxLoginAttempts: 5, lockTime: 600 }'
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} ${hardened} }`
     expect(rulesOf(source)).toEqual([])
   })
 })
@@ -118,7 +119,8 @@ describe('require-complete-access', () => {
   })
 
   it('does not read a field-level access block as the collection own', () => {
-    const source: string = `const A: CollectionConfig = { slug: 'a', fields: [{ name: 'x', access: { read: isAdmin, create: isAdmin, update: isAdmin, delete: isAdmin } }] }`
+    const field: string = `{ name: 'x', ${COMPLETE_ACCESS.replace(',', '')} }`
+    const source: string = `const A: CollectionConfig = { slug: 'a', fields: [${field}] }`
     expect(rulesOf(source)).toEqual(['require-complete-access'])
   })
 })
@@ -127,19 +129,22 @@ describe('no-anonymous-draft-reads', () => {
   const drafts: string = 'versions: { drafts: true },'
 
   it('reports an unconditionally true read on a drafting collection', () => {
-    const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} access: { read: () => true, create: x, update: x, delete: x } }`
+    const open: string = 'access: { read: () => true, create: x, update: x, delete: x }'
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} ${open} }`
     expect(rulesOf(source)).toEqual(['no-anonymous-draft-reads'])
   })
 
   it('says nothing when drafts are not enabled', () => {
-    const source: string = `const A: CollectionConfig = { slug: 'a', access: { read: () => true, create: x, update: x, delete: x } }`
+    const open: string = 'access: { read: () => true, create: x, update: x, delete: x }'
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${open} }`
     expect(rulesOf(source)).toEqual([])
   })
 
   // The access value runs to the end of the enclosing literal, so testing it whole reported a field
   // that grants nothing beyond itself as though the collection were open.
   it('does not read a field-level always-true read as the collection own', () => {
-    const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} ${COMPLETE_ACCESS} fields: [{ name: 'x', access: { read: () => true } }] }`
+    const field: string = `{ name: 'x', access: { read: () => true } }`
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} ${COMPLETE_ACCESS} fields: [${field}] }`
     expect(rulesOf(source)).toEqual([])
   })
 })

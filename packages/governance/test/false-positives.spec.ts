@@ -10,6 +10,12 @@ import { isLicenseAllowed } from '../src/license-allowlist.js'
 import { renderGitleaksConfig } from '../src/secret-policy.js'
 import { findSkillManifestViolations } from '../src/skill-manifest.js'
 
+// Named by code point rather than written out, which is the same self-reference `banned-typography.ts`
+// solves the same way: this file is about the character it bans, and spelling it here would make the
+// spec a counterexample to the rule it asserts.
+const EM_DASH_CODE_POINT: number = 0x2014
+const EM_DASH: string = String.fromCodePoint(EM_DASH_CODE_POINT)
+
 const manifest = (description: string): string =>
   `---\nname: my-skill\ndescription: ${description}\n---\n\n# Body\n`
 
@@ -50,7 +56,7 @@ describe('a file whose lines end in CRLF', () => {
   })
 
   it('reports a banned character on the line it is actually on', () => {
-    const text: string = 'first\r\nsecond — third\r\n'
+    const text: string = `first\r\nsecond ${EM_DASH} third\r\n`
     expect(findTypographyViolations(text)[0]?.line).toBe(2)
   })
 })
@@ -192,18 +198,18 @@ describe('a rendered scanner configuration', () => {
 // runs as its worst line had repeats.
 describe('a line carrying a banned character more than once', () => {
   it('reports every occurrence', () => {
-    expect(findTypographyViolations('a — b — c')).toHaveLength(2)
+    expect(findTypographyViolations(`a ${EM_DASH} b ${EM_DASH} c`)).toHaveLength(2)
   })
 
   it('reports each at its own column', () => {
-    expect(findTypographyViolations('a — b — c').map((violation) => violation.column)).toEqual([
-      3, 7,
-    ])
+    expect(
+      findTypographyViolations(`a ${EM_DASH} b ${EM_DASH} c`).map((violation) => violation.column),
+    ).toEqual([3, 7])
   })
 
   // `indexOf` counts UTF-16 units, so a column after an astral character named a position the editor
   // does not have.
   it('counts a column in characters rather than in code units', () => {
-    expect(findTypographyViolations('\u{1F600} —')[0]?.column).toBe(3)
+    expect(findTypographyViolations(`\u{1F600} ${EM_DASH}`)[0]?.column).toBe(3)
   })
 })
