@@ -1,7 +1,7 @@
 // The commit-message validator. It is a plain command rather than a git hook: ploaness enforces no
 // hooks, because a hook is local, opt-in, and bypassable with --no-verify, so CI is the only place a
 // rule can actually be held. `commit-history` runs the same policy as a gate.
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { commitHistory, commitMessageProblems } from '../checks/history.js'
 import type { Context } from '../context.js'
 import type { GateResult } from '../exec.js'
@@ -31,6 +31,11 @@ const checkHistory = (context: Context, revisions: readonly string[]): number =>
 
 /** Check one pending message, read from the file the author points at. */
 const checkPending = (context: Context, file: string): number => {
+  // A hook invokes this with a path git supplies, and a mistyped mode reaches it as a filename. Either
+  // way an absent file is a thing to say, not a stack trace to print.
+  if (!existsSync(file)) {
+    return reportProblems([`no such file: ${file}`], 'the commit message could not be read')
+  }
   const problems: readonly string[] = commitMessageProblems(context, readFileSync(file, 'utf8'))
   return problems.length > 0
     ? reportProblems(problems, `${String(problems.length)} commit-message problem(s)`)

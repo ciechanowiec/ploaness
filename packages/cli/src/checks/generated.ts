@@ -2,7 +2,13 @@
 // runtime settings file and, on the sync path, writes it back.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { applyDenyRules, findDenialViolations, GENERATED_ARTEFACTS } from '@ploaness/governance'
+import {
+  applyDenyRules,
+  findDenialViolations,
+  GENERATED_ARTEFACTS,
+  type ParsedJson,
+  parseJsonc,
+} from '@ploaness/governance'
 import type { Context } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
@@ -11,17 +17,27 @@ const JSON_INDENT: number = 2
 const SETTINGS_PATH: string = '.claude/settings.json'
 const LOCAL_SETTINGS_PATH: string = '.claude/settings.local.json'
 
-const readJson = (root: string, relative: string): unknown => {
+/** A settings file that was read, was absent, or could not be parsed - which are three different facts. */
+interface ReadSettings {
+  readonly value: unknown
+  /** True when the file exists but could not be read as JSON. */
+  readonly isMalformed: boolean
+}
+
+// Absent and unparseable used to collapse into the same `undefined`, and `hasWrittenDenyRules` then
+// merged its rules into that nothing and wrote the result. One stray comma in a project's settings and
+// `ploaness sync` replaced every permission, hook, and environment entry the file held with the deny
+// list alone. A tool may refuse to write; it may not quietly discard what it could not read.
+const readSettings = (root: string, relative: string): ReadSettings => {
   const full: string = path.join(root, relative)
   if (!existsSync(full)) {
-    return undefined
+    return { value: undefined, isMalformed: false }
   }
-  try {
-    return JSON.parse(readFileSync(full, 'utf8'))
-  } catch {
-    return undefined
-  }
+  const read: ParsedJson = parseJsonc(readFileSync(full, 'utf8'))
+  return { value: read.value, isMalformed: read.problem !== undefined }
 }
+
+const readJson = (root: string, relative: string): unknown => readSettings(root, relative).value
 
 /** Check that the agent runtime is denied write access to every generated artefact. */
 export const generatedDenial = (context: Context): GateResult => {
@@ -48,8 +64,14 @@ export const generatedDenial = (context: Context): GateResult => {
  */
 export const hasWrittenDenyRules = (context: Context): boolean => {
   const full: string = path.join(context.root, SETTINGS_PATH)
-  const existing: unknown = readJson(context.root, SETTINGS_PATH)
-  const merged: Record<string, unknown> = applyDenyRules(existing, GENERATED_ARTEFACTS)
+  const existing: ReadSettings = readSettings(context.root, SETTINGS_PATH)
+  if (existing.isMalformed) {
+    throw new Error(
+      `${SETTINGS_PATH} exists but is not valid JSON; repair it before running \`ploaness sync\`, ` +
+        'because merging into a file that could not be read would discard everything it holds',
+    )
+  }
+  const merged: Record<string, unknown> = applyDenyRules(existing.value, GENERATED_ARTEFACTS)
   const text: string = `${JSON.stringify(merged, null, JSON_INDENT)}\n`
   if (existsSync(full) && readFileSync(full, 'utf8') === text) {
     return false

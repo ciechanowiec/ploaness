@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CONTAINER_IMAGES, findUnpinnedImages } from '../src/toolchain-pins.js'
+import { CONTAINER_IMAGES, findUnpinnedImages, minimumNodeMajor } from '../src/toolchain-pins.js'
 
 describe('CONTAINER_IMAGES', () => {
   // The joint worth testing: not that a constant equals its own literal, but that nobody can put a
@@ -42,5 +42,27 @@ describe('findUnpinnedImages', () => {
   it('accepts a digest reference', () => {
     const digest: string = `sha256:${'a'.repeat(64)}`
     expect(findUnpinnedImages({ gitleaks: `zricethezav/gitleaks@${digest}` })).toEqual([])
+  })
+})
+
+// The Node floor `preflight` decides a verdict with. It used to be a constant in the CLI, which put a
+// rule in the I/O layer and made a fourth copy of a number `pins.json` already states.
+describe('minimumNodeMajor', () => {
+  it.each([
+    ['>=26', 26],
+    ['>= 26', 26],
+    ['26', 26],
+    ['^26.1.0', 26],
+    ['>=26 <28', 26],
+  ])('reads %j as %i', (range: string, expected: number) => {
+    expect(minimumNodeMajor(range)).toBe(expected)
+  })
+
+  it('reads a range naming no major as naming none', () => {
+    expect(minimumNodeMajor('*')).toBeUndefined()
+  })
+
+  it('reads an absent range as naming none, rather than as zero', () => {
+    expect(minimumNodeMajor(undefined)).toBeUndefined()
   })
 })

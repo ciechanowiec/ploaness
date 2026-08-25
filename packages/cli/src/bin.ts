@@ -63,12 +63,31 @@ const COMMANDS: Readonly<Record<string, CommandRunner>> = {
     commitMessage(context, rest[0], rest[1]),
 }
 
+// The flags this binary accepts, in full. Anything else beginning with a dash is refused rather than
+// ignored: `--extend` silently ran default verification, and `--enforce=FALSE` silently enforced, which
+// are the two ways a caller can believe it asked for something it did not get.
+const KNOWN_FLAGS: ReadonlySet<string> = new Set<string>(['--extended', '--enforce=false'])
+
+const unknownFlags = (argv: readonly string[]): readonly string[] =>
+  argv.filter((token: string): boolean => token.startsWith('--') && !KNOWN_FLAGS.has(token))
+
 const main = async (): Promise<number> => {
   const argv: readonly string[] = process.argv.slice(ARGV_COMMAND_OFFSET)
   const [command, ...rest] = argv
   if (command === undefined || HELP_COMMANDS.has(command)) {
     console.info(USAGE)
     return 0
+  }
+  // `Object.hasOwn`, not a bare index. The table is an object literal, so `ploaness toString` resolved
+  // to `Object.prototype.toString` and ran it as though it were a command.
+  if (!Object.hasOwn(COMMANDS, command)) {
+    console.error(`unknown command "${command}"\n\n${USAGE}`)
+    return 1
+  }
+  const flags: readonly string[] = unknownFlags(argv)
+  if (flags.length > 0) {
+    console.error(`unknown option(s): ${flags.join(', ')}\n\n${USAGE}`)
+    return 1
   }
   const runCommand: CommandRunner | undefined = COMMANDS[command]
   if (runCommand === undefined) {
@@ -79,7 +98,17 @@ const main = async (): Promise<number> => {
   return await runCommand(createContext(process.cwd(), isEnforce), rest)
 }
 
+// A command outside a gate has nothing above it to catch a throw, so an unreadable package.json used to
+// reach the user as a stack trace. The message is the finding; the trace is noise around it.
+const reportFailure = (error: unknown): number => {
+  console.error(error instanceof Error ? error.message : String(error))
+  return 1
+}
+
 // Setting the exit code is how Node reports a verdict while still flushing stdout. `process.exit()`
 // would truncate the report the gates just wrote.
-// eslint-disable-next-line functional/immutable-data -- process.exit() would truncate the report
-process.exitCode = await main()
+// One comment naming both rules rather than two stacked. A second `eslint-disable-next-line` makes the
+// FIRST one's next line the comment rather than the code, which silently disarms it - a defect this
+// repository has already had once.
+// eslint-disable-next-line functional/immutable-data, unicorn/prefer-await -- see the note above
+process.exitCode = await main().catch(reportFailure)

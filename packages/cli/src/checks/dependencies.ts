@@ -42,8 +42,11 @@ export const licenses = (context: Context): GateResult => {
   if (result.code !== 0) {
     return failed('the license inventory could not be produced', [result.output])
   }
+  // `stdout`, not `output`. pnpm writes ` WARN ` lines to stderr as a matter of course, and `output`
+  // concatenates the two streams with no separator - so a warning about an unsupported engine made the
+  // inventory unparseable and this gate blamed the parse rather than the warning.
   const grouped: Record<string, readonly PnpmLicenseEntry[]> | undefined = parseLicenseInventory(
-    result.output,
+    result.stdout,
   )
   if (grouped === undefined) {
     return failed('the license inventory was not valid JSON', [
@@ -269,7 +272,10 @@ const textAt = (raw: AuditAdvisory, key: string, fallback: string): string => {
 const asAdvisory = (key: string, raw: AuditAdvisory): Advisory => ({
   id: textAt(raw, 'github_advisory_id', key),
   packageName: textAt(raw, 'module_name', 'unknown'),
-  severity: textAt(raw, 'severity', 'info'),
+  // An advisory whose severity the record does not carry is read as the most severe, not the least.
+  // Defaulting to `info` put it below the threshold, so a malformed record was silently a pass inside a
+  // gate that is fail-closed everywhere else.
+  severity: textAt(raw, 'severity', 'unknown'),
   title: textAt(raw, 'title', 'no title reported'),
   aliases: asStrings(raw['cves']),
 })
@@ -300,7 +306,9 @@ export const vulnerabilities = (context: Context): GateResult => {
   // No `--prod` filter: the standard is explicit that build and test packages count, because a build
   // tool runs with build privileges and its vulnerability is reachable by anyone who can change the repo.
   const result: RunResult = run('pnpm', ['audit', '--json'], { cwd: context.root })
-  const advisories: readonly Advisory[] | undefined = parseAudit(result.output)
+  // `stdout` for the reason the licence gate reads it: a pnpm warning on stderr used to be concatenated
+  // into the payload and reported as the advisory database being unreachable.
+  const advisories: readonly Advisory[] | undefined = parseAudit(result.stdout)
   if (advisories === undefined) {
     return failed('the advisory database was unreachable, so vulnerabilities cannot be proven', [
       result.output.split('\n').slice(0, MAX_REPORTED_LINES).join('\n'),

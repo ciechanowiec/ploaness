@@ -3,7 +3,13 @@
 // characters a model emits appear in documentation and configuration as readily as in code.
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { findTypographyViolations, isBinary, type TypographyViolation } from '@ploaness/governance'
+import {
+  findTypographyViolations,
+  hasExtension,
+  isBinary,
+  matchesRole,
+  type TypographyViolation,
+} from '@ploaness/governance'
 import { type Context, trackedFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
@@ -31,15 +37,9 @@ const blankVendorRegions = (text: string): string =>
     text,
   )
 
-const endsWithAny = (file: string, extensions: readonly string[]): boolean =>
-  extensions.some((extension: string): boolean => file.endsWith(extension))
-
-const matchesAny = (file: string, patterns: readonly string[]): boolean =>
-  patterns.some((pattern: string): boolean => new RegExp(pattern).test(file))
-
 const typographyFindings = (context: Context, tracked: readonly string[]): readonly string[] =>
   tracked
-    .filter((file: string): boolean => !matchesAny(file, context.settings.typographyExclusions))
+    .filter((file: string): boolean => !matchesRole(file, context.settings.typographyExclusions))
     .flatMap((file: string): readonly string[] => {
       const bytes: Buffer = readFileSync(path.join(context.root, file))
       if (isBinary(bytes)) {
@@ -57,8 +57,8 @@ const javascriptFindings = (context: Context, tracked: readonly string[]): reado
   tracked
     .filter(
       (file: string): boolean =>
-        endsWithAny(file, JAVASCRIPT_EXTENSIONS) &&
-        !matchesAny(file, context.settings.javascriptAllowlist),
+        hasExtension(file, JAVASCRIPT_EXTENSIONS) &&
+        !matchesRole(file, context.settings.javascriptAllowlist),
     )
     .map(
       (file: string): string =>

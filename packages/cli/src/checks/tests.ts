@@ -71,6 +71,7 @@ export const tests = (context: Context): GateResult =>
         env: { NODE_OPTIONS: '--no-deprecation' },
       }),
       'the suite passes and meets the per-file coverage thresholds',
+      'the suite failed, or a file is below a coverage threshold',
     )
   })
 
@@ -106,6 +107,7 @@ export const endToEnd = (context: Context): GateResult => {
         env: { NODE_OPTIONS: '--no-deprecation --import=tsx/esm' },
       }),
       'the end-to-end suite passes',
+      'the end-to-end suite failed',
     )
   })
 }
@@ -129,5 +131,6 @@ export const build = (context: Context): GateResult =>
         },
       }),
       'the production build succeeds',
+      'the production build failed',
     )
   })

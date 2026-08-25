@@ -43,3 +43,18 @@ export const findUnpinnedImages = (images: Readonly<Record<string, string>>): re
       ([tool, reference]: readonly [string, string]): string =>
         `${tool} runs "${reference}", which is a mutable reference; pin it as <repo>@sha256:<digest>`,
     )
+
+// The major version an `engines.node` range admits at its lowest. The CLI carried its own
+// `MINIMUM_NODE_MAJOR = 26` and decided the verdict with it, which put a rule in the I/O layer and made
+// a fourth copy of a number `pins.json` already states - and the copy that decided was the loose one.
+const LEADING_MAJOR: RegExp = /(\d+)/
+
+/**
+ * The lowest Node major an engines range admits.
+ * @param enginesNode the declared range, such as `>=26`.
+ * @returns the major version, or undefined when the range names none.
+ */
+export const minimumNodeMajor = (enginesNode: string | undefined): number | undefined => {
+  const found: RegExpExecArray | null = LEADING_MAJOR.exec(enginesNode ?? '')
+  return found === null ? undefined : Number(found[1])
+}

@@ -29,12 +29,24 @@ export const failed = (summary: string, findings: readonly string[]): GateResult
 export interface RunOptions {
   readonly cwd: string
   readonly env?: Readonly<Record<string, string>>
+  /** Text to write to the child's stdin, for a tool that reads its subject there. */
+  readonly input?: string
 }
 
-/** The raw outcome of a child process, with stdout and stderr interleaved. */
+/** The raw outcome of a child process. */
 export interface RunResult {
   readonly code: number
+  /** Both streams together, which is what a finding shows the user. */
   readonly output: string
+  /**
+   * Standard output alone.
+   *
+   * A caller that PARSES the output must read this. `output` concatenates the two streams with no
+   * separator, and pnpm writes ` WARN ` lines to stderr as a matter of course - an unsupported engine,
+   * an ignored build script, a peer conflict. Feeding that to `JSON.parse` made the licence and
+   * advisory gates fail closed while blaming the registry for a warning the tool had merely mentioned.
+   */
+  readonly stdout: string
 }
 
 const BYTES_PER_KIB: number = 1024
@@ -43,7 +55,29 @@ const KIB_PER_MIB: number = 1024
 const MAX_OUTPUT_MIB: number = 64
 const MAX_OUTPUT_BYTES: number = MAX_OUTPUT_MIB * KIB_PER_MIB * BYTES_PER_KIB
 
-/** Run a command, capturing stdout and stderr together. A missing binary reports code 127. */
+// A tool that could not start and a tool that produced more output than the buffer holds are different
+// problems, and reporting both as 127 made the second read as "Docker is not available". The buffer
+// case is named for what it is.
+const OUT_OF_BUFFER: string = 'ENOBUFS'
+
+const startupFailure = (error: Error): RunResult => {
+  const isOverflow: boolean = error.message.includes('maxBuffer')
+  const output: string = isOverflow
+    ? `${OUT_OF_BUFFER}: the tool produced more than ${String(MAX_OUTPUT_MIB)} MiB of output`
+    : error.message
+  return { code: isOverflow ? 1 : COMMAND_NOT_FOUND, output, stdout: '' }
+}
+
+/** The exit status a shell reports when the command itself could not be found. */
+export const COMMAND_NOT_FOUND: number = 127
+
+// A process killed by a signal reports no status at all, and reporting it as an ordinary failure hid
+// the one fact that explains it - an out-of-memory kill during a build looks exactly like a build that
+// found an error.
+const describeSignal = (signal: NodeJS.Signals | null): readonly string[] =>
+  signal === null ? [] : [`the process was killed by ${signal}`]
+
+/** Run a command, capturing stdout and stderr both together and apart. */
 export const run = (
   command: string,
   commandArguments: readonly string[],
@@ -54,13 +88,17 @@ export const run = (
     encoding: 'utf8',
     maxBuffer: MAX_OUTPUT_BYTES,
     env: { ...process.env, ...options.env },
+    ...(options.input !== undefined && { input: options.input }),
   })
   if (result.error !== undefined) {
-    return { code: 127, output: result.error.message }
+    return startupFailure(result.error)
   }
   return {
     code: result.status ?? 1,
-    output: `${result.stdout}${result.stderr}`.trim(),
+    output: [`${result.stdout}${result.stderr}`.trim(), ...describeSignal(result.signal)]
+      .filter((part: string): boolean => part.length > 0)
+      .join('\n'),
+    stdout: result.stdout,
   }
 }
 
@@ -71,10 +109,27 @@ export const runNode = (
   options: RunOptions,
 ): RunResult => run(process.execPath, [script, ...commandArguments], options)
 
-/** Split a tool's combined output into findings, collapsing an empty report to a single marker line. */
+/**
+ * Split a tool's combined output into findings, collapsing an empty report to a single marker line.
+ * @param output the tool's own text.
+ * @returns one entry per line, with CRLF endings normalised so no finding carries a stray `\r`.
+ */
 export const asFindings = (output: string): readonly string[] =>
-  output.length > 0 ? output.split('\n') : ['(the tool produced no output)']
+  output.length > 0
+    ? output.replaceAll('\r\n', '\n').split('\n')
+    : ['(the tool produced no output)']
 
-/** Turn a child-process outcome into a gate result, showing the tool's own output on failure. */
-export const fromRun = (result: RunResult, summary: string): GateResult =>
-  result.code === 0 ? passed(summary) : failed(summary, asFindings(result.output))
+/**
+ * Turn a child-process outcome into a gate result.
+ *
+ * Two summaries, not one. Every call site phrases its summary as an assertion that the check passed -
+ * "module architecture holds", "no dead code or unused dependency" - and the report prints the summary
+ * for whichever verdict it got. So a failing run announced itself as `x knip  no dead code or unused
+ * dependency`, which is the gate contradicting itself on the line the reader looks at first.
+ * @param result the child-process outcome.
+ * @param passSummary what is true when the tool exits zero.
+ * @param failSummary what to say when it does not.
+ * @returns the gate result, carrying the tool's own output on failure.
+ */
+export const fromRun = (result: RunResult, passSummary: string, failSummary: string): GateResult =>
+  result.code === 0 ? passed(passSummary) : failed(failSummary, asFindings(result.output))

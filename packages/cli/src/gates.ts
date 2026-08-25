@@ -1,7 +1,9 @@
 // The ordered gate registry. The run stops at the first failing gate, so order decides which finding a
 // project sees first and is deliberate twice over: the cheap structural checks that tell a project it is
 // not wired correctly run before the expensive ones that would otherwise fail confusingly, and the tree
-// fingerprint is taken before anything that could rewrite a file and read back after everything has run.
+// fingerprint is taken before anything that could rewrite a file and read back after everything has run
+// - in extended verification too, which is where the gate most needs to look and where it used to run
+// before the build rather than after it.
 //
 // `preflight` and `wiring` lead, and they are the two preconditions: they decide whether ploaness may
 // judge this project at all, and whether what it is judging is what it thinks. Past a failing one,
@@ -122,7 +124,6 @@ const DEFAULT_GATES: readonly Gate[] = [
   { id: 'actions', title: 'workflow definitions', isExtended: false, run: actions },
   { id: 'knip', title: 'dead code and unused dependencies', isExtended: false, run: knip },
   { id: 'tests', title: 'suite and coverage', isExtended: false, run: tests },
-  { id: 'tree-verify', title: 'working tree unchanged', isExtended: false, run: treeVerify },
 ]
 
 /** Extended verification adds history, build, bundle, and end-to-end checks. */
@@ -145,15 +146,26 @@ const EXTENDED_GATES: readonly Gate[] = [
   { id: 'e2e', title: 'end-to-end suite', isExtended: true, run: endToEnd },
 ]
 
+// Last in BOTH modes, which it was not. It closed `DEFAULT_GATES`, and the extended gates were appended
+// after it - so `build`, `bundle`, and `e2e` all ran once the fingerprint had already been compared.
+// `next build` rewriting a tracked file is exactly what this gate exists to catch, and extended
+// verification was the one mode that could not see it.
+const TREE_VERIFY: Gate = {
+  id: 'tree-verify',
+  title: 'working tree unchanged',
+  isExtended: false,
+  run: treeVerify,
+}
+
 /** Every gate ploaness knows, in run order. */
-export const ALL_GATES: readonly Gate[] = [...DEFAULT_GATES, ...EXTENDED_GATES]
+export const ALL_GATES: readonly Gate[] = [...DEFAULT_GATES, ...EXTENDED_GATES, TREE_VERIFY]
 
 /**
  * The gates for one verification mode. Extended verification includes Default verification: the extra
  * gates are added rather than substituted, so `--extended` is never a different verdict about less.
  */
 export const gatesFor = (isExtended: boolean): readonly Gate[] =>
-  isExtended ? ALL_GATES : DEFAULT_GATES
+  isExtended ? ALL_GATES : [...DEFAULT_GATES, TREE_VERIFY]
 
 /** Look up one gate by identifier. */
 export const gateById = (id: string): Gate | undefined =>

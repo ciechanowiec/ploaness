@@ -12,7 +12,7 @@ import {
   requiredBiomeFiles,
   type WiringViolation,
 } from '@ploaness/governance'
-import { type Context, readJson, readText, shippedDirectory } from '../context.js'
+import { type Context, readJson, readPins, readText, shippedDirectory } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 // Libraries the consumer's own specs import. They cannot move into the harness: under the strict pnpm
@@ -54,9 +54,6 @@ interface PinGroup {
 
 const shippedFile = (packageName: string, fileName: string): string =>
   path.join(shippedDirectory(packageName), fileName)
-
-const readPins = (): Record<string, unknown> =>
-  asRecord(readJson(shippedFile('@ploaness/config', 'pins.json')))
 
 const pinGroups = (): readonly PinGroup[] => {
   const groups: unknown = readPins()['groups']

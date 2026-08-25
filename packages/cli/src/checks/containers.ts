@@ -2,13 +2,14 @@
 // so this costs nothing extra and makes the gates behave identically on every machine: no local install
 // of gitleaks, hadolint, or actionlint, and no version skew between developers and CI.
 
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { CONTAINER_IMAGES, renderGitleaksConfig } from '@ploaness/governance'
 import { type Context, trackedFiles } from '../context.js'
 import {
   asFindings,
+  COMMAND_NOT_FOUND,
   failed,
   fromRun,
   type GateResult,
@@ -22,9 +23,6 @@ import {
 const GITLEAKS_IMAGE: string = CONTAINER_IMAGES.gitleaks
 const HADOLINT_IMAGE: string = CONTAINER_IMAGES.hadolint
 const ACTIONLINT_IMAGE: string = CONTAINER_IMAGES.actionlint
-
-// The exit status a shell reports when the command itself could not be found.
-const COMMAND_NOT_FOUND: number = 127
 
 const isDockerMissing = (result: RunResult): boolean =>
   result.code === COMMAND_NOT_FOUND || result.output.includes('ENOENT')
@@ -91,7 +89,11 @@ export const secrets = (context: Context): GateResult =>
     const history: RunResult = scanSecrets(context, configDirectory, 'git')
     return (
       requireDocker(history, 'the secret scan') ??
-      fromRun(history, 'no secret found in the git history')
+      fromRun(
+        history,
+        'no secret found in the git history',
+        'the scanner found a secret in the git history',
+      )
     )
   })
 
@@ -124,16 +126,17 @@ const validateCompose = (root: string): RunResult => {
     : run('sh', ['-c', 'docker-compose config > /dev/null'], { cwd: root })
 }
 
+const composeFile = (context: Context): string | undefined =>
+  COMPOSE_FILES.find((file: string): boolean => existsSync(path.join(context.root, file)))
+
 /** Validate the compose file, if the project ships one. */
 const composeFindings = (context: Context): readonly string[] => {
-  const composeFile: string | undefined = COMPOSE_FILES.find((file: string): boolean =>
-    existsSync(path.join(context.root, file)),
-  )
-  if (composeFile === undefined) {
+  const found: string | undefined = composeFile(context)
+  if (found === undefined) {
     return []
   }
   const compose: RunResult = validateCompose(context.root)
-  return compose.code === 0 ? [] : [`${composeFile}:`, ...asFindings(compose.output)]
+  return compose.code === 0 ? [] : [`${found}:`, ...asFindings(compose.output)]
 }
 
 interface LintedDockerfile {
@@ -141,23 +144,42 @@ interface LintedDockerfile {
   readonly result: RunResult
 }
 
+// The file is fed on stdin through the argv form rather than through a shell redirection. It used to be
+// interpolated into an `sh -c` string with `JSON.stringify` around it, which is JSON quoting and not
+// shell quoting: inside double quotes `sh` still expands `$`, a backtick, and a backslash, so a tracked
+// file named `Dockerfile.$(...)` ran its own contents on every verification.
+const lintDockerfile = (context: Context, target: string): RunResult =>
+  run('docker', ['run', '--rm', '-i', HADOLINT_IMAGE], {
+    cwd: context.root,
+    input: readFileSync(path.join(context.root, target), 'utf8'),
+  })
+
+// What the gate actually looked at, so a pass never claims more than it checked. The summary read
+// "N Dockerfile(s) and the compose file are valid" whether or not a compose file existed.
+const describeTargets = (dockerfileCount: number, hasCompose: boolean): string => {
+  const parts: readonly string[] = [
+    ...(dockerfileCount > 0 ? [`${String(dockerfileCount)} Dockerfile(s)`] : []),
+    ...(hasCompose ? ['the compose file'] : []),
+  ]
+  return parts.length === 0
+    ? 'the project ships no container definition'
+    : `${parts.join(' and ')} are valid`
+}
+
 /** Lint every Dockerfile and validate the compose file. */
 export const containers = (context: Context): GateResult => {
   const targets: readonly string[] = dockerfiles(context)
-  if (targets.length === 0) {
-    return passed('the project ships no Dockerfile')
+  const hasCompose: boolean = composeFile(context) !== undefined
+  // A project whose database comes from compose and whose app is built by Next ships no Dockerfile at
+  // all - the common Payload layout. Returning here on that count alone meant its compose file was
+  // never validated, and the gate reported a pass having read nothing.
+  if (!hasCompose && targets.length === 0) {
+    return passed('the project ships no container definition')
   }
   // Lint every Dockerfile first, then judge. A missing daemon is reported as itself rather than as a
   // pile of findings about files no tool could read.
   const linted: readonly LintedDockerfile[] = targets.map(
-    (target: string): LintedDockerfile => ({
-      target,
-      result: run(
-        'sh',
-        ['-c', `docker run --rm -i ${HADOLINT_IMAGE} < ${JSON.stringify(target)}`],
-        { cwd: context.root },
-      ),
-    }),
+    (target: string): LintedDockerfile => ({ target, result: lintDockerfile(context, target) }),
   )
   const missing: GateResult | undefined = linted
     .map((entry: LintedDockerfile): GateResult | undefined =>
@@ -175,7 +197,7 @@ export const containers = (context: Context): GateResult => {
   ]
   return findings.length > 0
     ? failed('container definitions have defects', findings)
-    : passed(`${String(targets.length)} Dockerfile(s) and the compose file are valid`)
+    : passed(describeTargets(targets.length, hasCompose))
 }
 
 /** Lint the GitHub Actions workflows. */
@@ -188,5 +210,8 @@ export const actions = (context: Context): GateResult => {
     ['run', '--rm', '-v', `${context.root}:/repo`, '--workdir', '/repo', ACTIONLINT_IMAGE],
     { cwd: context.root },
   )
-  return requireDocker(result, 'the workflow gate') ?? fromRun(result, 'workflows pass actionlint')
+  return (
+    requireDocker(result, 'the workflow gate') ??
+    fromRun(result, 'workflows pass actionlint', 'a workflow does not pass actionlint')
+  )
 }

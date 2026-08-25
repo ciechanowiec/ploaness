@@ -4,7 +4,15 @@ import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { readSettings, type Settings } from '@ploaness/governance'
+import {
+  asRecord,
+  asStringRecord,
+  type ParsedJson,
+  parseJsonc,
+  readKey,
+  readSettings,
+  type Settings,
+} from '@ploaness/governance'
 
 const nodeRequire: NodeJS.Require = createRequire(import.meta.url)
 const BYTES_PER_KIB: number = 1024
@@ -25,17 +33,17 @@ export interface Context {
   readonly isEnforced: boolean
 }
 
-/** Read a JSON file, returning undefined when it is absent or unparseable. */
-export const readJson = (file: string): unknown => {
-  if (!existsSync(file)) {
-    return undefined
-  }
-  try {
-    return JSON.parse(readFileSync(file, 'utf8'))
-  } catch {
-    return undefined
-  }
-}
+/**
+ * Read a JSON file, returning undefined when it is absent or unparseable.
+ *
+ * Comments and trailing commas are tolerated, because the files this reads - a tsconfig, a Biome
+ * config, a runtime settings file - legally carry them, and a reader that refused them would report the
+ * project as malformed for writing what its own tools accept.
+ * @param file the absolute path.
+ * @returns the parsed value, or undefined.
+ */
+export const readJson = (file: string): unknown =>
+  existsSync(file) ? parseJsonc(readFileSync(file, 'utf8')).value : undefined
 
 /** Read a text file, returning undefined when it is absent. */
 export const readText = (file: string): string | undefined =>
@@ -102,12 +110,20 @@ export const resolveTool = (
   resolveFrom: NodeJS.Require = nodeRequire,
 ): string => {
   const manifestPath: string = manifestOf(packageName, resolveFrom)
-  const manifest: { readonly bin?: string | Record<string, string> } = JSON.parse(
-    readFileSync(manifestPath, 'utf8'),
-  ) as { readonly bin?: string | Record<string, string> }
+  // A tool's own manifest, so an unreadable one is the installation being broken rather than the
+  // project being wrong. `format` resolves a tool outside any gate, where a raw SyntaxError would reach
+  // the user as a stack trace with no mention of which package it came from.
+  const read: ParsedJson = parseJsonc(readFileSync(manifestPath, 'utf8'))
+  if (read.problem !== undefined) {
+    throw new Error(`ploaness could not read ${manifestPath}: ${read.problem}`)
+  }
+  // Narrowed through the governance guards rather than asserted. `bin` is either a path or a map of
+  // names to paths, and both cases are read here as what they are: an assertion would be a claim the
+  // compiler cannot check, and `type-coverage --strict` counts every one as untyped.
+  const declaredBin: unknown = readKey(read.value, 'bin')
   const wanted: string = binName ?? packageName
   const bin: string | undefined =
-    typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.[wanted]
+    typeof declaredBin === 'string' ? declaredBin : asStringRecord(declaredBin)[wanted]
   if (bin === undefined) {
     throw new Error(`ploaness could not resolve the "${wanted}" executable from ${packageName}`)
   }
@@ -151,3 +167,15 @@ export const git = (context: Context, commandArguments: readonly string[]): stri
     encoding: 'utf8',
     maxBuffer: MAX_OUTPUT_BYTES,
   }).trim()
+
+/**
+ * The pinned versions ploaness owns, read from the shipped `pins.json`.
+ *
+ * One reader rather than one per gate: `preflight` decided the Node floor from a constant of its own,
+ * which is a rule living in the I/O layer AND a second copy of what this file already states.
+ * @returns the parsed pins, or an empty record when the file cannot be read.
+ */
+export const readPins = (): Record<string, unknown> => {
+  const pinsFile: string = path.join(shippedDirectory('@ploaness/config'), 'pins.json')
+  return asRecord(readJson(pinsFile))
+}

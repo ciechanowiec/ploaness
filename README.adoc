@@ -160,7 +160,7 @@ pnpm exec ploaness init
 
 . A _gate_ is one named verification operation that a xref:#verification-commands[verification command] runs. A failing gate stops the run, and the report names the gate it halted at and how many gates it didn't reach. In xref:#report-only-mode[] the run carries on instead, so that one run lists every xref:#finding[finding].
 . A [[finding]]_finding_ is one problem reported by a gate. An analyzer's native output has its own name and becomes a finding only when a gate reports it. A run reports the findings of one gate, because nothing below a failing gate has been verified: a gate is free to leave the tree in a shape the next one misreads, and a column of passes beneath a failure describes a state nobody established.
-. The gate order is fixed, and it decides which finding a https://payloadcms.com[Payload CMS^] project sees first. The structural gates that catch a mis-wired project run before the analyzers whose output would be harder to read, and the xref:#tree-snapshot-gate[fingerprint of the working tree] is taken before any gate can rewrite a file. The xref:#preflight-gate[`preflight` gate] and the xref:#wiring-gate[`wiring` gate] lead: the first decides whether _ploaness_ may judge the project at all, and the second whether the thing being judged is the one _ploaness_ thinks it is. They're the two gates that stop even a xref:#report-only-mode[report-only] run, because a survey of findings below either would be a list of verdicts about nothing.
+. The gate order is fixed, and it decides which finding a https://payloadcms.com[Payload CMS^] project sees first. The structural gates that catch a mis-wired project run before the analyzers whose output would be harder to read, and the xref:#tree-snapshot-gate[fingerprint of the working tree] is taken before any gate can rewrite a file and compared again after every gate has run. The xref:#preflight-gate[`preflight` gate] and the xref:#wiring-gate[`wiring` gate] lead: the first decides whether _ploaness_ may judge the project at all, and the second whether the thing being judged is the one _ploaness_ thinks it is. They're the two gates that stop even a xref:#report-only-mode[report-only] run, because a survey of findings below either would be a list of verdicts about nothing.
 
 [[default-gates]]
 === Default Verification Gates
@@ -252,7 +252,7 @@ xref:#default-verification[] runs the following 31 gates.
 | The metadata header of every `SKILL.md`.
 
 | [[docker-gate]]`docker`
-| hadolint over every Dockerfile, and `docker compose config`.
+| hadolint over every Dockerfile, and `docker compose config`. A https://payloadcms.com[Payload CMS^] project that ships a compose file and no Dockerfile is checked too, since the compose file is what its database comes from.
 
 | [[actions-gate]]`actions`
 | actionlint over every workflow.
@@ -264,7 +264,7 @@ xref:#default-verification[] runs the following 31 gates.
 | The test suite and its coverage thresholds, under xref:#test-determinism[].
 
 | `tree-verify`
-| The working tree is unchanged since the xref:#tree-snapshot-gate[`tree-snapshot` gate] ran.
+| The working tree is unchanged since the xref:#tree-snapshot-gate[`tree-snapshot` gate] ran. It runs last in both modes, after the xref:#extended-gates[extended verification gates] as well, because xref:#build-gate[`build`] is the gate most able to rewrite a tracked file.
 |===
 
 [[extended-gates]]

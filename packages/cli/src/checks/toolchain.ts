@@ -16,6 +16,7 @@ export const types = (context: Context): GateResult =>
       cwd: context.root,
     }),
     'the project type-checks under the ploaness compiler options',
+    'the project does not type-check under the ploaness compiler options',
   )
 
 // `--error-on-warnings` for the reason the Stylelint invocation below carries `--max-warnings=0`: a
@@ -27,6 +28,7 @@ export const biome = (context: Context): GateResult =>
       cwd: context.root,
     }),
     'Biome reports no formatting or lint defect',
+    'Biome reports a formatting or lint defect',
   )
 
 /** Apply Biome's own fixes, used by `ploaness format`. */
@@ -67,6 +69,7 @@ export const eslint = (context: Context): GateResult =>
   fromRun(
     runNode(resolveTool('eslint'), ['.', '--max-warnings=0'], { cwd: context.root }),
     'ESLint reports no defect',
+    'ESLint reports at least one defect',
   )
 
 // `--max-warnings=0` because the shipped config asks Stylelint to report a descriptionless, needless, or
@@ -90,6 +93,7 @@ export const css = (context: Context): GateResult =>
       { cwd: context.root },
     ),
     'style sheets pass Stylelint',
+    'a style sheet does not pass Stylelint',
   )
 
 /** Module architecture: layer boundaries, cycles, and import hygiene. */
@@ -103,6 +107,7 @@ export const architecture = (context: Context): GateResult =>
       { cwd: context.root },
     ),
     'module architecture holds',
+    'the module architecture contract is broken',
   )
 
 // Roles with no hand-written type surface to measure: framework glue, generated files, views, and
@@ -153,6 +158,7 @@ export const typeCoverage = (context: Context): GateResult =>
       { cwd: context.root },
     ),
     'hand-written logic is fully typed',
+    'some hand-written logic is not fully typed',
   )
 
 /** Dead code, unused files, and unused dependencies. */
@@ -165,4 +171,5 @@ export const knip = (context: Context): GateResult =>
       env: context.settings.analysisEnv,
     }),
     'no dead code or unused dependency',
+    'dead code or an unused dependency was found',
   )

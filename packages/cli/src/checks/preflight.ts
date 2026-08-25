@@ -2,11 +2,15 @@
 // judge a project that is not one. Running anyway would produce a verdict about a contract the project
 // never agreed to.
 
-import { declaredDependencies } from '@ploaness/governance'
-import type { Context } from '../context.js'
+import { asStringRecord, declaredDependencies, minimumNodeMajor } from '@ploaness/governance'
+import { type Context, readPins } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
-const MINIMUM_NODE_MAJOR: number = 26
+// Read from `pins.json`, not written here. The floor was a constant in this file, which made it a rule
+// living in the I/O layer and a fourth copy of a number the pins already state - and this copy is the
+// one that decided a verdict, so it was the copy that could silently disagree with `engines.node`.
+const requiredNodeMajor = (): number | undefined =>
+  minimumNodeMajor(asStringRecord(readPins()['engines'])['node'])
 
 // The two questions preflight asks about the project itself, separated from the runtime question so
 // neither has to accumulate into a shared list.
@@ -26,10 +30,11 @@ const projectProblems = (context: Context): readonly string[] => {
 export const preflight = (context: Context): GateResult => {
   const projectFindings: readonly string[] = projectProblems(context)
   const nodeMajor: number = Number(process.versions.node.split('.', 1)[0] ?? '0')
+  const required: number | undefined = requiredNodeMajor()
   const findings: readonly string[] = [
     ...projectFindings,
-    ...(nodeMajor < MINIMUM_NODE_MAJOR
-      ? [`Node ${process.versions.node} is below the required ${String(MINIMUM_NODE_MAJOR)}`]
+    ...(required !== undefined && nodeMajor < required
+      ? [`Node ${process.versions.node} is below the required ${String(required)}`]
       : []),
   ]
   return findings.length > 0
