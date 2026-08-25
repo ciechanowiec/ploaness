@@ -16,6 +16,7 @@
 
 const DISABLE: string = 'disable'
 const IGNORE: string = 'ignore'
+const ALLOW: string = 'allow'
 
 // One entry per suppression form. `eslint-enable`, `biome-ignore-end`, and `stylelint-enable` close a
 // block that its opener already counted, so counting them would double every block suppression.
@@ -24,6 +25,11 @@ const IGNORE: string = 'ignore'
 // for a whole file rather than for one line. `ban-ts-comment` refuses it wherever ESLint reads, so it
 // was never free - but a file ESLint's config ignores escaped both, and the ceiling is what makes the
 // next suppression cost the removal of an existing one.
+//
+// The three coverage forms belong here for a sharper reason than the rest. Every other suppression
+// silences a finding; a coverage directive deletes the measurement, so the per-file floor is met by
+// dropping the line out of the report rather than by writing the test that would cover it. That was the
+// cheapest way in a governed repository to make a floor read as satisfied.
 const SUPPRESSION_TOKENS: readonly string[] = [
   `eslint-${DISABLE}`,
   `biome-${IGNORE}`,
@@ -31,12 +37,17 @@ const SUPPRESSION_TOKENS: readonly string[] = [
   `@ts-expect-error`,
   `@ts-${IGNORE}`,
   `@ts-nocheck`,
+  `v8 ${IGNORE}`,
+  `c8 ${IGNORE}`,
+  `istanbul ${IGNORE}`,
 ]
 
 const CLOSING_TOKENS: readonly string[] = [
   `eslint-enable`,
   `biome-${IGNORE}-end`,
   `stylelint-enable`,
+  `v8 ${IGNORE} stop`,
+  `c8 ${IGNORE} stop`,
 ]
 
 /** Suppressions permitted before any code is written, so a greenfield project is not born at zero. */
@@ -70,11 +81,21 @@ const COMMENT_OPENER: string = String.raw`(?:\/\/|\/\*|^\s*\*|^\s*#)\s*`
 const opensWith = (line: string, token: string): boolean =>
   new RegExp(`${COMMENT_OPENER}${token}`).test(line)
 
+// The one suppression form that is not a comment convention. gitleaks reads a line for this literal and
+// skips the line that carries it, whatever syntax the surrounding file comments in, so anchoring it to a
+// comment opener the way the others are anchored would leave every non-C-style file free. A governed
+// repository records a committed fake credential in the declared secret allowlist; this is the way
+// around that, and it costs a suppression like any other.
+const BARE_TOKENS: readonly string[] = [`gitleaks:${ALLOW}`]
+
 const tokenOnLine = (line: string): string | undefined => {
   if (CLOSING_TOKENS.some((closing: string): boolean => opensWith(line, closing))) {
     return undefined
   }
-  return SUPPRESSION_TOKENS.find((token: string): boolean => opensWith(line, token))
+  return (
+    SUPPRESSION_TOKENS.find((token: string): boolean => opensWith(line, token)) ??
+    BARE_TOKENS.find((token: string): boolean => line.includes(token))
+  )
 }
 
 /**

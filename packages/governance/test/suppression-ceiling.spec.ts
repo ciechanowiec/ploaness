@@ -19,6 +19,8 @@ const NOCHECK: string = `// @ts-${nocheck()}\n`
 // containing a literal suppression would be counted by the rule it is testing.
 const disable = (tool: string): string => `${tool}-disable`
 const ignore = (tool: string): string => `${tool}-ignore`
+const coverage = (tool: string): string => `${tool} ignore`
+const allow = (tool: string): string => `${tool}:allow`
 
 const sites = (count: number): readonly SuppressionSite[] =>
   Array.from({ length: count }, (_: unknown, index: number) => ({
@@ -70,6 +72,38 @@ describe('findSuppressions', () => {
   it('counts a suppression that opens its own comment', () => {
     const real: string = `// ${disable('eslint')}-next-line no-console -- the CLI prints here by design`
     expect(findSuppressions('src/a.ts', real)).toHaveLength(1)
+  })
+})
+
+// The forms that silence a measurement rather than a finding. A coverage directive drops a line out of
+// the report, so the per-file floor is met without the test that would cover it, and a gitleaks
+// allowance routes around the declared secret allowlist. Both were free until they were counted.
+describe('findSuppressions over the directives that are not lint comments', () => {
+  it.each([
+    ['v8 coverage', `/* ${coverage('v8')} next */`],
+    ['c8 coverage', `/* ${coverage('c8')} next */`],
+    ['istanbul coverage', `/* ${coverage('istanbul')} next */`],
+    ['gitleaks inline', `const token = 'aaaa' // ${allow('gitleaks')}`],
+  ])('counts a %s suppression', (_tool, line) => {
+    expect(findSuppressions('src/a.ts', line)).toHaveLength(1)
+  })
+
+  it('counts the comment that opens a coverage block', () => {
+    expect(findSuppressions('src/a.ts', `/* ${coverage('v8')} start */`)).toHaveLength(1)
+  })
+
+  it('does not count the comment that closes a coverage block its opener already counted', () => {
+    expect(findSuppressions('src/a.ts', `/* ${coverage('v8')} stop */`)).toEqual([])
+  })
+
+  // Matched anywhere on the line rather than after a comment opener, because gitleaks itself matches it
+  // that way. A line that names it IS a line gitleaks skips, so counting the mention and counting the
+  // suppression are the same act - which is why this differs from the prose case above rather than
+  // contradicting it.
+  it('counts a gitleaks allowance whatever syntax the file comments in', () => {
+    expect(findSuppressions('src/a.ts', `const key = 'aaaa' # ${allow('gitleaks')}`)).toHaveLength(
+      1,
+    )
   })
 })
 
