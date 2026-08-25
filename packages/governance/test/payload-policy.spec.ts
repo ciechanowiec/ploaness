@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { findPayloadViolations, stripComments, topLevelSlice } from '../src/payload-policy.js'
+import { findPayloadViolations } from '../src/payload-policy.js'
+import { stripComments, topLevelSlice } from '../src/source-text.js'
 
 const rulesOf = (source: string): readonly string[] =>
   findPayloadViolations(source).map((violation) => violation.rule)
