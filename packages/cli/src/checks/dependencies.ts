@@ -2,6 +2,7 @@
 // or upgrade something: a true signal about your change. Freshness is bounded rather than banned, because
 // "a newer version exists" is not a property of your change, but "the version I declared is two majors
 // behind" is, and that is a real liability.
+import { realpathSync } from 'node:fs'
 import path from 'node:path'
 import {
   type Advisory,
@@ -15,14 +16,17 @@ import {
   findFreshnessViolations,
   findLicenseViolations,
   HARNESS_EXCEPTIONS,
+  HARNESS_PACKAGE,
+  inheritedManifestPaths,
   isArray,
   isRecord,
   judgeVulnerabilities,
   type LicensedPackage,
+  type ManifestResolver,
   type ManifestSource,
   type VulnerabilityReport,
 } from '@ploaness/governance'
-import { type Context, readJson, trackedFiles } from '../context.js'
+import { type Context, manifestPathFrom, readJson, trackedFiles } from '../context.js'
 import { failed, type GateResult, passed, type RunResult, run } from '../exec.js'
 
 interface PnpmLicenseEntry {
@@ -75,16 +79,73 @@ const MANIFEST_NAME: string = 'package.json'
 
 // Every manifest the repository tracks, not only the root one. A workspace declares its toolchain across
 // several of them, and reading the root alone left every analyzer ploaness itself runs on unmeasured.
-// Git tracks nothing under node_modules, so the tracked list is already the right set.
-const manifestSources = (context: Context): readonly ManifestSource[] =>
+const trackedManifests = (context: Context): readonly ManifestSource[] =>
   trackedFiles(context.root)
     .filter((file: string): boolean => file === MANIFEST_NAME || file.endsWith(`/${MANIFEST_NAME}`))
     .map(
       (file: string): ManifestSource => ({
         path: file,
         packageJson: readJson(path.join(context.root, file)),
+        isInherited: false,
       }),
     )
+
+// A path as the filesystem finally names it, so the same manifest reached two ways compares equal.
+// Under pnpm every installed package is a symlink into the store, and in a workspace it is a symlink
+// back into the tree - which is how an inherited manifest can turn out to be a tracked one.
+const realPathOrSelf = (file: string): string => {
+  try {
+    return realpathSync(file)
+  } catch {
+    return file
+  }
+}
+
+// The one place the walk touches the filesystem. Everything it decides - which dependencies to follow,
+// how a diamond and a cycle are handled - is in @ploaness/governance, where a spec states it without
+// building an install.
+const HARNESS_RESOLVER: ManifestResolver = { locate: manifestPathFrom, read: readJson }
+
+// A manifest names itself, which is what a finding should say. The path under node_modules is a store
+// address that differs between two installs of the same version, so it identifies nothing a reader can
+// act on.
+const declaredName = (packageJson: unknown, fallback: string): string =>
+  asText(asRecord(packageJson)['name']) || fallback
+
+// The manifests a project INHERITS: `ploaness` as the project itself resolves it, and every ploaness
+// package that one pulls in. The standard counts these as declared coordinates, and they are the
+// manifests that decide which analyzer versions the project's gates actually run - none of which the
+// project tracks, so a reader of tracked files alone could never see them. That is why a consumer's
+// update report was silent about a harness pin going stale while ploaness's own report was not.
+const inheritedManifests = (
+  context: Context,
+  tracked: readonly ManifestSource[],
+): readonly ManifestSource[] => {
+  const alreadyRead: ReadonlySet<string> = new Set<string>(
+    tracked.map((manifest: ManifestSource): string =>
+      realPathOrSelf(path.join(context.root, manifest.path)),
+    ),
+  )
+  const entry: string | undefined = manifestPathFrom(
+    HARNESS_PACKAGE,
+    path.join(context.root, MANIFEST_NAME),
+  )
+  return inheritedManifestPaths(entry, HARNESS_RESOLVER)
+    .filter((file: string): boolean => !alreadyRead.has(realPathOrSelf(file)))
+    .map((file: string): ManifestSource => {
+      const packageJson: unknown = readJson(file)
+      return {
+        path: `${declaredName(packageJson, file)}/${MANIFEST_NAME}`,
+        packageJson,
+        isInherited: true,
+      }
+    })
+}
+
+const manifestSources = (context: Context): readonly ManifestSource[] => {
+  const tracked: readonly ManifestSource[] = trackedManifests(context)
+  return [...tracked, ...inheritedManifests(context, tracked)]
+}
 
 // The registry exposes two documents per package: the packument root and, per version, a version
 // document. `/{name}/latest` is the version document for the `latest` dist-tag and costs a few kilobytes,
@@ -188,6 +249,23 @@ const sortLookups = (
 const describeFinding = (finding: FreshnessFinding): string =>
   `${finding.owner} ${finding.name}: declared ${finding.current}, latest ${finding.latest}`
 
+// A line names its repair, and for an inherited coordinate that is not the repair every other line
+// names. The project cannot edit a version ploaness declares, so "change the declaration" would be
+// advice it has no file to act on; upgrading the harness is the move, and reporting it is the move when
+// no release carries the newer pin yet. The same answer `HARNESS_EXCEPTIONS` gives for an advisory
+// carried by ploaness's own chain.
+const HARNESS_REPAIR: string =
+  ' - declared by ploaness rather than by the project, so upgrade ploaness, or report it if no ' +
+  'release carries the newer pin'
+
+// `stale`, not `update`, for a coordinate past the bound that does not stop this build. Printed as an
+// ordinary update it would bury the one line saying the harness itself is overdue among a dozen saying
+// a patch release exists.
+const describeReported = (finding: FreshnessFinding): string =>
+  finding.verdict === 'fail'
+    ? `stale ${describeFinding(finding)}; past the freshness bound${HARNESS_REPAIR}`
+    : `update ${describeFinding(finding)}`
+
 // One lookup per distinct name, fanned back out across the coordinates that share it. A workspace
 // declaring the same analyzer in three manifests must not ask the registry three times.
 const lookUpEach = async (names: readonly string[]): Promise<ReadonlyMap<string, Lookup>> =>
@@ -236,20 +314,29 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
       `${String(report.failures.length)} dependency/dependencies are two or more majors behind`,
       [
         ...report.failures.map((finding: FreshnessFinding): string => describeFinding(finding)),
-        ...report.updates.map(
-          (finding: FreshnessFinding): string => `update ${describeFinding(finding)}`,
-        ),
+        ...report.reported.map((finding: FreshnessFinding): string => describeReported(finding)),
         ...notes,
       ],
     )
   }
-  return passed(
+  const inherited: number = manifests.filter(
+    (manifest: ManifestSource): boolean => manifest.isInherited,
+  ).length
+  // The summary may not claim every coordinate is within the bound while the report below it lists one
+  // that is not. A harness pin past the bound does not stop this build, and a pass that said nothing
+  // about it would leave the only line that matters to be found by reading.
+  const overdue: number = report.reported.filter(
+    (finding: FreshnessFinding): boolean => finding.verdict === 'fail',
+  ).length
+  const counted: string =
     `${String(statuses.length)} declared coordinate(s) across ${String(manifests.length)} ` +
-      `manifest(s) are within the freshness bound`,
+    `manifest(s), ${String(inherited)} inherited`
+  return passed(
+    overdue > 0
+      ? `${counted}; ${String(overdue)} inherited coordinate(s) past the bound, reported not failed`
+      : `${counted}, are within the freshness bound`,
     [
-      ...report.updates.map(
-        (finding: FreshnessFinding): string => `update ${describeFinding(finding)}`,
-      ),
+      ...report.reported.map((finding: FreshnessFinding): string => describeReported(finding)),
       ...notes,
     ],
   )

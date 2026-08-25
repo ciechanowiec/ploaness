@@ -243,7 +243,7 @@ xref:#default-verification[] runs the following 32 gates.
   postinstall script. An empty list is a valid answer; leaving the list undeclared is not.
 
 | `deps`
-| No dependency is two or more major versions behind. The registry must be reachable.
+| No dependency the https://payloadcms.com[Payload CMS^] project declares is two or more major versions behind. The update report covers the project's own manifests and the _ploaness_ manifests it inherits, naming the manifest that declares each coordinate. A coordinate an inherited manifest declares is measured the same way and reported the same way, but never fails the build: its version belongs to _ploaness_, so the repair is upgrading _ploaness_ rather than editing the project. The registry must be reachable.
 
 | `image-assets`
 | Every tracked image decodes as the format its bytes claim.

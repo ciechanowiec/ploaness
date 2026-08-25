@@ -55,12 +55,25 @@ export const describeFound = (found: string | undefined): string =>
 // package called `ploaness: "file` and matched nothing. Repairing the reader turned an accident into a
 // finding, which is the right time to say what was actually intended.
 const HARNESS_SCOPE: string = '@ploaness/'
-const HARNESS_PACKAGE: string = 'ploaness'
 const LOCAL_ARTEFACT: RegExp = /^(?:file|link|workspace):/
 
+/** The meta package a governed project declares, and the root of everything it inherits from ploaness. */
+export const HARNESS_PACKAGE: string = 'ploaness'
+
+/**
+ * Whether a package name is one of ploaness's own.
+ *
+ * Exported because the `deps` gate asks the same question when it walks the manifests a project
+ * inherits, and it had no way to ask it but a second copy of the two literals above - which is the
+ * shape of drift this repository refuses everywhere else.
+ * @param packageName the declared name.
+ * @returns true for `ploaness` and for anything under its scope.
+ */
+export const isHarnessPackage = (packageName: string): boolean =>
+  packageName === HARNESS_PACKAGE || packageName.startsWith(HARNESS_SCOPE)
+
 const isHarnessTarball = (entry: OverrideEntry): boolean =>
-  (entry.packageName === HARNESS_PACKAGE || entry.packageName.startsWith(HARNESS_SCOPE)) &&
-  LOCAL_ARTEFACT.test(entry.specifier)
+  isHarnessPackage(entry.packageName) && LOCAL_ARTEFACT.test(entry.specifier)
 
 const overrideViolation = (
   entry: OverrideEntry,

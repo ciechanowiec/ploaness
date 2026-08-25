@@ -142,6 +142,25 @@ export const resolveProjectTool = (
 ): string =>
   resolveTool(packageName, binName, createRequire(path.join(context.root, 'package.json')))
 
+/**
+ * Locate a package's manifest as the package at `fromManifest` resolves it.
+ *
+ * Resolution root matters here rather than being an implementation detail: under pnpm's strict layout
+ * `@ploaness/config` is reachable from `ploaness` and from nowhere else, so walking the manifests a
+ * project inherits has to re-root at each step. Undefined rather than a throw, because a package that
+ * does not resolve is a fact the caller reports rather than a broken run.
+ * @param packageName the package to locate.
+ * @param fromManifest the manifest whose resolution rules apply.
+ * @returns the absolute path to the package's own manifest, or undefined.
+ */
+export const manifestPathFrom = (packageName: string, fromManifest: string): string | undefined => {
+  try {
+    return manifestOf(packageName, createRequire(fromManifest))
+  } catch {
+    return undefined
+  }
+}
+
 /** Locate a directory inside a package ploaness depends on, for shipped configs and assets. */
 export const shippedDirectory = (packageName: string): string =>
   packageDirectory(packageName, nodeRequire)
