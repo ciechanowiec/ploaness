@@ -2,7 +2,14 @@
 // judge a project that is not one. Running anyway would produce a verdict about a contract the project
 // never agreed to.
 
-import { asStringRecord, declaredDependencies, minimumNodeMajor } from '@ploaness/governance'
+import {
+  asOptionalText,
+  asStringRecord,
+  declaredDependencies,
+  findPnpmRuntimeViolations,
+  minimumNodeMajor,
+  pinnedPnpmVersion,
+} from '@ploaness/governance'
 import { type Context, readPins } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
@@ -11,6 +18,13 @@ import { failed, type GateResult, passed } from '../exec.js'
 // one that decided a verdict, so it was the copy that could silently disagree with `engines.node`.
 const requiredNodeMajor = (): number | undefined =>
   minimumNodeMajor(asStringRecord(readPins()['engines'])['node'])
+
+// The pnpm this run is executing under, which is a different fact from the one the wiring gate reads.
+// `packageManager` is what the project DECLARES, and Corepack obeys it only where Corepack is enabled;
+// this is what actually resolved the tree every later gate then judges. Read from the pin rather than
+// from `engines.pnpm`, which is derived from the same field.
+const requiredPnpm = (): string | undefined =>
+  pinnedPnpmVersion(asOptionalText(readPins()['packageManager']))
 
 // The two questions preflight asks about the project itself, separated from the runtime question so
 // neither has to accumulate into a shared list.
@@ -36,8 +50,9 @@ export const preflight = (context: Context): GateResult => {
     ...(required !== undefined && nodeMajor < required
       ? [`Node ${process.versions.node} is below the required ${String(required)}`]
       : []),
+    ...findPnpmRuntimeViolations(process.env['npm_config_user_agent'], requiredPnpm()),
   ]
   return findings.length > 0
-    ? failed('project is not a supported Payload application', findings)
+    ? failed('project is not a supported Payload application on a pinned toolchain', findings)
     : passed(`Payload project on Node ${process.versions.node}`)
 }

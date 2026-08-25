@@ -6,6 +6,7 @@
 // helpers below.
 import { findOverrides, OVERRIDE_KEYS, type OverrideEntry } from './install-policy.js'
 import { asOptionalText, asRecord, asStringRecord, declaredDependencies } from './json-shapes.js'
+import { pinnedPnpmVersion } from './toolchain-pins.js'
 import type { WiringViolation } from './wiring-violation.js'
 
 /** What a project must declare and at which version, plus the invariants those pins imply. */
@@ -129,6 +130,15 @@ const checkPackageManager = (
           reason: `is ${describeFound(asOptionalText(declared))} but ploaness requires "${required}"`,
         },
       ]
+}
+
+// The `engines.pnpm` entry is DERIVED from the `packageManager` pin rather than pinned beside it.
+// Corepack reads one field and an installer reads the other, so two literals would be two statements
+// about a single version - and this was the pair that had already drifted apart in meaning: an exact
+// `pnpm@11.9.0` beside a `>=11` floor told a reader that any pnpm 11 would resolve the same tree.
+const enginesRequiredBy = (inputs: VersionInputs): Readonly<Record<string, string>> => {
+  const pnpm: string | undefined = pinnedPnpmVersion(inputs.requiredPackageManager)
+  return pnpm === undefined ? inputs.requiredEngines : { ...inputs.requiredEngines, pnpm }
 }
 
 // `preflight` checks the Node that is actually running, which is the version a gate is executed by.
@@ -324,7 +334,7 @@ export const findVersionViolations = (
   ...checkExactVersions(packageJson),
   ...checkPayloadFamily(packageJson, inputs.payloadVersion),
   ...checkPackageManager(packageJson, inputs.requiredPackageManager),
-  ...checkEngines(packageJson, inputs.requiredEngines),
+  ...checkEngines(packageJson, enginesRequiredBy(inputs)),
   ...checkPinnedOverrides(inputs.workspaceFile, inputs.expected, packageJson),
   ...checkVersionEscapes(packageJson, inputs.expected),
 ]

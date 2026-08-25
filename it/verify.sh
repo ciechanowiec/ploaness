@@ -416,6 +416,15 @@ edit_json "$scratch/fail-engines/package.json" engines.node '>=20'
 commit_case fail-engines 'feat(fixture): declare a runtime ploaness refuses' "$CONFORMING_BODY"
 expect fail-engines wiring FAIL 'engines.node'
 
+# The pnpm half of the same block, which is derived from `packageManager` rather than pinned beside it.
+# A floor here is the range ban unapplied to the one tool that resolves every other pin: it tells an
+# installer that any pnpm 11 will build the same tree, while `packageManager` names exactly one.
+new_case fail-engines-pnpm
+edit_json "$scratch/fail-engines-pnpm/package.json" engines.pnpm '>=11'
+commit_case fail-engines-pnpm 'feat(fixture): declare a package manager floor beside an exact pin' \
+    "$CONFORMING_BODY"
+expect fail-engines-pnpm wiring FAIL 'engines.pnpm'
+
 # ploaness owns the version of a Postgres driver without deciding that every project uses Postgres:
 # an unrequired pin is matched when declared and forced on nobody.
 new_case fail-ecosystem-version

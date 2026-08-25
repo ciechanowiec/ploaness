@@ -18,7 +18,7 @@ const inputs = (overrides: Partial<VersionInputs> = {}): VersionInputs => ({
 const wired = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   devDependencies: { vitest: '4.1.11' },
   packageManager: 'pnpm@11.9.0',
-  engines: { node: '>=26' },
+  engines: { node: '>=26', pnpm: '11.9.0' },
   ...overrides,
 })
 
@@ -130,6 +130,26 @@ describe('the runtime a project declares', () => {
 
   it('reports a missing engines block', () => {
     expect(locationsOf(wired({ engines: {} }))).toContain('package.json engines.node')
+  })
+
+  // The joint, not the value: `requiredEngines` names only `node`, so a passing `engines.pnpm` proves
+  // the requirement was derived from `packageManager` rather than restated beside it. Written the other
+  // way - two literals for one version - the pair had already drifted, an exact `pnpm@11.9.0` beside a
+  // `>=11` floor that told a reader any pnpm 11 would resolve the same tree.
+  it('requires engines.pnpm at the version packageManager names, without pinning it twice', () => {
+    expect(locationsOf(wired({ engines: { node: '>=26', pnpm: '>=11' } }))).toContain(
+      'package.json engines.pnpm',
+    )
+  })
+
+  it('says nothing about an engines.pnpm that is the version packageManager names', () => {
+    expect(locationsOf(wired())).not.toContain('package.json engines.pnpm')
+  })
+
+  it('requires no engines.pnpm when ploaness pins no package manager', () => {
+    expect(
+      locationsOf(wired({ engines: { node: '>=26' } }), { requiredPackageManager: undefined }),
+    ).not.toContain('package.json engines.pnpm')
   })
 })
 

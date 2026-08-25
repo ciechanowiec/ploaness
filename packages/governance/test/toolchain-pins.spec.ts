@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { CONTAINER_IMAGES, findUnpinnedImages, minimumNodeMajor } from '../src/toolchain-pins.js'
+import {
+  CONTAINER_IMAGES,
+  findPnpmRuntimeViolations,
+  findUnpinnedImages,
+  minimumNodeMajor,
+  pinnedPnpmVersion,
+} from '../src/toolchain-pins.js'
 
 describe('CONTAINER_IMAGES', () => {
   // The joint worth testing: not that a constant equals its own literal, but that nobody can put a
@@ -64,5 +70,64 @@ describe('minimumNodeMajor', () => {
 
   it('reads an absent range as naming none, rather than as zero', () => {
     expect(minimumNodeMajor(undefined)).toBeUndefined()
+  })
+})
+
+// The single source of the pnpm version. `engines.pnpm` used to state it a second time, as a `>=11`
+// floor beside an exact `pnpm@11.9.0`, so the two fields disagreed about what a conforming project ran.
+describe('pinnedPnpmVersion', () => {
+  it('reads the exact version out of the specifier', () => {
+    expect(pinnedPnpmVersion('pnpm@11.9.0')).toBe('11.9.0')
+  })
+
+  it('reads past the integrity suffix Corepack writes, which names the same version', () => {
+    expect(pinnedPnpmVersion(`pnpm@11.9.0+sha512.${'a'.repeat(16)}`)).toBe('11.9.0')
+  })
+
+  it('names no version for another package manager', () => {
+    expect(pinnedPnpmVersion('yarn@4.5.0')).toBeUndefined()
+  })
+
+  it('names no version when the field is absent, rather than an empty one', () => {
+    expect(pinnedPnpmVersion(undefined)).toBeUndefined()
+  })
+})
+
+// `packageManager` is a declaration; this is the pnpm that actually resolved the tree. A project passed
+// the wiring gate declaring `pnpm@11.9.0` and installed under 11.5.0 wherever Corepack was not enabled,
+// which made the pin a comment for exactly the tool that decides what every other pin resolves to.
+const agent = (version: string): string => `pnpm/${version} npm/? node/v26.2.0 darwin arm64`
+
+describe('findPnpmRuntimeViolations', () => {
+  it('reports a running pnpm that is not the pinned one', () => {
+    const found: readonly string[] = findPnpmRuntimeViolations(agent('11.5.0'), '11.9.0')
+    expect(found).toHaveLength(1)
+    expect(found[0]).toContain('11.5.0')
+  })
+
+  it('names the pinned version, so the report says which pnpm to run', () => {
+    expect(findPnpmRuntimeViolations(agent('11.5.0'), '11.9.0')[0]).toContain('pnpm@11.9.0')
+  })
+
+  it('says nothing when the running pnpm is the pinned one', () => {
+    expect(findPnpmRuntimeViolations(agent('11.9.0'), '11.9.0')).toEqual([])
+  })
+
+  // Not started by pnpm at all: npx, a direct node invocation, a CI step calling the binary. There is
+  // no version to disagree with, and failing there would report a project for how one command was
+  // launched rather than for what it declared.
+  it.each([undefined, '', 'npm/11.0.0 node/v26.2.0 darwin arm64'])(
+    'says nothing when %j names no pnpm',
+    (userAgent: string | undefined) => {
+      expect(findPnpmRuntimeViolations(userAgent, '11.9.0')).toEqual([])
+    },
+  )
+
+  it('does not read @pnpm/exe as pnpm, whose version is a different number', () => {
+    expect(findPnpmRuntimeViolations('@pnpm/exe/11.5.0 node/v26.2.0', '11.9.0')).toEqual([])
+  })
+
+  it('says nothing when ploaness pins no package manager', () => {
+    expect(findPnpmRuntimeViolations(agent('11.5.0'), undefined)).toEqual([])
   })
 })

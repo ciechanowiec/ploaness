@@ -2,9 +2,9 @@
   "$comment": "Everything ploaness pins that it cannot pin by declaring a dependency. A pinned analyzer is a real dependency of a ploaness package, so its version has exactly one source; nothing here can be, because ploaness imports none of it and declaring it would install a second Payload, Next, React, or set of type definitions into a project that already has one - and two copies of @types/react in a single tree is not merely waste, it is a class of type error that reads as the project's fault. This file is that one source instead. It is data rather than code: a group carries the rule that applies to it, so adding one needs no change anywhere else.",
   "$required": "A required group is declared by every governed project and matched exactly. An unrequired group is matched only when the project declares it, and is never forced on a project with no use for it. That distinction is not a convenience: a Payload project on MongoDB has no Postgres driver, and requiring one would make ploaness dictate a database rather than a version. Requiring a package a project does not need would also manufacture a dependency the dead-code gate then rightly reports as unused.",
   "packageManager": "pnpm@11.9.0",
+  "$engines": "Only `node` is stated here. The pnpm entry is derived from `packageManager` above, because Corepack reads one field and an installer reads the other and two literals for one version will not stay equal - these two had already stopped agreeing in meaning, an exact `pnpm@11.9.0` beside a `>=11` floor.",
   "engines": {
-    "node": ">=26",
-    "pnpm": ">=11"
+    "node": ">=26"
   },
   "groups": [
     {

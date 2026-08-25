@@ -58,3 +58,56 @@ export const minimumNodeMajor = (enginesNode: string | undefined): number | unde
   const found: RegExpExecArray | null = LEADING_MAJOR.exec(enginesNode ?? '')
   return found === null ? undefined : Number(found[1])
 }
+
+// Corepack permits an integrity suffix - `pnpm@11.9.0+sha512.<hash>` - and that specifier names the
+// same version as the bare one. Reading up to the `+` keeps a project that pasted Corepack's own
+// output from failing a rule about a number it got right.
+const PNPM_SPECIFIER: RegExp = /^pnpm@([^+\s]+)(?:\+\S+)?$/
+
+/**
+ * The exact pnpm version a `packageManager` specifier names.
+ *
+ * The version has one source - the `packageManager` pin - and everything else that states it is
+ * derived from here. `engines.pnpm` was pinned separately at `>=11` while `packageManager` said
+ * `pnpm@11.9.0`, which is the range ban applied to every dependency except the tool that resolves
+ * them: it told a reader that any pnpm 11 would build the same tree.
+ * @param packageManager the declared specifier, such as `pnpm@11.9.0`.
+ * @returns the version, or undefined when the specifier names another manager or no version.
+ */
+export const pinnedPnpmVersion = (packageManager: string | undefined): string | undefined => {
+  const found: RegExpExecArray | null = PNPM_SPECIFIER.exec(packageManager ?? '')
+  return found?.[1]
+}
+
+// pnpm identifies itself to every script it runs: `pnpm/11.9.0 npm/? node/v26.2.0 darwin arm64`. The
+// prefix is anchored at a word boundary because `@pnpm/exe/11.9.0` would otherwise match as `pnpm`.
+const PNPM_USER_AGENT: RegExp = /(?:^|\s)pnpm\/(\S+)/
+
+/**
+ * Report the pnpm actually running this command when it is not the pinned one.
+ *
+ * `packageManager` is a declaration, and Corepack obeys it only where Corepack is enabled. Without
+ * this the pin was a comment: a project could declare `pnpm@11.9.0`, pass the wiring gate, and resolve
+ * its whole tree with another pnpm - which is the one difference that changes what every other pin
+ * means, because the lockfile it produces is the input to every gate that follows.
+ * @param userAgent the `npm_config_user_agent` of the running process.
+ * @param required the pinned version, from {@link pinnedPnpmVersion}.
+ * @returns one finding when the running pnpm disagrees; empty when it agrees or cannot be observed.
+ */
+export const findPnpmRuntimeViolations = (
+  userAgent: string | undefined,
+  required: string | undefined,
+): readonly string[] => {
+  const found: RegExpExecArray | null = PNPM_USER_AGENT.exec(userAgent ?? '')
+  const running: string | undefined = found?.[1]
+  // An absent or non-pnpm user agent means this command was not started by pnpm at all - `npx`, a
+  // direct `node` invocation, a CI step calling the binary. There is no version to disagree with, and
+  // inventing a failure there would report a project for how its operator launched one command.
+  if (required === undefined || running === undefined || running === required) {
+    return []
+  }
+  return [
+    `pnpm ${running} is running this command but ploaness pins pnpm@${required}; ` +
+      'enable Corepack, because the package manager resolves the tree every other pin describes',
+  ]
+}

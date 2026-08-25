@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { minimumNodeMajor } from '@ploaness/governance'
+import { minimumNodeMajor, pinnedPnpmVersion } from '@ploaness/governance'
 import { describe, expect, it } from 'vitest'
 
 const specDirectory: string = path.dirname(fileURLToPath(import.meta.url))
@@ -34,6 +34,34 @@ describe('the package manager ploaness pins', () => {
   it('is the one the consumer fixture declares, which the wiring gate then judges it against', () => {
     expect(fixtureManifest['packageManager']).toBe(pins['packageManager'])
   })
+
+  // `pinnedPnpmVersion` names whatever version text follows `pnpm@`, because its job is to read the
+  // pin rather than to judge it. This is where the pin is judged: a range here would be derived
+  // straight into every consumer's `engines.pnpm`, which is the one thing the derivation exists to
+  // stop - the pin would then admit exactly the drift it was written to close.
+  it('is pinned to one exact version, not to a range', () => {
+    expect(pinnedPnpmVersion(pins['packageManager'] as string)).toMatch(/^\d+\.\d+\.\d+$/)
+  })
+})
+
+// The pnpm version is stated once, in `packageManager`, and `engines.pnpm` is derived from it by
+// `version-policy.ts`. These assert the derivation is real rather than a second literal that happens to
+// agree today: the pins must NOT carry an `engines.pnpm`, and both manifests must carry the derived
+// value. The pair had already drifted apart in meaning before this - `pnpm@11.9.0` beside `>=11`.
+describe('the pnpm version a consumer must declare', () => {
+  it('is not restated in the pins, because it is derived from packageManager', () => {
+    expect(enginesOf(pins)['pnpm']).toBeUndefined()
+  })
+
+  it.each([
+    ['this repository', rootManifest],
+    ['the consumer fixture', fixtureManifest],
+  ])(
+    'is what %s declares as its engines.pnpm',
+    (_who: string, manifest: Record<string, unknown>) => {
+      expect(enginesOf(manifest)['pnpm']).toBe(pinnedPnpmVersion(pins['packageManager'] as string))
+    },
+  )
 })
 
 describe('the Node floor ploaness pins', () => {

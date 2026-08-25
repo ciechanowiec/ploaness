@@ -77,7 +77,10 @@ ploaness governs all of the following domains:
   MongoDB has no Postgres driver. A type package is pinned for the toolchain's reason: it is an input
   to tsc, so a patch release changes what type-checks while the project stays unchanged. `packageManager`
   and `engines` are pinned too - Corepack runs exactly the package manager named, so it decides how
-  every other pin resolves. Declare each at the exact version ploaness pins, and every
+  every other pin resolves. `engines.pnpm` is the exact version `packageManager` names rather than a
+  floor, for the reason no dependency carries a range; and `preflight` reads the pnpm actually running
+  the command, because a declaration Corepack is not enabled to obey resolves the tree with something
+  else. Declare each at the exact version ploaness pins, and every
   `@payloadcms/*` package at the pinned `payload` version, because Payload fails at runtime when its
   own packages disagree. No dependency carries a range: a caret, tilde, comparator, wildcard or
   partial version means the build and the suite run against whatever was newest at install time. An
