@@ -106,6 +106,17 @@ describe('a JSON document that carries comments', () => {
     expect(parseJsonc('{ "a": "one, two" }').value).toEqual({ a: 'one, two' })
   })
 
+  // The case above passes without the string ever being consulted, because the comma is followed by a
+  // letter. This one is not: a brace-expansion glob ending in a comma is a trailing comma by the
+  // pattern's reading, and the pattern used to run over the document rather than over a mask of it - so
+  // a Biome `includes` entry reached every wiring rule with a character the project had not removed.
+  it('leaves a comma inside a string alone when a closing brace follows it', () => {
+    expect(parseJsonc('{ "includes": ["**/*.{ts,}"] }').value).toEqual({
+      includes: ['**/*.{ts,}'],
+    })
+    expect(parseJsonc('{ "a": "x,]" }').value).toEqual({ a: 'x,]' })
+  })
+
   it('reports the reason a genuinely malformed document could not be read', () => {
     expect(parseJsonc('{ "a": }').problem).toBeDefined()
   })

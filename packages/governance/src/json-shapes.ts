@@ -8,7 +8,7 @@
 //
 // An array narrows to a record, as it did before: `typeof [] === 'object'`, and a manifest key holding
 // an array is read by whichever caller cares, not refused here.
-import { stripComments } from './source-text.js'
+import { maskLiterals, stripComments } from './source-text.js'
 
 /** A parsed document, or the reason it could not be parsed. */
 export interface ParsedJson {
@@ -20,6 +20,18 @@ export interface ParsedJson {
 // A trailing comma is legal in JSONC and in nothing `JSON.parse` accepts, so it is removed after the
 // comments are, when a comma followed only by whitespace and a closing bracket can be recognised.
 const TRAILING_COMMA: RegExp = /,(?=\s*[\]}])/g
+
+// Located on a mask rather than on the document, and removed from the document by offset. Run over the
+// text itself the pattern reads inside a string too, and a glob such as `{ts,}` in a Biome `includes`
+// lost the comma it declared - a silent edit to a parsed value, in the reader every wiring rule uses.
+// Removed from the end backwards so each remaining offset still names the character it named.
+const withoutTrailingCommas = (text: string): string =>
+  [...maskLiterals(text).matchAll(TRAILING_COMMA)]
+    .map((match: RegExpExecArray): number => match.index)
+    .reduceRight(
+      (current: string, at: number): string => current.slice(0, at) + current.slice(at + 1),
+      text,
+    )
 
 /**
  * Parse JSON that may carry comments and trailing commas.
@@ -35,7 +47,7 @@ const TRAILING_COMMA: RegExp = /,(?=\s*[\]}])/g
 export const parseJsonc = (text: string): ParsedJson => {
   try {
     return {
-      value: JSON.parse(stripComments(text).replaceAll(TRAILING_COMMA, '')),
+      value: JSON.parse(withoutTrailingCommas(stripComments(text))),
       problem: undefined,
     }
   } catch (error: unknown) {

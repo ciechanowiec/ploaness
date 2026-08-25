@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   balancedArguments,
   lineOf,
+  maskLiterals,
   occurrences,
   stripComments,
   topLevelKeys,
@@ -152,5 +153,41 @@ describe('lineOf and occurrences', () => {
   // pattern syntax.
   it('does not read the needle punctuation as a pattern', () => {
     expect(occurrences('axb', 'a.b')).toEqual([])
+  })
+})
+
+// The same walk as `stripComments`, differing only in what it does with a string. Its whole value is
+// that a caller can locate syntax by offset without reading inside a literal, so both halves are
+// asserted: the string is gone, and nothing moved.
+describe('maskLiterals', () => {
+  it('blanks a string literal as well as a comment', () => {
+    const source: string = 'const a = "one, two" // why'
+    const masked: string = maskLiterals(source)
+    expect(masked.includes('one')).toBe(false)
+    expect(masked.includes('why')).toBe(false)
+    expect(masked).toHaveLength(source.length)
+    expect(masked.startsWith('const a = ')).toBe(true)
+  })
+
+  it('keeps the punctuation outside a string where it stood', () => {
+    const source: string = '{ "a": "x,]" , }'
+    const masked: string = maskLiterals(source)
+    // The comma the document declares is still at its own offset; the one inside the string is gone,
+    // so the first comma the mask carries is the last comma the source carries.
+    expect(masked.indexOf(',')).toBe(source.lastIndexOf(','))
+    expect(masked).toHaveLength(source.length)
+  })
+
+  // The property `parseJsonc` stands on, and the one a mask of spaces silently broke: a separator
+  // between two strings must not read as a trailing comma once the strings are gone.
+  it('does not turn a separator between two strings into a trailing comma', () => {
+    const trailingComma: RegExp = /,(?=\s*[\]}])/
+    expect(trailingComma.test(maskLiterals('["a", "b"]'))).toBe(false)
+    expect(trailingComma.test(maskLiterals('["a", ]'))).toBe(true)
+  })
+
+  it('leaves newlines intact so a masked offset still names its line', () => {
+    const source: string = 'const a = "one\ntwo"\nconst b = 1'
+    expect(maskLiterals(source).split('\n')).toHaveLength(source.split('\n').length)
   })
 })

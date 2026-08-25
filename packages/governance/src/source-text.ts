@@ -62,7 +62,18 @@ const lastMeaningful = (text: string): string => text.trimEnd().at(LAST_CHARACTE
 // them apart is what lets stripComments read as the dispatch it is rather than as four interleaved
 // state machines sharing one cursor.
 
-const blank = (text: string): string => text.replaceAll(/[^\n]/g, ' ')
+// A replacement FUNCTION rather than a replacement string: a string replacement reads `$&` and its
+// siblings as syntax, and the character to fill with is a parameter here rather than a literal.
+const fill = (text: string, character: string): string =>
+  text.replaceAll(/[^\n]/g, (): string => character)
+
+const blank = (text: string): string => fill(text, ' ')
+
+// A masked string becomes a filler that is NOT whitespace, unlike an erased comment. A caller reads the
+// mask for syntax, and a string blanked to spaces stops being a token: `["a", "b"]` would mask to a
+// comma followed by whitespace and a bracket, which is precisely the trailing comma such a caller
+// looks for. The character itself carries no meaning beyond being neither space nor delimiter.
+const STRING_FILLER: string = 'x'
 
 // `/*`, `*/`, and `//` are each two characters wide, and a backslash escape is the character after it.
 const DELIMITER_WIDTH: number = 2
@@ -193,15 +204,17 @@ const constructAt = (source: string, index: number, output: string): Skipped | u
   return undefined
 }
 
-/**
- * Blank every comment and regular-expression literal to spaces, leaving newlines intact so reported line
- * numbers still point at real source positions. Without this, prose that merely names a banned construct
- * would be reported as the construct itself, which is the difference between a gate that is trusted and
- * one that is worked around.
- * @param source the file contents.
- * @returns the source with comments and regex literals replaced by spaces of equal length.
- */
-export const stripComments = (source: string): string => {
+// One walk, two callers. A string is the only construct the two disagree about, so the difference is a
+// parameter rather than a second scanner - which is what this module's own header says it exists to
+// avoid, and what a second set of edge cases about where a string ends would cost.
+const replacementFor = (text: string, skipped: Skipped, isStringMasked: boolean): string => {
+  if (skipped.erased) {
+    return blank(text)
+  }
+  return isStringMasked ? fill(text, STRING_FILLER) : text
+}
+
+const strip = (source: string, isStringMasked: boolean): string => {
   /* eslint-disable functional/no-let -- a whole source file is walked here, so recursion would risk
      the stack; the cursor and the output it builds are confined to this loop and escape as a value */
   let output: string = ''
@@ -215,11 +228,35 @@ export const stripComments = (source: string): string => {
       continue
     }
     const text: string = source.slice(index, skipped.stop)
-    output += skipped.erased ? blank(text) : text
+    output += replacementFor(text, skipped, isStringMasked)
     index = skipped.stop
   }
   return output
 }
+
+/**
+ * Blank every comment and regular-expression literal to spaces, leaving newlines intact so reported line
+ * numbers still point at real source positions. Without this, prose that merely names a banned construct
+ * would be reported as the construct itself, which is the difference between a gate that is trusted and
+ * one that is worked around.
+ * @param source the file contents.
+ * @returns the source with comments and regex literals replaced by spaces of equal length.
+ */
+export const stripComments = (source: string): string => strip(source, false)
+
+/**
+ * The source with every string literal replaced by filler of equal length, on top of what
+ * {@link stripComments} erases.
+ *
+ * A mask, for a caller that must locate syntax without reading inside a string. Offsets still line up
+ * with the source, so a position found here names the same character there, and a masked string is
+ * still a token rather than a gap. `parseJsonc` is that caller: it removed trailing commas from the
+ * document itself, so a comma sitting inside a string before a closing bracket - as a brace-expansion
+ * glob ending in one carries - was deleted from the parsed value, and nothing said so.
+ * @param source the file contents.
+ * @returns the source with comments erased, strings filled, and newlines intact.
+ */
+export const maskLiterals = (source: string): string => strip(source, true)
 
 /** One character of a delimiter-aware scan, with the bracket depth that holds once it is applied. */
 export interface ScanStep {
