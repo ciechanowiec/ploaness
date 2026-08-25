@@ -60,7 +60,8 @@ ploaness governs all of the following domains:
   dialect, not the rule turned off.
   Writing one to quiet a finding is the reflex this forbids; answer the finding in the source instead.
 - **Source:** formatting, fast lint, type-aware lint, strict type checking, type coverage, typography,
-  source conventions, committed whitespace and encoding, style sheets, and module architecture. Test
+  source conventions, committed whitespace and encoding, style sheets, token-bound Tailwind values,
+  and module architecture. Test
   code is source code and passes the same checks.
 - **Payload usage:** bounded Local API reads, no access-control override, no parent-relative imports,
   and access control decided rather than inherited: every collection decides create, read, update and

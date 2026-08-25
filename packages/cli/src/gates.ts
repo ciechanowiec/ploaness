@@ -22,6 +22,7 @@ import { payloadGenerated, payloadRules } from './checks/payload.js'
 import { preflight } from './checks/preflight.js'
 import { configReferences, documentation, skills } from './checks/references.js'
 import { suppressions } from './checks/suppressions.js'
+import { tailwindTokens } from './checks/tailwind.js'
 import { build, endToEnd, tests } from './checks/tests.js'
 import {
   architecture,
@@ -77,6 +78,12 @@ const DEFAULT_GATES: readonly Gate[] = [
   { id: 'editorconfig', title: 'committed formatting', isExtended: false, run: editorconfig },
   { id: 'suppressions', title: 'suppression ceiling', isExtended: false, run: suppressions },
   { id: 'css', title: 'style sheets', isExtended: false, run: css },
+  {
+    id: 'tailwind-tokens',
+    title: 'token-bound Tailwind values',
+    isExtended: false,
+    run: tailwindTokens,
+  },
   { id: 'arch', title: 'module architecture', isExtended: false, run: architecture },
   { id: 'type-coverage', title: 'type coverage', isExtended: false, run: typeCoverage },
   {

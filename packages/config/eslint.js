@@ -58,7 +58,16 @@ export default compose(
       'eslint.config.mjs',
       'next.config.ts',
       'playwright.config.ts',
+      'postcss.config.mjs',
       'vitest.config.mts',
+      // A tool that keeps its configuration in a dot-directory - Storybook is the common one - cannot
+      // have it type-linted by anybody. The `include` block ploaness dictates reaches such a file with
+      // `**/*.ts`, and TypeScript's `**` does not descend into a directory whose name begins with a
+      // dot, so the file is outside the project the type-aware pass reads. Left unignored it reports a
+      // parsing error rather than a finding, on every run, with no edit a project is permitted to make
+      // that would clear it: `include` is dictated and this config is re-exported verbatim. Biome and
+      // the conventions gate still read these files.
+      '.*/**',
     ],
   },
 

@@ -1,0 +1,48 @@
+// The token-bound rule: every colour, size, spacing, radius and motion value a Tailwind project
+// renders must come from the theme, applied through a utility class.
+//
+// An arbitrary value - `bg-[#0a7]`, `p-[13px]`, `translate-y-[2px]` - hardcodes the number instead.
+// Nothing downstream can see that it happened: the page renders, the build passes, and the design
+// system quietly stops being the single source of the value. That is the defect this rule names, and
+// it is a rule about Tailwind rather than about any one project, which is why it is here rather than
+// in a script a project owns and can edit.
+//
+// The match is deliberately narrow, because the two things it must not confuse look alike:
+//
+//   - An arbitrary VALUE is `<utility>-[<value>]` and IS a finding. The `-` before the bracket is what
+//     separates it from TypeScript index access (`medalChip[result.medal]`), which has no dash.
+//   - An arbitrary VARIANT is `data-[state=open]:...` or `[&>tr]:...` and is NOT. A variant is a
+//     selector prefix rather than a value, and is always followed by `:`. The negative lookahead below
+//     is what keeps it out - and is the reason this is a rule in TypeScript rather than a GritQL
+//     plugin, whose Rust regex engine has no lookahead to express it with.
+
+/** One arbitrary-Tailwind-value occurrence: where it is, and the token that caused it. */
+export interface ArbitraryValueViolation {
+  /** 1-based line. */
+  readonly line: number
+  /** 1-based column. */
+  readonly column: number
+  /** The offending token, as written. */
+  readonly value: string
+}
+
+// A utility with a bracketed value, not immediately followed by `:` (which would make it a variant).
+const ARBITRARY_VALUE: RegExp = /-\[[^\]]+\](?!:)/g
+
+/**
+ * Find every arbitrary Tailwind value in one file's text.
+ * @param content the file's text.
+ * @returns the violations, each with a 1-based line and column and the offending token.
+ */
+export const findArbitraryValues = (content: string): readonly ArbitraryValueViolation[] => {
+  const lines: readonly string[] = content.split('\n')
+  return lines.flatMap((lineText: string, index: number): readonly ArbitraryValueViolation[] =>
+    [...lineText.matchAll(ARBITRARY_VALUE)].map(
+      (match: RegExpExecArray): ArbitraryValueViolation => ({
+        line: index + 1,
+        column: match.index + 1,
+        value: match[0],
+      }),
+    ),
+  )
+}

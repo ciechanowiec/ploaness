@@ -207,6 +207,9 @@ xref:#default-verification[] runs the following 31 gates.
 | [[css-gate]]`css`
 | Stylelint over every style sheet under the source roots. Tailwind v4 is accepted as written: its at-rules and its mandatory `@import "tailwindcss"` string form both pass, so a https://payloadcms.com[Payload CMS^] project styled with it needs no configuration of its own, which is just as well because `.stylelintrc.json` is xref:#forbidden-file[forbidden]. A misspelled at-rule still fails.
 
+| [[tailwind-tokens-gate]]`tailwind-tokens`
+| Every visual value in the markup comes from the Tailwind theme, applied through a utility class. An arbitrary value such as `bg-[#0a7]` or `p-[13px]` hardcodes the number and quietly stops the design system being the one place it lives, which nothing else notices: the page renders and the build passes. An arbitrary *variant* (`data-[state=open]:...`) isn't a value and isn't a finding. A https://payloadcms.com[Payload CMS^] project that styles without https://tailwindcss.com[Tailwind^] writes none of these, so the gate reports nothing rather than needing to be turned off.
+
 | `arch`
 | dependency-cruiser.
 
