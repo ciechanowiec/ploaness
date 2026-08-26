@@ -4,7 +4,9 @@
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { projectSettings } from '../project-settings.js'
+// The build output, for the reason vitest-config.spec.ts records: the config loaded below reads the
+// settings module out of `dist`, and a spec comparing against a second instance proves less than it looks.
+import { projectSettings } from '../dist/project-settings.js'
 
 interface WebServer {
   readonly command: string
@@ -20,7 +22,7 @@ const specDirectory: string = path.dirname(fileURLToPath(import.meta.url))
 
 const loadConfig = async (): Promise<PlaywrightConfig> => {
   const loaded: unknown = await import(
-    pathToFileURL(path.join(specDirectory, '..', 'playwright.js')).href
+    pathToFileURL(path.join(specDirectory, '..', 'dist', 'playwright.js')).href
   )
   if (typeof loaded !== 'object' || loaded === null || !Object.hasOwn(loaded, 'default')) {
     throw new TypeError('playwright.js does not default-export a config')

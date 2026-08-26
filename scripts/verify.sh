@@ -135,6 +135,12 @@ step test pnpm run test
 # install them into the isolated fixture, so the verification command covers the same resolution path a
 # consumer receives. `pnpm run it` remains a declared subset for iterating on this leg by itself.
 step pack pnpm run pack:local
+
+# Between packing and installing, because it judges the artefact rather than the install. The fixture
+# below exercises the entry points it happens to import; this reads every one the `exports` map
+# declares, under each resolution mode a consumer might use.
+step packaging sh "$root/scripts/lib/check-packaging.sh"
+
 step integration pnpm run it
 
 # History gates last: they need no build, and a history failure is repaired differently from a source

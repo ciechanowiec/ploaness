@@ -12,7 +12,9 @@ import { describe, expect, it } from 'vitest'
 
 const specDirectory: string = path.dirname(fileURLToPath(import.meta.url))
 const configPackage: string = path.join(specDirectory, '..')
-const metaPackage: string = path.join(configPackage, '..', 'ploaness')
+// The shim SOURCES. They are TypeScript now and compile into `dist`, so a listing of the package root
+// would find only generated JSON and report that no entry point re-exports anything.
+const metaPackage: string = path.join(configPackage, '..', 'ploaness', 'src')
 
 interface KnipConfig {
   readonly ignoreDependencies?: readonly string[]
@@ -28,7 +30,7 @@ const INTERNAL_SPECIFIER: RegExp = /from '(@ploaness\/[a-z-]+)/g
 // exists instead of by an entry somebody has to remember to add.
 const reExportedPackages = (): readonly string[] => {
   const shims: readonly string[] = readdirSync(metaPackage).filter((file: string): boolean =>
-    file.endsWith('.js'),
+    file.endsWith('.ts'),
   )
   const found: readonly string[] = shims.flatMap((file: string): readonly string[] =>
     [...readFileSync(path.join(metaPackage, file), 'utf8').matchAll(INTERNAL_SPECIFIER)].map(

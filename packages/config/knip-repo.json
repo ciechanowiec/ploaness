@@ -2,8 +2,9 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": [],
-      "project": ["*.{js,mjs,ts,mts}"]
+      "entry": ["scripts/lib/*.ts", "it/lib/*.ts"],
+      "project": ["*.{js,mjs,ts,mts}", "scripts/lib/*.ts", "it/lib/*.ts"],
+      "ignoreDependencies": ["@arethetypeswrong/cli", "publint"]
     },
     "packages/cli": {
       "entry": [],
@@ -22,8 +23,8 @@
       ]
     },
     "packages/config": {
-      "entry": ["*.js", "test/**/*.spec.ts"],
-      "project": ["*.js", "test/**/*.ts"],
+      "entry": ["src/*.ts", "test/**/*.spec.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
       "ignoreDependencies": [
         "@axe-core/playwright",
         "@testing-library/jest-dom",
@@ -35,14 +36,14 @@
       "ignoreUnresolved": ["next"]
     },
     "packages/ploaness": {
-      "entry": ["*.js"],
-      "project": ["*.js", "*.mjs"],
+      "entry": ["src/*.ts"],
+      "project": ["src/**/*.ts"],
       "ignoreDependencies": ["@ploaness/assets"],
       "ignoreUnresolved": ["next"]
     },
     "packages/assets": {
       "entry": ["test/**/*.spec.ts"],
-      "project": ["*.mjs", "test/**/*.ts"]
+      "project": ["test/**/*.ts"]
     },
     "packages/governance": {
       "entry": ["test/**/*.spec.ts"],

@@ -21,8 +21,10 @@ const RESTRICTED_SYNTAX: string = 'no-restricted-syntax'
 const RESTRICTED_PROPERTIES: string = 'no-restricted-properties'
 
 const specDirectory: string = path.dirname(fileURLToPath(import.meta.url))
-const configPackage: string = path.join(specDirectory, '..')
-const workspaceRoot: string = path.join(configPackage, '..', '..')
+// The build output, because these blocks are loaded and composed rather than read as text. It is also
+// what a consumer receives, so the properties are proven against the artefact rather than its source.
+const configPackage: string = path.join(specDirectory, '..', 'dist')
+const workspaceRoot: string = path.join(specDirectory, '..', '..', '..')
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined

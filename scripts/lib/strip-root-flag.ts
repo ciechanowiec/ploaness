@@ -5,13 +5,20 @@
 // the staged stand-in for the consumer's root config has that flag removed before the asset bodies are
 // checked against it.
 import { readFileSync, writeFileSync } from 'node:fs'
+import { asRecord } from '@ploaness/governance'
 
 // node and this script's own path precede the caller's arguments.
-const ARGUMENT_OFFSET = 2
+const ARGUMENT_OFFSET: number = 2
+
+const [source, destination]: readonly (string | undefined)[] = process.argv.slice(ARGUMENT_OFFSET)
+if (source === undefined || destination === undefined) {
+  throw new Error('usage: strip-root-flag.ts <source> <destination>')
+}
 
 // The indent every JSON file in this repository is written with.
-const JSON_INDENT = 2
+const JSON_INDENT: number = 2
 
-const [source, destination] = process.argv.slice(ARGUMENT_OFFSET)
-const { root: _root, ...config } = JSON.parse(readFileSync(source, 'utf8'))
+const { root: _root, ...config }: Record<string, unknown> = asRecord(
+  JSON.parse(readFileSync(source, 'utf8')),
+)
 writeFileSync(destination, `${JSON.stringify(config, null, JSON_INDENT)}\n`)

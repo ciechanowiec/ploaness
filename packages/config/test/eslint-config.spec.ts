@@ -24,8 +24,10 @@ const lintConfigSnippet = (code: string): readonly LintMessage[] =>
     rules: { 'no-restricted-syntax': ['error', { selector: SELECTOR }] },
   })
 
+// The source rather than the build output. Both carry these strings, and the assertion is about the
+// config this repository authors; `dist` is derived from it by a compiler that does not rewrite literals.
 const shippedConfig = (): string =>
-  readFileSync(path.join(specDirectory, '..', 'eslint.js'), 'utf8')
+  readFileSync(path.join(specDirectory, '..', 'src', 'eslint.ts'), 'utf8')
 
 describe('no-inline-config-logic gate', () => {
   it('rejects an arrow function inlined as a config value', () => {

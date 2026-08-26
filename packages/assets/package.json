@@ -7,7 +7,7 @@
   "type": "module",
   "exports": {
     "./manifest": "./manifest.tsv",
-    "./files/": "./files/",
+    "./files/*": "./files/*",
     "./package.json": "./package.json"
   },
   "files": [
@@ -15,7 +15,7 @@
     "files"
   ],
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.ts"
   },
   "engines": {
     "node": ">=26"

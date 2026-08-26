@@ -8,7 +8,12 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { DETERMINISTIC_SEQUENCE, harnessSetupFile } from '../vitest-core.js'
+// The build output, not the source, and the identity assertions below are the reason. A spec that
+// imported `../src/vitest-core.ts` would hold a second module instance of the shared layer, so `toBe`
+// would compare two structurally identical objects and fail - and `harnessSetupFile()` resolves against
+// its OWN `import.meta.url`, which from `src` names a `vitest-setup.js` that exists only in `dist`.
+// Reading the artefact keeps both halves of each assertion on the module a consumer actually loads.
+import { DETERMINISTIC_SEQUENCE, harnessSetupFile } from '../dist/vitest-core.js'
 
 /** The part of a Vitest config these assertions read. */
 interface VitestConfig {
@@ -20,6 +25,7 @@ interface VitestConfig {
 
 const specDirectory: string = path.dirname(fileURLToPath(import.meta.url))
 const configPackage: string = path.join(specDirectory, '..')
+const configBuild: string = path.join(configPackage, 'dist')
 const workspaceRoot: string = path.join(configPackage, '..', '..')
 
 // A shape this does not recognise throws rather than yielding an empty object: a spec that silently
@@ -33,7 +39,7 @@ const loadConfig = async (modulePath: string): Promise<VitestConfig> => {
   return exported
 }
 
-const shipped = (): Promise<VitestConfig> => loadConfig(path.join(configPackage, 'vitest.js'))
+const shipped = (): Promise<VitestConfig> => loadConfig(path.join(configBuild, 'vitest.js'))
 
 const workspace = (): Promise<VitestConfig> =>
   loadConfig(path.join(workspaceRoot, 'vitest.config.mts'))

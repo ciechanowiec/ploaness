@@ -19,12 +19,15 @@
     "lint:eslint": "eslint . --max-warnings=0"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
     "@biomejs/biome": "2.5.10",
     "@ploaness/config": "workspace:*",
+    "@ploaness/governance": "workspace:*",
     "@types/node": "26.3.0",
     "@vitest/coverage-v8": "4.1.11",
     "eslint": "10.9.1",
     "fast-check": "4.9.0",
+    "publint": "0.3.24",
     "typescript": "6.0.3",
     "vitest": "4.1.11"
   },
@@ -47,20 +50,8 @@
     ],
     "javascriptAllowlist": [
       {
-        "pattern": "^packages/config/[a-z0-9-]+\\.js$",
-        "reason": "analyzer configuration, loaded as JavaScript by the tools that read it"
-      },
-      {
-        "pattern": "^packages/ploaness/[a-z0-9-]+\\.js$",
-        "reason": "package entry shims, loaded as JavaScript by the resolver"
-      },
-      {
-        "pattern": "^packages/(ploaness|assets)/build\\.mjs$",
-        "reason": "build scripts run by node directly, before any TypeScript is compiled"
-      },
-      {
-        "pattern": "^(it|scripts)/lib/[a-z0-9-]+\\.mjs$",
-        "reason": "verification-script helpers run by node directly, outside any TypeScript build"
+        "pattern": "^eslint\\.config\\.mjs$",
+        "reason": "ESLint's own flat config, which its loader reads as JavaScript unless jiti is added"
       }
     ]
   }

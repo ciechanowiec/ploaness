@@ -14,7 +14,16 @@ import { defineConfig } from 'vitest/config'
 import { projectSettings as settings } from './project-settings.js'
 import { DETERMINISTIC_SEQUENCE, harnessSetupFile, projectSetupFiles } from './vitest-core.js'
 
-export default defineConfig({
+// Structural rather than Vite's own `UserConfig`, and the annotation is load-bearing rather than
+// stylistic. An emitted declaration naming `import('vite').UserConfig` would make `vite` resolvable
+// from this package a condition of type-checking a consumer's `vitest.config.mts` - and `vite` arrives
+// here only as a transitive dependency of `vitest`, which pnpm's strict layout does not expose. The
+// consumer re-exports this value and never reads a field off it, so the shape is all it needs. The
+// hand-written declaration this file replaced recorded the same decision.
+// `ReturnType` rather than the runner's own exported type: naming that type would import it, which is
+// the dependency the annotation below exists to avoid. This binding is module-local, so it reaches no
+// declaration file either way.
+const declared: ReturnType<typeof defineConfig> = defineConfig({
   plugins: [react()],
   // Vite resolves the project's path aliases from tsconfig natively, so no extra plugin is needed.
   resolve: { tsconfigPaths: true },
@@ -55,3 +64,9 @@ export default defineConfig({
     },
   },
 })
+
+// A shallow copy rather than an assertion: a spread yields an anonymous object type, which carries
+// the index signature an interface does not, so the structural annotation above holds without one.
+const config: Readonly<Record<string, unknown>> = { ...declared }
+
+export default config

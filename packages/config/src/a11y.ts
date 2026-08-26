@@ -5,4 +5,4 @@
 // must not follow, and cannot take away the ones every Payload project carries.
 import { projectSettings } from './project-settings.js'
 
-export const SKIPPED_ROUTE_PREFIXES = projectSettings.accessibilitySkipRoutes
+export const SKIPPED_ROUTE_PREFIXES: readonly string[] = projectSettings.accessibilitySkipRoutes

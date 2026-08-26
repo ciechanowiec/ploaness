@@ -4,6 +4,7 @@
 // its configuration surface. It cannot loosen the sweep in the way an exclusion loosens a gate: every
 // entry names one permission the project grants on purpose and says why, and the sweep still reports
 // every other anonymous permission it finds. A project that declares nothing is judged most strictly.
+import type { PublicAccess } from '@ploaness/governance'
 import { projectSettings } from './project-settings.js'
 
-export const PUBLIC_ACCESS = projectSettings.publicAccess
+export const PUBLIC_ACCESS: readonly PublicAccess[] = projectSettings.publicAccess

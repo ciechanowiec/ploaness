@@ -10,7 +10,6 @@ import {
   compose,
   guidelineRules,
   immutabilityBlock,
-  javascriptBlock,
   NO_FAST_CHECK_SEED,
   NO_INHERITANCE,
   NO_LITERAL_ASSERTIONS,
@@ -24,15 +23,10 @@ import {
 
 const SOURCE = 'packages/*/src/**/*.ts'
 const SPECS = 'packages/*/test/**/*.spec.ts'
-// The programs that implement a check: the fixture mutations, the asset-body staging helper, the two
-// package build scripts, and the setup file that installs the network guard. Each is JavaScript because
-// the tool that loads it reads it as JavaScript, and each is source code of this repository.
-const CHECK_PROGRAMS = [
-  'it/lib/*.mjs',
-  'scripts/lib/*.mjs',
-  'packages/*/build.mjs',
-  'packages/config/vitest-setup.js',
-]
+// The programs that implement a check - the fixture mutations, the asset-body staging helper, the two
+// package build scripts - need no glob of their own any more. They are TypeScript now, node strips
+// their types where it runs them, and `tsconfig.lint.json` names them so the type-aware pass has a
+// project to read them in. The unscoped rule block below therefore reaches them like anything else.
 
 export default compose(
   {
@@ -53,15 +47,12 @@ export default compose(
       // Ambient declarations for the re-export shims. They carry no statements to lint, and putting
       // them in a project only to satisfy the parser would compile a consumer's entry points here.
       '**/*.d.ts',
-      // Analyzer configuration and package entry shims. These must be JavaScript - an ESLint flat
-      // config and a `bin` shim are loaded as JavaScript by the tools that read them - so they carry
-      // no type information for a type-aware pass to read. The negations put the check programs back:
-      // those are not configuration but code, and the standard makes a check a repository implements
-      // into source code of it.
+      // Nothing hand-written in this repository is JavaScript any more: the analyzer configs and the
+      // package entry shims are TypeScript sources that compile into the `dist` trees already ignored
+      // above, and the check programs are TypeScript that node type-strips where it runs them. What is
+      // left matching these globs is build output and this file, whose loader reads it as JavaScript.
       '**/*.js',
       '**/*.mjs',
-      ...CHECK_PROGRAMS.map((pattern) => `!${pattern}`),
-      'eslint.config.mjs',
     ],
   },
 
@@ -72,9 +63,12 @@ export default compose(
   typeAwareParsing({ project: ['./tsconfig.lint.json'], tsconfigRootDir: import.meta.dirname }),
   { rules: guidelineRules },
 
-  immutabilityBlock([SOURCE, SPECS], []),
-
-  javascriptBlock(CHECK_PROGRAMS),
+  // The network guard is the one exemption, and it is a role rather than a convenience: installing a
+  // guard on `net.Socket.prototype` and on the DNS resolvers IS mutation of an existing object, so the
+  // rule has nothing to propose there. Every other module in this repository is held to it. The
+  // exemption names one path rather than a directory, so a second file in `packages/config/src` does not
+  // inherit it by sitting next door.
+  immutabilityBlock([SOURCE, SPECS], ['packages/config/src/vitest-setup.ts']),
 
   {
     files: [SPECS],

@@ -15,30 +15,34 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { asRecord } from '@ploaness/governance'
 
-const here = path.dirname(fileURLToPath(import.meta.url))
+const here: string = path.dirname(fileURLToPath(import.meta.url))
 // The indent every JSON file in this repository is written with.
-const JSON_INDENT = 2
+const JSON_INDENT: number = 2
 
-const nodeRequire = createRequire(import.meta.url)
+const nodeRequire: NodeJS.Require = createRequire(import.meta.url)
 
-const shared = JSON.parse(readFileSync(nodeRequire.resolve('@ploaness/config/biome'), 'utf8'))
-const generated = {
+const readJson = (specifier: string): Record<string, unknown> => {
+  const resolved: string = nodeRequire.resolve(specifier)
+  return asRecord(JSON.parse(readFileSync(resolved, 'utf8')))
+}
+
+const shared: Record<string, unknown> = readJson('@ploaness/config/biome')
+const generated: Record<string, unknown> = {
   ...shared,
   // A generated file: edit packages/config/biome.json instead.
   // biome-ignore lint/style/useNamingConvention: a JSON Schema keyword, dictated by the format
-  $schema: shared.$schema,
+  $schema: shared['$schema'],
 }
 writeFileSync(path.join(here, 'biome.json'), `${JSON.stringify(generated, null, JSON_INDENT)}\n`)
-console.info(`ploaness: inlined biome.json (${Object.keys(generated).length} sections)`)
+console.info(`ploaness: inlined biome.json (${String(Object.keys(generated).length)} sections)`)
 
-const sharedTsconfig = JSON.parse(
-  readFileSync(nodeRequire.resolve('@ploaness/config/tsconfig'), 'utf8'),
-)
+const sharedTsconfig: Record<string, unknown> = readJson('@ploaness/config/tsconfig')
 // A generated file: edit packages/config/tsconfig.json instead. `extends` is stripped rather than
 // followed, because the shared config is a leaf; if it ever gains a parent, that parent must be inlined
 // here too rather than left as a hop a consumer cannot resolve.
-if (typeof sharedTsconfig.extends === 'string') {
+if (typeof sharedTsconfig['extends'] === 'string') {
   throw new TypeError(
     'the shared tsconfig gained an `extends`; inline its parent here before shipping',
   )
@@ -47,6 +51,7 @@ writeFileSync(
   path.join(here, 'tsconfig.json'),
   `${JSON.stringify(sharedTsconfig, null, JSON_INDENT)}\n`,
 )
+const compilerOptions: Record<string, unknown> = asRecord(sharedTsconfig['compilerOptions'])
 console.info(
-  `ploaness: inlined tsconfig.json (${Object.keys(sharedTsconfig.compilerOptions ?? {}).length} compiler options)`,
+  `ploaness: inlined tsconfig.json (${String(Object.keys(compilerOptions).length)} compiler options)`,
 )

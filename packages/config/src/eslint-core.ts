@@ -11,6 +11,8 @@
 import js from '@eslint/js'
 import comments from '@eslint-community/eslint-plugin-eslint-comments/configs'
 import vitest from '@vitest/eslint-plugin'
+import type { Linter } from 'eslint'
+import { defineConfig } from 'eslint/config'
 import prettier from 'eslint-config-prettier'
 import functional from 'eslint-plugin-functional'
 import jsdoc from 'eslint-plugin-jsdoc'
@@ -20,21 +22,76 @@ import unicorn from 'eslint-plugin-unicorn'
 import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
-const COMPLEXITY_MAX = 8
-const MAX_PARAMS = 4
-const MAX_DEPTH = 3
-const MAX_LINES_PER_FILE = 500
-const MAX_LINES_PER_FUNCTION = 50
-const MIN_NAME_LENGTH = 2
+/**
+ * One flat-config block, described by its shape rather than by the plugins' own declarations.
+ *
+ * Those declarations name symbols from deep inside the dependency tree - `Immutability` from
+ * is-immutable-type, `RuleEnforcementComparator` from eslint-plugin-functional - which a declaration
+ * file emitted beside this module cannot reference portably, and naming them would make each of those
+ * packages resolvable-from-here a condition of consuming this one. `packages/ploaness` records the same
+ * decision for its own re-exports. A module that composes blocks and hands them to ESLint needs their
+ * shape, not their provenance; ESLint validates the result it is given.
+ */
+export type FlatConfigBlock = Readonly<Record<string, unknown>>
+
+/**
+ * One rule table: a rule id against whatever that rule's own declaration accepts.
+ *
+ * ESLint's own type rather than a structural stand-in. `eslint` is a declared dependency of this
+ * package - every plugin imported above requires it at runtime - so naming the real type costs nothing
+ * and lets a caller spread this table into a config block without an assertion. That matters here
+ * because an assertion is uncovered by the type coverage measurement this repository holds at 100%.
+ */
+export type RuleTable = Partial<Linter.RulesRecord>
+
+/** One `no-restricted-syntax` entry: the shape to reject, and what to say when it appears. */
+export interface RestrictedSyntax {
+  readonly selector: string
+  readonly message: string
+}
+
+/**
+ * A whole `no-restricted-syntax` setting: the severity first, then the shapes.
+ *
+ * A tuple rather than an array, because that is what the rule's own declaration is. Typed as a plain
+ * array, the severity in position zero is indistinguishable from an entry, and a caller spreading this
+ * into a config block gets a type error it can only clear with an assertion.
+ *
+ * The severity is the literal rather than ESLint's own union: a warning severity does not exist in a
+ * governed repository, which is the rule the escalation below enforces on every preset layer.
+ */
+export type RestrictedSyntaxSetting = readonly ['error', ...RestrictedSyntax[]]
+
+/** One `no-restricted-properties` entry: the member access to reject, and what to say instead. */
+export interface RestrictedProperty {
+  readonly object: string
+  readonly property: string
+  readonly message: string
+}
+
+/** Composes flat-config blocks into the array ESLint reads. */
+export type Compose = (...blocks: readonly unknown[]) => readonly FlatConfigBlock[]
+
+// Narrowing rather than a property read: `rules` arrives as `unknown` out of the index signature above,
+// and a layer that carries none is passed through untouched.
+const isRuleTable = (value: unknown): value is RuleTable =>
+  typeof value === 'object' && value !== null
+
+const COMPLEXITY_MAX: number = 8
+const MAX_PARAMS: number = 4
+const MAX_DEPTH: number = 3
+const MAX_LINES_PER_FILE: number = 500
+const MAX_LINES_PER_FUNCTION: number = 50
+const MIN_NAME_LENGTH: number = 2
 // The governing standard's "short structural-value allowlist".
-const STRUCTURAL_NUMBERS = [-1, 0, 1]
+const STRUCTURAL_NUMBERS: readonly number[] = [-1, 0, 1]
 
 // No mocks. Tests run against real objects and real services (a real Payload instance, a real
 // database, real in-process servers) - never test doubles. These are the Vitest entry points that
 // create mocks/stubs/spies, plus the third-party mocking libraries, all banned build-wide.
-const NO_MOCKS_MESSAGE =
+const NO_MOCKS_MESSAGE: string =
   'No mocks/stubs/spies. Test against real objects and real services instead (see AGENTS.md).'
-const MOCKING_VI_METHODS = [
+const MOCKING_VI_METHODS: readonly string[] = [
   'fn',
   'mock',
   'doMock',
@@ -45,7 +102,7 @@ const MOCKING_VI_METHODS = [
   'stubEnv',
   'importMock',
 ]
-const MOCKING_PACKAGES = [
+const MOCKING_PACKAGES: readonly string[] = [
   'sinon',
   'testdouble',
   'jest-mock',
@@ -61,20 +118,20 @@ const MOCKING_PACKAGES = [
 // modules, then reference by name. Identifier references (`read: anyone`) pass; inline functions do not.
 // A flat-config block that sets `no-restricted-syntax` REPLACES the setting rather than adding to it, so
 // a scoped block would silently drop these. Spread into every such array instead of restating them.
-const INHERITANCE_MESSAGE =
+const INHERITANCE_MESSAGE: string =
   'Add behavior by composing objects, not by inheriting. Inherit only from a base the ' +
   'language or a dependency requires.'
 // The mock ban as ENTRIES rather than as a finished rule setting, for the reason the comment above
 // `NO_INHERITANCE` gives: a scoped block that sets `no-restricted-properties` REPLACES this rather than
 // adding to it. `eslint.js` set that key for `src/**` to the process.env rule alone, which switched the
 // build-wide mock ban off across a project's whole source tree without a word anywhere saying so.
-const NO_MOCK_PROPERTIES = MOCKING_VI_METHODS.map((property) => ({
+const NO_MOCK_PROPERTIES: readonly RestrictedProperty[] = MOCKING_VI_METHODS.map((property) => ({
   object: 'vi',
   property,
   message: NO_MOCKS_MESSAGE,
 }))
 
-const NO_INHERITANCE = [
+const NO_INHERITANCE: RestrictedSyntaxSetting = [
   'error',
   {
     selector: 'ClassDeclaration[superClass]:not([superClass.name="Error"])',
@@ -89,9 +146,9 @@ const NO_INHERITANCE = [
 // An assertion whose operands are literals alone cannot fail when the code under test changes, so it
 // reports as passing while judging nothing. This catches the exact form the standard names; the general
 // rule is not statically decidable and is stated in the agent guide instead.
-const LITERAL_ASSERTION_MESSAGE =
+const LITERAL_ASSERTION_MESSAGE: string =
   'An assertion over a literal cannot fail when the code under test changes. Assert an observable outcome.'
-const NO_LITERAL_ASSERTIONS = [
+const NO_LITERAL_ASSERTIONS: readonly RestrictedSyntax[] = [
   {
     selector: "CallExpression[callee.name='expect'] > Literal",
     message: LITERAL_ASSERTION_MESSAGE,
@@ -106,11 +163,24 @@ const NO_LITERAL_ASSERTIONS = [
   },
 ]
 
-/** Re-exported so a caller declares no plugin version of its own. */
-export const compose = tseslint.config
+/**
+ * Re-exported so a caller declares no plugin version of its own.
+ *
+ * `defineConfig` rather than `tseslint.config`, which typescript-eslint deprecated in favour of it: the
+ * composition of flat-config blocks is ESLint's own concern now, and this is where a governed project
+ * reaches it. `eslint` is declared as a dependency of this package for the same reason - every plugin
+ * imported above already requires it at runtime, and resolving it out of whatever the consumer happens
+ * to have hoisted is a resolution this package should not depend on.
+ *
+ * Typed against `FlatConfigBlock` rather than against `defineConfig`'s own parameter type, for the
+ * reason that alias exists. This assertion is the single place the widening happens: every caller then
+ * composes blocks without one of its own, and a block's shape is still checked by ESLint, which is the
+ * only thing that can validate a rule's options anyway.
+ */
+export const compose: typeof defineConfig = defineConfig
 
 /** Formatting is Biome's job; this disables every conflicting stylistic rule and must stay last. */
-export const prettierLast = prettier
+export const prettierLast: FlatConfigBlock = prettier
 
 // A warning severity does not exist in a governed repository: a check has two verdicts, and a finding
 // that prints and exits 0 is neither. Several presets ship rules at `warn` anyway - 31 of jsdoc's and 6
@@ -120,26 +190,41 @@ export const prettierLast = prettier
 // declare, and it would go stale on the next upgrade in the one direction that fails open. Each layer's
 // own declarations are re-read instead and raised to `error`, options intact. A rule a preset turns
 // `off` stays off: that is a decision about whether the rule runs, not about how loudly it speaks.
-const escalate = (setting) => {
-  const severity = Array.isArray(setting) ? setting[0] : setting
-  if (severity === 'off' || severity === 0) {
-    return setting
+const isOff = (severity: unknown): boolean => severity === 'off' || severity === 0
+
+const escalate = (setting: unknown): unknown => {
+  if (!Array.isArray(setting)) {
+    return isOff(setting) ? setting : 'error'
   }
-  return Array.isArray(setting) ? ['error', ...setting.slice(1)] : 'error'
+  // Re-bound through `unknown[]`: `Array.isArray` narrows an `unknown` to `any[]`, and reading an
+  // element out of that would put an `any` back into the rule table this function exists to keep honest.
+  const declared: readonly unknown[] = setting
+  return isOff(declared[0]) ? setting : ['error', ...declared.slice(1)]
 }
 
-const withoutWarnings = (layer) =>
-  layer.rules === undefined
-    ? layer
-    : {
+// `object` and `Reflect.get`, rather than an indexable type and a property read. Each preset layer
+// arrives as the plugin's own declared interface, and an interface carries no index signature, so
+// naming one here would force an assertion at every call site - which the type coverage measurement
+// counts as uncovered. What this function needs is one property, read the way an unknown shape is read.
+const withoutWarnings = (layer: object): FlatConfigBlock => {
+  const rules: unknown = Reflect.get(layer, 'rules')
+  return isRuleTable(rules)
+    ? {
         ...layer,
         rules: Object.fromEntries(
-          Object.entries(layer.rules).map(([id, setting]) => [id, escalate(setting)]),
+          Object.entries(rules).map(
+            ([id, setting]: readonly [string, unknown]): readonly [string, unknown] => [
+              id,
+              escalate(setting),
+            ],
+          ),
         ),
       }
+    : { ...layer }
+}
 
 /** The preset layers every ploaness-governed project runs, none of which may report at `warn`. */
-export const baseLayers = [
+export const baseLayers: readonly FlatConfigBlock[] = [
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
@@ -150,17 +235,21 @@ export const baseLayers = [
   jsdoc.configs['flat/recommended-typescript-error'],
   comments.recommended, // disciplined eslint-disable comments (scoped + justified)
   regexp.configs['flat/recommended'], // regex correctness and safety
-].map(withoutWarnings)
+].map((layer: object): FlatConfigBlock => withoutWarnings(layer))
 
 /**
  * Type-aware parsing, with the caller supplying the parser options its layout needs.
  * @param parserOptions the typescript-eslint parser options.
  * @returns a flat-config block.
  */
-export const typeAwareParsing = (parserOptions) => ({ languageOptions: { parserOptions } })
+export const typeAwareParsing = (
+  parserOptions: Readonly<Record<string, unknown>>,
+): FlatConfigBlock => ({
+  languageOptions: { parserOptions },
+})
 
 /** The maximum-explicit rule set: the caps, the explicitness rules, the bans, the mock ban. */
-export const guidelineRules = {
+export const guidelineRules: RuleTable = {
   // Explicitness - types must be written, not just inferred at boundaries.
   '@typescript-eslint/explicit-function-return-type': 'error',
   '@typescript-eslint/explicit-module-boundary-types': 'error',
@@ -245,10 +334,14 @@ export const guidelineRules = {
   // vocabulary rather than a name anyone chose.
   'id-length': ['error', { min: MIN_NAME_LENGTH, properties: 'never', exceptions: ['_'] }],
 
-  // TODO and FIXME are banned outright. `unicorn/expiring-todo-comments` arrives ON from the
-  // recommended preset and contradicts that: its whole premise is that a TODO is acceptable when it
-  // carries an expiry date. The ban has no such exception, so the rule is turned off rather than
-  // left to license what this one forbids.
+  // The two deferred-work markers this rule's own options name are banned outright, and the unicorn
+  // rule disabled beneath it arrives ON from the recommended preset and contradicts that: its whole
+  // premise is that such a marker is acceptable once it carries an expiry date. The ban has no such
+  // exception, so that rule is turned off rather than left to license what this one forbids.
+  //
+  // Neither marker, and neither is the disabled rule's name, is spelled in this comment. `location:
+  // 'anywhere'` scans comment text, so a comment explaining the ban would otherwise report itself -
+  // the same self-reference `banned-typography.ts` answers by naming characters as code points.
   'no-warning-comments': ['error', { terms: ['todo', 'fixme'], location: 'anywhere' }],
   'unicorn/expiring-todo-comments': 'off',
 
@@ -360,10 +453,10 @@ export const guidelineRules = {
 // It lived only in the shipped config, so the harness published the check and was not measured by it -
 // the same asymmetry that put the caps and the naming bans in this file.
 /** The plugin the block below needs, re-exported so a caller declares no version of its own. */
-export const vitestPlugin = vitest
+export const vitestPlugin: FlatConfigBlock = vitest
 
 /** The Vitest half of the test-integrity block, shared by every config that lints a Vitest suite. */
-export const testIntegrityRules = {
+export const testIntegrityRules: RuleTable = {
   'vitest/no-focused-tests': 'error', // ban `.only` - it skips the rest of the suite.
   'vitest/no-disabled-tests': 'error', // ban `.skip` / `xit` / `xdescribe`.
   'vitest/no-commented-out-tests': 'error', // a commented-out test is a deleted test that looks present.
@@ -392,7 +485,7 @@ export const testIntegrityRules = {
 // the shipped setup file: that file lives inside node_modules, and a `fast-check` reached from there is
 // a different module record from the one the suite loads, so configuring it would configure nothing. The
 // message therefore says whose job it is rather than claiming ploaness has already done it.
-const NO_FAST_CHECK_SEED = [
+const NO_FAST_CHECK_SEED: readonly RestrictedSyntax[] = [
   {
     selector:
       "CallExpression[callee.object.name='fc'][callee.property.name='assert'] > " +
@@ -408,7 +501,7 @@ const NO_FAST_CHECK_SEED = [
 // and the sequence block is out of a project's reach entirely. Raw datagrams and a new process or worker
 // do not pass through the patched runtime, so those entry points are refused statically instead of being
 // wrapped incompletely. The selectors make every escape attempt a finding before the suite runs.
-const NO_NETWORK_GUARD_ESCAPE = [
+const NO_NETWORK_GUARD_ESCAPE: readonly RestrictedSyntax[] = [
   {
     selector:
       'ImportDeclaration[source.value=/^(?:node:)?(?:child_process|cluster|dgram|worker_threads)$/]',
@@ -484,7 +577,7 @@ const NO_NETWORK_GUARD_ESCAPE = [
 // Ordering is decided once, by the shipped sequence block. A per-test escape reintroduces exactly the
 // coupling the shuffle exists to find, and `vi.setConfig` reintroduces the per-run seed.
 // `describe.shuffle` is deliberately absent from this list: it only strengthens.
-const NO_TEST_ORDER_ESCAPE = [
+const NO_TEST_ORDER_ESCAPE: readonly RestrictedSyntax[] = [
   {
     selector:
       "MemberExpression[object.name=/^(?:it|test|describe|suite)$/][property.name='sequential']",
@@ -518,7 +611,7 @@ const NO_TEST_ORDER_ESCAPE = [
  * @param files the glob patterns this block governs.
  * @returns a flat-config block.
  */
-export const javascriptBlock = (files) => ({
+export const javascriptBlock = (files: readonly string[]): FlatConfigBlock => ({
   files,
   extends: [tseslint.configs.disableTypeChecked],
   // Declared rather than inferred. `no-undef` is off for every TypeScript file here because the
@@ -553,7 +646,10 @@ export const javascriptBlock = (files) => ({
 })
 
 /** No `let`, no in-place mutation. The caller supplies the files and the generated-role exemptions. */
-export const immutabilityBlock = (files, ignores) => ({
+export const immutabilityBlock = (
+  files: readonly string[],
+  ignores: readonly string[],
+): FlatConfigBlock => ({
   files,
   ignores,
   plugins: { functional },

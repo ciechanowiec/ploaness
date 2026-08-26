@@ -1,0 +1,14 @@
+// The build of this package, kept apart from `tsconfig.json` because that name is already taken by the
+// configuration ploaness SHIPS for a consumer to extend. Naming this file `tsconfig.json` would compile
+// a consumer's settings as if they described this package, which is the trap the root solution file
+// documents for exactly this directory.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../governance" }]
+}

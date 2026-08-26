@@ -182,22 +182,22 @@ expect_suite() {
 lib="$(cd "$(dirname "$0")" && pwd)/lib"
 
 edit_json() {
-    node "$lib/edit-json.mjs" "$@"
+    node "$lib/edit-json.ts" "$@"
 }
 
 duplicate_file() {
-    node "$lib/duplicate-file.mjs" "$@"
+    node "$lib/duplicate-file.ts" "$@"
 }
 
 # Reads one non-blank line out of the managed body ploaness ships. A fixture that restated the managed
 # text in its own words is a second copy of a value ploaness owns, and it degrades into a silent no-op
 # the moment ploaness rewords the block - which is exactly the defect this suite exists to catch.
 managed_line() {
-    node "$lib/managed-line.mjs" "$@"
+    node "$lib/managed-line.ts" "$@"
 }
 
 drop_text() {
-    node "$lib/drop-text.mjs" "$@"
+    node "$lib/drop-text.ts" "$@"
 }
 
 
@@ -370,7 +370,7 @@ expect fail-pinned-override wiring FAIL 'pins'
 
 # Left undeclared, every package in the resolved set may run code during install.
 new_case fail-install-scripts
-node "$lib/drop-install-allowlist.mjs" "$scratch/fail-install-scripts/pnpm-workspace.yaml"
+node "$lib/drop-install-allowlist.ts" "$scratch/fail-install-scripts/pnpm-workspace.yaml"
 commit_case fail-install-scripts 'feat(fixture): drop the install-script allowlist' "$CONFORMING_BODY"
 expect fail-install-scripts install-scripts FAIL 'onlyBuiltDependencies'
 
@@ -473,7 +473,7 @@ expect fail-ecosystem-version wiring FAIL 'ploaness pins it'
 
 # The same pin, absent: a project with no Postgres is not asked to grow one.
 new_case pass-ecosystem-absent
-node "$lib/delete-dependency.mjs" "$scratch/pass-ecosystem-absent/package.json" pg
+node "$lib/delete-dependency.ts" "$scratch/pass-ecosystem-absent/package.json" pg
 commit_case pass-ecosystem-absent 'feat(fixture): drop a package ploaness pins but never requires' \
     "$CONFORMING_BODY"
 expect pass-ecosystem-absent wiring PASS
@@ -489,7 +489,7 @@ expect fail-types-version wiring FAIL 'ploaness pins it'
 # The required set is derived from the pin file, so a pinned package the project never declares is a
 # missing dependency rather than an entry that quietly enforces nothing.
 new_case fail-missing-pin
-node "$lib/delete-dependency.mjs" "$scratch/fail-missing-pin/package.json" '@types/node'
+node "$lib/delete-dependency.ts" "$scratch/fail-missing-pin/package.json" '@types/node'
 commit_case fail-missing-pin 'feat(fixture): drop a package ploaness pins' "$CONFORMING_BODY"
 expect fail-missing-pin wiring FAIL 'missing'
 

@@ -35,8 +35,8 @@ import {
   vitestPlugin,
 } from './eslint-core.js'
 
-const NO_INLINE_CONFIG_FUNCTIONS_SELECTOR = 'ArrowFunctionExpression, FunctionExpression'
-const NO_INLINE_CONFIG_FUNCTIONS_MESSAGE =
+const NO_INLINE_CONFIG_FUNCTIONS_SELECTOR: string = 'ArrowFunctionExpression, FunctionExpression'
+const NO_INLINE_CONFIG_FUNCTIONS_MESSAGE: string =
   'No inline functions in collection/global/field/block configs. Define behavior (access, hooks, ' +
   'validate) in src/access or src/lib so it is unit-tested, then import it by reference.'
 

@@ -6,13 +6,17 @@
 import { readFileSync } from 'node:fs'
 
 // node and this script's own path precede the caller's arguments.
-const ARGUMENT_OFFSET = 2
+const ARGUMENT_OFFSET: number = 2
 
-const [file, index] = process.argv.slice(ARGUMENT_OFFSET)
-const lines = readFileSync(file, 'utf8')
+const [file, index]: readonly (string | undefined)[] = process.argv.slice(ARGUMENT_OFFSET)
+if (file === undefined || index === undefined) {
+  throw new Error('usage: managed-line.ts <file> <non-blank-line-index>')
+}
+
+const lines: readonly string[] = readFileSync(file, 'utf8')
   .split('\n')
-  .filter((line) => line.trim().length > 0)
-const line = lines[Number(index)]
+  .filter((line: string): boolean => line.trim().length > 0)
+const line: string | undefined = lines[Number(index)]
 if (line === undefined) {
   throw new Error(`the managed body has no non-blank line ${index}`)
 }

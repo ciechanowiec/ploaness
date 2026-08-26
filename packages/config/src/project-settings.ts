@@ -5,16 +5,19 @@
 // value the harness both writes and judges is declared once; the same holds for the value it reads.
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { readSettings } from '@ploaness/governance'
+import { readSettings, type Settings } from '@ploaness/governance'
 
 // A project whose package.json cannot be read gets the defaults, which are the strict end of every
 // setting. Failing to parse must never be the thing that loosens a threshold.
-const readPackageJson = () => {
+// `unknown` rather than the parse's own `any`: `readSettings` narrows every field it reads, so handing
+// it an `any` would only move the narrowing somewhere nothing checks it.
+const readPackageJson = (): unknown => {
+  const manifest: string = path.join(process.cwd(), 'package.json')
   try {
-    return JSON.parse(readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'))
+    return JSON.parse(readFileSync(manifest, 'utf8'))
   } catch {
     return {}
   }
 }
 
-export const projectSettings = readSettings(readPackageJson())
+export const projectSettings: Settings = readSettings(readPackageJson())

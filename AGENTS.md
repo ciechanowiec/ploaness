@@ -60,9 +60,19 @@ because only their globs are project-shaped: dependency-cruiser through
 `packages/config/dependency-cruiser-repo.json`, knip through `packages/config/knip-repo.json`, and
 `type-coverage` over `tsconfig.lint.json`. The framework-neutral half of the architecture contract lives in
 `dependency-cruiser-core.json` and is shared with what a consumer receives, for the reason
-`eslint-core.js` exists. Each `-repo` config is named that way because `.dependency-cruiser.json` and
+`eslint-core.ts` exists. Each `-repo` config is named that way because `.dependency-cruiser.json` and
 `knip.json` are FORBIDDEN paths in a governed project; a file with either name here would read as a
 counterexample.
+
+A third check is about the artefacts themselves. `scripts/lib/check-packaging.sh` runs `publint` and
+`attw` over the packed tarballs, because an `exports` map is data no compiler resolves and no linter
+parses: a subpath naming a file the tarball does not carry, or one whose declarations no resolution mode
+can reach, is invisible from inside the tree and lands as a broken install outside it. It found
+`@ploaness/assets` shipping a `./files/` subpath - a trailing-slash target node REMOVED rather than
+deprecated, so the export resolved for nobody. `--profile esm-only` states a role rather than silencing
+findings one at a time: every package here is `"type": "module"` on `node >= 26`, so the two resolutions
+it drops describe consumers these packages do not have. It cannot be a gate, because a gate ships to
+Payload projects and an application has no tarball to read.
 
 Two more checks are about files a governed project has no equivalent of. `scripts/lib/check-asset-bodies.sh`
 pipes every TypeScript asset body back through Biome under the path it will occupy in a consumer,
@@ -108,9 +118,9 @@ path, and every consumer fails on a pin none of them can move.
 
 ### The repository is linted by the config it publishes
 
-`packages/config/eslint.js` carries every cap and ban the governing standard states, and for a long
+`packages/config/src/eslint.ts` carries every cap and ban the governing standard states, and for a long
 time this repository never ran it on itself. The framework-neutral half now lives in
-`packages/config/eslint-core.js`, shared by the shipped config and by the root `eslint.config.mjs`, so
+`packages/config/src/eslint-core.ts`, shared by the shipped config and by the root `eslint.config.mjs`, so
 neither restates a rule; only the globs differ, which is the one genuinely repository-shaped part.
 `tsconfig.lint.json` puts the specs in a project, so a type-aware pass can read them and the compiler
 checks them too.
@@ -122,16 +132,36 @@ rather than obeyed. Three of those findings were defects rather than style - a s
 wrapped onto a second line had silently disarmed itself, a boolean-returning function was named as
 though it returned data, and `.filter(fn)` over `git ls-files` crashed on a symlink.
 
-The JavaScript half took longer. `eslint.config.mjs` ignored every `.js` and `.mjs` file, which is right
-for an analyzer config and a `bin` shim - they carry no type information for a type-aware pass to read -
-but wrong for the programs that IMPLEMENT a check: the fixture mutations in `it/lib/`, the asset-body
-staging helper, the two package build scripts, and the setup file that installs the network guard. The
-standard makes each of those source code of this repository, and Biome alone was reading them, which
-covers the complexity cap and nothing else. `CHECK_PROGRAMS` in `eslint.config.mjs` names them and
-`javascriptBlock` in `eslint-core.js` holds them to the same rule list, minus the four rules that ask
-for syntax a JavaScript file cannot carry. Clearing that run replaced two `process.exit(1)` calls with
-thrown errors, a `delete` with a rebuilt object, and a hand-written wrapper in the network guard with a
-Proxy - which also stopped the guard from having to copy `dns.lookup`'s promisify symbol by hand.
+The JavaScript half took longer, and is now finished by there being no JavaScript half. `eslint.config.mjs`
+ignored every `.js` and `.mjs` file, which was right for an analyzer config and a `bin` shim - they carried
+no type information for a type-aware pass to read - but wrong for the programs that IMPLEMENT a check: the
+fixture mutations in `it/lib/`, the asset-body staging helper, the two package build scripts, and the setup
+file that installs the network guard. The standard makes each of those source code of this repository, and
+Biome alone was reading them, which covers the complexity cap and nothing else. That round replaced two
+`process.exit(1)` calls with thrown errors, a `delete` with a rebuilt object, and a hand-written wrapper in
+the network guard with a Proxy - which also stopped the guard from having to copy `dns.lookup`'s promisify
+symbol by hand.
+
+The premise underneath it - that these files cannot be TypeScript - was true only of what SHIPS. Node
+refuses to type-strip a file under a `node_modules` path, so a published `.ts` would fail to load in every
+consumer; nothing stops the source being TypeScript and the published artefact being the compiled output,
+which is what `packages/governance` and `packages/cli` always did. `packages/config` and `packages/ploaness`
+build the same way now, from `src/` into a gitignored `dist/`, and the check programs are plain `.ts` that
+node strips where it runs them - outside `node_modules`, where stripping is allowed. `tsconfig.lint.json`
+names them so the compiler and the type-aware pass read them.
+
+Two things fell out of that. Every hand-written `.d.ts` is gone: eight files that restated shapes their
+implementations already knew, replaced by declarations `tsc` emits, so `packages/ploaness/src/a11y.ts` now
+re-exports a type instead of describing it a second time. And the `javascriptAllowlist` in the root
+`package.json` shrank from four directory-wide patterns to one file, which is what turns "prefer
+TypeScript" from a preference into `gate conventions` failing on the next `.js` anybody adds.
+
+One trap is worth naming, because the compiler will not: an entry point whose type is INFERRED from a
+runner's own config helper emits a declaration naming that runner's types. `@ploaness/config/vitest` did,
+and `vite` reaches this package only as a transitive dependency pnpm's strict layout does not expose - so
+the reference would have degraded to `any` under `skipLibCheck` in every consumer, silently. Both runner
+configs are annotated structurally for that reason, exactly as the hand-written declarations they replaced
+were.
 
 Do not clear a new finding with a suppression while a structural fix exists. `ploaness gate
 suppressions` reports where the budget stands; a comfortable margin is not permission to spend it,
@@ -144,7 +174,7 @@ in `it/lib/` rather than arguments to `node -e`.
 
 ### The suite runs under the guard it ships
 
-`packages/config/vitest-setup.js` is loaded ahead of every other setup file, here and in a consumer. It
+`packages/config/src/vitest-setup.ts` is loaded ahead of every other setup file, here and in a consumer. It
 installs the network guard - `net.Socket.prototype.connect`, the DNS lookups, and the resolver family,
 all made non-writable and non-configurable so a spec cannot put the originals back - and the shipped
 `sequence` block shuffles the suite under a fixed seed. Both were prose in the agent guide until they
@@ -231,7 +261,7 @@ lands at spec collection rather than in a test. Next reads those files itself, s
 test never showed the gap. `playwright.js` now reads them, over the order `environment-files.ts`
 declares - the order is the whole of the meaning, since `process.loadEnvFile` never replaces a value
 already set, and it is stated in `governance` rather than at the call site because a list in
-`packages/config` is measured by no coverage floor. `vitest-setup.js` reads the same list, which is
+`packages/config` is measured by no coverage floor. `vitest-setup.ts` reads the same list, which is
 what the shared constant is for: an integration spec boots the project exactly as an end-to-end helper
 does. A project may still load them in its own `vitest.setup.ts`, and nothing breaks if it does,
 because neither read replaces a value already set - but the promise that a gate running the
@@ -244,11 +274,13 @@ The `ploaness` key of `package.json` carries two exclusions, each a role rather 
 - `.vale/styles/**` is exempt from the typography ban because those files are Vale detector definitions
   whose content *is* the banned character. It is the same self-reference `banned-typography.ts` solves
   by naming characters as code points.
-- The JavaScript allowlist covers the analyzer configs and package entry shims. An ESLint flat config
-  and a `bin` shim are loaded as JavaScript by the tools that read them and cannot be TypeScript. Both
-  patterns name the two directories rather than listing filenames: an enumeration is a second copy of
-  what the directory already contains, and shipping the Playwright entry point failed the conventions
-  gate the moment the file was tracked because the list had not been extended with it.
+- The JavaScript allowlist is one entry, `eslint.config.mjs`, and it is the only hand-written JavaScript
+  left in the repository. ESLint's own loader reads a flat config as JavaScript unless `jiti` is
+  installed, and adding a dependency to author one file is a worse trade than keeping the file. The
+  analyzer configs and the package entry shims used to be listed here too; they are TypeScript sources
+  compiled into `dist` now, so the two directory-wide patterns that covered them are gone. Shrinking
+  this list is what makes the ban enforceable: `gate conventions` fails on the next `.js` anybody
+  tracks, which is how shipping the Playwright entry point was caught the moment the file appeared.
 
 ## Coding Style & Naming Conventions
 

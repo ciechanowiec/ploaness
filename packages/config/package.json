@@ -6,46 +6,54 @@
   "author": "Herman Ciechanowiec <herman@ciechanowiec.eu>",
   "type": "module",
   "exports": {
-    "./eslint": "./eslint.js",
-    "./vitest": "./vitest.js",
+    "./eslint": {
+      "types": "./dist/eslint.d.ts",
+      "default": "./dist/eslint.js"
+    },
+    "./vitest": {
+      "types": "./dist/vitest.d.ts",
+      "default": "./dist/vitest.js"
+    },
     "./biome": "./biome.json",
     "./tsconfig": "./tsconfig.json",
     "./stylelint": "./stylelint.json",
     "./dependency-cruiser": "./dependency-cruiser.json",
     "./knip": "./knip.json",
     "./package.json": "./package.json",
-    "./eslint-core": "./eslint-core.js",
-    "./vitest-core": {
-      "types": "./vitest-core.d.ts",
-      "default": "./vitest-core.js"
+    "./eslint-core": {
+      "types": "./dist/eslint-core.d.ts",
+      "default": "./dist/eslint-core.js"
     },
-    "./playwright": "./playwright.js",
-    "./a11y": "./a11y.js",
-    "./access": "./access.js",
+    "./vitest-core": {
+      "types": "./dist/vitest-core.d.ts",
+      "default": "./dist/vitest-core.js"
+    },
+    "./playwright": {
+      "types": "./dist/playwright.d.ts",
+      "default": "./dist/playwright.js"
+    },
+    "./a11y": {
+      "types": "./dist/a11y.d.ts",
+      "default": "./dist/a11y.js"
+    },
+    "./access": {
+      "types": "./dist/access.d.ts",
+      "default": "./dist/access.js"
+    },
     "./pins": "./pins.json"
   },
   "files": [
-    "a11y.js",
-    "access.js",
+    "dist",
     "biome.json",
     "dependency-cruiser-core.json",
     "dependency-cruiser.json",
-    "eslint-core.js",
-    "eslint.js",
     "knip.json",
     "pins.json",
-    "playwright.js",
-    "project-settings.d.ts",
-    "project-settings.js",
     "stylelint.json",
-    "tsconfig.json",
-    "vitest-core.d.ts",
-    "vitest-core.js",
-    "vitest-setup.js",
-    "vitest.js"
+    "tsconfig.json"
   ],
   "scripts": {
-    "build": "node --version > /dev/null"
+    "build": "tsc --build tsconfig.build.json"
   },
   "dependencies": {
     "@axe-core/playwright": "4.13.0",
@@ -58,6 +66,7 @@
     "@testing-library/user-event": "14.6.6",
     "@vitejs/plugin-react": "6.1.0",
     "@vitest/eslint-plugin": "1.6.27",
+    "eslint": "10.9.1",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-functional": "10.0.0",
     "eslint-plugin-jsdoc": "64.2.1",
@@ -78,5 +87,9 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "devDependencies": {
+    "@types/node": "26.3.0",
+    "typescript": "6.0.3"
   }
 }

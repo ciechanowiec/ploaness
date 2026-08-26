@@ -25,16 +25,22 @@ for (const file of runEnvironmentFiles(existsSync)) {
   process.loadEnvFile(file)
 }
 
-const isContinuousIntegration = Boolean(process.env.CI)
+const isContinuousIntegration: boolean = Boolean(process.env['CI'])
 
 // The web server is `next dev`, which compiles a route on its first request. The first hit to the heavy
 // Payload admin bundle can exceed the 30s Playwright default on a cold runner, so the budget gives
 // compilation headroom instead of leaning on a retry to mask it.
-const TEST_TIMEOUT_MS = 90_000
-const SERVER_TIMEOUT_MS = 180_000
-const CI_RETRIES = 2
+const TEST_TIMEOUT_MS: number = 90_000
+const SERVER_TIMEOUT_MS: number = 180_000
+const CI_RETRIES: number = 2
 
-export default defineConfig({
+// Structural rather than Playwright's own `PlaywrightTestConfig`, for the reason `vitest.ts` records:
+// the harness owns the config and the consumer owns the runner, so an emitted declaration should not
+// make the runner's types a condition of reading this entry point.
+// `ReturnType` rather than the runner's own exported type: naming that type would import it, which is
+// the dependency the annotation below exists to avoid. This binding is module-local, so it reaches no
+// declaration file either way.
+const declared: ReturnType<typeof defineConfig> = defineConfig({
   testDir: './tests/e2e',
   timeout: TEST_TIMEOUT_MS,
   forbidOnly: true,
@@ -76,3 +82,9 @@ export default defineConfig({
     })),
   ],
 })
+
+// A shallow copy rather than an assertion: a spread yields an anonymous object type, which carries
+// the index signature an interface does not, so the structural annotation above holds without one.
+const config: Readonly<Record<string, unknown>> = { ...declared }
+
+export default config

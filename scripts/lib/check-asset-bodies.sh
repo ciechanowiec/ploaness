@@ -25,7 +25,7 @@ cd "$root"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT INT TERM
 
-node "$root/scripts/lib/strip-root-flag.mjs" \
+node "$root/scripts/lib/strip-root-flag.ts" \
     "$root/packages/ploaness/biome.json" "$stage/biome.json"
 
 # Named one by one rather than as the whole directory: the config sits there too, and Biome would
