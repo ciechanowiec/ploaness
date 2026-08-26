@@ -4,9 +4,18 @@
 #
 # What this suite proves: that a project scaffolded by `ploaness init` satisfies the gates ploaness
 # applies to a project's own shape, and that removing one guarantee fails that guarantee's gate rather
-# than merely failing something. What it does not prove: the gates that shell out to a toolchain
-# (types, biome, eslint, tests, build). Those need a real Payload application and are proven end to end
-# by a consumer project, not by a fixture.
+# than merely failing something.
+#
+# It also compiles and lints the fixture, which the paragraph above once said it could not. That was
+# true while ploaness shipped only configurations; it stopped being true when ploaness began shipping
+# executable specs it cannot read as code from its own side - it is a library with no Payload
+# application, so `check-asset-bodies.sh` reaches those specs with Biome alone, which carries no type
+# information and none of the rules the shipped ESLint config states. This fixture receives them from
+# `ploaness init` exactly as a consumer does, so it is where they are first read as the code they are.
+# Two defects had already escaped to real projects by the time that was noticed.
+#
+# What it still does not prove: `tests`, `build`, and `e2e`. Those need a real Payload application and
+# a browser, and are proven end to end by a consumer project rather than by a fixture.
 set -eu
 
 # The gate report has two formats, and the ASCII one carries the `[PASS] <id>` token every assertion
@@ -191,9 +200,6 @@ drop_text() {
     node "$lib/drop-text.mjs" "$@"
 }
 
-replace_text() {
-    node "$lib/replace-text.mjs" "$@"
-}
 
 CONFORMING_BODY='The fixture exercises the packed harness from outside the workspace, which is the
 only arrangement that resolves the way a published install does.'
@@ -209,6 +215,17 @@ for gate in preflight wiring assets conventions editorconfig suppressions genera
             linear-history; do
     expect pass "$gate" PASS
 done
+
+# The gates that compile and lint, run here because ploaness ships executable specs and can judge none
+# of them itself: it is a library with no Payload application, so `check-asset-bodies.sh` reaches them
+# with Biome alone, which carries no type information and none of the rules the shipped ESLint config
+# states. This fixture IS a consumer, and it receives those specs from `ploaness init` like any other,
+# so it is the first place in this repository where they are read as the code they are.
+#
+# Both defects that reached a real project were of exactly this kind: a type the sweep imported and the
+# entry point never exported, and a callback passed by reference. Each would have failed here.
+expect pass types PASS
+expect pass eslint PASS
 
 # The two history modes are options of `commit-message`, not global CLI flags. A global allowlist once
 # rejected both documented forms before their handler could read them.
@@ -235,10 +252,10 @@ expect fail-unbounded-find payload-rules FAIL no-unbounded-find
 
 new_case fail-collection-access
 drop_text "$scratch/fail-collection-access/src/collections/Posts.ts" "  access: {
-    read: (): boolean => true,
-    create: (): boolean => false,
-    update: (): boolean => false,
-    delete: (): boolean => false,
+    read: anyone,
+    create: nobody,
+    update: nobody,
+    delete: nobody,
   },
 "
 commit_case fail-collection-access 'feat(fixture): omit the collection access rules' "$CONFORMING_BODY"
@@ -367,24 +384,24 @@ drop_text "$scratch/fail-unrestricted-upload/src/collections/Media.ts" "    mime
 commit_case fail-unrestricted-upload 'feat(fixture): let the upload collection take any file' "$CONFORMING_BODY"
 expect fail-unrestricted-upload payload-rules FAIL require-upload-restrictions
 
-# The auth collection is the admin collection in a default Payload project, so an always-true create
-# lets a stranger register into the collection that carries the roles. The value is flipped rather than
-# dropped: dropping it would leave the collection incomplete and fail a different rule.
-new_case fail-public-auth-create
-replace_text "$scratch/fail-public-auth-create/src/collections/Users.ts" \
-    'create: (): boolean => false' 'create: (): boolean => true'
-commit_case fail-public-auth-create 'feat(fixture): open the auth collection to anyone' "$CONFORMING_BODY"
-expect fail-public-auth-create payload-rules FAIL no-public-auth-create
+# `auth: true` is Payload's bare enable, and it caps nothing: without a login-attempt limit and a lock
+# time the collection accepts guesses as fast as a client can make them. Unlike the always-true forms,
+# this one a conforming project CAN write, which is why it is the auth rule worth a fixture.
+new_case fail-unhardened-auth
+drop_text "$scratch/fail-unhardened-auth/src/collections/Users.ts" "    maxLoginAttempts: 5,
+"
+commit_case fail-unhardened-auth 'feat(fixture): drop the login-attempt cap' "$CONFORMING_BODY"
+expect fail-unhardened-auth payload-rules FAIL require-auth-hardening
 
 new_case fail-partial-access
-drop_text "$scratch/fail-partial-access/src/collections/Posts.ts" "    create: (): boolean => false,
+drop_text "$scratch/fail-partial-access/src/collections/Posts.ts" "    create: nobody,
 "
 commit_case fail-partial-access 'feat(fixture): leave one operation to the defaults' "$CONFORMING_BODY"
 expect fail-partial-access payload-rules FAIL require-complete-access
 
 # Globals were covered by no rule at all before this.
 new_case fail-global-access
-drop_text "$scratch/fail-global-access/src/globals/Header.ts" "    update: (): boolean => false,
+drop_text "$scratch/fail-global-access/src/globals/Header.ts" "    update: nobody,
 "
 commit_case fail-global-access 'feat(fixture): leave a global update undeclared' "$CONFORMING_BODY"
 expect fail-global-access payload-rules FAIL require-complete-access

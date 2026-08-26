@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload'
+import { anyone, nobody } from '@/access'
 
 // An upload collection restricts what it will accept. Left undeclared, `mimeTypes` defaults to
 // undefined and the collection takes any file, so the fixture carries the restriction and the
@@ -6,10 +7,10 @@ import type { CollectionConfig } from 'payload'
 export const Media: CollectionConfig = {
   slug: 'media',
   access: {
-    read: (): boolean => true,
-    create: (): boolean => false,
-    update: (): boolean => false,
-    delete: (): boolean => false,
+    read: anyone,
+    create: nobody,
+    update: nobody,
+    delete: nobody,
   },
   upload: {
     mimeTypes: ['image/png', 'image/jpeg'],

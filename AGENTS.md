@@ -205,9 +205,19 @@ managed paths out of both the count and the line total. Counting them would spen
 project's whole allowance on a decision the project never made.
 
 `ploaness` is not a Payload application and has no browser to drive, so these bodies have no root file
-to pair with and are listed in `ASSET_AUTHORED_PATHS`. Nothing here compiles them, and
-`scripts/lib/check-asset-bodies.sh` is the only thing that reads them as code at all. What proves them
-is the third verification leg: a real consumer runs them, which is the reason that leg exists.
+to pair with and are listed in `ASSET_AUTHORED_PATHS`. For a while nothing here compiled them and
+`scripts/lib/check-asset-bodies.sh` was the only thing that read them as code at all - which is Biome,
+carrying no type information and none of the rules the shipped ESLint config states. Two defects
+reached real projects through that gap: a type the sweep imported and `ploaness/access` never exported,
+and a callback passed to `.map` by reference. Neither was findable from this side.
+
+`it/verify.sh` now runs the `types` and `eslint` gates over its fixture, which receives the specs from
+`ploaness init` exactly as a consumer does. That is where a shipped spec is first read as the code it
+is. Running the suite with either defect restored fails the matching gate, which is what makes those
+two assertions worth their run time rather than decoration.
+
+What still proves the specs RUN is the third verification leg: a real consumer drives them in a
+browser, which is the reason that leg exists.
 
 Shipping a spec makes the end-to-end suite mandatory, so `playwright.config.ts` joined the files the
 wiring gate requires as a bare re-export, and the `e2e` gate no longer reports a pass for a project that

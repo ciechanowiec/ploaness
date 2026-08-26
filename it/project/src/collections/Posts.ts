@@ -1,13 +1,15 @@
 import type { CollectionConfig } from 'payload'
+import { anyone, nobody } from '@/access'
 
-// Access is declared rather than inherited, which is what the require-collection-access rule asks for.
+// Access is declared rather than inherited, which is what require-complete-access asks for. The rules
+// are referenced by name because an inline function in a config file carries no seam a test can reach.
 export const Posts: CollectionConfig = {
   slug: 'posts',
   access: {
-    read: (): boolean => true,
-    create: (): boolean => false,
-    update: (): boolean => false,
-    delete: (): boolean => false,
+    read: anyone,
+    create: nobody,
+    update: nobody,
+    delete: nobody,
   },
   fields: [{ name: 'title', type: 'text', required: true }],
 }

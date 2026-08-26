@@ -1,4 +1,5 @@
 import type { GlobalConfig } from 'payload'
+import { anyone, nobody } from '@/access'
 
 // A global declares read and update; it has neither create nor delete, because it exists from the
 // moment it is configured. The fixture carries one so the globals half of require-complete-access is
@@ -6,8 +7,8 @@ import type { GlobalConfig } from 'payload'
 export const Header: GlobalConfig = {
   slug: 'header',
   access: {
-    read: (): boolean => true,
-    update: (): boolean => false,
+    read: anyone,
+    update: nobody,
   },
   fields: [{ name: 'title', type: 'text', required: true }],
 }
