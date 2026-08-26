@@ -37,7 +37,7 @@
     "packages/ploaness": {
       "entry": ["*.js"],
       "project": ["*.js", "*.mjs"],
-      "ignoreDependencies": ["@ploaness/assets", "@ploaness/governance"],
+      "ignoreDependencies": ["@ploaness/assets"],
       "ignoreUnresolved": ["next"]
     },
     "packages/assets": {

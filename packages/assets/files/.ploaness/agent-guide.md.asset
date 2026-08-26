@@ -371,3 +371,9 @@ enforces. These are decided by reading the code against the wording below, not b
   inverting one direction behind an abstraction. A cycle is never declared acceptable.
 - The attribution ban binds in prose as well as by pattern: a marker naming an AI agent that no pattern
   yet knows is still a violation.
+- A URL that came from a CMS field is passed through `safeHref` from `ploaness/runtime` before it
+  reaches an `href`. React escapes text content, so an editor cannot inject markup through a field, but
+  an href is an attribute: `javascript:alert(1)` stored in a link field executes as the site the moment
+  a visitor clicks it, and nothing in the framework, the type system, or the lint pass reports it. The
+  helper is shipped so no project has to get the scheme rules right twice; calling it where editor
+  content becomes a link is the part no check can see.

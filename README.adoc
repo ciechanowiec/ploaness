@@ -420,6 +420,22 @@ that at the config root rather than on the collection.
 . The xref:#sync-command[] creates `AGENTS.md` or refreshes its xref:#managed-section[], carrying the text below the managed section through unchanged. It refuses a file whose markers are duplicated, incomplete, or no longer leading, because every edit it could make there would either duplicate the managed section or swallow text the https://payloadcms.com[Payload CMS^] project owns. The xref:#assets-gate[`assets` gate] names such a file on its own and asks for a repair by hand.
 . To let the https://payloadcms.com[Payload CMS^] project own a xref:#pinned-file[], a xref:#seed-file[], or a xref:#forbidden-file[], list its path under xref:#unmanaged-assets[`unmanagedAssets`] together with the reason. _ploaness_ then leaves that path alone. An entry without a reason is dropped, so _ploaness_ continues to apply the file's policy.
 
+[[runtime-helpers]]
+== Runtime Helpers
+
+. Almost everything _ploaness_ ships is read by a tool or run as a xref:#gates[gate]. `ploaness/runtime`
+is the exception: code a https://payloadcms.com[Payload CMS^] project's own application calls.
+. It holds `safeHref`, which neutralises an untrusted URL before it reaches an `href`. React escapes
+text content, so an editor can't inject markup through a CMS field - but an `href` is an attribute, and
+a stored `javascript:alert(1)` executes as the site the moment a visitor clicks it. Nothing in the
+framework, the type system, or the lint pass reports that: the value is a string, and it's rendered as a
+string. A relative URL and the `http`, `https`, `mailto`, and `tel` schemes pass through unchanged;
+anything else becomes `#`. Whitespace and control characters are removed before the scheme is read,
+because a browser removes them too, so a tab or a null byte inside the scheme can't smuggle one past.
+. Every project mapping a CMS field into markup has this problem, so _ploaness_ owns the answer rather
+than leaving each project to rediscover the scheme rules. What no xref:#gates[gate] can see is whether
+the helper was *called*, so `.ploaness/agent-guide.md` states that as a rule an inspection decides.
+
 [[configuration]]
 == Configuration
 
