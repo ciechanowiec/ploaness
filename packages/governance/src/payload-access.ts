@@ -148,16 +148,14 @@ export const findUnhardenedAuth = (source: string): readonly PayloadViolation[] 
 // read rule admits - so a read that is unconditionally true publishes every draft to anyone.
 const DRAFTS_ENABLED: RegExp = /drafts\s*:\s*(?:true|\{)/
 
-// The inline always-true form for one operation, built per operation rather than written out twice:
-// the draft rule and the auth-create rule below ask the same question of different keys.
+// The inline always-true read.
 //
 // The return type is optional in the pattern and effectively mandatory in a governed project, which is
 // the whole reason it appears here. `explicit-function-return-type` makes a conforming project write
 // `read: (): boolean => true`, and a pattern demanding `()` immediately before `=>` matched none of
-// those - so the draft rule reported nothing on the only spelling the harness permits. `[^=]*` cannot
-// run past the arrow it precedes, which keeps the optional part from swallowing the match.
-const alwaysTrue = (operation: string): RegExp =>
-  new RegExp(String.raw`${operation}\s*:\s*\(\s*\)\s*(?:\s*:[^=]*)?=>\s*true`)
+// those - so this rule reported nothing on the only spelling the harness permits. `[^=]*` cannot run
+// past the arrow it precedes, which keeps the optional part from swallowing the match.
+const ALWAYS_TRUE_READ: RegExp = /read\s*:\s*\(\s*\)\s*(?::[^=]*)?=>\s*true/
 
 // Where the access block's own braces close, so the search below cannot run past them into the fields.
 const blockEnd = (access: string, open: number): number => {
@@ -165,26 +163,26 @@ const blockEnd = (access: string, open: number): number => {
   return body === undefined ? access.length : open + body.length
 }
 
-// The operation is looked for inside the access block alone. `depthOneValue` returns everything from
-// the key's colon to the end of the enclosing literal, so testing it whole meant a FIELD-level
+// The read is looked for inside the access block alone. `depthOneValue` returns everything from the
+// key's colon to the end of the enclosing literal, so testing it whole meant a FIELD-level
 // `read: () => true` - which grants nothing beyond that one field - was reported as though the
 // collection itself were open to anyone.
 //
-// Only the inline form is decidable here. A rule delegated to a helper, such as `read: anyone`, reads
-// identically to a restrictive one, which is why the managed access-boundary sweep asks the running
-// application what it actually grants instead of leaving the question to this scan.
-const opensToAnyone = (body: string, operation: string): boolean => {
+// Only the inline form is decidable here, and the lint pass forbids that form in a config file, so a
+// conforming project writes `read: anyone` and this rule stays silent on it. What covers the conforming
+// case is the managed access-boundary sweep, which asks the running application what it grants rather
+// than reading the source. This rule reaches a config declared outside the linted directories.
+const isDraftExposed = (body: string): boolean => {
+  const versions: string | undefined = depthOneValue(body, 'versions')
+  if (versions === undefined || !DRAFTS_ENABLED.test(versions)) {
+    return false
+  }
   const access: string | undefined = depthOneValue(body, 'access')
   if (access === undefined) {
     return false
   }
   const open: number = access.indexOf('{')
-  return open !== NOT_FOUND && alwaysTrue(operation).test(access.slice(0, blockEnd(access, open)))
-}
-
-const isDraftExposed = (body: string): boolean => {
-  const versions: string | undefined = depthOneValue(body, 'versions')
-  return versions !== undefined && DRAFTS_ENABLED.test(versions) && opensToAnyone(body, 'read')
+  return open !== NOT_FOUND && ALWAYS_TRUE_READ.test(access.slice(0, blockEnd(access, open)))
 }
 
 /** Report a config whose drafts are readable by an unauthenticated client. */
@@ -201,29 +199,6 @@ export const findAnonymousDraftReads = (source: string): readonly PayloadViolati
           },
         ]
       : [],
-  )
-
-// The auth collection is the admin collection in a default Payload project, so an unconditionally true
-// `create` on it lets anyone on the internet register an account into the collection that carries the
-// roles. Payload asks nothing further: there is no separate registration switch that would also have
-// to be on, so this single key is the whole of the decision.
-const publicAuthCreateIn = (source: string, found: FoundConfig): readonly PayloadViolation[] =>
-  depthOneValue(found.body, 'auth') !== undefined && opensToAnyone(found.body, 'create')
-    ? [
-        {
-          line: lineOf(source, found.marker),
-          rule: 'no-public-auth-create',
-          reason:
-            'an auth collection must not grant an unconditionally true create; anyone could ' +
-            'register an account into the collection that carries the roles',
-        },
-      ]
-    : []
-
-/** Report an auth collection that lets an unauthenticated client create its own account. */
-export const findPublicAuthCreate = (source: string): readonly PayloadViolation[] =>
-  eachConfig(source, (kind: ConfigKind, found: FoundConfig): readonly PayloadViolation[] =>
-    kind.label === COLLECTION ? publicAuthCreateIn(source, found) : [],
   )
 
 // `mimeTypes` defaults to undefined, so an upload collection takes whatever a client sends until the

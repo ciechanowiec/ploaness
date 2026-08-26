@@ -333,24 +333,16 @@ xref:#extended-verification[] adds the following six gates to xref:#default-veri
 | `no-anonymous-draft-reads`
 | A config with `versions.drafts` enabled doesn't grant an unconditionally true `read`.
 
-| [[no-public-auth-create-rule]]`no-public-auth-create`
-| A collection with `auth` enabled doesn't grant an unconditionally true `create`.
-
 | [[require-upload-restrictions-rule]]`require-upload-restrictions`
 | A collection with `upload` enabled declares `mimeTypes`.
 |===
 . The xref:#require-complete-access-rule[`require-complete-access` rule] guards a security decision rather than a matter of style. https://payloadcms.com[Payload CMS^] fills the operations a config leaves out during sanitisation, and its default grants public read, so a partial `access` block is invisible the moment the application boots. A collection meant to be readable by anyone declares that in writing, one operation at a time.
-. The xref:#no-public-auth-create-rule[`no-public-auth-create` rule] guards the same kind of decision
-one collection further in. In a default https://payloadcms.com[Payload CMS^] project the collection
-carrying `auth` is the collection carrying the roles, so a `create` that admits anyone lets a stranger
-register an account into it. Payload asks nothing further: there's no separate registration switch that
-would also have to be on, so that one key is the whole of the decision.
 . The xref:#require-upload-restrictions-rule[`require-upload-restrictions` rule] is about what a
 collection will accept rather than who may reach it. `mimeTypes` defaults to `undefined`, so an upload
 collection takes whatever a client sends, and an SVG served from the application's own origin is script
 that runs as the site. No size cap is asked for here, because https://payloadcms.com[Payload CMS^] takes
 that at the config root rather than on the collection.
-. `no-anonymous-draft-reads` covers what follows from that. A draft is unpublished content, and `?draft=true` serves it to whoever the read rule admits, so a read that is unconditionally true publishes every draft. Only the inline always-true form is detectable from the source; a read delegated to a helper is a judgement `.ploaness/agent-guide.md` states in prose.
+. `no-anonymous-draft-reads` covers what follows from that. A draft is unpublished content, and `?draft=true` serves it to whoever the read rule admits, so a read that is unconditionally true publishes every draft. Only the inline always-true form is detectable from the source, and the lint pass forbids that form in a config file - so a conforming project writes `read: anyone` and this rule stays silent on it. It reaches a config declared outside the linted directories; what covers the conforming case is xref:#access-boundary-sweep[the access-boundary sweep], which asks the running application what it grants instead of reading the source.
 . The xref:#payload-rules-gate[`payload-rules` gate] reads a call by scanning for its matching bracket and skipping over string literals, so a call spread across several lines or nested inside another one still reads correctly. Only a call on `payload`, `req.payload`, or `this.payload` counts, which is what leaves an unrelated `array.find(...)` alone.
 
 [[test-determinism]]
