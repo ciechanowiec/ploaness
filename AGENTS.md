@@ -183,20 +183,31 @@ assertion that reads it.
 Everything else that was relaxed for tests has been turned back on, including the size caps, the
 explicitness rules, and the immutability rules.
 
-### The one asset that is executable
+### The assets that are executable
 
-Every other managed file is a configuration, read by a tool. The accessibility sweep, whose body is
-`packages/assets/files/tests/e2e/a11y.e2e.spec.ts.asset`, is a spec that runs, and it is managed for the
-same reason a rule is: a check a project can edit is not a rule. Three consequences follow, and each is
-handled where it arises rather than waived.
+Most managed files are configurations, read by a tool. Three are specs that run, and they are managed
+for the same reason a rule is: a check a project can edit is not a rule. Each judges something only a
+running application knows, which is the whole reason it runs rather than reads.
+
+- the accessibility sweep, `packages/assets/files/tests/e2e/a11y.e2e.spec.ts.asset`, for a contrast
+  defect that appears only under `:hover` or `:focus` and a page nobody remembered to list;
+- the security-headers sweep, `security-headers.e2e.spec.ts.asset`, because a Next.js application sends
+  no security header unless the project sets one and every static gate stays green while it does not;
+- the access-boundary sweep, `access-boundary.e2e.spec.ts.asset`, which asks Payload through
+  `/api/access`, with no credential, what it grants a stranger. The source rules read the access block a
+  project wrote; they cannot read what `read: anyone` decides, nor what Payload made of the config after
+  sanitisation, so a project can satisfy all of them and still serve every document to everyone.
+
+Three consequences follow, and each is handled where it arises rather than waived.
 
 A consumer cannot remove a suppression inside a file it does not own, so the suppressions gate leaves
 managed paths out of both the count and the line total. Counting them would spend a fifth of a small
 project's whole allowance on a decision the project never made.
 
-`ploaness` is not a Payload application and has no browser to drive, so this body has no root file to
-pair with and is listed in `ASSET_AUTHORED_PATHS`. Nothing here compiles it. What proves it is the third
-verification leg: a real consumer runs it, which is the reason that leg exists.
+`ploaness` is not a Payload application and has no browser to drive, so these bodies have no root file
+to pair with and are listed in `ASSET_AUTHORED_PATHS`. Nothing here compiles them, and
+`scripts/lib/check-asset-bodies.sh` is the only thing that reads them as code at all. What proves them
+is the third verification leg: a real consumer runs them, which is the reason that leg exists.
 
 Shipping a spec makes the end-to-end suite mandatory, so `playwright.config.ts` joined the files the
 wiring gate requires as a bare re-export, and the `e2e` gate no longer reports a pass for a project that

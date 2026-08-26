@@ -31,6 +31,23 @@ export interface DeclaredExclusion {
   readonly kind: ExclusionKind
 }
 
+/**
+ * One anonymous permission a project grants on purpose, with the reason it does.
+ *
+ * The managed access-boundary sweep asks the running application what it grants an unauthenticated
+ * caller and fails on what it finds. Some grants are the point of the site - a published page a
+ * stranger must be able to read, a contact form a stranger must be able to submit - so a project
+ * records those here and the sweep passes them. An entry missing any field is dropped, which restores
+ * the finding rather than widening the sweep, which is the safe direction to fail in.
+ */
+export interface PublicAccess {
+  /** The collection or global slug, as Payload itself reports it. */
+  readonly entity: string
+  /** The operation granted: create, read, update, or delete. */
+  readonly operation: string
+  readonly reason: string
+}
+
 /** A managed path a project has taken over from the catalogue, with the reason it did so. */
 export interface UnmanagedAsset {
   readonly path: string
@@ -77,6 +94,8 @@ export interface Settings {
   readonly vulnerabilityAllowlist: readonly VulnerabilityException[]
   /** Committed fake credentials the secret scan excuses, each with the reason it is committed. */
   readonly secretAllowlist: readonly SecretException[]
+  /** Anonymous permissions the project grants deliberately, each with the reason it does. */
+  readonly publicAccess: readonly PublicAccess[]
   /**
    * A command run once before the test and end-to-end gates, as argv. A Payload project needs a database
    * before its suite can boot, and how it obtains one (a compose service, a managed instance, an
@@ -245,6 +264,22 @@ const asSecretAllowlist = (raw: unknown): readonly SecretException[] =>
       })
     : []
 
+// Dropped on any missing field, for the reason an unexplained secret exception is dropped: a granted
+// anonymous permission is a decision the project must record, and a typo must re-expose the finding
+// rather than quietly excuse a permission nobody chose.
+const asPublicAccess = (raw: unknown): readonly PublicAccess[] =>
+  isArray(raw)
+    ? raw.flatMap((entry: unknown): readonly PublicAccess[] => {
+        const record: Record<string, unknown> = asRecord(entry)
+        const entity: string = asText(record['entity']).trim()
+        const operation: string = asText(record['operation']).trim()
+        const reason: string = asText(record['reason']).trim()
+        return entity.length > 0 && operation.length > 0 && reason.length > 0
+          ? [{ entity, operation, reason }]
+          : []
+      })
+    : []
+
 // An exclusion narrows a gate's scope, which is the one thing the standard says a project's settings
 // may not do without the harness's leave. The leave it grants is an exclusion by file role - so an
 // entry states the role it is claiming, and an entry that states none is dropped rather than honoured.
@@ -341,6 +376,7 @@ export const readSettings = (packageJson: unknown): Settings => {
       typeof raw['vulnerabilitySeverity'] === 'string' ? raw['vulnerabilitySeverity'] : undefined,
     vulnerabilityAllowlist: asVulnerabilityAllowlist(raw['vulnerabilityAllowlist']),
     secretAllowlist: asSecretAllowlist(raw['secretAllowlist']),
+    publicAccess: asPublicAccess(raw['publicAccess']),
     pretest: asStringArray(raw['pretest'], []),
     testWrapper: asStringArray(raw['testWrapper'], []),
     serverUrl: typeof raw['serverUrl'] === 'string' ? raw['serverUrl'] : DEFAULT_SERVER_URL,

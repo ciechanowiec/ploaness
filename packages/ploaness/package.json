@@ -30,6 +30,10 @@
       "types": "./a11y.d.ts",
       "default": "./a11y.js"
     },
+    "./access": {
+      "types": "./access.d.ts",
+      "default": "./access.js"
+    },
     "./biome": "./biome.json",
     "./tsconfig": "./tsconfig.json",
     "./package.json": "./package.json",
@@ -41,6 +45,8 @@
   "files": [
     "a11y.d.ts",
     "a11y.js",
+    "access.d.ts",
+    "access.js",
     "bin.js",
     "biome.json",
     "eslint.d.ts",

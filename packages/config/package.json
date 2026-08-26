@@ -21,10 +21,12 @@
     },
     "./playwright": "./playwright.js",
     "./a11y": "./a11y.js",
+    "./access": "./access.js",
     "./pins": "./pins.json"
   },
   "files": [
     "a11y.js",
+    "access.js",
     "biome.json",
     "dependency-cruiser-core.json",
     "dependency-cruiser.json",

@@ -74,7 +74,8 @@ ploaness governs all of the following domains:
 - **Drafts:** a collection or global with `versions.drafts` enabled must not grant a read that admits
   anyone, because `?draft=true` then serves unpublished content to an unauthenticated client. The gate
   catches the inline always-true form; a read delegated to a helper is yours to judge, and the helper
-  must require authentication or published status.
+  must require authentication or published status. What the source cannot decide, the access-boundary
+  sweep below asks the running application instead.
 - **Generated output:** the Payload types and admin import map must match the configuration that
   produces them.
 - **Versions:** ploaness owns two sets of them. The toolchain is every package whose version changes
@@ -112,6 +113,21 @@ ploaness governs all of the following domains:
   any further route prefix the crawl must not follow (`ploaness.accessibilitySkipRoutes`, which adds to
   `/admin` and `/api` rather than replacing them). A finding is a defect in the page, never in the sweep:
   repair the markup or the contrast rather than narrowing what is scanned.
+- **Security headers:** a sweep ploaness pins into `tests/e2e/security-headers.e2e.spec.ts` asks the
+  running application what it answers with. A Next.js application sends no security header unless the
+  project configures one, and no static check can see that it did not: the page renders and the build
+  passes. The baseline is `X-Content-Type-Options: nosniff`, a `Referrer-Policy`, a decision about who
+  may frame the page, and a `Content-Security-Policy` that constrains script without readmitting
+  `'unsafe-inline'`. In practice that means a per-request nonce from a `middleware.ts`, because the
+  suite drives `next dev` and its inline scripts would otherwise need blanket permission.
+- **Access boundary:** a sweep ploaness pins into `tests/e2e/access-boundary.e2e.spec.ts` asks Payload
+  itself, through `/api/access` with no credential, what an unauthenticated caller may do to every
+  collection and global. The static rules see that each operation was decided and can see an inline
+  always-true rule; they cannot see what `read: anyone` decides, nor what Payload made of the config
+  after sanitisation, so a project can satisfy all of them and still serve every document to every
+  stranger. The admin panel must refuse an unauthenticated caller, and every permission the application
+  grants anonymously must be one the project recorded under `ploaness.publicAccess` with the reason it
+  is intended. Close the access rule, or record the grant; a grant nobody wrote is the finding.
 - **Test determinism:** two rules of the governing standard that used to be prose and are now checks.
   The suite runs under a network guard the shipped setup file installs before any setup of yours: a
   socket, a DNS lookup, or a fetch that leaves this machine fails the test that made it, naming the
@@ -305,6 +321,7 @@ default, so a typo can never widen a rule.
 | `secretAllowlist` | empty | Fake credentials committed as fixtures. `path` and `reason`. |
 | `serverUrl` | `http://localhost:3000` | The origin the end-to-end suite drives. |
 | `auxiliaryServers` | empty | Servers the end-to-end run starts beside the application. `command` and `url`. An entry missing either is dropped. The application is still started first and still answers at `serverUrl`. |
+| `publicAccess` | empty | Anonymous permissions the project grants on purpose. `entity`, `operation`, and `reason`. An entry missing one is dropped, which restores the finding rather than excusing it. |
 | `accessibilitySkipRoutes` | `/admin`, `/api` | Route prefixes the sweep skips, added to those two. A route is a URL, so the reach rule above does not judge it. |
 | `analysisEnv` | `PAYLOAD_SECRET`, `DATABASE_URL` | Placeholder environment for the gates that import the project. |
 | `pretest` | empty | A command run before the `tests`, `build`, and `e2e` gates. |

@@ -1,0 +1,88 @@
+// ploaness owns this file. Edit the harness, not this copy: `ploaness verify` compares it byte for byte
+// and `ploaness sync` restores it.
+//
+// A Next.js application serves no security headers unless the project configures them, and no static
+// analysis can see that it did not: the page renders, the build passes, and every gate stays green. The
+// only place the answer exists is in what the running application actually sends, so this asks it.
+//
+// Deliberately not asserted: Strict-Transport-Security. It is a transport directive a browser ignores
+// over the plain-HTTP origin these tests drive, and it is commonly applied at the edge by the hosting
+// platform rather than by the application, so requiring it here would fail projects that already have
+// it and would prove nothing about the ones that do not.
+import { type APIResponse, expect, test } from '@playwright/test'
+
+// Stops a browser re-interpreting a response as a type the server never declared. Without it an
+// uploaded file served as one type can be executed as another.
+const CONTENT_TYPE_OPTIONS: string = 'x-content-type-options'
+const NO_SNIFF: string = 'nosniff'
+
+// Controls how much of this site's URLs travel to the origins it links to.
+const REFERRER_POLICY: string = 'referrer-policy'
+
+// Either answer is a decision about who may frame the page: a policy carrying frame-ancestors has no
+// need of the older header, and a project setting only the older header has still decided.
+const FRAME_OPTIONS: string = 'x-frame-options'
+const FRAME_ANCESTORS: string = 'frame-ancestors'
+
+const CONTENT_SECURITY_POLICY: string = 'content-security-policy'
+const UNSAFE_INLINE: string = "'unsafe-inline'"
+
+const directive = (policy: string, name: string): string | undefined =>
+  policy
+    .split(';')
+    .map((part: string): string => part.trim())
+    .find((part: string): boolean => part === name || part.startsWith(`${name} `))
+
+// script-src when it is declared, and default-src otherwise, which is what the browser itself falls
+// back to. Reading only script-src would pass a policy that declares none and leaves default-src open.
+const scriptSources = (policy: string): string | undefined =>
+  directive(policy, 'script-src') ?? directive(policy, 'default-src')
+
+test.describe('Security headers', () => {
+  test('the application answers with a baseline of security headers', async ({
+    request,
+    baseURL,
+  }) => {
+    const origin: string = baseURL ?? ''
+    expect(origin, 'the ploaness Playwright config must declare a server URL').not.toEqual('')
+    const response: APIResponse = await request.get(origin)
+    expect(response.ok(), `${origin} did not answer`).toBe(true)
+    const headers: Record<string, string> = response.headers()
+
+    expect(
+      headers[CONTENT_TYPE_OPTIONS],
+      `${CONTENT_TYPE_OPTIONS} must be ${NO_SNIFF}, so a browser cannot re-interpret a response ` +
+        'as a type this application never declared',
+    ).toBe(NO_SNIFF)
+
+    expect(
+      headers[REFERRER_POLICY],
+      `${REFERRER_POLICY} must be declared, so the full URL of a page here is not handed to every ` +
+        'origin it links to',
+    ).toBeDefined()
+
+    const policy: string = headers[CONTENT_SECURITY_POLICY] ?? ''
+    expect(
+      policy,
+      `${CONTENT_SECURITY_POLICY} must be declared; without one the page places no limit at all ` +
+        'on where script may be loaded from',
+    ).not.toEqual('')
+
+    expect(
+      headers[FRAME_OPTIONS] !== undefined || directive(policy, FRAME_ANCESTORS) !== undefined,
+      `the application must decide who may frame it, through ${FRAME_OPTIONS} or a ` +
+        `${FRAME_ANCESTORS} directive`,
+    ).toBe(true)
+
+    const sources: string | undefined = scriptSources(policy)
+    expect(
+      sources,
+      'the policy must constrain script, through script-src or default-src',
+    ).toBeDefined()
+    expect(
+      sources ?? '',
+      `script must not be allowed from ${UNSAFE_INLINE}; it readmits the injection a policy ` +
+        'exists to stop',
+    ).not.toContain(UNSAFE_INLINE)
+  })
+})

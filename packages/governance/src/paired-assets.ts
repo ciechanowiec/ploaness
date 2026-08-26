@@ -17,19 +17,21 @@ const ASSET_DIRECTORY: string = 'files'
 /** The suffix npm forces on a packed body: a packed `.npmrc` is stripped and a `.gitignore` renamed. */
 const ASSET_SUFFIX: string = '.asset'
 
-// Two paths are authored where they are shipped rather than copied from a root file, both because
+// Some paths are authored where they are shipped rather than copied from a root file, all because
 // ploaness is not a consumer of itself.
 //
 // `.ploaness/agent-guide.md` maps the guideline onto the harness for a consumer, and ploaness has no
-// `.ploaness/` directory. `tests/e2e/a11y.e2e.spec.ts` drives a Payload application through a browser,
-// and ploaness is a library with no application to drive; pairing it with a root file would mean
-// keeping a Next.js project in this repository for one spec to compile against. What proves that body
-// instead is the third verification leg AGENTS.md already requires: a real consumer runs it.
+// `.ploaness/` directory. The managed sweeps under `tests/e2e` drive a Payload application, and
+// ploaness is a library with no application to drive; pairing one with a root file would mean keeping
+// a Next.js project in this repository for a spec to compile against. What proves those bodies instead
+// is the third verification leg AGENTS.md already requires: a real consumer runs them.
 //
 // A SECTION entry is likewise unpaired: its body is the managed block, not a copy of any whole file.
 const ASSET_AUTHORED_PATHS: ReadonlySet<string> = new Set<string>([
   '.ploaness/agent-guide.md',
   'tests/e2e/a11y.e2e.spec.ts',
+  'tests/e2e/security-headers.e2e.spec.ts',
+  'tests/e2e/access-boundary.e2e.spec.ts',
 ])
 
 /** A root file and the shipped body generated from it. */
