@@ -1,4 +1,5 @@
-// Where the network guard is installed, as the first setup file the shipped Vitest config loads.
+// The first setup file the shipped Vitest config loads. It does two things: it reads the project
+// environment, and it installs the network guard.
 //
 // It imports node builtins and @ploaness/governance, and NOTHING ELSE. A setup file that lives inside
 // node_modules/@ploaness/config resolves `vitest`, `fast-check`, and `@testing-library/*` to the
@@ -12,6 +13,7 @@
 // Every decision lives in @ploaness/governance. What is left here is the interception, which is the one
 // part that cannot be pure.
 import dns from 'node:dns'
+import { existsSync } from 'node:fs'
 import net from 'node:net'
 import os from 'node:os'
 import {
@@ -20,7 +22,21 @@ import {
   hostOfUrl,
   localAddresses,
   RESOLVER_METHODS,
+  runEnvironmentFiles,
 } from '@ploaness/governance'
+
+// Read here for the reason the Playwright config reads them: an integration spec boots the project,
+// and a Payload configuration validates `process.env` as the module loads, so the spec dies on
+// configuration rather than on code. A project could put this in its own `vitest.setup.ts` and many
+// did, but then the promise that a gate running the application uses the real environment holds only
+// for the projects that remembered. Nothing loaded here replaces a value already set, so a project
+// that still loads them itself is unaffected, and a variable CI exported outranks both files.
+//
+// Vitest re-runs this module once per spec file. That costs nothing to repeat: a file that is read
+// twice sets nothing the second time, because the first read already set it.
+for (const file of runEnvironmentFiles(existsSync)) {
+  process.loadEnvFile(file)
+}
 
 // Vitest re-runs a setup module once per spec file, while the builtins it patches live for the whole
 // worker. Without a mark, each file would wrap the previous file's wrapper one layer deeper.
