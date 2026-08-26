@@ -31,7 +31,7 @@ import {
   type VulnerabilityReport,
 } from '@ploaness/governance'
 import { type Context, manifestPathFrom, readJson, trackedFiles } from '../context.js'
-import { failed, type GateResult, passed, type RunResult, run } from '../exec.js'
+import { failed, type GateResult, passed, type RunResult, run, withOutput } from '../exec.js'
 
 interface PnpmLicenseEntry {
   readonly name: string
@@ -71,12 +71,15 @@ export const licenses = (context: Context): GateResult => {
       }),
     )
   const violations: readonly LicensedPackage[] = findLicenseViolations(packages)
-  return violations.length > 0
-    ? failed(
-        `${String(violations.length)} dependency license(s) outside policy`,
-        violations.map((entry: LicensedPackage): string => `${entry.name}: ${entry.license}`),
-      )
-    : passed(`all ${String(packages.length)} dependency licenses are within policy`)
+  return withOutput(
+    violations.length > 0
+      ? failed(
+          `${String(violations.length)} dependency license(s) outside policy`,
+          violations.map((entry: LicensedPackage): string => `${entry.name}: ${entry.license}`),
+        )
+      : passed(`all ${String(packages.length)} dependency licenses are within policy`),
+    result.stdout,
+  )
 }
 
 const MANIFEST_NAME: string = 'package.json'
@@ -486,12 +489,19 @@ export const vulnerabilities = (context: Context): GateResult => {
     ),
     ...report.deadEntries,
   ]
-  return findings.length > 0
-    ? failed(
-        `${String(findings.length)} vulnerability finding(s) at or above ${report.threshold}`,
-        findings,
-      )
-    : passed(
-        `no vulnerability at or above ${report.threshold} across ${String(advisories.length)} advisory record(s)`,
-      )
+  // The evidence is the audit pnpm printed, kept whatever the verdict. A gate that reaches its verdict
+  // by PARSING a tool rather than by its exit status is exactly the one a reader wants to audit, and
+  // dropping the transcript here would leave `--verbose` answering "no output" on the gate that most
+  // needs an answer.
+  return withOutput(
+    findings.length > 0
+      ? failed(
+          `${String(findings.length)} vulnerability finding(s) at or above ${report.threshold}`,
+          findings,
+        )
+      : passed(
+          `no vulnerability at or above ${report.threshold} across ${String(advisories.length)} advisory record(s)`,
+        ),
+    result.stdout,
+  )
 }
