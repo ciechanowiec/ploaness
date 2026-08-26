@@ -323,6 +323,12 @@ export const guidelineRules = {
   'unicorn/prefer-set-methods': 'off',
   'unicorn/no-null': 'off', // React and Payload use `null` deliberately.
   'unicorn/no-keyword-prefix': 'off',
+  // A DIRECT contradiction rather than a preference. Biome's `useNumberNamespace` requires
+  // `Number.NaN` and `Number.POSITIVE_INFINITY`; this rule requires the bare globals, so no source
+  // text satisfies both linters and the only escapes are a suppression or contorting the code to
+  // avoid the constant. Biome decides, for the reason it already decides formatting: the two must
+  // never disagree about the same character, so one of them owns style and the other defers.
+  'unicorn/prefer-global-number-constants': 'off',
   // New in unicorn 73. It would expand every concise one-line `/** ... */` export doc into a
   // three-line block, and would also rewrite the `GENERATED AUTOMATICALLY BY PAYLOAD` /
   // `DO NOT MODIFY` headers that Payload writes into the `src/app/(payload)` scaffolding.

@@ -274,10 +274,7 @@ const publishedAt = async (name: string, version: string): Promise<number | unde
       return undefined
     }
     const date: unknown = found['date']
-    if (typeof date !== 'string') {
-      return undefined
-    }
-    const parsed: number = Date.parse(date)
+    const parsed: number = typeof date === 'string' ? Date.parse(date) : Number.NaN
     return Number.isNaN(parsed) ? undefined : parsed
   } catch {
     return undefined
