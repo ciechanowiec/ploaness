@@ -25,7 +25,7 @@
       "required": true,
       "why": "Type definitions travel with what they describe, and they are pinned for the toolchain's reason rather than the framework's: a type package is an input to tsc, so a patch release changes what type-checks while the project stays unchanged. They carry their own version lines rather than the version of the package they describe, so unlike the Payload family they cannot be derived and have to be written down.",
       "versions": {
-        "@types/node": "26.2.0",
+        "@types/node": "26.3.0",
         "@types/react": "19.2.18",
         "@types/react-dom": "19.2.5"
       }
