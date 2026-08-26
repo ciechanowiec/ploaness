@@ -17,13 +17,17 @@ import {
   findLicenseViolations,
   HARNESS_EXCEPTIONS,
   HARNESS_PACKAGE,
+  hoursPublished,
   inheritedManifestPaths,
   isArray,
+  isHeldByReleaseAge,
   isRecord,
   judgeVulnerabilities,
   type LicensedPackage,
   type ManifestResolver,
   type ManifestSource,
+  RELEASE_AGE_FLOOR_HOURS,
+  type ReleaseAge,
   type VulnerabilityReport,
 } from '@ploaness/governance'
 import { type Context, manifestPathFrom, readJson, trackedFiles } from '../context.js'
@@ -243,6 +247,40 @@ const sortLookups = (
   }
 }
 
+// The version document carries no publication date, and the packument root that does costs tens of
+// megabytes for a package as long-lived as `next`. The search document is a kilobyte and names the
+// latest version beside its date, which is the only affordable answer to "how old is this release".
+// It is asked ONLY for a coordinate the report already names - a handful, not every dependency - and
+// every miss is silent: search matches by relevance rather than exactly, so a document naming another
+// package or another version answers nothing, and an unknown date reports the update the ordinary way.
+const searchDocumentUrl = (name: string): string =>
+  `https://registry.npmjs.org/-/v1/search?text=${encodeURIComponent(name)}&size=1`
+
+const publishedAt = async (name: string, version: string): Promise<number | undefined> => {
+  try {
+    const response: Response = await fetch(searchDocumentUrl(name), {
+      headers: { accept: 'application/json' },
+    })
+    if (!response.ok) {
+      return undefined
+    }
+    const objects: unknown = asRecord(await response.json())['objects']
+    const first: unknown = isArray(objects) ? objects[0] : undefined
+    const found: Record<string, unknown> = asRecord(asRecord(first)['package'])
+    if (found['name'] !== name || found['version'] !== version) {
+      return undefined
+    }
+    const date: unknown = found['date']
+    if (typeof date !== 'string') {
+      return undefined
+    }
+    const parsed: number = Date.parse(date)
+    return Number.isNaN(parsed) ? undefined : parsed
+  } catch {
+    return undefined
+  }
+}
+
 // The manifest leads the line because it is what the reader has to open. The standard asks the update
 // report to name it for every coordinate, and a workspace pinning one analyzer in two places is exactly
 // the case where the bare package name says nothing about where to make the change.
@@ -265,6 +303,41 @@ const describeReported = (finding: FreshnessFinding): string =>
   finding.verdict === 'fail'
     ? `stale ${describeFinding(finding)}; past the freshness bound${HARNESS_REPAIR}`
     : `update ${describeFinding(finding)}`
+
+// `held`, not `update`, for a release pnpm will refuse for being too young. Naming it as an ordinary
+// update sends the reader to an install that fails, and the way past that failure is an exclusion from
+// the very guard the wait exists to keep. It says the age so the reader can see how short the wait is.
+const describeHeld = (finding: FreshnessFinding, hours: number | undefined): string => {
+  const age: string = hours === undefined ? 'recently' : `${String(hours)}h ago`
+  return (
+    `held ${finding.owner} ${finding.name}: latest ${finding.latest}, published ${age}; below the ` +
+    `${String(RELEASE_AGE_FLOOR_HOURS)}h release-age floor pnpm enforces, so it installs once it ages`
+  )
+}
+
+// A date is asked for only where it can change the line: a coordinate already past the bound is stale
+// whatever its age, and one this project cannot edit is reported to a different address entirely.
+const isHeldCandidate = (finding: FreshnessFinding): boolean =>
+  finding.verdict === 'update' && !finding.isInherited
+
+const describeUpdates = async (
+  reported: readonly FreshnessFinding[],
+  now: number,
+): Promise<readonly string[]> =>
+  await Promise.all(
+    reported.map(async (finding: FreshnessFinding): Promise<string> => {
+      if (!isHeldCandidate(finding)) {
+        return describeReported(finding)
+      }
+      const age: ReleaseAge = {
+        publishedAt: await publishedAt(finding.name, finding.latest),
+        now,
+      }
+      return isHeldByReleaseAge(age)
+        ? describeHeld(finding, hoursPublished(age))
+        : describeReported(finding)
+    }),
+  )
 
 // One lookup per distinct name, fanned back out across the coordinates that share it. A workspace
 // declaring the same analyzer in three manifests must not ask the registry three times.
@@ -314,7 +387,7 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
       `${String(report.failures.length)} dependency/dependencies are two or more majors behind`,
       [
         ...report.failures.map((finding: FreshnessFinding): string => describeFinding(finding)),
-        ...report.reported.map((finding: FreshnessFinding): string => describeReported(finding)),
+        ...(await describeUpdates(report.reported, Date.now())),
         ...notes,
       ],
     )
@@ -335,10 +408,7 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
     overdue > 0
       ? `${counted}; ${String(overdue)} inherited coordinate(s) past the bound, reported not failed`
       : `${counted}, are within the freshness bound`,
-    [
-      ...report.reported.map((finding: FreshnessFinding): string => describeReported(finding)),
-      ...notes,
-    ],
+    [...(await describeUpdates(report.reported, Date.now())), ...notes],
   )
 }
 

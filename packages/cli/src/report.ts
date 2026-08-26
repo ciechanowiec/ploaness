@@ -88,6 +88,40 @@ const MILLISECONDS_PER_SECOND: number = 1000
 const elapsed = (milliseconds: number): string =>
   `${(milliseconds / MILLISECONDS_PER_SECOND).toFixed(1)}s`
 
+const SECONDS_PER_MINUTE: number = 60
+
+// A gate line keeps the seconds form: the values there are small and the shared unit is what makes the
+// column comparable at a glance. A whole run routinely passes a minute, where the same form stops being
+// readable - `205.4s` is a number to divide rather than a duration to recognise.
+const duration = (milliseconds: number): string => {
+  const seconds: number = Math.round(milliseconds / MILLISECONDS_PER_SECOND)
+  if (seconds < SECONDS_PER_MINUTE) {
+    return elapsed(milliseconds)
+  }
+  const minutes: number = Math.floor(seconds / SECONDS_PER_MINUTE)
+  return `${String(minutes)}m ${String(seconds - minutes * SECONDS_PER_MINUTE)}s`
+}
+
+/** How many of the slowest gates the closing summary names. */
+const SLOWEST_LISTED: number = 3
+
+// The total says how long the run took; this says where it went, which is the part a reader can act on.
+// Listed only when there are more gates than the list would name, because "the slowest 3 of 3" ranks a
+// run rather than summarising it.
+const slowest = (outcomes: readonly GateOutcome[]): string | undefined => {
+  if (outcomes.length <= SLOWEST_LISTED) {
+    return undefined
+  }
+  const ranked: readonly GateOutcome[] = [...outcomes].sort(
+    (left: GateOutcome, right: GateOutcome): number => right.durationMs - left.durationMs,
+  )
+  const named: string = ranked
+    .slice(0, SLOWEST_LISTED)
+    .map((outcome: GateOutcome): string => `${outcome.gate.id} ${elapsed(outcome.durationMs)}`)
+    .join(', ')
+  return `  slowest: ${named}`
+}
+
 // Below this width the right-hand column would collide with the summary, so the duration simply follows
 // the text instead of being pushed to the margin.
 const MINIMUM_COLUMNS: number = 80
@@ -199,10 +233,15 @@ export const reportVerdict = (
   const counts: string = [
     `${String(tally(outcomes, PASS))} passed`,
     `${String(failures.length)} failed`,
+    `${String(outcomes.length)} gates`,
   ].join('  ')
   const mode: string = isExtended ? 'Extended verification' : 'Default verification'
   line('')
-  line(spread(`  ${counts}`, elapsed(total), `  ${paint(counts, DIM)}`))
+  line(spread(`  ${counts}`, duration(total), `  ${paint(counts, DIM)}`))
+  const ranking: string | undefined = slowest(outcomes)
+  if (ranking !== undefined) {
+    line(paint(ranking, DIM))
+  }
   if (failures.length === 0) {
     const passedText: string = `${mode} passed.`
     line(`  ${paint(passedText, GREEN)}`)

@@ -226,8 +226,12 @@ time. Use it while adopting ploaness, to see the size of the job. It still exits
 a pass. `preflight` and `wiring` stop it anyway: below a failing one, ploaness either may not judge this
 project or cannot tell whether what it is judging is what it thinks.
 
-Run a single gate with `ploaness gate <id>` while iterating, and `ploaness gates` to list every gate in
-run order. A single gate is a debugging aid, never a verdict.
+Run a single gate with `ploaness gate <id>`, and `ploaness gates` to list every gate in run order with
+the tier it belongs to. Use it freely while iterating and to answer one focused question - `ploaness
+gate deps` to see what has a newer release, `ploaness gate suppressions` to see where the budget
+stands. What a single gate is not is a verdict: it skips `preflight`, so it never establishes that this
+project is one ploaness may judge, and it says nothing about the gates it did not run. Only a full run
+answers "is this ready".
 
 ## Layer 5: Exceptions and Repairs
 
@@ -253,6 +257,24 @@ run order. A single gate is a debugging aid, never a verdict.
 - For a source suppression, use the analyzer's exact rule identifier and put the reason on the same
   line. A bare suppression without a stated reason is itself a finding, and every suppression counts
   against the ceiling.
+
+### Change Requests
+
+A project cannot repair the harness from inside itself, and that is the design rather than a gap in it:
+a rule a project can edit is not a rule. What follows from it is that a rule improves only when somebody
+reports it, which makes the report part of the contract rather than a courtesy.
+
+Raise it with the ploaness maintainers when:
+
+- a gate blocks work that is correct, and the only way past it is a suppression or a carve-out;
+- the same finding is repaired the same way in project after project, which is a rule that belongs in
+  the harness rather than in each project's habits;
+- a project-owned check turns out to be true of every project of this kind, and should move into a gate;
+- a message names a defect without naming the repair, or names the wrong repair.
+
+Bring the failing output, the smallest case that reproduces it, and what the rule should have said. A
+suppression to get past a gate is a local answer to a general problem: take it when the work cannot
+wait, and report it either way, because the next project meets the same gate with no memory of this one.
 
 ### Settings
 
