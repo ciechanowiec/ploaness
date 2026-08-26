@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   findAnonymousDraftReads,
+  findPublicAuthCreate,
   findUndeclaredAccess,
   findUnhardenedAuth,
+  findUnrestrictedUploads,
 } from '../src/payload-access.js'
 
 const COMPLETE_ACCESS: string =
@@ -13,6 +15,8 @@ const rulesOf = (source: string): readonly string[] =>
     ...findUndeclaredAccess(source),
     ...findUnhardenedAuth(source),
     ...findAnonymousDraftReads(source),
+    ...findPublicAuthCreate(source),
+    ...findUnrestrictedUploads(source),
   ].map((violation) => violation.rule)
 
 // The three declaration forms are the point of this block. Two of them used to be matched by nothing at
@@ -149,10 +153,71 @@ describe('no-anonymous-draft-reads', () => {
   })
 })
 
+// The auth collection is the admin collection in a default Payload project, so this one key decides
+// whether a stranger can register into the collection that carries the roles.
+describe('no-public-auth-create', () => {
+  const hardened: string = 'auth: { maxLoginAttempts: 5, lockTime: 600 },'
+  const openCreate: string =
+    'access: { create: () => true, read: isAdmin, update: isAdmin, delete: isAdmin }'
+
+  it('reports an unconditionally true create on an auth collection', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${hardened} ${openCreate} }`
+    expect(rulesOf(source)).toEqual(['no-public-auth-create'])
+  })
+
+  it('says nothing when the collection carries no auth', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${openCreate} }`
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it('accepts an auth collection whose create is delegated to a rule', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${hardened} ${COMPLETE_ACCESS} }`
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  // The access value runs to the end of the enclosing literal, so a field granting nothing beyond
+  // itself must not be read as the collection opening its own create.
+  it('does not read a field-level always-true create as the collection own', () => {
+    const field: string = `{ name: 'x', access: { create: () => true } }`
+    const head: string = `const A: CollectionConfig = { slug: 'a', ${hardened} ${COMPLETE_ACCESS}`
+    expect(rulesOf(`${head} fields: [${field}] }`)).toEqual([])
+  })
+})
+
+// mimeTypes defaults to undefined, so an upload collection takes whatever a client sends until the
+// project says otherwise, and an SVG served from this origin is script that runs as the site.
+describe('require-upload-restrictions', () => {
+  it('reports the bare enable, which restricts nothing', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} upload: true }`
+    expect(rulesOf(source)).toEqual(['require-upload-restrictions'])
+  })
+
+  it('reports an upload block that declares no mimeTypes', () => {
+    const upload: string = `upload: { staticDir: 'media' }`
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} ${upload} }`
+    expect(rulesOf(source)).toEqual(['require-upload-restrictions'])
+  })
+
+  it('accepts an upload block that restricts mimeTypes', () => {
+    const upload: string = `upload: { mimeTypes: ['image/png'] }`
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} ${upload} }`
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it('says nothing about a collection that uploads nothing', () => {
+    expect(rulesOf(`const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} }`)).toEqual([])
+  })
+
+  it('names the restriction it wants in the reason it gives', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} upload: true }`
+    expect(findUnrestrictedUploads(source)[0]?.reason).toContain('mimeTypes')
+  })
+})
+
 // A governed project cannot write the untyped form: `explicit-function-return-type` requires the
-// annotation, so `read: (): boolean => true` is the only always-true spelling that reaches this rule.
-// The detector demanded `()` immediately before the arrow, so it matched none of them, and the rule
-// reported nothing on precisely the code it exists to catch.
+// annotation, so `read: (): boolean => true` is the only always-true spelling that reaches these rules.
+// The detector demanded `()` immediately before the arrow, so it matched none of them, and both rules
+// below reported nothing on precisely the code they exist to catch.
 describe('the always-true form a governed project actually writes', () => {
   it('reports a typed always-true read on a drafting collection', () => {
     const drafts: string = 'versions: { drafts: true },'
@@ -161,9 +226,19 @@ describe('the always-true form a governed project actually writes', () => {
     expect(rulesOf(source)).toEqual(['no-anonymous-draft-reads'])
   })
 
+  it('reports a typed always-true create on an auth collection', () => {
+    const hardened: string = 'auth: { maxLoginAttempts: 5, lockTime: 600 },'
+    const open: string =
+      'access: { create: (): boolean => true, read: isAdmin, update: isAdmin, delete: isAdmin }'
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${hardened} ${open} }`
+    expect(rulesOf(source)).toEqual(['no-public-auth-create'])
+  })
+
   it('still accepts a typed rule that returns false', () => {
-    const closed: string = 'access: { read: (): boolean => false, create: x, update: x, delete: x }'
-    const source: string = `const A: CollectionConfig = { slug: 'a', versions: { drafts: true }, ${closed} }`
+    const hardened: string = 'auth: { maxLoginAttempts: 5, lockTime: 600 },'
+    const closed: string =
+      'access: { create: (): boolean => false, read: isAdmin, update: isAdmin, delete: isAdmin }'
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${hardened} ${closed} }`
     expect(rulesOf(source)).toEqual([])
   })
 })

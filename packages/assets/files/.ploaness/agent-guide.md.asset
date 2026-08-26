@@ -67,7 +67,10 @@ ploaness governs all of the following domains:
   and access control decided rather than inherited: every collection decides create, read, update and
   delete, every global decides read and update, and an auth collection caps login attempts and locks
   the account. Payload fills what a config omits during sanitisation, and its default is public read,
-  so a partial access block is invisible once the application boots.
+  so a partial access block is invisible once the application boots. An auth collection must not grant
+  a create that admits anyone: it is the collection carrying the roles, so an always-true create lets a
+  stranger register into it. An upload collection must declare `mimeTypes`: undeclared, it accepts
+  whatever a client sends, and an SVG served from this origin is script that runs as the site.
 - **Drafts:** a collection or global with `versions.drafts` enabled must not grant a read that admits
   anyone, because `?draft=true` then serves unpublished content to an unauthenticated client. The gate
   catches the inline always-true form; a read delegated to a helper is yours to judge, and the helper

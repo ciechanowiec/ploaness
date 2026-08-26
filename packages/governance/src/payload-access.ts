@@ -1,7 +1,7 @@
 // The access-control half of the Payload rules: who a collection or a global lets in, and what it
 // leaves to the framework's defaults.
 //
-// These three rules are separated from the Local API rules in `payload-policy.ts` because they share a
+// These rules are separated from the Local API rules in `payload-policy.ts` because they share a
 // question the others do not ask - "which object literal IS this config" - and because together the two
 // halves passed the file size cap. Every one of them is a security decision that Payload will silently
 // make on the project's behalf if the project does not make it first.
@@ -62,7 +62,7 @@ const SATISFIES: string = 'satisfies'
 
 // EVERY config in the file, not the first. `search` returned one offset, so a module exporting two
 // collections - or a collection beside a global - had its second config judged by nothing at all. The
-// Local API rules already iterated their matches; these three did not, and the asymmetry was invisible
+// Local API rules already iterated their matches; these did not, and the asymmetry was invisible
 // because a file with one config, which is most of them, behaves identically either way.
 const findConfigs = (source: string, kind: ConfigKind): readonly FoundConfig[] =>
   [...source.matchAll(kind.declaration)].flatMap(
@@ -146,13 +146,18 @@ export const findUnhardenedAuth = (source: string): readonly PayloadViolation[] 
 
 // A draft is unpublished content. With versions.drafts enabled, `?draft=true` serves it to whoever the
 // read rule admits - so a read that is unconditionally true publishes every draft to anyone.
+const DRAFTS_ENABLED: RegExp = /drafts\s*:\s*(?:true|\{)/
+
+// The inline always-true form for one operation, built per operation rather than written out twice:
+// the draft rule and the auth-create rule below ask the same question of different keys.
+//
 // The return type is optional in the pattern and effectively mandatory in a governed project, which is
 // the whole reason it appears here. `explicit-function-return-type` makes a conforming project write
 // `read: (): boolean => true`, and a pattern demanding `()` immediately before `=>` matched none of
-// those - so this rule reported nothing on the only spelling the harness permits. `[^=]*` cannot run
-// past the arrow it precedes, which keeps the optional part from swallowing the match.
-const ALWAYS_TRUE_READ: RegExp = /read\s*:\s*\(\s*\)\s*(?:\s*:[^=]*)?=>\s*true/
-const DRAFTS_ENABLED: RegExp = /drafts\s*:\s*(?:true|\{)/
+// those - so the draft rule reported nothing on the only spelling the harness permits. `[^=]*` cannot
+// run past the arrow it precedes, which keeps the optional part from swallowing the match.
+const alwaysTrue = (operation: string): RegExp =>
+  new RegExp(String.raw`${operation}\s*:\s*\(\s*\)\s*(?:\s*:[^=]*)?=>\s*true`)
 
 // Where the access block's own braces close, so the search below cannot run past them into the fields.
 const blockEnd = (access: string, open: number): number => {
@@ -160,21 +165,26 @@ const blockEnd = (access: string, open: number): number => {
   return body === undefined ? access.length : open + body.length
 }
 
-// The read rule is looked for inside the access block alone. `depthOneValue` returns everything from
+// The operation is looked for inside the access block alone. `depthOneValue` returns everything from
 // the key's colon to the end of the enclosing literal, so testing it whole meant a FIELD-level
 // `read: () => true` - which grants nothing beyond that one field - was reported as though the
 // collection itself were open to anyone.
-const isDraftExposed = (body: string): boolean => {
-  const versions: string | undefined = depthOneValue(body, 'versions')
-  if (versions === undefined || !DRAFTS_ENABLED.test(versions)) {
-    return false
-  }
+//
+// Only the inline form is decidable here. A rule delegated to a helper, such as `read: anyone`, reads
+// identically to a restrictive one, which is why the managed access-boundary sweep asks the running
+// application what it actually grants instead of leaving the question to this scan.
+const opensToAnyone = (body: string, operation: string): boolean => {
   const access: string | undefined = depthOneValue(body, 'access')
   if (access === undefined) {
     return false
   }
   const open: number = access.indexOf('{')
-  return open !== NOT_FOUND && ALWAYS_TRUE_READ.test(access.slice(0, blockEnd(access, open)))
+  return open !== NOT_FOUND && alwaysTrue(operation).test(access.slice(0, blockEnd(access, open)))
+}
+
+const isDraftExposed = (body: string): boolean => {
+  const versions: string | undefined = depthOneValue(body, 'versions')
+  return versions !== undefined && DRAFTS_ENABLED.test(versions) && opensToAnyone(body, 'read')
 }
 
 /** Report a config whose drafts are readable by an unauthenticated client. */
@@ -191,4 +201,60 @@ export const findAnonymousDraftReads = (source: string): readonly PayloadViolati
           },
         ]
       : [],
+  )
+
+// The auth collection is the admin collection in a default Payload project, so an unconditionally true
+// `create` on it lets anyone on the internet register an account into the collection that carries the
+// roles. Payload asks nothing further: there is no separate registration switch that would also have
+// to be on, so this single key is the whole of the decision.
+const publicAuthCreateIn = (source: string, found: FoundConfig): readonly PayloadViolation[] =>
+  depthOneValue(found.body, 'auth') !== undefined && opensToAnyone(found.body, 'create')
+    ? [
+        {
+          line: lineOf(source, found.marker),
+          rule: 'no-public-auth-create',
+          reason:
+            'an auth collection must not grant an unconditionally true create; anyone could ' +
+            'register an account into the collection that carries the roles',
+        },
+      ]
+    : []
+
+/** Report an auth collection that lets an unauthenticated client create its own account. */
+export const findPublicAuthCreate = (source: string): readonly PayloadViolation[] =>
+  eachConfig(source, (kind: ConfigKind, found: FoundConfig): readonly PayloadViolation[] =>
+    kind.label === COLLECTION ? publicAuthCreateIn(source, found) : [],
+  )
+
+// `mimeTypes` defaults to undefined, so an upload collection takes whatever a client sends until the
+// project says otherwise. Served from the application's own origin, an uploaded SVG is script that runs
+// as the site, which is why the restriction is required rather than advised. No size cap is asked for
+// here: Payload takes that at the config root rather than on the collection.
+const UPLOAD_RESTRICTION: string = 'mimeTypes'
+
+const unrestrictedUploadIn = (source: string, found: FoundConfig): readonly PayloadViolation[] => {
+  const value: string | undefined = depthOneValue(found.body, 'upload')
+  if (value === undefined) {
+    return []
+  }
+  const declared: readonly string[] = value.trimStart().startsWith('{')
+    ? topLevelKeys(value, 0)
+    : []
+  return declared.includes(UPLOAD_RESTRICTION)
+    ? []
+    : [
+        {
+          line: lineOf(source, found.marker),
+          rule: 'require-upload-restrictions',
+          reason:
+            `an upload collection must declare ${UPLOAD_RESTRICTION}; left undeclared it accepts ` +
+            'any file, and an SVG served from this origin is script that runs as the site',
+        },
+      ]
+}
+
+/** Report an upload collection that accepts whatever file type Payload's defaults allow. */
+export const findUnrestrictedUploads = (source: string): readonly PayloadViolation[] =>
+  eachConfig(source, (kind: ConfigKind, found: FoundConfig): readonly PayloadViolation[] =>
+    kind.label === COLLECTION ? unrestrictedUploadIn(source, found) : [],
   )

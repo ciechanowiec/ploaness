@@ -191,6 +191,10 @@ drop_text() {
     node "$lib/drop-text.mjs" "$@"
 }
 
+replace_text() {
+    node "$lib/replace-text.mjs" "$@"
+}
+
 CONFORMING_BODY='The fixture exercises the packed harness from outside the workspace, which is the
 only arrangement that resolves the way a published install does.'
 
@@ -355,6 +359,23 @@ expect fail-install-scripts install-scripts FAIL 'onlyBuiltDependencies'
 
 # Payload fills the missing operations in during sanitisation, so a partial access block is invisible
 # once the app boots. The rule this replaced accepted one operation out of four.
+# An upload collection that restricts nothing takes whatever a client sends, and an SVG served from
+# the application's own origin is script that runs as the site.
+new_case fail-unrestricted-upload
+drop_text "$scratch/fail-unrestricted-upload/src/collections/Media.ts" "    mimeTypes: ['image/png', 'image/jpeg'],
+"
+commit_case fail-unrestricted-upload 'feat(fixture): let the upload collection take any file' "$CONFORMING_BODY"
+expect fail-unrestricted-upload payload-rules FAIL require-upload-restrictions
+
+# The auth collection is the admin collection in a default Payload project, so an always-true create
+# lets a stranger register into the collection that carries the roles. The value is flipped rather than
+# dropped: dropping it would leave the collection incomplete and fail a different rule.
+new_case fail-public-auth-create
+replace_text "$scratch/fail-public-auth-create/src/collections/Users.ts" \
+    'create: (): boolean => false' 'create: (): boolean => true'
+commit_case fail-public-auth-create 'feat(fixture): open the auth collection to anyone' "$CONFORMING_BODY"
+expect fail-public-auth-create payload-rules FAIL no-public-auth-create
+
 new_case fail-partial-access
 drop_text "$scratch/fail-partial-access/src/collections/Posts.ts" "    create: (): boolean => false,
 "
