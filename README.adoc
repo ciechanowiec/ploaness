@@ -64,7 +64,7 @@ endif::[]
 . _ploaness_ runs on Node 26 or newer.
 . The https://payloadcms.com[Payload CMS^] project declares the https://www.npmjs.com/package/payload[`payload` package^] among its dependencies. Every rule _ploaness_ applies is a rule about https://payloadcms.com[Payload CMS^].
 . Three xref:#gates[gates] run their analyzer in a container: xref:#secrets-gate[`secrets`], xref:#docker-gate[`docker`], and xref:#actions-gate[`actions`]. Each analyzer needs a reachable Docker daemon, and each image is pinned by digest so an upstream release can't change a verdict.
-. Two xref:#gates[gates] read a public service by design and fail when it's unreachable: xref:#vulnerabilities-gate[`vulnerabilities`] reads the advisory database, and `deps` reads the package registry.
+. Two xref:#gates[gates] read a public service by design and fail when it's unreachable: xref:#vulnerabilities-gate[`vulnerabilities`] reads the advisory database, and `deps` reads the package registry and the public image registry.
 . _ploaness_ pins two sets of versions, and the xref:#wiring-gate[`wiring` gate] rejects any other value for either.
 +
 The *toolchain* is every package whose version changes what a xref:#gates[gate] does: `vitest`, `@vitest/coverage-v8`, `typescript`, `jsdom`, `fast-check`, the `@testing-library` packages, `@playwright/test`, `@axe-core/playwright`, and `tsx`, which the xref:#e2e-gate[`e2e`] gate starts the run through. A https://payloadcms.com[Payload CMS^] project declares the ones its own files import and declares the rest only if it uses them, at the pinned version either way. The expected version is read from _ploaness_'s own manifests, so there is no second copy to drift.
@@ -244,7 +244,7 @@ xref:#default-verification[] runs the following 32 gates.
   postinstall script. An empty list is a valid answer; leaving the list undeclared is not.
 
 | `deps`
-| No dependency the https://payloadcms.com[Payload CMS^] project declares is two or more major versions behind. The update report covers the project's own manifests and the _ploaness_ manifests it inherits, naming the manifest that declares each coordinate. A coordinate an inherited manifest declares is measured the same way and reported the same way, but never fails the build: its version belongs to _ploaness_, so the repair is upgrading _ploaness_ rather than editing the project. The registry must be reachable.
+| No dependency the https://payloadcms.com[Payload CMS^] project declares is two or more major versions behind. The update report covers the project's own manifests and the _ploaness_ manifests it inherits, naming the manifest that declares each coordinate. A coordinate an inherited manifest declares is measured the same way and reported the same way, but never fails the build: its version belongs to _ploaness_, so the repair is upgrading _ploaness_ rather than editing the project. The same report covers the container images _ploaness_ pins for the analyzers it runs in one. An image is reported and never fails: the two-major bound is a claim about a release line, and an image tag isn't required to carry one. Each line names the analyzer, the newer tag, and the whole reference that replaces the pin, so moving it is a copy rather than a lookup. A tag that no longer resolves to the digest pinned beside it is reported too, which is a fact about the registry rather than about the pin: the digest still names the same bytes. Both registries must be reachable.
 
 | `image-assets`
 | Every tracked image decodes as the format its bytes claim.

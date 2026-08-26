@@ -81,6 +81,20 @@ shipped body that is code once reached a consumer unformatted. And shellcheck re
 that implement these checks, which the standard makes source code of this repository: the analyzer runs
 in a digest-pinned image declared in `toolchain-pins.ts` beside the three the gates use.
 
+Each of those four is declared as `<repo>:<tag>@sha256:<digest>`, and both halves are load-bearing. The
+digest is what makes a verdict reproducible; the tag is what the `deps` gate reads to ask the registry
+whether a newer release exists. The tag used to be a comment, which no check could read - and two of the
+four had gone stale there, the hadolint pin commented `2.14.0` while carrying the bytes of `v2.15.1` and
+the actionlint pin commented `1.7.7` while carrying `1.7.12`. Nothing was wrong with the pins; the prose
+beside them was wrong, and only a person reading carefully could have noticed.
+
+An image update is reported and never fails, because the freshness bound is a claim about a release line
+and a tag is not required to carry one. What does fail is a registry that cannot say what is current,
+which is the same fail-closed rule the coordinate half already followed. The decisions - what a stable
+tag is, which tags share the pinned tag's scheme, which is newest - are in
+`packages/governance/src/container-freshness.ts`, so they are unit-tested against tag lists no live
+registry would produce on demand; `packages/cli/src/checks/images.ts` holds the HTTP and nothing else.
+
 What remains genuinely inapplicable is `preflight`, `wiring`, and `assets`, which judge a consumer's
 installation of ploaness; `payload-generated`, `payload-rules`, and `generated-denial`, which are about
 Payload - the last of those denies write access to the three artefacts `payload generate` owns, and this

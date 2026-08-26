@@ -30,7 +30,14 @@ describe('findUnpinnedImages', () => {
   it('rejects a floating latest tag', () => {
     const found: readonly string[] = findUnpinnedImages({ gitleaks: 'zricethezav/gitleaks:latest' })
     expect(found).toHaveLength(1)
-    expect(found[0]).toContain('mutable reference')
+    expect(found[0]).toContain('<repo>:<tag>@sha256:<digest>')
+  })
+
+  // A digest alone is reproducible but says nothing about which release it is, which is how the version
+  // came to live in a comment and go stale there. The freshness report reads the tag, so both are required.
+  it('rejects a digest carrying no tag, which names bytes but no release', () => {
+    const digest: string = `sha256:${'a'.repeat(64)}`
+    expect(findUnpinnedImages({ gitleaks: `zricethezav/gitleaks@${digest}` })).toHaveLength(1)
   })
 
   it('rejects a version tag, which the registry may still repoint', () => {
@@ -45,9 +52,9 @@ describe('findUnpinnedImages', () => {
     expect(findUnpinnedImages({ hadolint: 'hadolint/hadolint:latest' })[0]).toContain('hadolint')
   })
 
-  it('accepts a digest reference', () => {
+  it('accepts a reference naming both the release and its bytes', () => {
     const digest: string = `sha256:${'a'.repeat(64)}`
-    expect(findUnpinnedImages({ gitleaks: `zricethezav/gitleaks@${digest}` })).toEqual([])
+    expect(findUnpinnedImages({ gitleaks: `zricethezav/gitleaks:v8.30.1@${digest}` })).toEqual([])
   })
 })
 

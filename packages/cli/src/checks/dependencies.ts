@@ -32,6 +32,7 @@ import {
 } from '@ploaness/governance'
 import { type Context, manifestPathFrom, readJson, trackedFiles } from '../context.js'
 import { failed, type GateResult, passed, type RunResult, run, withOutput } from '../exec.js'
+import { type ImageReport, imageFreshness } from './images.js'
 
 interface PnpmLicenseEntry {
   readonly name: string
@@ -361,7 +362,49 @@ const lookUpEach = async (names: readonly string[]): Promise<ReadonlyMap<string,
  * publish at all - a private or workspace-linked package - is reported rather than judged, because a
  * public "latest" it has no claim to would be a fabricated comparison.
  */
+// The images the harness pins are versioned inputs like the coordinates are, and they are read first so
+// a registry that cannot answer fails before the longer npm fan-out runs. An image never fails for being
+// behind; it fails only where the guideline says a freshness check does, which is when nothing can
+// establish what is current.
+const imagesUnprovable = (images: ImageReport): GateResult | undefined =>
+  images.failure === undefined
+    ? undefined
+    : failed('image freshness cannot be proven', [
+        images.failure,
+        'this gate is fail-closed by design; retry with network access',
+      ])
+
+// The summary may not claim every coordinate is within the bound while the report below it lists one
+// that is not. A harness pin past the bound does not stop this build, and a pass that said nothing about
+// it would leave the only line that matters to be found by reading. The images are counted here too:
+// they are versioned inputs the same rule covers, so a summary naming only coordinates would understate
+// what the gate read.
+const freshnessSummary = (
+  statuses: readonly DependencyStatus[],
+  manifests: readonly ManifestSource[],
+  report: FreshnessReport,
+  images: ImageReport,
+): string => {
+  const inherited: number = manifests.filter(
+    (manifest: ManifestSource): boolean => manifest.isInherited,
+  ).length
+  const overdue: number = report.reported.filter(
+    (finding: FreshnessFinding): boolean => finding.verdict === 'fail',
+  ).length
+  const counted: string =
+    `${String(statuses.length)} declared coordinate(s) across ${String(manifests.length)} ` +
+    `manifest(s), ${String(inherited)} inherited, and ${String(images.scanned)} pinned image(s)`
+  return overdue > 0
+    ? `${counted}; ${String(overdue)} inherited coordinate(s) past the bound, reported not failed`
+    : `${counted}, are within the freshness bound`
+}
+
 export const dependencyFreshness = async (context: Context): Promise<GateResult> => {
+  const images: ImageReport = await imageFreshness()
+  const unprovable: GateResult | undefined = imagesUnprovable(images)
+  if (unprovable !== undefined) {
+    return unprovable
+  }
   const manifests: readonly ManifestSource[] = manifestSources(context)
   const coordinates: readonly DeclaredCoordinate[] = collectCoordinates(manifests)
   const names: readonly string[] = [
@@ -388,28 +431,16 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
       [
         ...report.failures.map((finding: FreshnessFinding): string => describeFinding(finding)),
         ...(await describeUpdates(report.reported, Date.now())),
+        ...images.lines,
         ...notes,
       ],
     )
   }
-  const inherited: number = manifests.filter(
-    (manifest: ManifestSource): boolean => manifest.isInherited,
-  ).length
-  // The summary may not claim every coordinate is within the bound while the report below it lists one
-  // that is not. A harness pin past the bound does not stop this build, and a pass that said nothing
-  // about it would leave the only line that matters to be found by reading.
-  const overdue: number = report.reported.filter(
-    (finding: FreshnessFinding): boolean => finding.verdict === 'fail',
-  ).length
-  const counted: string =
-    `${String(statuses.length)} declared coordinate(s) across ${String(manifests.length)} ` +
-    `manifest(s), ${String(inherited)} inherited`
-  return passed(
-    overdue > 0
-      ? `${counted}; ${String(overdue)} inherited coordinate(s) past the bound, reported not failed`
-      : `${counted}, are within the freshness bound`,
-    [...(await describeUpdates(report.reported, Date.now())), ...notes],
-  )
+  return passed(freshnessSummary(statuses, manifests, report, images), [
+    ...(await describeUpdates(report.reported, Date.now())),
+    ...images.lines,
+    ...notes,
+  ])
 }
 
 // The npm-v6 audit shape `pnpm audit --json` emits: advisories keyed by id, each carrying the module,

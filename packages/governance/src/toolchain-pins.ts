@@ -5,31 +5,39 @@
 // a different verdict on a different day. A digest names the bytes, so it is the only form that makes
 // "an upstream release cannot change a verdict while the repository does not change" literally true.
 //
-// To move a pin, read the new digest with `docker buildx imagetools inspect <repo>:<tag>` and record
-// the human-readable version beside it. Never write a bare tag here: the spec rejects one.
+// The tag is written too, and it is not decoration. A digest alone says nothing about which release it
+// is, so the version used to live in a comment beside it - unreadable to anything but a person, which
+// is why nothing reported when a newer image existed. `<repo>:<tag>@sha256:<digest>` states both: docker
+// resolves the digest and ignores the tag, and the freshness check reads the tag to ask the registry
+// what is newer. A bare tag is still rejected; the spec requires both halves.
+//
+// To move a pin, read the new digest with `docker buildx imagetools inspect <repo>:<tag>`.
+//
+// Two of the four tags below are not the versions their comments used to claim. The hadolint pin was
+// commented `2.14.0` and is the bytes of `v2.15.1`; the actionlint pin was commented `1.7.7` and is
+// `1.7.12`. Nothing could have caught that while the version was prose, which is the whole argument for
+// writing it where a check can read it.
 
 /** An analyzer ploaness runs in a container rather than installing from the registry. */
 export type ContainerTool = 'gitleaks' | 'hadolint' | 'actionlint' | 'shellcheck'
 
 /** The exact image each containerised analyzer runs, by digest. */
 export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
-  // gitleaks 8.30.1
   gitleaks:
-    'zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f',
-  // hadolint 2.14.0
+    'zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f',
   hadolint:
-    'hadolint/hadolint@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d',
-  // actionlint 1.7.7
+    'hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d',
   actionlint:
-    'rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667',
-  // shellcheck 0.11.0. The standard makes a check a repository implements itself into its source code,
-  // and the ploaness verification command is a shell script that no analyzer read.
+    'rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667',
+  // The standard makes a check a repository implements itself into its source code, and the ploaness
+  // verification command is a shell script that no analyzer read.
   shellcheck:
-    'koalaman/shellcheck@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d',
+    'koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d',
 }
 
-/** Matches a reference that names image bytes, and only such a reference. */
-export const DIGEST_PINNED: RegExp = /^[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$/
+/** Matches a reference that names image bytes AND the release they are, and only such a reference. */
+export const DIGEST_PINNED: RegExp =
+  /^[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9][\w.-]*@sha256:[0-9a-f]{64}$/
 
 /**
  * Report every containerised analyzer whose image is not pinned to an exact digest.
@@ -41,7 +49,8 @@ export const findUnpinnedImages = (images: Readonly<Record<string, string>>): re
     .filter(([, reference]: readonly [string, string]): boolean => !DIGEST_PINNED.test(reference))
     .map(
       ([tool, reference]: readonly [string, string]): string =>
-        `${tool} runs "${reference}", which is a mutable reference; pin it as <repo>@sha256:<digest>`,
+        `${tool} runs "${reference}", which does not name both the release and its bytes; ` +
+        'pin it as <repo>:<tag>@sha256:<digest>',
     )
 
 // The major version an `engines.node` range admits at its lowest. The CLI carried its own
