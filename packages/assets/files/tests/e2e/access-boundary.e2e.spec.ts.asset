@@ -85,7 +85,7 @@ test.describe('Access boundary', () => {
     ]
     const undeclared: readonly string[] = granted
       .filter((one: Granted): boolean => !isDeclared(one))
-      .map(describeGrant)
+      .map((one: Granted): string => describeGrant(one))
     expect(
       undeclared,
       'the running application grants these to anyone, and the project has not said it meant to. ' +
