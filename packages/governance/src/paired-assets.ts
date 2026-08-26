@@ -21,14 +21,17 @@ const ASSET_SUFFIX: string = '.asset'
 // ploaness is not a consumer of itself.
 //
 // `.ploaness/agent-guide.md` maps the guideline onto the harness for a consumer, and ploaness has no
-// `.ploaness/` directory. The managed sweeps under `tests/e2e` drive a Payload application, and
-// ploaness is a library with no application to drive; pairing one with a root file would mean keeping
-// a Next.js project in this repository for a spec to compile against. What proves those bodies instead
-// is the third verification leg AGENTS.md already requires: a real consumer runs them.
+// `.ploaness/` directory. `.dockerignore` bounds what a Docker build sends to the daemon, and ploaness
+// builds no image, so a copy at this root would be a file no tool here reads. The managed sweeps under
+// `tests/e2e` drive a Payload application, and ploaness is a library with no application to drive;
+// pairing one with a root file would mean keeping a Next.js project in this repository for a spec to
+// compile against. What proves those bodies instead is the third verification leg AGENTS.md already
+// requires: a real consumer runs them.
 //
 // A SECTION entry is likewise unpaired: its body is the managed block, not a copy of any whole file.
 const ASSET_AUTHORED_PATHS: ReadonlySet<string> = new Set<string>([
   '.ploaness/agent-guide.md',
+  '.dockerignore',
   'tests/e2e/a11y.e2e.spec.ts',
   'tests/e2e/security-headers.e2e.spec.ts',
   'tests/e2e/access-boundary.e2e.spec.ts',

@@ -19,6 +19,12 @@ CLAUDE.md	PINNED
 .gitattributes	PINNED
 .nvmrc	PINNED
 .npmrc	PINNED
+# Docker sends the whole directory to the daemon before it reads the first instruction, so what is left
+# out is decided here or not at all. The entry that matters is `.env`: the stock Payload Dockerfile does
+# `COPY . .` in its builder stage, so an env file in the context lands in that layer and stays in the
+# build cache. PINNED rather than SEED for that reason - a project that quietly drops that line puts
+# secrets in a layer, and nothing downstream would report it.
+.dockerignore	PINNED
 .gitignore	SEED
 
 # The three entries below are executable specs rather than configurations. Each judges something only a

@@ -1,0 +1,46 @@
+# ploaness owns this file. Edit the harness, not this copy: `ploaness verify` compares it byte for byte
+# and `ploaness sync` restores it.
+#
+# Docker sends the whole directory to the daemon before it reads the first instruction, so what is left
+# out here is decided before any build step can decide it. Without this file a Payload project sends
+# well over a gigabyte, nearly all of it dependencies and build output the image rebuilds anyway.
+#
+# The entry that matters most is `.env`. The stock Payload Dockerfile does `COPY . .` in its builder
+# stage, so an env file present in the context is copied into that layer and kept in the build cache.
+# The final image takes only `public` and `.next/standalone` and so does not carry it, but a single
+# edit to the Dockerfile would change that. Secrets belong in the runtime environment, never in a layer.
+
+# Dependencies and build output: the image installs and builds these itself.
+node_modules
+.next
+.turbo
+storybook-static
+
+# Version control and its metadata.
+.git
+.gitignore
+.gitattributes
+
+# Secrets. Never copied into a layer; supplied by the runtime instead.
+.env
+.env.*
+
+# Test and coverage output, which no image needs.
+coverage
+test-results
+playwright-report
+.type-coverage
+
+# The build recipe describes the image; it does not belong inside it.
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.yaml
+compose.yml
+compose.yaml
+
+# Editor and operating-system leftovers.
+.idea
+.vscode
+.DS_Store
+*.log
