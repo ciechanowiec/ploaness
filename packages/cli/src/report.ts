@@ -174,6 +174,20 @@ const reportGateFindings = (outcome: GateOutcome): void => {
   line('')
 }
 
+/**
+ * Print what the gate's tool actually wrote, whole and unfiltered.
+ *
+ * Whole, because a truncated audit log is worse than none: a reader asking this question is checking a
+ * verdict, and evidence cut off in the middle cannot settle anything. It is opt-in and one gate at a
+ * time, which is what makes the volume affordable.
+ */
+export const reportOutput = (outcome: GateOutcome): void => {
+  const output: string | undefined = outcome.result.output
+  line('')
+  line(paint(`  --- ${outcome.gate.id} output ---`, DIM))
+  line(output ?? '  (the tool produced no output)')
+}
+
 /** Print the one-line verdict for a gate that has just finished, and its findings when it did not pass. */
 export const reportGate = (outcome: GateOutcome, width: number): void => {
   const verdict: string = verdictOf(outcome.result)

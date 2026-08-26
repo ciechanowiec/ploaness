@@ -12,6 +12,7 @@ import {
   reportHalt,
   reportHeader,
   reportNote,
+  reportOutput,
   reportVerdict,
 } from '../report.js'
 
@@ -80,10 +81,23 @@ export const verify = async (context: Context, isExtended: boolean): Promise<num
   return reportVerdict(outcomes, isExtended, context.isEnforced)
 }
 
-/** Run one gate by identifier. A single gate is a debugging aid, never a verdict. */
-export const verifyOne = async (context: Context, gate: Gate): Promise<number> => {
+/**
+ * Run one gate by identifier. A single gate is a debugging aid, never a verdict.
+ * @param context the resolved project environment.
+ * @param gate the gate to run.
+ * @param isVerbose whether to print what the gate's tool wrote, not only the verdict it produced.
+ * @returns the process exit code.
+ */
+export const verifyOne = async (
+  context: Context,
+  gate: Gate,
+  isVerbose: boolean = false,
+): Promise<number> => {
   const outcome: GateOutcome = await timeGate(gate, context)
   reportGate(outcome, gate.id.length)
+  if (isVerbose) {
+    reportOutput(outcome)
+  }
   reportNote('A single gate is a debugging aid. Run `ploaness verify` for a verdict.')
   return outcome.result.ok || !context.isEnforced ? 0 : 1
 }

@@ -9,6 +9,15 @@ export interface GateResult {
   readonly findings: readonly string[]
   /** One line summarising what the gate observed. */
   readonly summary: string
+  /**
+   * What the underlying tool actually printed, kept whole and printed only on request.
+   *
+   * Deliberately apart from `findings`, whose contract is the lines a user must ACT on: a passing
+   * gate's output is not that, and merging the two would make a gate that found nothing read as
+   * though it had. Held so a reader can audit a verdict rather than take it on faith - "no
+   * vulnerability at or above moderate" is a claim, and this is the evidence for it.
+   */
+  readonly output?: string
 }
 
 /** A passing result, optionally carrying a non-failing report. */
@@ -24,6 +33,10 @@ export const failed = (summary: string, findings: readonly string[]): GateResult
   findings,
   summary,
 })
+
+/** The same result, carrying the tool output that produced it. */
+export const withOutput = (result: GateResult, output: string): GateResult =>
+  output.length > 0 ? { ...result, output } : result
 
 /** Where and how to run a child process. */
 export interface RunOptions {
@@ -132,4 +145,7 @@ export const asFindings = (output: string): readonly string[] =>
  * @returns the gate result, carrying the tool's own output on failure.
  */
 export const fromRun = (result: RunResult, passSummary: string, failSummary: string): GateResult =>
-  result.code === 0 ? passed(passSummary) : failed(failSummary, asFindings(result.output))
+  withOutput(
+    result.code === 0 ? passed(passSummary) : failed(failSummary, asFindings(result.output)),
+    result.output,
+  )

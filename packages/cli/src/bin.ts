@@ -5,8 +5,9 @@ import { init } from './commands/init.js'
 import { sync } from './commands/sync.js'
 import { verify, verifyOne } from './commands/verify.js'
 // The `ploaness` command. Argument handling is deliberately small: ploaness offers commands, not
-// options that change what is checked. The one flag, --enforce=false, changes only whether findings are
-// fatal. There is no flag that skips a gate.
+// options that change what is checked. Two flags exist and neither reaches a rule: --enforce=false
+// changes whether findings are fatal, and --verbose changes what is shown. There is no flag that skips
+// a gate.
 import { type Context, createContext } from './context.js'
 import { ALL_GATES, type Gate, gateById } from './gates.js'
 
@@ -21,11 +22,12 @@ const USAGE: string = `ploaness, the quality harness for Payload CMS projects
   ploaness format                                  apply formatting and safe fixes
   ploaness sync                                    materialise the managed files
   ploaness init                                    scaffold the consumer wiring
-  ploaness gate <id>                               run one gate, for debugging
+  ploaness gate <id> [--verbose]                   run one gate, for debugging
   ploaness gates                                   list the gates in run order
   ploaness commit-message <file|--range R|--all>   check one message, a range, or the history
 
-Report-only mode (--enforce=false) prints findings and exits 0. It is not a pass.`
+Report-only mode (--enforce=false) prints findings and exits 0. It is not a pass.
+Verbose mode (--verbose) prints what the gate's tool wrote, passing or failing.`
 
 const HELP_COMMANDS: ReadonlySet<string> = new Set<string>(['--help', '-h', 'help'])
 
@@ -37,13 +39,17 @@ const listGates = (): number => {
   return 0
 }
 
-const runOneGate = async (context: Context, id: string | undefined): Promise<number> => {
+const runOneGate = async (
+  context: Context,
+  id: string | undefined,
+  isVerbose: boolean,
+): Promise<number> => {
   const gate: Gate | undefined = id === undefined ? undefined : gateById(id)
   if (gate === undefined) {
     console.error(`unknown gate "${id ?? ''}". Run \`ploaness gates\` to list them.`)
     return 1
   }
-  return await verifyOne(context, gate)
+  return await verifyOne(context, gate, isVerbose)
 }
 
 // One entry per command. The table is the list of commands the binary accepts, and each handler is
@@ -58,7 +64,7 @@ const COMMANDS: Readonly<Record<string, CommandRunner>> = {
   init: (context: Context): number => init(context),
   gates: (): number => listGates(),
   gate: async (context: Context, rest: readonly string[]): Promise<number> =>
-    await runOneGate(context, rest[0]),
+    await runOneGate(context, rest[0], rest.includes(VERBOSE_OPTION)),
   'commit-message': (context: Context, rest: readonly string[]): number =>
     commitMessage(context, rest[0], rest[1]),
 }
@@ -67,6 +73,8 @@ const COMMANDS: Readonly<Record<string, CommandRunner>> = {
 // `--range` modes while accepting `--extended` on commands that do not use it; checking the whole shape
 // also stops extra positional arguments and single-dash options from disappearing silently.
 const VERIFY_OPTIONS: ReadonlySet<string> = new Set<string>(['--extended', '--enforce=false'])
+const VERBOSE_OPTION: string = '--verbose'
+const GATE_OPTIONS: ReadonlySet<string> = new Set<string>([VERBOSE_OPTION])
 const RANGE_ARGUMENT_COUNT: number = 2
 
 const hasDistinctMembersOf = (values: readonly string[], allowed: ReadonlySet<string>): boolean =>
@@ -90,8 +98,10 @@ const acceptsArguments: Readonly<Record<string, (rest: readonly string[]) => boo
   sync: (rest: readonly string[]): boolean => rest.length === 0,
   init: (rest: readonly string[]): boolean => rest.length === 0,
   gates: (rest: readonly string[]): boolean => rest.length === 0,
-  gate: (rest: readonly string[]): boolean =>
-    rest.length === 1 && rest[0] !== undefined && !rest[0].startsWith('-'),
+  gate: (rest: readonly string[]): boolean => {
+    const [id, ...options] = rest
+    return id !== undefined && !id.startsWith('-') && hasDistinctMembersOf(options, GATE_OPTIONS)
+  },
   'commit-message': isCommitMessageArguments,
 }
 

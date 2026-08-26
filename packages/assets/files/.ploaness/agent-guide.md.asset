@@ -233,6 +233,12 @@ stands. What a single gate is not is a verdict: it skips `preflight`, so it neve
 project is one ploaness may judge, and it says nothing about the gates it did not run. Only a full run
 answers "is this ready".
 
+A gate normally reports a verdict rather than a transcript, and `ploaness gate <id> --verbose` prints
+what its underlying tool actually wrote - passing or failing, whole and unfiltered. Reach for it to
+audit a verdict rather than take it on faith: "no vulnerability at or above moderate" is a claim, and
+the scanner's own output is the evidence for it. A full run has no such flag, because thirty-eight
+transcripts bury the one finding the report exists to surface.
+
 ## Layer 5: Exceptions and Repairs
 
 - Fix a managed-file finding with `ploaness sync`. A project may take over a managed path through
