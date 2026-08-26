@@ -146,7 +146,12 @@ export const findUnhardenedAuth = (source: string): readonly PayloadViolation[] 
 
 // A draft is unpublished content. With versions.drafts enabled, `?draft=true` serves it to whoever the
 // read rule admits - so a read that is unconditionally true publishes every draft to anyone.
-const ALWAYS_TRUE_READ: RegExp = /read\s*:\s*\(\s*\)\s*=>\s*true/
+// The return type is optional in the pattern and effectively mandatory in a governed project, which is
+// the whole reason it appears here. `explicit-function-return-type` makes a conforming project write
+// `read: (): boolean => true`, and a pattern demanding `()` immediately before `=>` matched none of
+// those - so this rule reported nothing on the only spelling the harness permits. `[^=]*` cannot run
+// past the arrow it precedes, which keeps the optional part from swallowing the match.
+const ALWAYS_TRUE_READ: RegExp = /read\s*:\s*\(\s*\)\s*(?:\s*:[^=]*)?=>\s*true/
 const DRAFTS_ENABLED: RegExp = /drafts\s*:\s*(?:true|\{)/
 
 // Where the access block's own braces close, so the search below cannot run past them into the fields.

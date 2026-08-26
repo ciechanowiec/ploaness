@@ -148,3 +148,22 @@ describe('no-anonymous-draft-reads', () => {
     expect(rulesOf(source)).toEqual([])
   })
 })
+
+// A governed project cannot write the untyped form: `explicit-function-return-type` requires the
+// annotation, so `read: (): boolean => true` is the only always-true spelling that reaches this rule.
+// The detector demanded `()` immediately before the arrow, so it matched none of them, and the rule
+// reported nothing on precisely the code it exists to catch.
+describe('the always-true form a governed project actually writes', () => {
+  it('reports a typed always-true read on a drafting collection', () => {
+    const drafts: string = 'versions: { drafts: true },'
+    const open: string = 'access: { read: (): boolean => true, create: x, update: x, delete: x }'
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} ${open} }`
+    expect(rulesOf(source)).toEqual(['no-anonymous-draft-reads'])
+  })
+
+  it('still accepts a typed rule that returns false', () => {
+    const closed: string = 'access: { read: (): boolean => false, create: x, update: x, delete: x }'
+    const source: string = `const A: CollectionConfig = { slug: 'a', versions: { drafts: true }, ${closed} }`
+    expect(rulesOf(source)).toEqual([])
+  })
+})
