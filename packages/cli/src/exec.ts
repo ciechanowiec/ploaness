@@ -1,6 +1,7 @@
 // Process execution for the gates, and the single result shape every gate returns. A uniform shape lets
 // the runner present one verdict whether a gate shelled out to a tool or evaluated a rule in process.
 import { type SpawnSyncReturns, spawnSync } from 'node:child_process'
+import path from 'node:path'
 
 /** The outcome of one gate. */
 export interface GateResult {
@@ -91,6 +92,27 @@ const describeSignal = (signal: NodeJS.Signals | null): readonly string[] =>
   signal === null ? [] : [`the process was killed by ${signal}`]
 
 /** Run a command, capturing stdout and stderr both together and apart. */
+// `runNode` invokes a tool through the interpreter so ploaness needs no shim of its own, but a tool it
+// starts can start further processes, and those resolve through PATH like anything else. Playwright's
+// `webServer` runs `next dev` through `/bin/sh`, which found nothing: the project's `node_modules/.bin`
+// was on PATH only for a project whose `testWrapper` happened to route the run through a package
+// manager, because that is what puts it there. The e2e gate therefore passed or failed on whether the
+// project had declared an unrelated setting. Prepending it here makes the child's PATH the same either
+// way, and prepending rather than appending keeps the project's own copy of a tool ahead of any
+// same-named one already on PATH.
+const withProjectBinaries = (
+  cwd: string,
+  overrides: Readonly<Record<string, string>> | undefined,
+): Record<string, string | undefined> => {
+  const binaries: string = path.join(cwd, 'node_modules', '.bin')
+  const inherited: string | undefined = process.env['PATH']
+  return {
+    ...process.env,
+    ...overrides,
+    PATH: inherited === undefined ? binaries : `${binaries}${path.delimiter}${inherited}`,
+  }
+}
+
 export const run = (
   command: string,
   commandArguments: readonly string[],
@@ -100,7 +122,7 @@ export const run = (
     cwd: options.cwd,
     encoding: 'utf8',
     maxBuffer: MAX_OUTPUT_BYTES,
-    env: { ...process.env, ...options.env },
+    env: withProjectBinaries(options.cwd, options.env),
     ...(options.input !== undefined && { input: options.input }),
   })
   if (result.error !== undefined) {
