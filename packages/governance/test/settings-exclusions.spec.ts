@@ -245,3 +245,30 @@ describe('the auxiliary servers a project declares', () => {
     expect(settings.auxiliaryServers).toEqual([])
   })
 })
+
+// The joint, not the value: `pureLogicRule` renders these roots into a regular expression and appends a
+// slash to each, while `findUnreachedExclusionsBySetting` matches them against tracked directories.
+// Both used to normalise a trailing slash for themselves, and disagreed about it. It is normalised once
+// here, so a spec asserting the assembled setting is what keeps the two consumers in step.
+const rootsFor = (declared: readonly unknown[]): readonly string[] =>
+  readSettings({ ploaness: { pureLogicRoots: declared } }).pureLogicRoots
+
+describe('pureLogicRoots assembly', () => {
+  it('adds a declared root to the shipped floor rather than replacing it', () => {
+    expect(rootsFor([{ pattern: 'src/config', reason: 'pure by construction' }])).toEqual([
+      'src/access',
+      'src/lib',
+      'src/config',
+    ])
+  })
+
+  it('strips a trailing slash, because the renderer appends one', () => {
+    expect(rootsFor([{ pattern: 'src/config/', reason: 'pure by construction' }])).toContain(
+      'src/config',
+    )
+  })
+
+  it('honours no root that states no reason', () => {
+    expect(rootsFor(['src/config'])).toEqual(['src/access', 'src/lib'])
+  })
+})

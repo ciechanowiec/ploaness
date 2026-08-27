@@ -5,16 +5,13 @@ import { existsSync, globSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   asRecord,
-  COVERAGE_INCLUDE,
   type ConfigReferenceViolation,
-  type DeclaredExclusion,
   type DocumentViolation,
   extractLiteralSourcePaths,
   findDocumentReferenceViolations,
   findMissingConfigReferences,
   findSkillManifestViolations,
-  findUnreachedExclusions,
-  matchesGlob,
+  findUnreachedExclusionsBySetting,
   requiredBiomeFiles,
   type SkillViolation,
 } from '@ploaness/governance'
@@ -87,33 +84,11 @@ const mandatedReferences = (context: Context): ReadonlySet<string> =>
 // coverage exclusion against what the coverage report measures, a typography or JavaScript exclusion
 // against the tracked tree the conventions gate walks. Judging either against the other's set would
 // report a finding about the wrong thing.
-const measuredByCoverage = (tracked: readonly string[]): readonly string[] =>
-  tracked.filter((file: string): boolean =>
-    COVERAGE_INCLUDE.some((pattern: string): boolean => matchesGlob(pattern, file)),
-  )
-
 // Which file set an exclusion has to reach is decided by the SETTING it came from, not by how its
-// pattern is written. Partitioning on the pattern's kind was right while `coverageExclude` was the only
-// glob-shaped setting; it stopped being right the moment two more arrived, and it reported a carve-out
-// naming a real file as reaching nothing - because it was asking whether a generated artefact appears
-// in the coverage report, which is precisely where it does not.
-const COVERAGE_SETTING: string = 'coverageExclude'
-
-const deadExclusions = (context: Context): readonly string[] => {
-  const tracked: readonly string[] = trackedFiles(context.root)
-  const declared: readonly DeclaredExclusion[] = context.settings.declaredExclusions
-  const isCoverage = (entry: DeclaredExclusion): boolean => entry.setting === COVERAGE_SETTING
-  return [
-    ...findUnreachedExclusions(
-      declared.filter((entry: DeclaredExclusion): boolean => isCoverage(entry)),
-      measuredByCoverage(tracked),
-    ),
-    ...findUnreachedExclusions(
-      declared.filter((entry: DeclaredExclusion): boolean => !isCoverage(entry)),
-      tracked,
-    ),
-  ]
-}
+// pattern is written - the partition itself lives in `governance`, where it is spec'd against file lists
+// no repository has to be built to produce. What is left here is the one read it needs.
+const deadExclusions = (context: Context): readonly string[] =>
+  findUnreachedExclusionsBySetting(context.settings.declaredExclusions, trackedFiles(context.root))
 
 /**
  * A concrete source file carved out of a tool config must still exist on disk, and a declared exclusion

@@ -50,4 +50,26 @@ describe('pureLogicRule', () => {
   it('renders no rule for a project with no declared floor', () => {
     expect(ruleFor([])).toBeUndefined()
   })
+
+  // A root is spliced into a regular expression, so what it renders to has to be a legal one whatever
+  // the project wrote. It was not: a glob-shaped root took the analyzer down with no finding attached,
+  // and a route-group directory silently matched a different path than the one declared.
+  it('renders a valid expression for every root a project could declare', () => {
+    for (const root of [
+      'src/config',
+      'src/config/**',
+      'src/app/(payload)',
+      'src/a+b',
+      'src/x[1]',
+    ]) {
+      expect(() => new RegExp(pathOf(ruleFor([root]), 'from'))).not.toThrow()
+    }
+  })
+
+  it('matches a route-group directory literally rather than as a capture group', () => {
+    const matcher: RegExp = new RegExp(pathOf(ruleFor(['src/app/(payload)']), 'from'))
+    expect(matcher.test('src/app/(payload)/admin/page.tsx')).toBe(true)
+    // Without escaping the parentheses this was the path that matched, and the declared one that did not.
+    expect(matcher.test('src/app/payload/admin/page.tsx')).toBe(false)
+  })
 })

@@ -441,7 +441,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     typographyExclusions: [...DEFAULT_TYPOGRAPHY_EXCLUSIONS, ...honoured(declaredTypography)],
     frameworkGlue: [...DEFAULT_FRAMEWORK_GLUE, ...honoured(declaredGlue)],
     generatedArtefacts: [...GENERATED_ARTEFACTS, ...honoured(declaredGenerated)],
-    pureLogicRoots: [...DEFAULT_PURE_LOGIC_ROOTS, ...honoured(declaredLayers)],
+    pureLogicRoots: [...DEFAULT_PURE_LOGIC_ROOTS, ...layerRoots(declaredLayers)],
     declaredExclusions: [
       ...declaredTypography,
       ...declaredJavascript,
@@ -529,3 +529,110 @@ const reachesAny = (entry: DeclaredExclusion, candidates: readonly string[]): bo
       ? matchesGlob(entry.pattern, candidate)
       : matchesRole(candidate, [entry.pattern]),
   )
+
+/**
+ * The setting whose patterns are matched against the files the coverage report measures, rather than
+ * against every tracked file.
+ */
+const COVERAGE_SETTING: string = 'coverageExclude'
+
+/**
+ * The settings whose patterns name a DIRECTORY rather than a file.
+ *
+ * `pureLogicRoots` names the directories forming the architecture floor. Matched against tracked FILE
+ * paths it can never reach anything, so a project declaring a floor that exists was told its declaration
+ * excluded nothing - while the only pattern that satisfied that check, `src/config/**`, is spliced into
+ * a regex by `pureLogicRule` and produces `^(src/config/**\/)`, which is not a valid regular expression.
+ * Between them the two rules left the setting with no legal value at all.
+ */
+/**
+ * A directory path without its trailing slashes.
+ *
+ * Written as a recursion rather than as `/\/+$/`, which backtracks super-linearly on a pathological
+ * input - a rule this repository holds itself to.
+ * @param value the declared path.
+ * @returns the same path with every trailing slash removed.
+ */
+export const withoutTrailingSlash = (value: string): string =>
+  value.endsWith('/') ? withoutTrailingSlash(value.slice(0, -1)) : value
+
+/** The floor a project declared, normalised: the renderer appends the slash, so a written one goes. */
+const layerRoots = (declared: readonly DeclaredExclusion[]): readonly string[] =>
+  honoured(declared).map((root: string): string => withoutTrailingSlash(root))
+
+const DIRECTORY_SETTINGS: ReadonlySet<string> = new Set<string>(['pureLogicRoots'])
+
+/**
+ * Every directory that holds a tracked file, at every depth.
+ *
+ * Derived from the file list rather than read from disk, so the answer covers exactly what is committed:
+ * a directory that exists only in a working tree is not part of the repository a gate judges.
+ * @param tracked the repo-relative paths of the tracked files.
+ * @returns each containing directory once, without a trailing slash.
+ */
+export const trackedDirectories = (tracked: readonly string[]): readonly string[] => [
+  ...new Set<string>(
+    tracked.flatMap((file: string): readonly string[] => {
+      const segments: readonly string[] = file.split('/').slice(0, -1)
+      return segments.map((_: string, index: number): string =>
+        segments.slice(0, index + 1).join('/'),
+      )
+    }),
+  ),
+]
+
+const measuredByCoverage = (tracked: readonly string[]): readonly string[] =>
+  tracked.filter((file: string): boolean =>
+    COVERAGE_INCLUDE.some((pattern: string): boolean => matchesGlob(pattern, file)),
+  )
+
+/**
+ * Which paths a setting's exclusions have to reach.
+ *
+ * The file set is decided by the SETTING an entry came from, never by how its pattern is written.
+ * Partitioning on the pattern's shape was right while `coverageExclude` was the only glob-shaped
+ * setting, and wrong the moment a second one arrived: it asks a coverage carve-out whether a generated
+ * artefact appears in the coverage report, which is precisely where it does not, and it asks a
+ * directory declaration to name a file.
+ */
+const candidatesFor = (setting: string, tracked: readonly string[]): readonly string[] => {
+  if (setting === COVERAGE_SETTING) {
+    return measuredByCoverage(tracked)
+  }
+  return DIRECTORY_SETTINGS.has(setting) ? trackedDirectories(tracked) : tracked
+}
+
+/**
+ * Report every declared exclusion that reaches none of the paths ITS OWN setting could have excluded.
+ *
+ * A composition over `findUnreachedExclusions`: it groups the entries by setting and hands each group
+ * the candidate set that setting governs, so a caller supplies the tracked file list and nothing else.
+ * @param entries the exclusions the project declared, across every setting.
+ * @param tracked the repo-relative paths of the tracked files.
+ * @returns one message per entry that reaches nothing.
+ */
+export const findUnreachedExclusionsBySetting = (
+  entries: readonly DeclaredExclusion[],
+  tracked: readonly string[],
+): readonly string[] =>
+  [...new Set<string>(entries.map((entry: DeclaredExclusion): string => entry.setting))].flatMap(
+    (setting: string): readonly string[] =>
+      findUnreachedExclusions(
+        entries
+          .filter((entry: DeclaredExclusion): boolean => entry.setting === setting)
+          .map((entry: DeclaredExclusion): DeclaredExclusion => normalised(entry)),
+        candidatesFor(setting, tracked),
+      ),
+  )
+
+/**
+ * A directory setting tolerates a trailing slash, because the renderer that consumes it appends one.
+ *
+ * Normalising here rather than in each consumer is what keeps the two from disagreeing: `pureLogicRule`
+ * already accepted `src/lib/` and this rule already reported it, which is the same contradiction the
+ * partition above exists to remove, one size smaller.
+ */
+const normalised = (entry: DeclaredExclusion): DeclaredExclusion =>
+  DIRECTORY_SETTINGS.has(entry.setting)
+    ? { ...entry, pattern: withoutTrailingSlash(entry.pattern) }
+    : entry

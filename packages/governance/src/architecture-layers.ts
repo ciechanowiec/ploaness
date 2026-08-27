@@ -9,8 +9,21 @@
 /** The generated files the floor may depend on, which carry types rather than behaviour. */
 const TYPE_ONLY_ARTEFACTS: readonly string[] = ['src/payload-types.ts']
 
+// Every root is spliced into a regular expression, so it has to be escaped on the way in. It was not,
+// and both halves of that were live: `src/app/(payload)` - a real directory in a Payload project - read
+// as a capture group and matched `src/app/payload/` instead, and a glob-shaped root produced
+// `^(src/config/**\/)`, which is not a valid expression at all and took dependency-cruiser down with no
+// finding attached. The artefact list beside this one was already escaped; the roots were the half that
+// was missed.
+const REGEX_METACHARACTERS: RegExp = /[$()*+.?[\\\]^{|}]/gu
+
+// A trailing slash is normalised where the setting is read, so what arrives here is already a bare
+// directory. This escapes it, and nothing else.
+const asRoot = (directory: string): string =>
+  directory.replaceAll(REGEX_METACHARACTERS, String.raw`\$&`)
+
 const alternation = (directories: readonly string[]): string =>
-  directories.map((directory: string): string => `${directory}/`).join('|')
+  directories.map((directory: string): string => `${asRoot(directory)}/`).join('|')
 
 /**
  * The forbidden rule that keeps the declared pure-logic directories pure.
