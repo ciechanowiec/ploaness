@@ -9,6 +9,7 @@
 // that declared a stricter bundle budget would be silently overwritten by every member that declared
 // none.
 import { asRecord, isArray } from './json-shapes.js'
+import type { DeclaredExclusion } from './settings.js'
 
 /** Keys where a member ADDS to what the repository declared, the way `sourceRoots` always has. */
 const ADDITIVE: ReadonlySet<string> = new Set<string>([
@@ -88,4 +89,39 @@ export const layerSettingBlocks = (
         : (base[key] ?? overlay[key]),
     ]),
   )
+}
+
+/**
+ * Move a member's exclusion into the repository's path space.
+ *
+ * The gates that walk the tracked tree run once, at the repository root, while a member declares its
+ * exclusions relative to itself. `^src/generated/` written inside `apps/web` therefore matches nothing
+ * when the repository-scope gate walks past `apps/web/src/generated/`, and a generated directory a
+ * project correctly excused starts failing the typography ban.
+ *
+ * An UNANCHORED pattern is left alone, deliberately. `importMap\.js$` already matches at any depth, and
+ * prefixing it would narrow it to one member - so the rule errs toward a pattern that matches too much
+ * at repository scope rather than one that silently stops matching. Too wide is the safe direction here:
+ * a repository-scope gate that skips one extra path reports one fewer finding, while a narrowed pattern
+ * reports a project for a file it had already accounted for.
+ * @param memberPath the member's repo-relative path, `.` for the member at the root.
+ * @param entry the exclusion as the member declared it.
+ * @returns the exclusion as the repository-scope gates must read it.
+ */
+export const rebaseExclusion = (
+  memberPath: string,
+  entry: DeclaredExclusion,
+): DeclaredExclusion => {
+  if (memberPath === '.') {
+    return entry
+  }
+  if (entry.kind === 'route') {
+    return entry
+  }
+  if (entry.kind === 'glob') {
+    return { ...entry, pattern: `${memberPath}/${entry.pattern}` }
+  }
+  return entry.pattern.startsWith('^')
+    ? { ...entry, pattern: `^${memberPath}/${entry.pattern.slice(1)}` }
+    : entry
 }

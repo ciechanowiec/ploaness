@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { readRawSettings, readSettings } from '../src/settings.js'
-import { layerSettingBlocks } from '../src/settings-layering.js'
+import { type DeclaredExclusion, readRawSettings, readSettings } from '../src/settings.js'
+import { layerSettingBlocks, rebaseExclusion } from '../src/settings-layering.js'
 
 const layered = (
   base: Record<string, unknown>,
@@ -107,5 +107,45 @@ describe('layering a malformed or partial declaration', () => {
       maxSuppressions: 3,
       serverUrl: 'http://localhost:3200',
     })
+  })
+})
+
+const exclusion = (pattern: string, kind: DeclaredExclusion['kind']): DeclaredExclusion => ({
+  setting: 'typographyExclusions',
+  pattern,
+  reason: 'generated',
+  kind,
+})
+
+describe('rebaseExclusion', () => {
+  it('leaves a member at the repository root untouched', () => {
+    // The single-package proof: with nothing above it, a project's exclusions are read exactly as
+    // they were written.
+    const entry: DeclaredExclusion = exclusion('^src/generated/', 'regex')
+    expect(rebaseExclusion('.', entry)).toEqual(entry)
+  })
+
+  it('moves an anchored pattern into the member it was written in', () => {
+    expect(rebaseExclusion('apps/web', exclusion('^src/generated/', 'regex')).pattern).toBe(
+      '^apps/web/src/generated/',
+    )
+  })
+
+  it('leaves an unanchored pattern alone, because it already matches at any depth', () => {
+    // Prefixing would NARROW it to one member, which is the unsafe direction: the gate would stop
+    // skipping a file the project had already accounted for.
+    const entry: DeclaredExclusion = exclusion(String.raw`importMap\.js$`, 'regex')
+    expect(rebaseExclusion('apps/web', entry)).toEqual(entry)
+  })
+
+  it('prefixes a glob, which is always relative to the package that declared it', () => {
+    expect(rebaseExclusion('apps/web', exclusion('src/migrations/**', 'glob')).pattern).toBe(
+      'apps/web/src/migrations/**',
+    )
+  })
+
+  it('leaves a route alone, because it names a URL rather than a path', () => {
+    const entry: DeclaredExclusion = exclusion('/admin', 'route')
+    expect(rebaseExclusion('apps/web', entry)).toEqual(entry)
   })
 })
