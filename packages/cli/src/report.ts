@@ -18,6 +18,8 @@ const FAIL: string = 'FAIL'
 
 /** One completed gate, what it found, and how long it took. */
 export interface GateOutcome {
+  /** The member this gate was asked about, or undefined for a repository-scope gate. */
+  readonly member?: string | undefined
   readonly gate: Gate
   readonly result: GateResult
   /** Wall-clock milliseconds, so a long run shows where the time actually went. */

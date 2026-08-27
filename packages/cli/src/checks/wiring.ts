@@ -12,7 +12,13 @@ import {
   requiredBiomeFiles,
   type WiringViolation,
 } from '@ploaness/governance'
-import { type Context, readJson, readPins, readText, shippedDirectory } from '../context.js'
+import {
+  type Repository as Repo,
+  readJson,
+  readPins,
+  readText,
+  shippedDirectory,
+} from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 // Libraries the consumer's own specs import. They cannot move into the harness: under the strict pnpm
@@ -133,13 +139,13 @@ const expectedTestLibraries = (): Readonly<Record<string, string>> => {
 }
 
 /** Verify the project has installed ploaness exactly as ploaness dictates. */
-export const wiring = (context: Context): GateResult => {
+export const wiring = (context: Repo): GateResult => {
   const violations: readonly WiringViolation[] = findWiringViolations({
     packageJson: context.packageJson,
     eslintConfig: readText(path.join(context.root, 'eslint.config.mjs')),
     vitestConfig: readText(path.join(context.root, 'vitest.config.mts')),
     playwrightConfig: readText(path.join(context.root, 'playwright.config.ts')),
-    workspaceFile: readText(path.join(context.root, 'pnpm-workspace.yaml')) ?? '',
+    workspaceFile: context.workspaceFile,
     declaredExclusions: context.settings.declaredExclusions,
     biomeConfig: readText(path.join(context.root, 'biome.json')),
     tsconfig: readText(path.join(context.root, 'tsconfig.json')),

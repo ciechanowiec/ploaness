@@ -9,6 +9,12 @@
 // judge this project at all, and whether what it is judging is what it thinks. Past a failing one,
 // nothing below means what it says, which is why they stop even a report-only run.
 
+import {
+  type GateDescriptor,
+  type MemberDescriptor,
+  type PlanStep,
+  planSteps,
+} from '@ploaness/governance'
 import { assets } from './checks/assets.js'
 import { actions, containers, secrets } from './checks/containers.js'
 import { conventions } from './checks/conventions.js'
@@ -36,11 +42,11 @@ import {
 } from './checks/toolchain.js'
 import { treeSnapshot, treeVerify } from './checks/tree.js'
 import { wiring } from './checks/wiring.js'
-import type { Context } from './context.js'
+import type { Context, Member, Repository as Repo } from './context.js'
 import type { GateResult } from './exec.js'
 
-/** One verification gate. */
-export interface Gate {
+/** What every gate declares, whatever it judges. */
+interface GateMeta {
   /** Stable identifier, usable with `ploaness gate <id>`. */
   readonly id: string
   /** What the gate is checking, shown in the run log. */
@@ -55,69 +61,178 @@ export interface Gate {
    * vouches for, so a survey of findings below it would be a list of verdicts about nothing.
    */
   readonly isPrecondition?: boolean
-  readonly run: (context: Context) => GateResult | Promise<GateResult>
 }
+
+/**
+ * One verification gate, discriminated by what it judges.
+ *
+ * The union is what stops a repository-scope gate being handed a member's directory - the mistake that
+ * made `install-scripts` demand a workspace file inside a package, and made the overrides check vouch
+ * for pins it had not read. A check written against `Context` still satisfies either arm, because both
+ * carry the fields it always used.
+ */
+export type Gate =
+  | (GateMeta & {
+      readonly scope: 'repository'
+      readonly run: (repo: Repo) => GateResult | Promise<GateResult>
+    })
+  | (GateMeta & {
+      readonly scope: 'package' | 'payload'
+      readonly run: (member: Member) => GateResult | Promise<GateResult>
+    })
 
 /** Default verification: the gates that run on every invocation. */
 const DEFAULT_GATES: readonly Gate[] = [
   {
     id: 'preflight',
+    scope: 'repository',
     title: 'supported Payload project',
     isExtended: false,
     isPrecondition: true,
     run: preflight,
   },
-  { id: 'wiring', title: 'harness wiring', isExtended: false, isPrecondition: true, run: wiring },
-  { id: 'assets', title: 'managed files', isExtended: false, run: assets },
-  { id: 'tree-snapshot', title: 'working-tree fingerprint', isExtended: false, run: treeSnapshot },
-  { id: 'types', title: 'strict type check', isExtended: false, run: types },
-  { id: 'biome', title: 'formatting and fast lint', isExtended: false, run: biome },
-  { id: 'biome-schema', title: 'Biome schema drift', isExtended: false, run: biomeSchema },
-  { id: 'eslint', title: 'type-aware lint', isExtended: false, run: eslint },
-  { id: 'conventions', title: 'source conventions', isExtended: false, run: conventions },
-  { id: 'editorconfig', title: 'committed formatting', isExtended: false, run: editorconfig },
-  { id: 'suppressions', title: 'suppression ceiling', isExtended: false, run: suppressions },
-  { id: 'css', title: 'style sheets', isExtended: false, run: css },
+  {
+    id: 'wiring',
+    scope: 'repository',
+    title: 'harness wiring',
+    isExtended: false,
+    isPrecondition: true,
+    run: wiring,
+  },
+  { id: 'assets', scope: 'repository', title: 'managed files', isExtended: false, run: assets },
+  {
+    id: 'tree-snapshot',
+    scope: 'repository',
+    title: 'working-tree fingerprint',
+    isExtended: false,
+    run: treeSnapshot,
+  },
+  { id: 'types', scope: 'package', title: 'strict type check', isExtended: false, run: types },
+  {
+    id: 'biome',
+    scope: 'package',
+    title: 'formatting and fast lint',
+    isExtended: false,
+    run: biome,
+  },
+  {
+    id: 'biome-schema',
+    scope: 'repository',
+    title: 'Biome schema drift',
+    isExtended: false,
+    run: biomeSchema,
+  },
+  { id: 'eslint', scope: 'package', title: 'type-aware lint', isExtended: false, run: eslint },
+  {
+    id: 'conventions',
+    scope: 'repository',
+    title: 'source conventions',
+    isExtended: false,
+    run: conventions,
+  },
+  {
+    id: 'editorconfig',
+    scope: 'repository',
+    title: 'committed formatting',
+    isExtended: false,
+    run: editorconfig,
+  },
+  {
+    id: 'suppressions',
+    scope: 'package',
+    title: 'suppression ceiling',
+    isExtended: false,
+    run: suppressions,
+  },
+  { id: 'css', scope: 'package', title: 'style sheets', isExtended: false, run: css },
   {
     id: 'tailwind-tokens',
+    scope: 'package',
     title: 'token-bound Tailwind values',
     isExtended: false,
     run: tailwindTokens,
   },
-  { id: 'arch', title: 'module architecture', isExtended: false, run: architecture },
-  { id: 'type-coverage', title: 'type coverage', isExtended: false, run: typeCoverage },
+  {
+    id: 'arch',
+    scope: 'package',
+    title: 'module architecture',
+    isExtended: false,
+    run: architecture,
+  },
+  {
+    id: 'type-coverage',
+    scope: 'package',
+    title: 'type coverage',
+    isExtended: false,
+    run: typeCoverage,
+  },
   {
     id: 'payload-generated',
+    scope: 'payload',
     title: 'generated Payload artefacts',
     isExtended: false,
     run: payloadGenerated,
   },
   {
     id: 'generated-denial',
+    scope: 'repository',
     title: 'generated files denied',
     isExtended: false,
     run: generatedDenial,
   },
-  { id: 'payload-rules', title: 'Payload usage rules', isExtended: false, run: payloadRules },
-  { id: 'config-refs', title: 'config references', isExtended: false, run: configReferences },
-  { id: 'secrets', title: 'secret scan', isExtended: false, run: secrets },
-  { id: 'licenses', title: 'dependency licenses', isExtended: false, run: licenses },
+  {
+    id: 'payload-rules',
+    scope: 'payload',
+    title: 'Payload usage rules',
+    isExtended: false,
+    run: payloadRules,
+  },
+  {
+    id: 'config-refs',
+    scope: 'package',
+    title: 'config references',
+    isExtended: false,
+    run: configReferences,
+  },
+  { id: 'secrets', scope: 'repository', title: 'secret scan', isExtended: false, run: secrets },
+  {
+    id: 'licenses',
+    scope: 'repository',
+    title: 'dependency licenses',
+    isExtended: false,
+    run: licenses,
+  },
   {
     id: 'vulnerabilities',
+    scope: 'repository',
     title: 'known vulnerabilities',
     isExtended: false,
     run: vulnerabilities,
   },
   {
     id: 'install-scripts',
+    scope: 'repository',
     title: 'install-script allowlist',
     isExtended: false,
     run: installScripts,
   },
-  { id: 'deps', title: 'dependency freshness', isExtended: false, run: dependencyFreshness },
-  { id: 'image-assets', title: 'image integrity', isExtended: false, run: imageAssets },
+  {
+    id: 'deps',
+    scope: 'repository',
+    title: 'dependency freshness',
+    isExtended: false,
+    run: dependencyFreshness,
+  },
+  {
+    id: 'image-assets',
+    scope: 'repository',
+    title: 'image integrity',
+    isExtended: false,
+    run: imageAssets,
+  },
   {
     id: 'docs',
+    scope: 'repository',
     title: 'agent documentation references',
     isExtended: false,
     // The gate identifiers are supplied as reserved words: documenting a gate must not be read as a
@@ -126,31 +241,63 @@ const DEFAULT_GATES: readonly Gate[] = [
     run: (context: Context): GateResult =>
       documentation(context, new Set(ALL_GATES.map((gate: Gate): string => gate.id))),
   },
-  { id: 'skills', title: 'agent skill manifests', isExtended: false, run: skills },
-  { id: 'docker', title: 'container definitions', isExtended: false, run: containers },
-  { id: 'actions', title: 'workflow definitions', isExtended: false, run: actions },
-  { id: 'knip', title: 'dead code and unused dependencies', isExtended: false, run: knip },
-  { id: 'tests', title: 'suite and coverage', isExtended: false, run: tests },
+  {
+    id: 'skills',
+    scope: 'repository',
+    title: 'agent skill manifests',
+    isExtended: false,
+    run: skills,
+  },
+  {
+    id: 'docker',
+    scope: 'repository',
+    title: 'container definitions',
+    isExtended: false,
+    run: containers,
+  },
+  {
+    id: 'actions',
+    scope: 'repository',
+    title: 'workflow definitions',
+    isExtended: false,
+    run: actions,
+  },
+  {
+    id: 'knip',
+    scope: 'package',
+    title: 'dead code and unused dependencies',
+    isExtended: false,
+    run: knip,
+  },
+  { id: 'tests', scope: 'package', title: 'suite and coverage', isExtended: false, run: tests },
 ]
 
 /** Extended verification adds history, build, bundle, and end-to-end checks. */
 const EXTENDED_GATES: readonly Gate[] = [
   {
     id: 'require-full-history',
+    scope: 'repository',
     title: 'full history present',
     isExtended: true,
     run: requireFullHistory,
   },
   {
     id: 'commit-history',
+    scope: 'repository',
     title: 'commit messages across the whole history',
     isExtended: true,
     run: (context: Context): GateResult => commitHistory(context, ['HEAD']),
   },
-  { id: 'linear-history', title: 'linear history', isExtended: true, run: linearHistory },
-  { id: 'build', title: 'production build', isExtended: true, run: build },
-  { id: 'bundle', title: 'client bundle budget', isExtended: true, run: bundle },
-  { id: 'e2e', title: 'end-to-end suite', isExtended: true, run: endToEnd },
+  {
+    id: 'linear-history',
+    scope: 'repository',
+    title: 'linear history',
+    isExtended: true,
+    run: linearHistory,
+  },
+  { id: 'build', scope: 'package', title: 'production build', isExtended: true, run: build },
+  { id: 'bundle', scope: 'package', title: 'client bundle budget', isExtended: true, run: bundle },
+  { id: 'e2e', scope: 'package', title: 'end-to-end suite', isExtended: true, run: endToEnd },
 ]
 
 // Last in BOTH modes, which it was not. It closed `DEFAULT_GATES`, and the extended gates were appended
@@ -159,6 +306,7 @@ const EXTENDED_GATES: readonly Gate[] = [
 // verification was the one mode that could not see it.
 const TREE_VERIFY: Gate = {
   id: 'tree-verify',
+  scope: 'repository',
   title: 'working tree unchanged',
   isExtended: false,
   run: treeVerify,
@@ -177,3 +325,49 @@ export const gatesFor = (isExtended: boolean): readonly Gate[] =>
 /** Look up one gate by identifier. */
 export const gateById = (id: string): Gate | undefined =>
   ALL_GATES.find((gate: Gate): boolean => gate.id === id)
+
+/** One gate invocation: the gate, and the member it is about when it has one. */
+export interface PlannedGate {
+  readonly gate: Gate
+  readonly member: Member | undefined
+}
+
+const describe = (gate: Gate): GateDescriptor => ({
+  id: gate.id,
+  scope: gate.scope,
+  isExtended: gate.isExtended,
+})
+
+/**
+ * Expand the registry into the invocations one run performs against this repository.
+ *
+ * The ordering rule itself lives in governance, where it is spec'd against the sequence that shipped
+ * before members existed; this only zips that plan back onto the registry entries and the member
+ * objects the gates are actually handed.
+ * @param repository the repository being judged.
+ * @param isExtended whether extended verification's gates are included.
+ * @returns one planned invocation per step, in run order.
+ */
+export const planFor = (repository: Repo, isExtended: boolean): readonly PlannedGate[] => {
+  const members: readonly MemberDescriptor[] = repository.members.map(
+    (member: Member): MemberDescriptor => ({ path: member.path, isPayload: member.isPayload }),
+  )
+  return planSteps(
+    ALL_GATES.map((gate: Gate): GateDescriptor => describe(gate)),
+    members,
+    isExtended,
+  ).flatMap((step: PlanStep): readonly PlannedGate[] => {
+    const gate: Gate | undefined = gateById(step.gateId)
+    if (gate === undefined) {
+      return []
+    }
+    return [
+      {
+        gate,
+        member: repository.members.find(
+          (candidate: Member): boolean => candidate.path === step.member,
+        ),
+      },
+    ]
+  })
+}

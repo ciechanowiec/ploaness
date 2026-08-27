@@ -2,9 +2,9 @@
 // a crashed run, because a tool that cannot start is indistinguishable from a tool that found a defect:
 // either way the project is not verified.
 import { endsRun } from '@ploaness/governance'
-import type { Context } from '../context.js'
+import type { Member, Repository as Repo } from '../context.js'
 import { failed, type GateResult } from '../exec.js'
-import { type Gate, gatesFor } from '../gates.js'
+import { type PlannedGate, planFor } from '../gates.js'
 import {
   beginGate,
   type GateOutcome,
@@ -19,85 +19,108 @@ import {
 const asMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
-const runGate = async (gate: Gate, context: Context): Promise<GateResult> => {
+// The union is narrowed exactly here, once. Everywhere else a gate is a gate; this is the one place
+// that has to know a repository-scope gate is handed the repository and a member-scope gate its member.
+const invoke = async (planned: PlannedGate, repo: Repo): Promise<GateResult> => {
+  if (planned.gate.scope === 'repository') {
+    return await planned.gate.run(repo)
+  }
+  const member: Member | undefined = planned.member
+  if (member === undefined) {
+    return failed(`the ${planned.gate.id} gate was planned without a member`, [
+      'this is a ploaness defect; the run plan and the registry disagree about this gate',
+    ])
+  }
+  return await planned.gate.run(member)
+}
+
+const runGate = async (planned: PlannedGate, repo: Repo): Promise<GateResult> => {
   try {
-    return await gate.run(context)
+    return await invoke(planned, repo)
   } catch (error: unknown) {
-    return failed(`the ${gate.id} gate could not run`, [asMessage(error)])
+    return failed(`the ${planned.gate.id} gate could not run`, [asMessage(error)])
   }
 }
 
 /** Time one gate and package it as the outcome the report layer prints. */
-const timeGate = async (gate: Gate, context: Context): Promise<GateOutcome> => {
+const timeGate = async (planned: PlannedGate, repo: Repo): Promise<GateOutcome> => {
   const started: number = Date.now()
-  const result: GateResult = await runGate(gate, context)
-  return { gate, result, durationMs: Date.now() - started }
+  const result: GateResult = await runGate(planned, repo)
+  return {
+    gate: planned.gate,
+    result,
+    durationMs: Date.now() - started,
+    member: planned.member?.path,
+  }
 }
 
 // The identifier column is sized to the widest gate in this run rather than to a fixed constant, so
 // adding a longer gate identifier cannot silently push the summaries out of alignment.
-const identifierWidth = (gates: readonly Gate[]): number =>
-  gates.reduce((widest: number, gate: Gate): number => Math.max(widest, gate.id.length), 0)
+const identifierWidth = (planned: readonly PlannedGate[]): number =>
+  planned.reduce(
+    (widest: number, step: PlannedGate): number => Math.max(widest, step.gate.id.length),
+    0,
+  )
 
 // A sequence with an exit rather than a plain map, because a run does not always reach the end. The
 // rule that decides is `endsRun`, in governance; this supplies the outcome and the mode.
-const runGates = async (
-  gates: readonly Gate[],
-  context: Context,
+const runPlan = async (
+  planned: readonly PlannedGate[],
+  repo: Repo,
   width: number,
 ): Promise<readonly GateOutcome[]> => {
-  const [gate, ...rest] = gates
-  if (gate === undefined) {
+  const [step, ...rest] = planned
+  if (step === undefined) {
     return []
   }
-  beginGate(gate, width)
-  const outcome: GateOutcome = await timeGate(gate, context)
+  beginGate(step.gate, width)
+  const outcome: GateOutcome = await timeGate(step, repo)
   reportGate(outcome, width)
-  const isPrecondition: boolean = gate.isPrecondition === true
+  const isPrecondition: boolean = step.gate.isPrecondition === true
   if (
     endsRun({
       isFailure: !outcome.result.ok,
       isPrecondition,
-      isEnforced: context.isEnforced,
+      isEnforced: repo.isEnforced,
     })
   ) {
-    reportHalt(gate, rest.length, isPrecondition)
+    reportHalt(step.gate, rest.length, isPrecondition)
     return [outcome]
   }
-  return [outcome, ...(await runGates(rest, context, width))]
+  return [outcome, ...(await runPlan(rest, repo, width))]
 }
 
 /**
  * Run Default or Extended verification.
- * @param context the resolved project environment.
+ * @param repository the resolved repository environment.
  * @param isExtended whether to include the history, build, bundle, and end-to-end gates.
  * @returns the process exit code.
  */
-export const verify = async (context: Context, isExtended: boolean): Promise<number> => {
-  const gates: readonly Gate[] = gatesFor(isExtended)
-  const width: number = identifierWidth(gates)
-  reportHeader(isExtended, gates.length)
-  const outcomes: readonly GateOutcome[] = await runGates(gates, context, width)
-  return reportVerdict(outcomes, isExtended, context.isEnforced)
+export const verify = async (repository: Repo, isExtended: boolean): Promise<number> => {
+  const planned: readonly PlannedGate[] = planFor(repository, isExtended)
+  const width: number = identifierWidth(planned)
+  reportHeader(isExtended, planned.length)
+  const outcomes: readonly GateOutcome[] = await runPlan(planned, repository, width)
+  return reportVerdict(outcomes, isExtended, repository.isEnforced)
 }
 
 /**
  * Run one gate by identifier. A single gate is a debugging aid, never a verdict.
- * @param context the resolved project environment.
- * @param gate the gate to run.
+ * @param repository the resolved repository environment.
+ * @param planned the gate to run, with the member it is about.
  * @param isVerbose whether to print what the gate's tool wrote, not only the verdict it produced.
  * @returns the process exit code.
  */
 export const verifyOne = async (
-  context: Context,
-  gate: Gate,
+  repository: Repo,
+  planned: PlannedGate,
   isVerbose: boolean = false,
 ): Promise<number> => {
-  const outcome: GateOutcome = await timeGate(gate, context)
-  reportGate(outcome, gate.id.length)
+  const outcome: GateOutcome = await timeGate(planned, repository)
+  reportGate(outcome, planned.gate.id.length)
   if (isVerbose) {
     reportOutput(outcome)
   }
   reportNote('A single gate is a debugging aid. Run `ploaness verify` for a verdict.')
-  return outcome.result.ok || !context.isEnforced ? 0 : 1
+  return outcome.result.ok || !repository.isEnforced ? 0 : 1
 }

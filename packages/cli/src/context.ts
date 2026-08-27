@@ -7,11 +7,18 @@ import { fileURLToPath } from 'node:url'
 import {
   asRecord,
   asStringRecord,
+  findGovernedMembers,
+  findRepositoryRoot,
+  isPayloadProject,
   type ParsedJson,
+  type ProjectManifest,
   parseJsonc,
+  ROOT_MEMBER_PATH,
   readKey,
   readSettings,
+  readWorkspacePackages,
   type Settings,
+  selectProjects,
 } from '@ploaness/governance'
 
 const nodeRequire: NodeJS.Require = createRequire(import.meta.url)
@@ -31,6 +38,35 @@ export interface Context {
   readonly settings: Settings
   /** False in report-only mode, where findings print but the run still exits 0. */
   readonly isEnforced: boolean
+}
+
+/**
+ * One governed package.
+ *
+ * `root` is the member's own directory, which is why every check that joins a path onto it kept working
+ * unchanged when members arrived: for a single-package repository the member root IS the repository
+ * root, so the field means exactly what it always meant.
+ */
+export interface Member extends Context {
+  /** Repo-relative, `.` for the member at the repository root. */
+  readonly path: string
+  /** Whether this member declares Payload, which decides if the Payload-scope gates ask about it. */
+  readonly isPayload: boolean
+}
+
+/**
+ * The repository a run judges, and every member inside it.
+ *
+ * The distinction this type exists to make is the one ploaness did not have: an install-script
+ * allowlist, an overrides block and a managed dotfile are facts about the REPOSITORY, and reading them
+ * from a member's directory produced a verdict about a file that was never there.
+ */
+export interface Repository extends Context {
+  /** The workspace file at the repository root - the only place pnpm honours these keys. */
+  readonly workspaceFile: string
+  readonly members: readonly Member[]
+  /** Every pnpm project the workspace selects, governed or not, for the anti-bypass rule. */
+  readonly projects: readonly ProjectManifest[]
 }
 
 /**
@@ -197,4 +233,111 @@ export const git = (context: Context, commandArguments: readonly string[]): stri
 export const readPins = (): Record<string, unknown> => {
   const pinsFile: string = path.join(shippedDirectory('@ploaness/config'), 'pins.json')
   return asRecord(readJson(pinsFile))
+}
+
+const MANIFEST: string = 'package.json'
+const WORKSPACE_FILE: string = 'pnpm-workspace.yaml'
+
+// Every directory from the working directory up to the filesystem root, nearest first, which is the
+// order `findRepositoryRoot` searches.
+const ancestorsOf = (directory: string): readonly string[] => {
+  const parent: string = path.dirname(directory)
+  return parent === directory ? [directory] : [directory, ...ancestorsOf(parent)]
+}
+
+const hasEntry = (directory: string, entry: string): boolean =>
+  existsSync(path.join(directory, entry))
+
+// Candidate project directories come from the tracked tree rather than from a filesystem walk, so a
+// directory git does not know about - a build output, an ignored scratch copy, an uninstalled example -
+// can never become a governed member.
+const manifestDirectories = (root: string): readonly string[] =>
+  trackedFiles(root)
+    .filter((file: string): boolean => path.basename(file) === MANIFEST)
+    .map((file: string): string => {
+      const directory: string = path.dirname(file)
+      return directory === '' ? ROOT_MEMBER_PATH : directory
+    })
+
+const readManifest = (root: string, projectPath: string): unknown =>
+  readJson(path.join(root, projectPath, MANIFEST))
+
+const createMember = (root: string, projectPath: string, isEnforced: boolean): Member => {
+  const packageJson: unknown = readManifest(root, projectPath)
+  return {
+    root: projectPath === ROOT_MEMBER_PATH ? root : path.join(root, projectPath),
+    packageJson,
+    settings: readSettings(packageJson),
+    isEnforced,
+    path: projectPath,
+    isPayload: isPayloadProject(packageJson),
+  }
+}
+
+/**
+ * Build the run context for a repository, discovering its governed members.
+ * @param cwd the directory ploaness was invoked from, which need not be the repository root.
+ * @param isEnforced false in report-only mode.
+ * @returns the repository, with one member for a single-package project.
+ */
+export const createRepository = (cwd: string, isEnforced: boolean): Repository => {
+  const root: string = findRepositoryRoot(ancestorsOf(path.resolve(cwd)), hasEntry)
+  const workspaceFile: string = readText(path.join(root, WORKSPACE_FILE)) ?? ''
+  const projects: readonly ProjectManifest[] = selectProjects(
+    readWorkspacePackages(workspaceFile),
+    manifestDirectories(root),
+  ).map(
+    (projectPath: string): ProjectManifest => ({
+      path: projectPath,
+      packageJson: readManifest(root, projectPath),
+    }),
+  )
+  const packageJson: unknown = readManifest(root, ROOT_MEMBER_PATH)
+  return {
+    root,
+    packageJson,
+    settings: readSettings(packageJson),
+    isEnforced,
+    workspaceFile,
+    projects,
+    members: findGovernedMembers(projects).map(
+      (projectPath: string): Member => createMember(root, projectPath, isEnforced),
+    ),
+  }
+}
+
+/**
+ * The member a single-gate invocation is about.
+ *
+ * `ploaness gate <id>` names no member, so it acts on the package containing the working directory. It
+ * resolves against every pnpm project rather than only the governed members, because a single gate is
+ * the tool an UNGOVERNED repository is surveyed with: before `ploaness` is declared anywhere there are
+ * no governed members but the root, and resolving to the root would silently measure the wrong package
+ * - reporting the repository's suppression ceiling to someone standing in an application asking about
+ * that application. A whole `verify` run still judges only what the repository actually governs.
+ * @param repository the repository being judged.
+ * @param cwd the directory ploaness was invoked from.
+ * @returns the member for the innermost project containing cwd, or the first governed member.
+ */
+export const memberAt = (repository: Repository, cwd: string): Member | undefined => {
+  const resolved: string = path.resolve(cwd)
+  const containsCwd = (projectPath: string): boolean => {
+    const full: string =
+      projectPath === ROOT_MEMBER_PATH ? repository.root : path.join(repository.root, projectPath)
+    return resolved === full || resolved.startsWith(`${full}${path.sep}`)
+  }
+  // The deepest match, so a nested project wins over the root that also contains it.
+  const innermost: ProjectManifest | undefined = [...repository.projects]
+    .filter((project: ProjectManifest): boolean => containsCwd(project.path))
+    .sort(
+      (left: ProjectManifest, right: ProjectManifest): number =>
+        right.path.length - left.path.length,
+    )[0]
+  if (innermost === undefined) {
+    return repository.members[0]
+  }
+  return (
+    repository.members.find((member: Member): boolean => member.path === innermost.path) ??
+    createMember(repository.root, innermost.path, repository.isEnforced)
+  )
 }
