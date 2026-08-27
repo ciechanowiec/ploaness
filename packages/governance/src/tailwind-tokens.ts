@@ -39,6 +39,14 @@ const PROPERTY_UTILITIES: readonly string[] = ['transition', 'will-change']
 const carriesProperty = (lineText: string, index: number): boolean =>
   PROPERTY_UTILITIES.some((utility: string): boolean => lineText.slice(0, index).endsWith(utility))
 
+// A bracketed value that reads a CSS custom property is the OPPOSITE of a hardcoded one. It is how a
+// value computed at render - a width from a prop, a gap from a CMS field - reaches a utility class, and
+// a static theme cannot hold a per-instance value. Reporting it demanded a token for something whose
+// whole purpose is not being known until the component renders.
+const CUSTOM_PROPERTY: RegExp = /var\(\s*--/
+
+const carriesCustomProperty = (value: string): boolean => CUSTOM_PROPERTY.test(value)
+
 /**
  * Find every arbitrary Tailwind value in one file's text.
  * @param content the file's text.
@@ -48,7 +56,10 @@ export const findArbitraryValues = (content: string): readonly ArbitraryValueVio
   const lines: readonly string[] = content.split('\n')
   return lines.flatMap((lineText: string, index: number): readonly ArbitraryValueViolation[] =>
     [...lineText.matchAll(ARBITRARY_VALUE)]
-      .filter((match: RegExpExecArray): boolean => !carriesProperty(lineText, match.index))
+      .filter(
+        (match: RegExpExecArray): boolean =>
+          !(carriesProperty(lineText, match.index) || carriesCustomProperty(match[0])),
+      )
       .map(
         (match: RegExpExecArray): ArbitraryValueViolation => ({
           line: index + 1,

@@ -61,3 +61,20 @@ describe('utilities whose bracket takes a property rather than a value', () => {
     expect(findArbitraryValues('<div className="duration-[400ms]" />')).toHaveLength(1)
   })
 })
+
+describe('a bracketed value that reads a custom property', () => {
+  it('accepts a margin taken from a runtime custom property', () => {
+    // The value is computed at render, so no static theme token could hold it.
+    expect(findArbitraryValues('<div className="mb-[var(--section-gap)]" />')).toEqual([])
+  })
+
+  it('accepts a calculation over a custom property', () => {
+    expect(
+      findArbitraryValues('<div className="basis-[calc(var(--tile-basis)_-_2rem)]" />'),
+    ).toEqual([])
+  })
+
+  it('still reports a calculation over only literals', () => {
+    expect(findArbitraryValues('<div className="w-[calc(100%-1px)]" />')).toHaveLength(1)
+  })
+})
