@@ -361,10 +361,14 @@ export const guidelineRules: RuleTable = {
   // exempt the words the frameworks mandate verbatim: `params` (the Next.js App Router route prop and
   // its `generateStaticParams` export) and `req`/`doc` (Payload's fixed hook/endpoint argument names -
   // every Payload hook, access function, and endpoint handler receives `req`, and change/read hooks
-  // receive `doc`). `: false` removes only those replacements; every other abbreviation is still reported.
+  // receive `doc`). `repository` is exempt for the same kind of reason one layer up: it is the domain
+  // term the scope model is built from - a repository holds members, and a rule is repository-scope or
+  // package-scope - so every comment, type name and finding string says it. Shortening the identifiers
+  // to `repo` would leave the code disagreeing with the prose that explains it.
+  // `: false` removes only those replacements; every other abbreviation is still reported.
   'unicorn/name-replacements': [
     'error',
-    { replacements: { params: false, req: false, doc: false } },
+    { replacements: { params: false, req: false, doc: false, repository: false } },
   ],
   // A predicate named as a third-person verb - `matchesAny`, `reachesThreshold`, `declaresKey` -
   // already says plainly what it does, which is what the naming rule asks for. Rewriting those as
