@@ -4,6 +4,10 @@
 // the shuffled order, declared by a sequence block. Neither config may state either one itself: a second
 // statement of the seed would drift silently, because nothing fails when two numbers that must be equal
 // stop being equal.
+//
+// Each property below is asserted of EVERY suite rather than of the config object, because the shipped
+// config splits into per-environment projects and a project inherits nothing from the root it is not
+// given. A guard that held only for the suite somebody remembered is not a guard.
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -15,18 +19,28 @@ import { describe, expect, it } from 'vitest'
 // Reading the artefact keeps both halves of each assertion on the module a consumer actually loads.
 import { DETERMINISTIC_SEQUENCE, harnessSetupFile } from '../dist/vitest-core.js'
 
+/** The part of one collected suite these assertions read. */
+interface Suite {
+  readonly environment?: string
+  readonly include?: readonly string[]
+  readonly setupFiles?: readonly string[]
+  readonly sequence?: unknown
+  readonly fileParallelism?: boolean
+}
+
 /** The part of a Vitest config these assertions read. */
 interface VitestConfig {
-  readonly test?: {
-    readonly setupFiles?: readonly string[]
-    readonly sequence?: unknown
-  }
+  readonly test?: Suite & { readonly projects?: readonly { readonly test?: Suite }[] }
 }
 
 const specDirectory: string = path.dirname(fileURLToPath(import.meta.url))
 const configPackage: string = path.join(specDirectory, '..')
 const configBuild: string = path.join(configPackage, 'dist')
 const workspaceRoot: string = path.join(configPackage, '..', '..')
+
+// The glob that names an integration spec. Read from the config rather than compared against it: this
+// spec asks which suite collects those files, and has nothing to say if none does.
+const INTEGRATION_GLOB: string = 'tests/int/'
 
 // A shape this does not recognise throws rather than yielding an empty object: a spec that silently
 // measured nothing would keep reporting green while proving none of the properties below.
@@ -44,14 +58,40 @@ const shipped = (): Promise<VitestConfig> => loadConfig(path.join(configBuild, '
 const workspace = (): Promise<VitestConfig> =>
   loadConfig(path.join(workspaceRoot, 'vitest.config.mts'))
 
+// A config declaring projects runs those and never its own root globs, so the root block is the suite
+// only when there are no projects. Throwing on neither keeps a renamed key from emptying the list.
+const suitesOf = (config: VitestConfig): readonly Suite[] => {
+  const projects: readonly { readonly test?: Suite }[] | undefined = config.test?.projects
+  if (projects !== undefined) {
+    return projects.map((project: { readonly test?: Suite }): Suite => {
+      if (project.test === undefined) {
+        throw new TypeError('a declared project carries no test block')
+      }
+      return project.test
+    })
+  }
+  if (config.test === undefined) {
+    throw new TypeError('the config carries neither a test block nor projects')
+  }
+  return [config.test]
+}
+
+const shippedSuites = async (): Promise<readonly Suite[]> => suitesOf(await shipped())
+
+const coversDirectory = (suite: Suite, fragment: string): boolean =>
+  (suite.include ?? []).some((glob: string): boolean => glob.includes(fragment))
+
 describe('the harness setup file', () => {
   it('exists on disk, so a project resolving it meets a guard rather than an error', () => {
     expect(existsSync(harnessSetupFile())).toBe(true)
   })
 
-  it('leads the setup files of the shipped config, before any the project wrote', async () => {
-    const config: VitestConfig = await shipped()
-    expect(config.test?.setupFiles?.[0]).toBe(harnessSetupFile())
+  it('leads the setup files of every shipped suite, before any the project wrote', async () => {
+    const suites: readonly Suite[] = await shippedSuites()
+    expect(suites.length).toBeGreaterThan(0)
+    for (const suite of suites) {
+      expect(suite.setupFiles?.[0]).toBe(harnessSetupFile())
+    }
   })
 
   it('leads the setup files of this repository, which runs what it publishes', async () => {
@@ -61,9 +101,12 @@ describe('the harness setup file', () => {
 })
 
 describe('the sequence block', () => {
-  it('is the shared one in the shipped config, not a second statement of it', async () => {
-    const config: VitestConfig = await shipped()
-    expect(config.test?.sequence).toBe(DETERMINISTIC_SEQUENCE)
+  it('is the shared one in every shipped suite, not a second statement of it', async () => {
+    const suites: readonly Suite[] = await shippedSuites()
+    expect(suites.length).toBeGreaterThan(0)
+    for (const suite of suites) {
+      expect(suite.sequence).toBe(DETERMINISTIC_SEQUENCE)
+    }
   })
 
   it('is the shared one in this repository too, so the two cannot drift apart', async () => {
@@ -85,5 +128,48 @@ describe('the sequence block', () => {
   // rather than an ordering.
   it('loads the setup files in the order they are listed', () => {
     expect(DETERMINISTIC_SEQUENCE.setupFiles).toBe('list')
+  })
+})
+
+describe('the environment a suite runs in', () => {
+  // jsdom installs its own realm's globals, typed-array constructors included, so a Node `Buffer` fails
+  // `instanceof Uint8Array` in any library that guards its input that way. Payload's upload pipeline
+  // does, through `file-type`, and reports the TypeError as the project's own upload allowlist
+  // rejecting a valid image - so this held every consumer's integration suite hostage to a realm it had
+  // no reason to be in.
+  it('is node wherever integration specs are collected, which boot a server and not a browser', async () => {
+    const suites: readonly Suite[] = await shippedSuites()
+    const integration: readonly Suite[] = suites.filter((suite: Suite): boolean =>
+      coversDirectory(suite, INTEGRATION_GLOB),
+    )
+    expect(integration.length).toBeGreaterThan(0)
+    for (const suite of integration) {
+      expect(suite.environment).toBe('node')
+    }
+  })
+
+  // The other half of the same split: ploaness pins and ships React Testing Library, jest-dom and
+  // user-event, which need a DOM. Moving the integration specs out must not take the realm away from
+  // the specs that were the reason for shipping it.
+  it('is jsdom wherever component specs are collected, which is what that stack is for', async () => {
+    const suites: readonly Suite[] = await shippedSuites()
+    const component: readonly Suite[] = suites.filter((suite: Suite): boolean =>
+      coversDirectory(suite, 'tests/component/'),
+    )
+    expect(component.length).toBeGreaterThan(0)
+    for (const suite of component) {
+      expect(suite.environment).toBe('jsdom')
+    }
+  })
+
+  // Vitest collapses the suites into one serial group only when every one of them asks for a single
+  // worker. A suite that omitted this would run alongside the others, and the Payload boots inside it
+  // would race the others for the single ephemeral database the test command created.
+  it('runs its files one at a time, in every shipped suite', async () => {
+    const suites: readonly Suite[] = await shippedSuites()
+    expect(suites.length).toBeGreaterThan(0)
+    for (const suite of suites) {
+      expect(suite.fileParallelism).toBe(false)
+    }
   })
 })

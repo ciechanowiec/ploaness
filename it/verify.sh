@@ -174,9 +174,19 @@ expect_command() {
 }
 
 # The network guard runs inside the suite rather than inside a gate, so proving it needs a spec rather
-# than an `expect`. The fixture's own vitest runs that spec, in the node environment and without
-# coverage: neither the DOM nor the thresholds is what these two cases are about. No commit is made for
-# them, because nothing here reads the history.
+# than an `expect`. The fixture's own vitest runs that spec, in the node suite and without coverage:
+# neither the DOM nor the thresholds is what these two cases are about. No commit is made for them,
+# because nothing here reads the history.
+#
+# The suite is chosen by where the spec is WRITTEN rather than by `--environment=node`, which the
+# shipped config no longer honours: it declares per-environment projects, and a project's environment is
+# its own. The flag was also hiding a property of this fixture. A case shares one install by symlinking
+# its `node_modules` at a template outside the case directory, so the store's real path lies outside
+# `searchForWorkspaceRoot(root)` - the one entry Vite's file-serving allow-list holds by default. The
+# jsdom suite fetches its setup files THROUGH that server, as `/@fs/<path>`, and would be refused the
+# harness setup file; the node suite imports them natively and never asks. No consumer has this shape,
+# because a project's own `.pnpm` store sits under its workspace root; the template, which has a real
+# `node_modules`, runs the same spec under jsdom and passes.
 #
 # The assertion is on the rule sentence, not merely on failure. An unguarded run would fail the remote
 # case too - on a DNS error - and a case that cannot tell those two apart proves nothing.
@@ -185,8 +195,8 @@ expect_suite() {
     verdict="$2"
     needle="$3"
     directory="$scratch/$name"
-    if output="$(cd "$directory" && ./node_modules/.bin/vitest run --environment=node \
-        tests/unit/network-guard.unit.spec.ts 2>&1)"; then
+    if output="$(cd "$directory" && ./node_modules/.bin/vitest run \
+        tests/int/network-guard.int.spec.ts 2>&1)"; then
         actual=PASS
     else
         actual=FAIL
@@ -589,8 +599,8 @@ expect pass-section-project-text assets PASS
 # The network guard, from both sides. A database on loopback is the case the guard exists to leave
 # alone, and a host beyond the machine is the case it exists to refuse.
 new_case pass-guard-allows-loopback
-mkdir -p "$scratch/pass-guard-allows-loopback/tests/unit"
-cat > "$scratch/pass-guard-allows-loopback/tests/unit/network-guard.unit.spec.ts" <<'LOOPBACK'
+mkdir -p "$scratch/pass-guard-allows-loopback/tests/int"
+cat > "$scratch/pass-guard-allows-loopback/tests/int/network-guard.int.spec.ts" <<'LOOPBACK'
 import net from 'node:net'
 import { expect, it } from 'vitest'
 
@@ -623,8 +633,8 @@ LOOPBACK
 expect_suite pass-guard-allows-loopback PASS 'passed'
 
 new_case fail-guard-blocks-remote
-mkdir -p "$scratch/fail-guard-blocks-remote/tests/unit"
-cat > "$scratch/fail-guard-blocks-remote/tests/unit/network-guard.unit.spec.ts" <<'REMOTE'
+mkdir -p "$scratch/fail-guard-blocks-remote/tests/int"
+cat > "$scratch/fail-guard-blocks-remote/tests/int/network-guard.int.spec.ts" <<'REMOTE'
 import { expect, it } from 'vitest'
 
 it('reaches a host beyond this machine', async () => {
