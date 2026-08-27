@@ -9,22 +9,6 @@ import { asOptionalText, asRecord, asStringRecord, declaredDependencies } from '
 import { pinnedPnpmVersion } from './toolchain-pins.js'
 import type { WiringViolation } from './wiring-violation.js'
 
-/** What a project must declare and at which version, plus the invariants those pins imply. */
-export interface VersionInputs {
-  /** Every pinned package, mapped to the exact version ploaness owns for it. */
-  readonly expected: Readonly<Record<string, string>>
-  /** The subset a project must declare rather than merely match when present. */
-  readonly required: ReadonlySet<string>
-  /** The version every `@payloadcms/*` package must carry, which is the pinned `payload` version. */
-  readonly payloadVersion: string | undefined
-  /** The exact `packageManager` field, or undefined when ploaness pins none. */
-  readonly requiredPackageManager: string | undefined
-  /** The `engines` block a project must declare. */
-  readonly requiredEngines: Readonly<Record<string, string>>
-  /** The contents of pnpm-workspace.yaml, or an empty string when the project ships none. */
-  readonly workspaceFile: string
-}
-
 // Which block a package is actually declared in. A finding that named `devDependencies` for a package
 // sitting in `dependencies` sent the reader to the wrong half of the file - and the framework pins,
 // which are runtime dependencies, are exactly the ones that would be misreported.
@@ -113,16 +97,17 @@ const overrideViolation = (
 // forbidden case is a package whose version the project already wrote down: two declarations of one
 // version will not stay equal, and the one that loses is the one every reader believes. The ploaness
 // packages are neither, so a pre-publication consumer may still point them at a local tarball.
-const checkPinnedOverrides = (
+// The declared set is the union across members rather than the root's own, because a root override
+// shadows a version ANY member wrote down - and in a workspace the package that declared it is usually
+// not the root at all.
+const checkPinnedOverridesAcross = (
   workspaceFile: string,
   expected: Readonly<Record<string, string>>,
-  packageJson: Record<string, unknown>,
-): readonly WiringViolation[] => {
-  const declared: Record<string, string> = declaredDependencies(packageJson)
-  return findOverrides(workspaceFile).flatMap((entry: OverrideEntry): readonly WiringViolation[] =>
-    overrideViolation(entry, expected, declared),
+  declaredAcrossMembers: Readonly<Record<string, string>>,
+): readonly WiringViolation[] =>
+  findOverrides(workspaceFile).flatMap((entry: OverrideEntry): readonly WiringViolation[] =>
+    overrideViolation(entry, expected, { ...declaredAcrossMembers }),
   )
-}
 
 // Corepack reads `packageManager` and runs exactly that version, so it decides how every other pinned
 // version is resolved. A project on a different pnpm can produce a different tree from the same
@@ -149,7 +134,10 @@ const checkPackageManager = (
 // Corepack reads one field and an installer reads the other, so two literals would be two statements
 // about a single version - and this was the pair that had already drifted apart in meaning: an exact
 // `pnpm@11.9.0` beside a `>=11` floor told a reader that any pnpm 11 would resolve the same tree.
-const enginesRequiredBy = (inputs: VersionInputs): Readonly<Record<string, string>> => {
+const enginesRequiredBy = (inputs: {
+  readonly requiredEngines: Readonly<Record<string, string>>
+  readonly requiredPackageManager: string | undefined
+}): Readonly<Record<string, string>> => {
   const pnpm: string | undefined = pinnedPnpmVersion(inputs.requiredPackageManager)
   return pnpm === undefined ? inputs.requiredEngines : { ...inputs.requiredEngines, pnpm }
 }
@@ -282,6 +270,15 @@ const PAYLOAD_SCOPE: string = '@payloadcms/'
  */
 export const PAYLOAD_PACKAGE: string = 'payload'
 
+/**
+ * The package whose presence makes a member a Next application.
+ *
+ * Read for the same reason as {@link PAYLOAD_PACKAGE}: it decides which shipped configuration a member
+ * receives. A Next application that is not a Payload one still has a build, a client bundle and a
+ * browser suite to govern.
+ */
+export const NEXT_PACKAGE: string = 'next'
+
 const checkPayloadFamily = (
   packageJson: Record<string, unknown>,
   payloadVersion: string | undefined,
@@ -342,9 +339,92 @@ const checkTestLibraries = (
   )
 }
 
+/** What the repository as a whole must declare, and the invariants those declarations imply. */
+export interface RepositoryVersionInputs {
+  /** Every pinned package, mapped to the exact version ploaness owns for it. */
+  readonly expected: Readonly<Record<string, string>>
+  /** The exact `packageManager` field, or undefined when ploaness pins none. */
+  readonly requiredPackageManager: string | undefined
+  /** The `engines` block the repository must declare. */
+  readonly requiredEngines: Readonly<Record<string, string>>
+  /** The contents of pnpm-workspace.yaml, read at the repository root and nowhere else. */
+  readonly workspaceFile: string
+  /** Every dependency any member declares, because a root override shadows all of them. */
+  readonly declaredAcrossMembers: Readonly<Record<string, string>>
+}
+
+/** What one member must declare, judged against that member's own manifest. */
+export interface PackageVersionInputs {
+  readonly expected: Readonly<Record<string, string>>
+  /** The subset this member must declare rather than merely match when present. */
+  readonly required: ReadonlySet<string>
+  /** The version every `@payloadcms/*` package must carry, which is the pinned `payload` version. */
+  readonly payloadVersion: string | undefined
+}
+
 /**
- * Return every way the project has changed, or could change, a version ploaness owns.
- * @param packageJson the consumer's parsed package.json.
+ * Return every way the repository has changed, or could change, a version ploaness owns.
+ *
+ * These are the declarations pnpm honours at the workspace root and nowhere else. Read from a member's
+ * directory they described a file that was not there: the overrides check found none and reported no
+ * violation, vouching for pins that the root had already replaced.
+ * @param packageJson the repository root's parsed package.json.
+ * @param inputs the pinned versions and the invariants they imply.
+ * @returns one violation per defect, in a stable order.
+ */
+export const findRepositoryVersionViolations = (
+  packageJson: Record<string, unknown>,
+  inputs: RepositoryVersionInputs,
+): readonly WiringViolation[] => [
+  ...checkPackageManager(packageJson, inputs.requiredPackageManager),
+  ...checkEngines(
+    packageJson,
+    enginesRequiredBy({
+      requiredEngines: inputs.requiredEngines,
+      requiredPackageManager: inputs.requiredPackageManager,
+    }),
+  ),
+  ...checkPinnedOverridesAcross(
+    inputs.workspaceFile,
+    inputs.expected,
+    inputs.declaredAcrossMembers,
+  ),
+]
+
+/**
+ * Return every way one member has changed, or could change, a version ploaness owns.
+ * @param packageJson the member's parsed package.json.
+ * @param inputs the pinned versions this member is held to.
+ * @returns one violation per defect, in a stable order.
+ */
+export const findPackageVersionViolations = (
+  packageJson: Record<string, unknown>,
+  inputs: PackageVersionInputs,
+): readonly WiringViolation[] => [
+  ...checkTestLibraries(packageJson, inputs.expected, inputs.required),
+  ...checkExactVersions(packageJson),
+  ...checkPayloadFamily(packageJson, inputs.payloadVersion),
+  ...checkVersionEscapes(packageJson, inputs.expected),
+]
+
+/** What a single-package project must declare, which is both scopes over one manifest. */
+export interface VersionInputs {
+  readonly expected: Readonly<Record<string, string>>
+  readonly required: ReadonlySet<string>
+  readonly payloadVersion: string | undefined
+  readonly requiredPackageManager: string | undefined
+  readonly requiredEngines: Readonly<Record<string, string>>
+  readonly workspaceFile: string
+}
+
+/**
+ * Every version violation for a repository holding exactly one package.
+ *
+ * Composes the two halves the way that case actually is: the sole member's manifest is also the
+ * repository's, so an override at the root and a declaration in the package are the same file. Kept as
+ * an entry point because the spec that pins this behaviour predates the split, and its passing
+ * unchanged is what shows nothing was lost in it.
+ * @param packageJson the project's parsed package.json.
  * @param inputs the pinned versions and the invariants they imply.
  * @returns one violation per defect, in a stable order.
  */
@@ -352,11 +432,16 @@ export const findVersionViolations = (
   packageJson: Record<string, unknown>,
   inputs: VersionInputs,
 ): readonly WiringViolation[] => [
-  ...checkTestLibraries(packageJson, inputs.expected, inputs.required),
-  ...checkExactVersions(packageJson),
-  ...checkPayloadFamily(packageJson, inputs.payloadVersion),
-  ...checkPackageManager(packageJson, inputs.requiredPackageManager),
-  ...checkEngines(packageJson, enginesRequiredBy(inputs)),
-  ...checkPinnedOverrides(inputs.workspaceFile, inputs.expected, packageJson),
-  ...checkVersionEscapes(packageJson, inputs.expected),
+  ...findPackageVersionViolations(packageJson, {
+    expected: inputs.expected,
+    required: inputs.required,
+    payloadVersion: inputs.payloadVersion,
+  }),
+  ...findRepositoryVersionViolations(packageJson, {
+    expected: inputs.expected,
+    requiredPackageManager: inputs.requiredPackageManager,
+    requiredEngines: inputs.requiredEngines,
+    workspaceFile: inputs.workspaceFile,
+    declaredAcrossMembers: declaredDependencies(packageJson),
+  }),
 ]

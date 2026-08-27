@@ -8,7 +8,7 @@
 // which directories are governed can be spec'd against directory lists no filesystem has to produce.
 import { matchesGlob } from './file-roles.js'
 import { declaredDependencies } from './json-shapes.js'
-import { HARNESS_PACKAGE, PAYLOAD_PACKAGE } from './version-policy.js'
+import { HARNESS_PACKAGE, NEXT_PACKAGE, PAYLOAD_PACKAGE } from './version-policy.js'
 import { topLevelListItems } from './yaml-blocks.js'
 
 /** The repo-relative path of the member that sits at the repository root. */
@@ -130,6 +130,38 @@ export const isGovernedProject = (packageJson: unknown): boolean =>
  */
 export const isPayloadProject = (packageJson: unknown): boolean =>
   declaresPackage(packageJson, PAYLOAD_PACKAGE)
+
+/**
+ * What kind of package a member is, which decides the configurations it receives.
+ *
+ * Three kinds rather than the Payload/not-Payload pair this started as. A Next application that is not
+ * a Payload one - a public site reading a CMS over HTTP - has route handlers, a client bundle and a
+ * browser suite, so handing it a library's configuration would leave all three ungoverned; handing it
+ * Payload's would judge it against generated files it does not have. The kind is DERIVED from what the
+ * member declares and never declared directly, so a project cannot receive a weaker configuration by
+ * describing itself differently.
+ */
+export type MemberKind = 'payload' | 'application' | 'library'
+
+/**
+ * Decide a member's kind from its manifest.
+ * @param packageJson the member's parsed manifest.
+ * @returns `payload` when it declares Payload, `application` when it declares Next, else `library`.
+ */
+export const memberKindOf = (packageJson: unknown): MemberKind => {
+  if (declaresPackage(packageJson, PAYLOAD_PACKAGE)) {
+    return 'payload'
+  }
+  return declaresPackage(packageJson, NEXT_PACKAGE) ? 'application' : 'library'
+}
+
+/**
+ * Whether a member has a server of its own, and therefore a build, a client bundle and a browser to
+ * drive. A library has none of the three, so the gates and configurations about them do not apply to it.
+ * @param kind the member's kind.
+ * @returns true for a Payload or Next application.
+ */
+export const hasRuntime = (kind: MemberKind): boolean => kind !== 'library'
 
 /**
  * The projects ploaness governs.

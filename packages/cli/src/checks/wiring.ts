@@ -5,15 +5,24 @@ import {
   asOptionalText,
   asRecord,
   asStringRecord,
-  findWiringViolations,
+  declaredDependencies,
+  findPackageWiringViolations,
+  findRepositoryWiringViolations,
+  findServerUrlCollisions,
+  findUngovernedProjects,
+  hasRuntime,
   isArray,
   isRecord,
+  type MemberKind,
+  type MemberShape,
+  memberKindOf,
   readKey,
   requiredBiomeFiles,
   type WiringViolation,
 } from '@ploaness/governance'
 import {
-  type Repository as Repo,
+  type Member,
+  type Repository,
   readJson,
   readPins,
   readText,
@@ -138,30 +147,100 @@ const expectedTestLibraries = (): Readonly<Record<string, string>> => {
   return { ...fromDependencies, ...ownedVersions() }
 }
 
-/** Verify the project has installed ploaness exactly as ploaness dictates. */
-export const wiring = (context: Repo): GateResult => {
-  const violations: readonly WiringViolation[] = findWiringViolations({
-    packageJson: context.packageJson,
-    eslintConfig: readText(path.join(context.root, 'eslint.config.mjs')),
-    vitestConfig: readText(path.join(context.root, 'vitest.config.mts')),
-    playwrightConfig: readText(path.join(context.root, 'playwright.config.ts')),
-    workspaceFile: context.workspaceFile,
-    declaredExclusions: context.settings.declaredExclusions,
-    biomeConfig: readText(path.join(context.root, 'biome.json')),
-    tsconfig: readText(path.join(context.root, 'tsconfig.json')),
+// A member's own required set. Only a member that serves an application needs the browser packages: a
+// library has no page to sweep, and requiring them would manufacture dependencies the dead-code gate
+// then rightly reports as unused.
+const BROWSER_LIBRARIES: ReadonlySet<string> = new Set<string>([
+  '@playwright/test',
+  '@axe-core/playwright',
+  'tsx',
+])
+
+const requiredFor = (kind: MemberKind): ReadonlySet<string> =>
+  hasRuntime(kind)
+    ? requiredPackages()
+    : new Set<string>(
+        [...requiredPackages()].filter((name: string): boolean => !BROWSER_LIBRARIES.has(name)),
+      )
+
+const memberViolations = (member: Member): readonly WiringViolation[] => {
+  const kind: MemberKind = memberKindOf(member.packageJson)
+  return findPackageWiringViolations({
+    packageJson: member.packageJson,
+    kind,
+    requiredBiomeFiles: requiredBiomeFiles(member.settings.sourceRoots, kind),
+    eslintConfig: readText(path.join(member.root, 'eslint.config.mjs')),
+    vitestConfig: readText(path.join(member.root, 'vitest.config.mts')),
+    playwrightConfig: readText(path.join(member.root, 'playwright.config.ts')),
+    declaredExclusions: member.settings.declaredExclusions,
+    biomeConfig: readText(path.join(member.root, 'biome.json')),
+    tsconfig: readText(path.join(member.root, 'tsconfig.json')),
     expectedTestLibraries: expectedTestLibraries(),
-    requiredTestLibraries: requiredPackages(),
+    requiredTestLibraries: requiredFor(kind),
     payloadVersion: ownedVersions()['payload'],
-    requiredPackageManager: asOptionalText(readPins()['packageManager']),
-    requiredEngines: asStringRecord(readPins()['engines']),
-    requiredBiomeFiles: requiredBiomeFiles(context.settings.sourceRoots),
   })
-  return violations.length > 0
+}
+
+// A finding names the member it came from only when there is more than one, so a single-package project
+// reads exactly the findings it always did.
+const locate = (member: Member, isSolo: boolean, violation: WiringViolation): string =>
+  isSolo
+    ? `${violation.location}: ${violation.reason}`
+    : `${member.path}/${violation.location}: ${violation.reason}`
+
+const shapeOf = (member: Member): MemberShape => ({
+  path: member.path,
+  isPayload: member.isPayload,
+  sourceRoots: member.settings.sourceRoots,
+})
+
+// The rules that need the member LIST rather than any one manifest. Both describe a way a workspace can
+// be wrong that no single package can see: a project quietly left ungoverned, and two applications that
+// would drive the same origin and sweep each other.
+const acrossMembers = (repository: Repository): readonly WiringViolation[] => [
+  ...findUngovernedProjects(
+    repository.projects,
+    repository.members.map((member: Member): MemberShape => shapeOf(member)),
+  ).map((reason: string): WiringViolation => ({ location: 'pnpm-workspace.yaml', reason })),
+  ...findServerUrlCollisions(
+    repository.members
+      .filter((member: Member): boolean => hasRuntime(memberKindOf(member.packageJson)))
+      .map((member: Member) => ({ path: member.path, serverUrl: member.settings.serverUrl })),
+  ).map((reason: string): WiringViolation => ({ location: 'package.json ploaness', reason })),
+]
+
+const declaredEverywhere = (repository: Repository): Record<string, string> =>
+  Object.assign(
+    {},
+    ...repository.members.map(
+      (member: Member): Record<string, string> => declaredDependencies(member.packageJson),
+    ),
+  ) as Record<string, string>
+
+/** Verify the repository and each of its members have installed ploaness exactly as ploaness dictates. */
+export const wiring = (repository: Repository): GateResult => {
+  const isSolo: boolean = repository.members.length <= 1
+  const findings: readonly string[] = [
+    ...findRepositoryWiringViolations({
+      packageJson: repository.packageJson,
+      workspaceFile: repository.workspaceFile,
+      declaredExclusions: repository.settings.declaredExclusions,
+      expectedTestLibraries: expectedTestLibraries(),
+      requiredPackageManager: asOptionalText(readPins()['packageManager']),
+      requiredEngines: asStringRecord(readPins()['engines']),
+      declaredAcrossMembers: declaredEverywhere(repository),
+      repositoryFindings: acrossMembers(repository),
+    }).map((violation: WiringViolation): string => `${violation.location}: ${violation.reason}`),
+    ...repository.members.flatMap((member: Member): readonly string[] =>
+      memberViolations(member).map((violation: WiringViolation): string =>
+        locate(member, isSolo, violation),
+      ),
+    ),
+  ]
+  return findings.length > 0
     ? failed(
-        `${String(violations.length)} wiring defect(s); the harness is not installed as ploaness requires`,
-        violations.map(
-          (violation: WiringViolation): string => `${violation.location}: ${violation.reason}`,
-        ),
+        `${String(findings.length)} wiring defect(s); the harness is not installed as ploaness requires`,
+        findings,
       )
     : passed('ploaness is wired into the project as required')
 }

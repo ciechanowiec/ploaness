@@ -10,8 +10,15 @@ import {
 } from './json-shapes.js'
 import { type DeclaredExclusion, findConvenienceExclusions } from './settings.js'
 import { escapeForRegex } from './text-escapes.js'
-import { describeFound, findVersionViolations } from './version-policy.js'
+import {
+  describeFound,
+  findPackageVersionViolations,
+  findRepositoryVersionViolations,
+  type PackageVersionInputs,
+  type RepositoryVersionInputs,
+} from './version-policy.js'
 import type { WiringViolation } from './wiring-violation.js'
+import type { MemberKind } from './workspace-policy.js'
 // Anti-bypass policy: the module that exists because npm has no lifecycle.
 //
 // A build tool that bound its checks to fixed phases would make this unnecessary: the checks would run
@@ -108,6 +115,7 @@ export const REQUIRED_TSCONFIG_EXTENDS: string = 'ploaness/tsconfig.json'
  */
 export const requiredBiomeFiles = (
   sourceRoots: readonly string[],
+  kind: MemberKind = 'payload',
 ): Readonly<Record<string, unknown>> => ({
   ignoreUnknown: false,
   includes: [
@@ -121,7 +129,11 @@ export const requiredBiomeFiles = (
     // Derived from the artefact list rather than written out. The two lists had to name the same paths
     // and did not: `src/payload-generated-schema.ts` was denied to an agent and still handed to the
     // formatter, so a generator and a formatter took turns rewriting one file.
-    ...GENERATED_ARTEFACTS.map((artefact: string): string => `!${artefact}`),
+    // Only a Payload member has these. Negating them elsewhere would name paths that cannot exist,
+    // which `config-refs` reports as a carve-out reaching nothing.
+    ...(kind === 'payload'
+      ? GENERATED_ARTEFACTS.map((artefact: string): string => `!${artefact}`)
+      : []),
     '!**/.next',
     '!**/node_modules',
   ],
@@ -146,6 +158,66 @@ export const REQUIRED_TSCONFIG_PATHS: Readonly<Record<string, readonly string[]>
   ],
   exclude: ['node_modules'],
 }
+
+/**
+ * The `include` and `exclude` a member with no Next application must carry.
+ *
+ * The Payload globs name `next-env.d.ts` and two `.next` type directories. In a package that never runs
+ * Next those are carve-outs reaching nothing, which is itself a finding - so the kind that cannot have
+ * them does not claim them.
+ */
+export const LIBRARY_TSCONFIG_PATHS: Readonly<Record<string, readonly string[]>> = {
+  include: ['**/*.ts', '**/*.tsx', '**/*.mts'],
+  exclude: ['node_modules', 'dist'],
+}
+
+/**
+ * Everything a member of one kind must point at.
+ *
+ * Declared once and consumed by both the rule and `ploaness init`, for the reason the whole module
+ * exists: two literals that must stay equal will not, and that has already shipped a defect where the
+ * scaffolder wrote a project the gate then failed.
+ */
+export interface MemberWiringTargets {
+  readonly biomeExtends: string
+  readonly tsconfigExtends: string
+  readonly tsconfigPaths: Readonly<Record<string, readonly string[]>>
+  readonly eslintSpecifier: string
+  readonly vitestSpecifier: string
+  /** undefined when this kind has no application to drive, and so is not asked for a browser config. */
+  readonly playwrightSpecifier: string | undefined
+}
+
+const LIBRARY_TARGETS: MemberWiringTargets = {
+  biomeExtends: 'ploaness/biome-core',
+  tsconfigExtends: 'ploaness/tsconfig-core.json',
+  tsconfigPaths: LIBRARY_TSCONFIG_PATHS,
+  eslintSpecifier: 'ploaness/eslint-library',
+  vitestSpecifier: 'ploaness/vitest-library',
+  playwrightSpecifier: undefined,
+}
+
+const APPLICATION_TARGETS: MemberWiringTargets = {
+  biomeExtends: REQUIRED_BIOME_EXTENDS,
+  tsconfigExtends: REQUIRED_TSCONFIG_EXTENDS,
+  tsconfigPaths: REQUIRED_TSCONFIG_PATHS,
+  eslintSpecifier: 'ploaness/eslint',
+  vitestSpecifier: 'ploaness/vitest',
+  playwrightSpecifier: 'ploaness/playwright',
+}
+
+/**
+ * The wiring one kind of member must declare.
+ *
+ * A Next application receives the same configurations as a Payload one: it renders React, it builds
+ * through Next, and it serves pages a browser sweep can drive. What separates the two is the generated
+ * files only Payload has, which {@link requiredBiomeFiles} handles by kind rather than by a second
+ * configuration.
+ * @param kind the member's derived kind.
+ * @returns the specifiers and globs that kind is held to.
+ */
+export const wiringTargetsFor = (kind: MemberKind): MemberWiringTargets =>
+  kind === 'library' ? LIBRARY_TARGETS : APPLICATION_TARGETS
 
 // tsconfig keys a project may legitimately set for itself. Everything else is a compiler strictness
 // decision ploaness owns, so a local override is how a project would quietly weaken type checking.
@@ -280,9 +352,10 @@ const describeBiomeDrift = (
 const checkBiome = (
   config: string | undefined,
   requiredFiles: Readonly<Record<string, unknown>>,
+  biomeExtends: string,
 ): readonly WiringViolation[] => {
   if (config === undefined) {
-    return [{ location: 'biome.json', reason: `missing; must extend ${REQUIRED_BIOME_EXTENDS}` }]
+    return [{ location: 'biome.json', reason: `missing; must extend ${biomeExtends}` }]
   }
   const read: ParsedJson = parseJsonc(config)
   if (read.problem !== undefined) {
@@ -291,12 +364,12 @@ const checkBiome = (
   const parsed: Record<string, unknown> = asRecord(read.value)
   const extendsValue: unknown = parsed['extends']
   const missingExtends: readonly WiringViolation[] =
-    isArray(extendsValue) && extendsValue.includes(REQUIRED_BIOME_EXTENDS)
+    isArray(extendsValue) && extendsValue.includes(biomeExtends)
       ? []
       : [
           {
             location: 'biome.json',
-            reason: `must declare "extends": ["${REQUIRED_BIOME_EXTENDS}"]`,
+            reason: `must declare "extends": ["${biomeExtends}"]`,
           },
         ]
   const overriddenSections: readonly WiringViolation[] = OWNED_BIOME_SECTIONS.filter(
@@ -319,10 +392,13 @@ const checkBiome = (
   return [...missingExtends, ...overriddenSections, ...wrongFiles]
 }
 
-const checkTsconfig = (config: string | undefined): readonly WiringViolation[] => {
+const checkTsconfig = (
+  config: string | undefined,
+  targets: MemberWiringTargets,
+): readonly WiringViolation[] => {
   if (config === undefined) {
     return [
-      { location: 'tsconfig.json', reason: `missing; must extend ${REQUIRED_TSCONFIG_EXTENDS}` },
+      { location: 'tsconfig.json', reason: `missing; must extend ${targets.tsconfigExtends}` },
     ]
   }
   const read: ParsedJson = parseJsonc(config)
@@ -331,12 +407,12 @@ const checkTsconfig = (config: string | undefined): readonly WiringViolation[] =
   }
   const parsed: Record<string, unknown> = asRecord(read.value)
   const wrongExtends: readonly WiringViolation[] =
-    parsed['extends'] === REQUIRED_TSCONFIG_EXTENDS
+    parsed['extends'] === targets.tsconfigExtends
       ? []
       : [
           {
             location: 'tsconfig.json',
-            reason: `must declare "extends": "${REQUIRED_TSCONFIG_EXTENDS}"`,
+            reason: `must declare "extends": "${targets.tsconfigExtends}"`,
           },
         ]
   const overriddenOptions: readonly WiringViolation[] = Object.keys(
@@ -349,7 +425,7 @@ const checkTsconfig = (config: string | undefined): readonly WiringViolation[] =
         reason: 'ploaness owns this compiler option; remove the local override',
       }),
     )
-  const wrongPaths: readonly WiringViolation[] = Object.entries(REQUIRED_TSCONFIG_PATHS)
+  const wrongPaths: readonly WiringViolation[] = Object.entries(targets.tsconfigPaths)
     .filter(
       ([key, value]: readonly [string, unknown]): boolean =>
         JSON.stringify(parsed[key]) !== JSON.stringify(value),
@@ -385,13 +461,49 @@ const checkSilencedAdvisories = (packageJson: unknown): readonly WiringViolation
     }),
   )
 
+/** The repository-level files and declarations the wiring gate reads once, at the git root. */
+export interface RepositoryWiringInputs {
+  readonly packageJson: unknown
+  readonly workspaceFile: string
+  readonly declaredExclusions: readonly DeclaredExclusion[]
+  readonly expectedTestLibraries: Readonly<Record<string, string>>
+  readonly requiredPackageManager: string | undefined
+  readonly requiredEngines: Readonly<Record<string, string>>
+  /** Every dependency any member declares, so a root override can be judged against all of them. */
+  readonly declaredAcrossMembers: Readonly<Record<string, string>>
+  /** Findings the CLI supplies from rules that need the member list rather than one manifest. */
+  readonly repositoryFindings: readonly WiringViolation[]
+}
+
+/** The files and declarations the wiring gate reads inside one member. */
+export interface PackageWiringInputs {
+  readonly packageJson: unknown
+  readonly kind: MemberKind
+  /** The `files` block this member's biome.json must carry, from {@link requiredBiomeFiles}. */
+  readonly requiredBiomeFiles: Readonly<Record<string, unknown>>
+  readonly eslintConfig: string | undefined
+  readonly vitestConfig: string | undefined
+  readonly playwrightConfig: string | undefined
+  readonly declaredExclusions: readonly DeclaredExclusion[]
+  readonly biomeConfig: string | undefined
+  readonly tsconfig: string | undefined
+  readonly expectedTestLibraries: Readonly<Record<string, string>>
+  readonly requiredTestLibraries: ReadonlySet<string>
+  readonly payloadVersion: string | undefined
+}
+
 /**
- * Return every way the consuming project has weakened or dropped its ploaness wiring. An empty array
- * means the harness is installed exactly as ploaness dictates and cannot have been quietly disarmed.
- * @param inputs the consumer files and expectations to judge.
+ * Return every way the repository has weakened or dropped its ploaness wiring.
+ *
+ * These are the declarations that exist once per repository however many packages it holds: the package
+ * manager that resolves the whole tree, the engines an installer reads, the scripts a run is invoked
+ * through, and the overrides pnpm honours only at the root.
+ * @param inputs the repository-level files to judge.
  * @returns one violation per defect, in a stable order.
  */
-export const findWiringViolations = (inputs: WiringInputs): readonly WiringViolation[] => {
+export const findRepositoryWiringViolations = (
+  inputs: RepositoryWiringInputs,
+): readonly WiringViolation[] => {
   const packageJson: Record<string, unknown> = asRecord(inputs.packageJson)
   return [
     ...checkDependency(packageJson),
@@ -400,22 +512,91 @@ export const findWiringViolations = (inputs: WiringInputs): readonly WiringViola
       REQUIRED_SCRIPTS,
       'package.json scripts',
     ),
-    ...findVersionViolations(packageJson, {
+    ...findRepositoryVersionViolations(packageJson, {
       expected: inputs.expectedTestLibraries,
-      required: inputs.requiredTestLibraries,
-      payloadVersion: inputs.payloadVersion,
       requiredPackageManager: inputs.requiredPackageManager,
       requiredEngines: inputs.requiredEngines,
       workspaceFile: inputs.workspaceFile,
-    }),
+      declaredAcrossMembers: inputs.declaredAcrossMembers,
+    } satisfies RepositoryVersionInputs),
     ...checkSilencedAdvisories(inputs.packageJson),
     ...findConvenienceExclusions(inputs.declaredExclusions).map(
       (reason: string): WiringViolation => ({ location: 'package.json ploaness', reason }),
     ),
-    ...checkReexport(inputs.eslintConfig, 'eslint.config.mjs', 'ploaness/eslint'),
-    ...checkReexport(inputs.vitestConfig, 'vitest.config.mts', 'ploaness/vitest'),
-    ...checkReexport(inputs.playwrightConfig, 'playwright.config.ts', 'ploaness/playwright'),
-    ...checkBiome(inputs.biomeConfig, inputs.requiredBiomeFiles),
-    ...checkTsconfig(inputs.tsconfig),
+    ...inputs.repositoryFindings,
   ]
 }
+
+/**
+ * Return every way one member has weakened or dropped its ploaness wiring.
+ *
+ * A library member is not asked for a Playwright configuration: it has no application to drive, and
+ * requiring the file would make a package fail for not having a browser it was never going to open.
+ * @param inputs the member's files to judge.
+ * @returns one violation per defect, in a stable order.
+ */
+export const findPackageWiringViolations = (
+  inputs: PackageWiringInputs,
+): readonly WiringViolation[] => {
+  const packageJson: Record<string, unknown> = asRecord(inputs.packageJson)
+  const targets: MemberWiringTargets = wiringTargetsFor(inputs.kind)
+  return [
+    ...checkDependency(packageJson),
+    ...findPackageVersionViolations(packageJson, {
+      expected: inputs.expectedTestLibraries,
+      required: inputs.requiredTestLibraries,
+      payloadVersion: inputs.payloadVersion,
+    } satisfies PackageVersionInputs),
+    ...findConvenienceExclusions(inputs.declaredExclusions).map(
+      (reason: string): WiringViolation => ({ location: 'package.json ploaness', reason }),
+    ),
+    ...checkReexport(inputs.eslintConfig, 'eslint.config.mjs', targets.eslintSpecifier),
+    ...checkReexport(inputs.vitestConfig, 'vitest.config.mts', targets.vitestSpecifier),
+    ...(targets.playwrightSpecifier === undefined
+      ? []
+      : checkReexport(
+          inputs.playwrightConfig,
+          'playwright.config.ts',
+          targets.playwrightSpecifier,
+        )),
+    ...checkBiome(inputs.biomeConfig, inputs.requiredBiomeFiles, targets.biomeExtends),
+    ...checkTsconfig(inputs.tsconfig, targets),
+  ]
+}
+
+/**
+ * The whole wiring contract for a repository holding exactly one package.
+ *
+ * Not a shim over the split: a single-package repository IS both scopes over one manifest, so composing
+ * the halves is what that case means. It is kept as an entry point because the behaviour it describes is
+ * pinned by a large spec written before the scopes existed - and that spec passing unchanged is the
+ * evidence the split dropped nothing.
+ * @param inputs the consumer files and expectations to judge.
+ * @returns one violation per defect, in a stable order.
+ */
+export const findWiringViolations = (inputs: WiringInputs): readonly WiringViolation[] => [
+  ...findRepositoryWiringViolations({
+    packageJson: inputs.packageJson,
+    workspaceFile: inputs.workspaceFile,
+    declaredExclusions: inputs.declaredExclusions,
+    expectedTestLibraries: inputs.expectedTestLibraries,
+    requiredPackageManager: inputs.requiredPackageManager,
+    requiredEngines: inputs.requiredEngines,
+    declaredAcrossMembers: declaredDependencies(inputs.packageJson),
+    repositoryFindings: [],
+  }),
+  ...findPackageWiringViolations({
+    packageJson: inputs.packageJson,
+    kind: 'payload',
+    requiredBiomeFiles: inputs.requiredBiomeFiles,
+    eslintConfig: inputs.eslintConfig,
+    vitestConfig: inputs.vitestConfig,
+    playwrightConfig: inputs.playwrightConfig,
+    declaredExclusions: inputs.declaredExclusions,
+    biomeConfig: inputs.biomeConfig,
+    tsconfig: inputs.tsconfig,
+    expectedTestLibraries: inputs.expectedTestLibraries,
+    requiredTestLibraries: inputs.requiredTestLibraries,
+    payloadVersion: inputs.payloadVersion,
+  }),
+]

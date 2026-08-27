@@ -5,7 +5,10 @@ import {
   findRepositoryRoot as findRepoRoot,
   findServerUrlCollisions,
   findUngovernedProjects,
+  hasRuntime,
+  type MemberKind,
   type MemberShape,
+  memberKindOf,
   type ProjectManifest,
   ROOT_MEMBER_PATH,
   readWorkspacePackages,
@@ -206,5 +209,38 @@ describe('findServerUrlCollisions', () => {
 
   it('never reports a repository with one member', () => {
     expect(findServerUrlCollisions([{ path: '.', serverUrl: 'http://localhost:3000' }])).toEqual([])
+  })
+})
+
+describe('memberKindOf', () => {
+  it('reads a package declaring payload as a Payload application', () => {
+    expect(memberKindOf({ dependencies: { payload: '3.88.0', next: '16.3.2' } })).toBe('payload')
+  })
+
+  it('reads a package declaring next alone as an application', () => {
+    expect(memberKindOf({ dependencies: { next: '16.3.2' } })).toBe('application')
+  })
+
+  it('reads a package declaring neither as a library', () => {
+    expect(memberKindOf({ devDependencies: { vitest: '4.1.11' } })).toBe('library')
+  })
+
+  it('reads a manifest it cannot parse as a library rather than guessing', () => {
+    expect(memberKindOf(undefined)).toBe('library')
+  })
+
+  it('reads a framework declared as a devDependency too', () => {
+    expect(memberKindOf({ devDependencies: { next: '16.3.2' } })).toBe('application')
+  })
+})
+
+describe('hasRuntime', () => {
+  it('gives a build, a bundle and a browser to both kinds of application', () => {
+    const kinds: readonly MemberKind[] = ['payload', 'application']
+    expect(kinds.every((kind: MemberKind): boolean => hasRuntime(kind))).toBe(true)
+  })
+
+  it('gives none of the three to a library', () => {
+    expect(hasRuntime('library')).toBe(false)
   })
 })
