@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { type DeclaredExclusion, readRawSettings, readSettings } from '../src/settings.js'
-import { layerSettingBlocks, rebaseExclusion } from '../src/settings-layering.js'
+import {
+  type DeclaredExclusion,
+  readRawSettings,
+  readSettings,
+  type Settings,
+} from '../src/settings.js'
+import {
+  layerSettingBlocks,
+  readMemberSettings,
+  rebaseExclusion,
+} from '../src/settings-layering.js'
 
 const layered = (
   base: Record<string, unknown>,
@@ -147,5 +156,46 @@ describe('rebaseExclusion', () => {
   it('leaves a route alone, because it names a URL rather than a path', () => {
     const entry: DeclaredExclusion = exclusion('/admin', 'route')
     expect(rebaseExclusion('apps/web', entry)).toEqual(entry)
+  })
+})
+
+// A member INHERITS the repository's values and OWNS its declarations. Layering the declarations too
+// made every member answer for the repository's: a workspace root correctly excusing its Vale detector
+// definitions - whose content IS the character the ban detects - had each member report that exclusion
+// as reaching nothing, because no member holds the file. One correct declaration failed two gates, and
+// no edit a member could make would have fixed it.
+describe('readMemberSettings', () => {
+  const Repository: Record<string, unknown> = {
+    typographyExclusions: [
+      { pattern: String.raw`^\.vale/styles/`, reason: 'detector definitions' },
+    ],
+    sourceRoots: ['src'],
+  }
+  const Own: Record<string, unknown> = {
+    pureLogicRoots: [{ pattern: 'src/config', reason: 'pure by construction' }],
+  }
+
+  it('inherits the repository effective values', () => {
+    const settings: Settings = readMemberSettings(Repository, Own)
+    expect(settings.typographyExclusions).toContain(String.raw`^\.vale/styles/`)
+    expect(settings.pureLogicRoots).toContain('src/config')
+  })
+
+  it('declares only what the member itself wrote', () => {
+    const settings: Settings = readMemberSettings(Repository, Own)
+    const settingsDeclared: readonly string[] = settings.declaredExclusions.map(
+      (entry: DeclaredExclusion): string => entry.setting,
+    )
+    expect(settingsDeclared).toEqual(['pureLogicRoots'])
+  })
+
+  it('declares nothing for a member that declared nothing', () => {
+    expect(readMemberSettings(Repository, {}).declaredExclusions).toEqual([])
+  })
+
+  it('is equal to reading the block alone when the repository declared nothing', () => {
+    // The single-package proof: with no repository block there is nothing to inherit, so a member's
+    // settings are exactly what its own block says.
+    expect(readMemberSettings({}, Own)).toEqual(readRawSettings(Own))
   })
 })

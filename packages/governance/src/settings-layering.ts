@@ -9,7 +9,7 @@
 // that declared a stricter bundle budget would be silently overwritten by every member that declared
 // none.
 import { asRecord, isArray } from './json-shapes.js'
-import type { DeclaredExclusion } from './settings.js'
+import { type DeclaredExclusion, readRawSettings, type Settings } from './settings.js'
 
 /** Keys where a member ADDS to what the repository declared, the way `sourceRoots` always has. */
 const ADDITIVE: ReadonlySet<string> = new Set<string>([
@@ -125,3 +125,28 @@ export const rebaseExclusion = (
     ? { ...entry, pattern: `^${memberPath}/${entry.pattern.slice(1)}` }
     : entry
 }
+
+/**
+ * The settings one member runs under.
+ *
+ * Effective VALUES are layered - a member inherits the repository's source roots, its typography
+ * exclusions, its floor. `declaredExclusions` is not, and that asymmetry is the point: it is the list of
+ * decisions THIS package made, and every consumer of it judges the declarer. Layering it made a member
+ * answer for the repository's declarations, so a workspace root that correctly excused its Vale detector
+ * definitions - whose content IS the character the ban detects - had every member report that exclusion
+ * as reaching nothing, because no member contains the file. One correct declaration, two gates failed,
+ * and nothing a member could edit would have fixed it.
+ *
+ * The mirror direction was already handled: `rebaseExclusion` moves a member's exclusion up into the
+ * repository's path space. This is the same seam read downward.
+ * @param repositoryBlock the raw `ploaness` block of the repository root.
+ * @param ownBlock the raw `ploaness` block of the member itself.
+ * @returns the member's settings, inheriting values and owning declarations.
+ */
+export const readMemberSettings = (
+  repositoryBlock: Record<string, unknown>,
+  ownBlock: Record<string, unknown>,
+): Settings => ({
+  ...readRawSettings(layerSettingBlocks(repositoryBlock, ownBlock)),
+  declaredExclusions: readRawSettings(ownBlock).declaredExclusions,
+})
