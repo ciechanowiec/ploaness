@@ -1,0 +1,85 @@
+// The security headers this application sends, and the nonce that lets its own scripts run under a
+// policy that forbids inline script.
+//
+// ploaness writes this file ONCE, when it is absent, and the project owns it afterwards. It is a
+// starting point rather than a rule: the sweep in `tests/e2e/security-headers.e2e.spec.ts` asks whether
+// the running application sends a DECISION, not whether it sends this one. Narrowing `connect-src`,
+// adding the origins the site actually loads from, and changing the framing rule for a page meant to be
+// embedded are all the project's to make.
+//
+// One line should not be relaxed: `script-src` without `'unsafe-inline'`. That directive is what makes
+// the rest mean anything - a policy readmitting inline script readmits the injection a policy exists to
+// stop - and it is the one thing the sweep refuses.
+//
+// A project that already has a proxy (next-intl installs one, for instance) never receives this file.
+// Fold the three headers into the proxy it has instead; the sweep reads the response, not this path.
+import type { MiddlewareConfig, NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
+
+/** The request header Next reads to stamp its own script tags with this request's nonce. */
+const NONCE_HEADER: string = 'x-nonce'
+
+const CONTENT_SECURITY_POLICY: string = 'content-security-policy'
+
+const isDevelopment = (): boolean => process.env.NODE_ENV === 'development'
+
+/**
+ * The Content-Security-Policy for one request.
+ *
+ * `'strict-dynamic'` lets a script this policy already trusted load the next one, which is what Next's
+ * chunk loading needs; without it every chunk URL would have to be named here. `'unsafe-eval'` is
+ * development-only, because React Refresh compiles components with `eval` and `next dev` serves nothing
+ * without it - it is not `'unsafe-inline'`, which stays forbidden in both modes.
+ *
+ * `style-src` does allow inline, deliberately: an injected stylesheet cannot execute, and Next and most
+ * component libraries emit inline `<style>`. That is the trade the sweep declines to police.
+ * @param nonce the per-request nonce, already stamped on the request headers.
+ * @returns the policy, as a header value.
+ */
+const contentSecurityPolicy = (nonce: string): string => {
+  const script: string = isDevelopment()
+    ? `'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval'`
+    : `'self' 'nonce-${nonce}' 'strict-dynamic'`
+  const directives: readonly string[] = [
+    "default-src 'self'",
+    `script-src ${script}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' blob: data:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+  ]
+  return directives.join('; ')
+}
+
+/**
+ * Send the security headers with every response this application serves.
+ * @param request the incoming request, whose headers carry the nonce onward to the renderer.
+ * @returns the response, carrying the policy and the two headers that need no policy.
+ */
+export default function proxy(request: NextRequest): NextResponse {
+  const nonce: string = btoa(crypto.randomUUID())
+  const policy: string = contentSecurityPolicy(nonce)
+  const requestHeaders: Headers = new Headers(request.headers)
+  requestHeaders.set(NONCE_HEADER, nonce)
+  requestHeaders.set(CONTENT_SECURITY_POLICY, policy)
+
+  const response: NextResponse = NextResponse.next({ request: { headers: requestHeaders } })
+  response.headers.set(CONTENT_SECURITY_POLICY, policy)
+  // One correct value, and the only header here that encodes no choice: without it a browser may
+  // re-interpret a response as a type this application never declared.
+  response.headers.set('x-content-type-options', 'nosniff')
+  // A referrer is sent to same-origin destinations in full and to others as the origin alone.
+  response.headers.set('referrer-policy', 'strict-origin-when-cross-origin')
+  return response
+}
+
+export const config: MiddlewareConfig = {
+  // Everything but Next's own static output, which is served without a policy and needs none. The
+  // literal dot is a character class rather than an escape because Next analyses this export
+  // statically and cannot evaluate every escape form.
+  matcher: ['/((?!_next/static|_next/image|favicon[.]ico).*)'],
+}

@@ -64,10 +64,17 @@ describe('no-inline-config-logic gate', () => {
 // exemption must stay a single path. This assertion moved here from the consumer, where it had been
 // reading the project's own eslint.config.mjs: that file is now a bare re-export, and the rule it was
 // really describing lives in ploaness.
+// This asserted ONE exemption, and now asserts two. The second is not a widening of convenience:
+// `src/proxy.ts` is a file Next mandates by name and runs in the EDGE runtime, where the environment
+// module - which validates a Node-shaped environment at module scope - cannot be imported. It reads
+// `NODE_ENV`, which Next sets itself rather than project configuration anybody could have validated.
+//
+// The list is pinned rather than counted so a THIRD entry has to be argued for here, in a spec somebody
+// reads, rather than appearing in a config nobody diffs.
 describe('process.env access gate', () => {
-  it('exempts exactly one module from the process.env ban', () => {
+  it('exempts the environment module and the Next proxy, and nothing else', () => {
     const config: string = shippedConfig()
     expect(config).toContain("property: 'env'")
-    expect(config).toContain("ignores: ['src/lib/environment.ts']")
+    expect(config).toContain("ignores: ['src/lib/environment.ts', 'src/proxy.ts']")
   })
 })

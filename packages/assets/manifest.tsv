@@ -49,6 +49,13 @@ tests/e2e/a11y.e2e.spec.ts	PINNED	APPLICATION
 # stays green while it does not: the page renders and the build passes. Only the running application
 # knows what it sends, so this asks it.
 tests/e2e/security-headers.e2e.spec.ts	PINNED	APPLICATION
+# A Next application sends no security header unless the project sets one, so the sweep above fails on
+# every project that has never thought about it - and "write a Content-Security-Policy" is a large first
+# step to hand somebody. This is that step, written once: a working policy with a per-request nonce, a
+# framing decision and the one header that has a single correct value. SEED rather than PINNED because
+# every line of it except `script-src` is a judgement the project owns, and a project that already has a
+# proxy keeps its own.
+src/proxy.ts	SEED	APPLICATION
 # The static rules can see that a project decided each operation, and can see an inline always-true
 # rule. They cannot see what `read: anyone` decides, nor what Payload made of the config after
 # sanitisation, so a project can satisfy every one of them and still serve every document to every

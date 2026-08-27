@@ -188,9 +188,14 @@ export default compose(
   //    All process.env reads belong in src/lib/environment.ts, which validates and narrows them (and is
   //    unit-tested). Other src modules - including payload.config.ts - must consume the
   //    typed values it returns, never ambient env, so the env surface stays auditable in one place.
+  //    `src/proxy.ts` is exempt for a structural reason rather than a convenience one: Next mandates the
+  //    file, its name and its export shape, and runs it in the EDGE runtime - where the project's own
+  //    environment module, which validates a Node-shaped environment at module scope, is not reachable.
+  //    What it reads there is `NODE_ENV`, which Next sets itself; it is not project configuration that
+  //    `environment.ts` could have validated.
   {
     files: ['src/**/*.ts'],
-    ignores: ['src/lib/environment.ts'],
+    ignores: ['src/lib/environment.ts', 'src/proxy.ts'],
     rules: {
       // `NO_MOCK_PROPERTIES` is spread in beside the env rule because this key REPLACES the base
       // setting rather than adding to it - naming only the env restriction here switched the

@@ -28,6 +28,10 @@ const ASSET_SUFFIX: string = '.asset'
 // compile against. What proves those bodies instead is the third verification leg AGENTS.md already
 // requires: a real consumer runs them.
 //
+// `src/proxy.ts` is the security-header baseline, and it is authored here for the same reason as the
+// sweeps: it is Next middleware, and there is no Next application in this repository for a root copy of
+// it to compile against.
+//
 // A SECTION entry is likewise unpaired: its body is the managed block, not a copy of any whole file.
 const ASSET_AUTHORED_PATHS: ReadonlySet<string> = new Set<string>([
   '.ploaness/agent-guide.md',
@@ -35,6 +39,7 @@ const ASSET_AUTHORED_PATHS: ReadonlySet<string> = new Set<string>([
   'tests/e2e/a11y.e2e.spec.ts',
   'tests/e2e/security-headers.e2e.spec.ts',
   'tests/e2e/access-boundary.e2e.spec.ts',
+  'src/proxy.ts',
 ])
 
 /** A root file and the shipped body generated from it. */
