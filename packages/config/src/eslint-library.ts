@@ -14,6 +14,7 @@ import {
   immutabilityBlock,
   javascriptBlock,
   prettierLast,
+  processConfigBlock,
   testIdiomRules,
   testIntegrityRules,
   testSuiteSyntaxRules,
@@ -46,6 +47,10 @@ export default compose(
   // Immutability applies to every hand-written module. A library has no generated files to exempt, so
   // the block is applied without the Payload carve-outs rather than with an empty list of them.
   immutabilityBlock(['**/*.ts', '**/*.mts'], []),
+
+  // The setup file's role, straight after the block it narrows. It must come later: a block that sets
+  // this rule replaces its options, so stating the role first would have the general block undo it.
+  processConfigBlock(),
   javascriptBlock(JAVASCRIPT_FILES),
   // A library's specs are held to the same integrity rules as an application's: the suite is a gate, so
   // a test that cannot fail is a gate that cannot fail.

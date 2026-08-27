@@ -10,6 +10,7 @@
 // composes them with its own workspace layout. Neither restates a rule.
 import js from '@eslint/js'
 import comments from '@eslint-community/eslint-plugin-eslint-comments/configs'
+import { PROJECT_SETUP_FILE } from '@ploaness/governance'
 import vitest from '@vitest/eslint-plugin'
 import type { Linter } from 'eslint'
 import { defineConfig } from 'eslint/config'
@@ -713,6 +714,35 @@ export const javascriptBlock = (files: readonly string[]): FlatConfigBlock => ({
   },
 })
 
+// The verdict a program returns, which is the process rather than the program's own data.
+//
+// Assigning it is the ONLY spelling of that verdict this config leaves legal: `unicorn/no-process-exit`
+// arrives on by preset, so `process.exit()` is banned too, and with no carve-out here a Node entry point
+// cannot report a non-zero exit at all. Every governed `scripts/` therefore paid a suppression for the
+// one line it exists to end on - ploaness's own `bin.ts` among them, which is how this was found.
+const PROCESS_VERDICT: string = 'process.exitCode'
+
+// The environment, exempt in the setup file alone, because configuring the process before any spec reads
+// it is that file's whole job.
+//
+// ploaness exempts its OWN setup file from this rule and shipped no equivalent, while closing every
+// sanctioned alternative a project had: `vi.stubEnv` is banned outright by `NO_MOCK_PROPERTIES`, the
+// Vitest config must be a bare re-export so `test.env` cannot be added, and the `tests` gate runs the
+// runner directly rather than through a package script that could carry the assignment. A rule that
+// reports the only remaining door is aimed at the wrong thing.
+const PROCESS_ENVIRONMENT: string = 'process.env.*'
+
+// One constructor rather than an option object written at each site. A block that sets this rule REPLACES
+// its options rather than adding to them, so the setup file's block has to restate the base carve-out to
+// keep it - and restating it by hand is exactly how it would be dropped.
+//
+// An accessor pattern normalises computed access, so this covers `process.env['TZ']` as well as
+// `process.env.TZ`, and neither reaches an unrelated `object.property`.
+const immutableData = (accessors: readonly string[]): Linter.RuleEntry => [
+  'error',
+  { ignoreAccessorPattern: [PROCESS_VERDICT, ...accessors] },
+]
+
 /** No `let`, no in-place mutation. The caller supplies the files and the generated-role exemptions. */
 export const immutabilityBlock = (
   files: readonly string[],
@@ -723,7 +753,27 @@ export const immutabilityBlock = (
   plugins: { functional },
   rules: {
     'functional/no-let': 'error',
-    'functional/immutable-data': 'error',
+    'functional/immutable-data': immutableData([]),
+  },
+})
+
+/**
+ * The setup file's role, which is to configure the process rather than to hold program logic.
+ *
+ * A block of its own rather than a whole-file entry in `immutabilityBlock`'s `ignores`, so the file is
+ * still held to `no-let` and to every mutation that is not the environment. ploaness's own exemption is
+ * whole-file because installing a guard on `net.Socket.prototype` IS mutation of an existing object; a
+ * consumer's setup file needs the environment and nothing more.
+ */
+export const processConfigBlock = (): FlatConfigBlock => ({
+  files: [PROJECT_SETUP_FILE],
+  // Mounted here rather than inherited. A setup file sits at the project ROOT, which the source globs of
+  // the block above need not reach - this repository's own do not - and a rule whose plugin no matching
+  // block defines makes ESLint reject the entire config. The plugin belongs in the block that states the
+  // rules naming it, which is the same reason `eslint-library.ts` mounts the Vitest plugin where it does.
+  plugins: { functional },
+  rules: {
+    'functional/immutable-data': immutableData([PROCESS_ENVIRONMENT]),
   },
 })
 

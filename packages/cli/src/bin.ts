@@ -183,8 +183,19 @@ const reportFailure = (error: unknown): number => {
 
 // Setting the exit code is how Node reports a verdict while still flushing stdout. `process.exit()`
 // would truncate the report the gates just wrote.
-// One comment naming both rules rather than two stacked. A second `eslint-disable-next-line` makes the
-// FIRST one's next line the comment rather than the code, which silently disarms it - a defect this
-// repository has already had once.
-// eslint-disable-next-line functional/immutable-data, unicorn/prefer-await -- see the note above
-process.exitCode = await main().catch(reportFailure)
+//
+// Neither half of this carries a suppression any more, and the pair is why the carve-out exists. The
+// assignment tripped `functional/immutable-data` while `unicorn/no-process-exit` banned the other
+// spelling, so a Node entry point had no legal way to report a non-zero verdict; the shipped config now
+// states `process.exitCode` as an accessor that rule is not aimed at. `.catch()` tripped
+// `unicorn/prefer-await`, and awaiting inside a `try` is what that rule asks for - it needs no `let`,
+// so `functional/no-let` has nothing to say, and `functional/no-try-statements` is off everywhere.
+const runToVerdict = async (): Promise<number> => {
+  try {
+    return await main()
+  } catch (error) {
+    return reportFailure(error)
+  }
+}
+
+process.exitCode = await runToVerdict()

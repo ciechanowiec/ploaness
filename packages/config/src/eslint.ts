@@ -29,6 +29,7 @@ import {
   NO_MOCK_PROPERTIES,
   NO_NETWORK_GUARD_ESCAPE,
   prettierLast,
+  processConfigBlock,
   testIdiomRules,
   testIntegrityRules,
   testSuiteSyntaxRules,
@@ -98,6 +99,10 @@ export default compose(
     ['**/*.ts', '**/*.tsx'],
     [...settings.frameworkGlue, 'src/payload-types.ts', 'src/payload-generated-schema.ts'],
   ),
+
+  // The setup file's role, straight after the block it narrows. It must come later: a block that sets
+  // this rule replaces its options, so stating the role first would have the general block undo it.
+  processConfigBlock(),
 
   // ── Documenting comment blocks on hand-written modules. Default-safe: every src/ TypeScript module
   //    is in scope, with only the app/route layer, scripts, and generated files exempted (they carry

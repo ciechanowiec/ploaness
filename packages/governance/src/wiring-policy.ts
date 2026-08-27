@@ -103,6 +103,16 @@ export const REQUIRED_BIOME_EXTENDS: string = 'ploaness/biome'
 export const REQUIRED_TSCONFIG_EXTENDS: string = 'ploaness/tsconfig.json'
 
 /**
+ * The setup file a project writes for itself.
+ *
+ * Named here because four things have to agree about it and none of them can see the others: the Biome
+ * block below includes it, the shipped Vitest config loads it, the fast-check message tells a project to
+ * put a seed in it, and the ESLint config exempts it from a rule aimed at code rather than at process
+ * configuration. A name written four times is a name that eventually differs in one of them.
+ */
+export const PROJECT_SETUP_FILE: string = 'vitest.setup.ts'
+
+/**
  * The `files` block a consumer's biome.json must carry verbatim.
  *
  * File selection cannot live in the shared config the way rule configuration does. Biome resolves a
@@ -126,7 +136,7 @@ export const requiredBiomeFiles = (
     'tsconfig.json',
     '*.config.ts',
     '*.config.mts',
-    'vitest.setup.ts',
+    PROJECT_SETUP_FILE,
     // Derived from the artefact list rather than written out. The two lists had to name the same paths
     // and did not: `src/payload-generated-schema.ts` was denied to an agent and still handed to the
     // formatter, so a generator and a formatter took turns rewriting one file.

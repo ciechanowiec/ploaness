@@ -11,6 +11,7 @@ import {
   guidelineRules,
   immutabilityBlock,
   prettierLast,
+  processConfigBlock,
   testIdiomRules,
   testIntegrityRules,
   testSuiteSyntaxRules,
@@ -66,6 +67,10 @@ export default compose(
   // exemption names one path rather than a directory, so a second file in `packages/config/src` does not
   // inherit it by sitting next door.
   immutabilityBlock([SOURCE, SPECS], ['packages/config/src/vitest-setup.ts']),
+
+  // This repository's own root setup file, held to the same role the shipped configs give a consumer's.
+  // It needs no environment today; carrying the block is what stops the three configs drifting again.
+  processConfigBlock(),
 
   {
     files: [SPECS],

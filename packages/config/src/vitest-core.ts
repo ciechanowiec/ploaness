@@ -6,6 +6,7 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { PROJECT_SETUP_FILE as PROJECT_SETUP_FILE_NAME } from '@ploaness/governance'
 
 /**
  * The sequence block both Vitest configs declare, named so each carries the same shape rather than a
@@ -19,8 +20,14 @@ export interface DeterministicSequence {
   readonly setupFiles: 'list'
 }
 
-/** The setup file a project writes for itself, if it wants one. */
-const PROJECT_SETUP_FILE: string = './vitest.setup.ts'
+/**
+ * The setup file a project writes for itself, if it wants one, as this config must spell it.
+ *
+ * The name comes from governance rather than from a second literal here: the Biome block requires this
+ * file, the ESLint config exempts it from a rule aimed at code rather than at process configuration, and
+ * this config loads it. Three tools agreeing about one filename is a joint, not a coincidence.
+ */
+const PROJECT_SETUP_FILE: string = `./${PROJECT_SETUP_FILE_NAME}`
 
 /**
  * The fixed fast-check seed the property specs are written against.
