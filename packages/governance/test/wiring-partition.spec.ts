@@ -70,6 +70,7 @@ const packageHalf = (): readonly string[] =>
   findPackageWiringViolations({
     packageJson: BROKEN.packageJson,
     kind: 'payload',
+    isNestedMember: false,
     requiredBiomeFiles: BROKEN.requiredBiomeFiles,
     eslintConfig: BROKEN.eslintConfig,
     vitestConfig: BROKEN.vitestConfig,

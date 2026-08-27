@@ -92,18 +92,26 @@ const measuredByCoverage = (tracked: readonly string[]): readonly string[] =>
     COVERAGE_INCLUDE.some((pattern: string): boolean => matchesGlob(pattern, file)),
   )
 
+// Which file set an exclusion has to reach is decided by the SETTING it came from, not by how its
+// pattern is written. Partitioning on the pattern's kind was right while `coverageExclude` was the only
+// glob-shaped setting; it stopped being right the moment two more arrived, and it reported a carve-out
+// naming a real file as reaching nothing - because it was asking whether a generated artefact appears
+// in the coverage report, which is precisely where it does not.
+const COVERAGE_SETTING: string = 'coverageExclude'
+
 const deadExclusions = (context: Context): readonly string[] => {
   const tracked: readonly string[] = trackedFiles(context.root)
   const declared: readonly DeclaredExclusion[] = context.settings.declaredExclusions
-  const coverage: readonly DeclaredExclusion[] = declared.filter(
-    (entry: DeclaredExclusion): boolean => entry.kind === 'glob',
-  )
-  const overTree: readonly DeclaredExclusion[] = declared.filter(
-    (entry: DeclaredExclusion): boolean => entry.kind !== 'glob',
-  )
+  const isCoverage = (entry: DeclaredExclusion): boolean => entry.setting === COVERAGE_SETTING
   return [
-    ...findUnreachedExclusions(coverage, measuredByCoverage(tracked)),
-    ...findUnreachedExclusions(overTree, tracked),
+    ...findUnreachedExclusions(
+      declared.filter((entry: DeclaredExclusion): boolean => isCoverage(entry)),
+      measuredByCoverage(tracked),
+    ),
+    ...findUnreachedExclusions(
+      declared.filter((entry: DeclaredExclusion): boolean => !isCoverage(entry)),
+      tracked,
+    ),
   ]
 }
 

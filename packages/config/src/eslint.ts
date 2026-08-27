@@ -52,7 +52,7 @@ export default compose(
 
       '**/*.d.ts',
       'src/payload-types.ts',
-      'src/app/(payload)/admin/importMap.js',
+      ...settings.generatedArtefacts,
       // Tooling configs are formatted/checked by Biome + tsc, not type-linted here.
       // NOTE: `src/payload.config.ts` is deliberately NOT ignored - it is application code
       // (reads env, wires collections) and must be linted like the rest of `src`.

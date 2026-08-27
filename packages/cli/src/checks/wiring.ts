@@ -16,6 +16,7 @@ import {
   type MemberKind,
   type MemberShape,
   memberKindOf,
+  ROOT_MEMBER_PATH,
   readKey,
   requiredBiomeFiles,
   type WiringViolation,
@@ -173,7 +174,12 @@ const memberViolations = (member: Member): readonly WiringViolation[] => {
   return findPackageWiringViolations({
     packageJson: member.packageJson,
     kind,
-    requiredBiomeFiles: requiredBiomeFiles(member.settings.sourceRoots, kind),
+    isNestedMember: member.path !== ROOT_MEMBER_PATH,
+    requiredBiomeFiles: requiredBiomeFiles(
+      member.settings.sourceRoots,
+      kind,
+      member.settings.generatedArtefacts,
+    ),
     eslintConfig: readText(path.join(member.root, 'eslint.config.mjs')),
     vitestConfig: readText(path.join(member.root, 'vitest.config.mts')),
     playwrightConfig: readText(path.join(member.root, 'playwright.config.ts')),

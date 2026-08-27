@@ -9,6 +9,7 @@
 
 import { BUNDLE_BUDGET_BYTES } from './bundle-budget.js'
 import { matchesGlob, matchesRole } from './file-roles.js'
+import { GENERATED_ARTEFACTS } from './generated-denial.js'
 // Only string-valued entries survive `asStringRecord`: a non-string would reach `spawn` as a
 // malformed environment.
 import { asRecord, asStringRecord, asText, isArray, isRecord } from './json-shapes.js'
@@ -88,6 +89,16 @@ export interface Settings {
    * contract a Payload project already had.
    */
   readonly frameworkGlue: readonly string[]
+  /**
+   * Paths a generator owns, which no rule may judge and no agent may edit.
+   *
+   * The default names where Payload puts them in a stock installation. Payload lets a project mount its
+   * admin panel elsewhere, and one that does had every one of these rules miss: the import map was
+   * denied to nobody, diffed by nothing, handed to the formatter, and then linted as hand-written
+   * source - which is how a generated file full of hash-suffixed identifiers came to be told to rename
+   * them. Additive, so a stock installation declares nothing.
+   */
+  readonly generatedArtefacts: readonly string[]
   /**
    * Directories that form the pure-logic floor: they may depend on nothing else under the source root.
    *
@@ -355,6 +366,7 @@ interface DeclaredLists {
   readonly coverage: readonly DeclaredExclusion[]
   readonly routes: readonly DeclaredExclusion[]
   readonly glue: readonly DeclaredExclusion[]
+  readonly generated: readonly DeclaredExclusion[]
   readonly layers: readonly DeclaredExclusion[]
 }
 
@@ -366,6 +378,7 @@ const readDeclaredLists = (raw: Record<string, unknown>): DeclaredLists => ({
   coverage: asDeclaredExclusions(raw['coverageExclude'], 'coverageExclude', 'glob'),
   routes: asDeclaredExclusions(raw['accessibilitySkipRoutes'], 'accessibilitySkipRoutes', 'route'),
   glue: asDeclaredExclusions(raw['frameworkGlue'], 'frameworkGlue', 'glob'),
+  generated: asDeclaredExclusions(raw['generatedArtefacts'], 'generatedArtefacts', 'glob'),
   layers: asDeclaredExclusions(raw['pureLogicRoots'], 'pureLogicRoots', 'glob'),
 })
 
@@ -394,6 +407,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     coverage: declaredCoverage,
     routes: declaredRoutes,
     glue: declaredGlue,
+    generated: declaredGenerated,
     layers: declaredLayers,
   }: DeclaredLists = readDeclaredLists(raw)
   return {
@@ -406,6 +420,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     unmanagedAssets: asUnmanagedAssets(raw['unmanagedAssets']),
     typographyExclusions: [...DEFAULT_TYPOGRAPHY_EXCLUSIONS, ...honoured(declaredTypography)],
     frameworkGlue: [...DEFAULT_FRAMEWORK_GLUE, ...honoured(declaredGlue)],
+    generatedArtefacts: [...GENERATED_ARTEFACTS, ...honoured(declaredGenerated)],
     pureLogicRoots: [...DEFAULT_PURE_LOGIC_ROOTS, ...honoured(declaredLayers)],
     declaredExclusions: [
       ...declaredTypography,
@@ -413,6 +428,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
       ...declaredCoverage,
       ...declaredRoutes,
       ...declaredGlue,
+      ...declaredGenerated,
       ...declaredLayers,
     ],
     javascriptAllowlist: [...DEFAULT_JAVASCRIPT_ALLOWLIST, ...honoured(declaredJavascript)],

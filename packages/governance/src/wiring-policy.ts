@@ -116,6 +116,7 @@ export const REQUIRED_TSCONFIG_EXTENDS: string = 'ploaness/tsconfig.json'
 export const requiredBiomeFiles = (
   sourceRoots: readonly string[],
   kind: MemberKind = 'payload',
+  generatedArtefacts: readonly string[] = GENERATED_ARTEFACTS,
 ): Readonly<Record<string, unknown>> => ({
   ignoreUnknown: false,
   includes: [
@@ -132,7 +133,7 @@ export const requiredBiomeFiles = (
     // Only a Payload member has these. Negating them elsewhere would name paths that cannot exist,
     // which `config-refs` reports as a carve-out reaching nothing.
     ...(kind === 'payload'
-      ? GENERATED_ARTEFACTS.map((artefact: string): string => `!${artefact}`)
+      ? generatedArtefacts.map((artefact: string): string => `!${artefact}`)
       : []),
     '!**/.next',
     '!**/node_modules',
@@ -349,10 +350,29 @@ const describeBiomeDrift = (
     : `${parts.join(' and ')} in the includes block, which ploaness requires verbatim`
 }
 
+// A nested Biome configuration must declare itself not to be a root, or Biome refuses the whole tree
+// with "found a nested root configuration". The member cannot inherit the answer: `root` describes the
+// file that declares it, so the shipped config saying `root: false` says nothing about a consumer's.
+const checkBiomeRoot = (
+  parsed: Record<string, unknown>,
+  isNestedMember: boolean,
+): readonly WiringViolation[] =>
+  !isNestedMember || parsed['root'] === false
+    ? []
+    : [
+        {
+          location: 'biome.json root',
+          reason:
+            'must declare "root": false; Biome refuses a second root configuration in one tree, ' +
+            'and rejects every file in the repository rather than only this package',
+        },
+      ]
+
 const checkBiome = (
   config: string | undefined,
   requiredFiles: Readonly<Record<string, unknown>>,
   biomeExtends: string,
+  isNestedMember: boolean = false,
 ): readonly WiringViolation[] => {
   if (config === undefined) {
     return [{ location: 'biome.json', reason: `missing; must extend ${biomeExtends}` }]
@@ -389,7 +409,12 @@ const checkBiome = (
             reason: describeBiomeDrift(parsed['files'], requiredFiles),
           },
         ]
-  return [...missingExtends, ...overriddenSections, ...wrongFiles]
+  return [
+    ...missingExtends,
+    ...checkBiomeRoot(parsed, isNestedMember),
+    ...overriddenSections,
+    ...wrongFiles,
+  ]
 }
 
 const checkTsconfig = (
@@ -479,6 +504,12 @@ export interface RepositoryWiringInputs {
 export interface PackageWiringInputs {
   readonly packageJson: unknown
   readonly kind: MemberKind
+  /**
+   * Whether this member sits below the repository root. Biome refuses a second ROOT configuration in
+   * one tree, so a nested member has to say it is not one - and the shipped config cannot say it for
+   * the member, because `root` describes the file that declares it rather than the file it extends.
+   */
+  readonly isNestedMember: boolean
   /** The `files` block this member's biome.json must carry, from {@link requiredBiomeFiles}. */
   readonly requiredBiomeFiles: Readonly<Record<string, unknown>>
   readonly eslintConfig: string | undefined
@@ -559,7 +590,12 @@ export const findPackageWiringViolations = (
           'playwright.config.ts',
           targets.playwrightSpecifier,
         )),
-    ...checkBiome(inputs.biomeConfig, inputs.requiredBiomeFiles, targets.biomeExtends),
+    ...checkBiome(
+      inputs.biomeConfig,
+      inputs.requiredBiomeFiles,
+      targets.biomeExtends,
+      inputs.isNestedMember,
+    ),
     ...checkTsconfig(inputs.tsconfig, targets),
   ]
 }
@@ -588,6 +624,7 @@ export const findWiringViolations = (inputs: WiringInputs): readonly WiringViola
   ...findPackageWiringViolations({
     packageJson: inputs.packageJson,
     kind: 'payload',
+    isNestedMember: false,
     requiredBiomeFiles: inputs.requiredBiomeFiles,
     eslintConfig: inputs.eslintConfig,
     vitestConfig: inputs.vitestConfig,

@@ -29,13 +29,18 @@ const JSON_INDENT: number = 2
 
 // Biome resolves a relative glob against the config that declares it, so the file-selection block has to
 // sit at each member's root even though ploaness owns its contents. The wiring gate enforces it verbatim.
-const biomeStub = (
-  sourceRoots: readonly string[],
-  kind: MemberKind,
-  targets: MemberWiringTargets,
-): string =>
+const biomeStub = (member: Member, kind: MemberKind, targets: MemberWiringTargets): string =>
   `${JSON.stringify(
-    { extends: [targets.biomeExtends], files: requiredBiomeFiles(sourceRoots, kind) },
+    {
+      // A nested configuration has to say it is not a root, or Biome refuses the whole tree.
+      ...(member.path !== ROOT_MEMBER_PATH && { root: false }),
+      extends: [targets.biomeExtends],
+      files: requiredBiomeFiles(
+        member.settings.sourceRoots,
+        kind,
+        member.settings.generatedArtefacts,
+      ),
+    },
     null,
     JSON_INDENT,
   )}\n`
@@ -63,7 +68,7 @@ const stubs = (member: Member): Readonly<Record<string, string>> => {
   const targets: MemberWiringTargets = wiringTargetsFor(kind)
   return {
     'eslint.config.mjs': reexportStub(targets.eslintSpecifier),
-    'biome.json': biomeStub(member.settings.sourceRoots, kind, targets),
+    'biome.json': biomeStub(member, kind, targets),
     'tsconfig.json': tsconfigStub(kind, targets),
     'vitest.config.mts': reexportStub(targets.vitestSpecifier),
     // A member with no application is not given a browser configuration, because the rule does not ask

@@ -6,7 +6,6 @@ import {
   applyDenyRules,
   deniedPathsFor,
   findDenialViolations,
-  GENERATED_ARTEFACTS,
   type ParsedJson,
   parseJsonc,
 } from '@ploaness/governance'
@@ -46,12 +45,11 @@ const readJson = (root: string, relative: string): unknown => readSettings(root,
 // for one member would bind nothing in a workspace, and a gate per member would have several of them
 // fighting over one file. For a single member at the root the union is the list that always shipped.
 const deniedArtefacts = (repository: Repository): readonly string[] =>
-  deniedPathsFor(
-    repository.members
-      .filter((member: Member): boolean => member.isPayload)
-      .map((member: Member): string => member.path),
-    GENERATED_ARTEFACTS,
-  )
+  repository.members
+    .filter((member: Member): boolean => member.isPayload)
+    .flatMap((member: Member): readonly string[] =>
+      deniedPathsFor([member.path], member.settings.generatedArtefacts),
+    )
 
 export const generatedDenial = (context: Repository): GateResult => {
   const findings: readonly string[] = findDenialViolations(
