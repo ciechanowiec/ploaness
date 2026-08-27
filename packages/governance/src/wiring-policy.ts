@@ -331,6 +331,23 @@ const withoutPreamble = (config: string): string =>
 // `vitest.config.mts` was seeded by `init` and then checked by nothing, while the tests gate runs the
 // project's vitest with the project's config - so rewriting that file dropped the coverage thresholds,
 // the include globs, and the environment without a single finding.
+/**
+ * The files that must contain nothing but an import of a ploaness config and its default re-export.
+ *
+ * Exported because the ESLint configuration has to name them too: `unicorn/prefer-export-from` rewrites
+ * exactly this shape into `export { default } from '...'`, and it AUTOFIXES - so `ploaness format`
+ * turned a correctly wired project into one `wiring` then rejected, every time it ran. Two rules the
+ * harness owns, contradicting each other, with the formatter casting the deciding vote.
+ *
+ * The list is declared here, beside the rule that requires the shape, so the config that has to exempt
+ * them cannot fall out of step with it.
+ */
+export const REEXPORT_CONFIG_FILES: readonly string[] = [
+  'eslint.config.mjs',
+  'vitest.config.mts',
+  'playwright.config.ts',
+]
+
 const checkReexport = (
   config: string | undefined,
   file: string,

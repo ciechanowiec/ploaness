@@ -11,6 +11,7 @@
 // Philosophy: maximum-explicit. The build should be hard to satisfy by accident, so that code which
 // passes is verbose, explicit and readable by construction.
 
+import { REEXPORT_CONFIG_FILES } from '@ploaness/governance'
 //
 // The framework-neutral half - the caps, the explicitness rules, the naming ban, the suppression
 // discipline, the mock ban - lives in ./eslint-core.js and is shared with the ploaness repository's own
@@ -21,6 +22,7 @@ import testingLibrary from 'eslint-plugin-testing-library'
 import {
   baseLayers,
   compose,
+  type FlatConfigBlock,
   guidelineRules,
   immutabilityBlock,
   NO_FAST_CHECK_SEED,
@@ -40,6 +42,18 @@ const NO_INLINE_CONFIG_FUNCTIONS_SELECTOR: string = 'ArrowFunctionExpression, Fu
 const NO_INLINE_CONFIG_FUNCTIONS_MESSAGE: string =
   'No inline functions in collection/global/field/block configs. Define behavior (access, hooks, ' +
   'validate) in src/access or src/lib so it is unit-tested, then import it by reference.'
+
+// `unicorn/prefer-export-from` rewrites `import x from 'y'` + `export default x` into
+// `export { default } from 'y'` - and it AUTOFIXES, so `ploaness format` turned a correctly wired
+// project into one the `wiring` gate then rejected, every time it ran. Two rules this harness owns,
+// contradicting each other, with the formatter casting the deciding vote.
+//
+// The paths come from `REEXPORT_CONFIG_FILES`, declared beside the rule that requires the shape, so
+// this exemption cannot fall out of step with what `wiring` asks for.
+const reexportConfigBlock: FlatConfigBlock = {
+  files: [...REEXPORT_CONFIG_FILES],
+  rules: { 'unicorn/prefer-export-from': 'off' },
+}
 
 export default compose(
   // ── What is never linted ────────────────────────────────────────────────────────────────────
@@ -301,5 +315,6 @@ export default compose(
   },
 
   // ── Formatting is Biome's job - disable every conflicting stylistic rule (must stay last) ────
+  reexportConfigBlock,
   prettierLast,
 )

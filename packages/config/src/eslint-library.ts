@@ -5,6 +5,7 @@
 // the centralised environment module. Those are not relaxations a library is being granted; they are
 // carve-outs for files it does not contain, and applying them would have it judged against a layout it
 // never claimed. Every cap, ban and suppression rule in `eslint-core.ts` still applies in full.
+import { REEXPORT_CONFIG_FILES } from '@ploaness/governance'
 import {
   baseLayers,
   compose,
@@ -22,6 +23,18 @@ const IGNORED: readonly string[] = ['dist/**', 'node_modules/**', 'coverage/**',
 
 /** The JavaScript a library may legitimately carry: its own flat ESLint config, and nothing else. */
 const JAVASCRIPT_FILES: readonly string[] = ['eslint.config.mjs']
+
+// `unicorn/prefer-export-from` rewrites `import x from 'y'` + `export default x` into
+// `export { default } from 'y'` - and it AUTOFIXES, so `ploaness format` turned a correctly wired
+// project into one the `wiring` gate then rejected, every time it ran. Two rules this harness owns,
+// contradicting each other, with the formatter casting the deciding vote.
+//
+// The paths come from `REEXPORT_CONFIG_FILES`, declared beside the rule that requires the shape, so
+// this exemption cannot fall out of step with what `wiring` asks for.
+const reexportConfigBlock: FlatConfigBlock = {
+  files: [...REEXPORT_CONFIG_FILES],
+  rules: { 'unicorn/prefer-export-from': 'off' },
+}
 
 export default compose(
   { ignores: [...IGNORED] },
@@ -43,5 +56,6 @@ export default compose(
     plugins: { vitest: vitestPlugin },
     rules: { ...testIntegrityRules },
   } satisfies FlatConfigBlock,
+  reexportConfigBlock,
   prettierLast,
 )
