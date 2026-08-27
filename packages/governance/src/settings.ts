@@ -369,8 +369,19 @@ const readDeclaredLists = (raw: Record<string, unknown>): DeclaredLists => ({
  * @param packageJson the parsed package.json of the consuming project.
  * @returns the effective settings, with every field populated.
  */
-export const readSettings = (packageJson: unknown): Settings => {
-  const raw: Record<string, unknown> = asRecord(asRecord(packageJson)['ploaness'])
+export const readSettings = (packageJson: unknown): Settings =>
+  readRawSettings(ploanessBlock(packageJson))
+
+/** The raw `ploaness` block of a manifest, before any default is applied. */
+export const ploanessBlock = (packageJson: unknown): Record<string, unknown> =>
+  asRecord(asRecord(packageJson)['ploaness'])
+
+/**
+ * Read an already-layered raw settings block into a fully defaulted settings object.
+ * @param raw the raw block, after any layering.
+ * @returns the effective settings, with every field populated.
+ */
+export const readRawSettings = (raw: Record<string, unknown>): Settings => {
   const {
     typography: declaredTypography,
     javascript: declaredJavascript,

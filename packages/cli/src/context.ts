@@ -10,11 +10,14 @@ import {
   findGovernedMembers,
   findRepositoryRoot,
   isPayloadProject,
+  layerSettingBlocks,
   type ParsedJson,
   type ProjectManifest,
   parseJsonc,
+  ploanessBlock,
   ROOT_MEMBER_PATH,
   readKey,
+  readRawSettings,
   readSettings,
   readWorkspacePackages,
   type Settings,
@@ -275,12 +278,20 @@ const trackedManifestDirectories = (root: string): readonly string[] =>
 const readManifest = (root: string, projectPath: string): unknown =>
   readJson(path.join(root, projectPath, MANIFEST))
 
-const createMember = (root: string, projectPath: string, isEnforced: boolean): Member => {
+// A member's settings sit on top of the repository's rather than replacing them, so a fact declared
+// once at the root - a generated directory the typography ban must skip, a stricter bundle budget -
+// reaches every package without being restated in each.
+const createMember = (
+  root: string,
+  projectPath: string,
+  isEnforced: boolean,
+  repositoryBlock: Record<string, unknown> = {},
+): Member => {
   const packageJson: unknown = readManifest(root, projectPath)
   return {
     root: projectPath === ROOT_MEMBER_PATH ? root : path.join(root, projectPath),
     packageJson,
-    settings: readSettings(packageJson),
+    settings: readRawSettings(layerSettingBlocks(repositoryBlock, ploanessBlock(packageJson))),
     isEnforced,
     path: projectPath,
     isPayload: isPayloadProject(packageJson),
