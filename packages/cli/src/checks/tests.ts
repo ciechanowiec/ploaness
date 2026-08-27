@@ -3,8 +3,17 @@
 // module registry and fail to match its own matchers.
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import { type Context, resolveProjectTool } from '../context.js'
-import { asFindings, failed, fromRun, type GateResult, type RunResult, run } from '../exec.js'
+import { CODE_EXTENSIONS, carriesSourceCode, hasExtension } from '@ploaness/governance'
+import { type Context, type Member, resolveProjectTool, trackedFiles } from '../context.js'
+import {
+  asFindings,
+  failed,
+  fromRun,
+  type GateResult,
+  passed,
+  type RunResult,
+  run,
+} from '../exec.js'
 
 // A Payload suite needs a database before it can boot, and how the project obtains one is a fact ploaness
 // cannot know. The project declares it; the thresholds and the gate itself stay ploaness's.
@@ -56,8 +65,19 @@ const resolveProjectToolOrUndefined = (
 }
 
 /** Run the unit and integration suite with coverage, at the ploaness thresholds. */
-export const tests = (context: Context): GateResult =>
+// A member that holds no first-party source has no suite to run, and a runner started there fails on an
+// empty include - reporting a package with nothing to test as one that failed to test it. A member
+// holding code and no suite is untouched by this and still fails.
+const hasSourceToTest = (context: Member): boolean =>
+  carriesSourceCode(trackedFiles(context.root), context.settings.sourceRoots, (filePath: string) =>
+    hasExtension(filePath, CODE_EXTENSIONS),
+  )
+
+export const tests = (context: Member): GateResult =>
   withPretest(context, (): GateResult => {
+    if (!hasSourceToTest(context)) {
+      return passed('no first-party source in this package, so there is no suite to run')
+    }
     const vitest: string | undefined = resolveProjectToolOrUndefined(context, 'vitest')
     if (vitest === undefined) {
       return failed('vitest could not be resolved from the project', [

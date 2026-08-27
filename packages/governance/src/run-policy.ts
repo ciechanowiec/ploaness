@@ -29,3 +29,29 @@ export interface RunPoint {
  */
 export const endsRun = (point: RunPoint): boolean =>
   point.isFailure && (point.isEnforced || point.isPrecondition)
+
+/**
+ * Whether a member holds source code its suite could be about.
+ *
+ * A workspace root is a member - it has to be, to own the scripts a run is invoked through - and it may
+ * hold nothing but a manifest. Running a test runner there fails on an empty include, which would report
+ * a package with nothing to test as a package that failed to test it.
+ *
+ * The condition is derived rather than declared, and deliberately narrow: a member holding code and no
+ * suite still fails. `--passWithNoTests` would have been the easy answer and the wrong one - it lets an
+ * application delete its specs and stay green.
+ * @param trackedPaths every tracked path inside the member, member-relative.
+ * @param sourceRoots the directories the member declared as holding first-party source.
+ * @param isCode whether a path is a code file.
+ * @returns true when at least one code file sits under a declared source root.
+ */
+export const carriesSourceCode = (
+  trackedPaths: readonly string[],
+  sourceRoots: readonly string[],
+  isCode: (filePath: string) => boolean,
+): boolean =>
+  trackedPaths.some(
+    (filePath: string): boolean =>
+      isCode(filePath) &&
+      sourceRoots.some((root: string): boolean => filePath.startsWith(`${root}/`)),
+  )
