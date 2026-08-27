@@ -460,8 +460,18 @@ export const guidelineRules: RuleTable = {
 //
 // It lived only in the shipped config, so the harness published the check and was not measured by it -
 // the same asymmetry that put the caps and the naming bans in this file.
-/** The plugin the block below needs, re-exported so a caller declares no version of its own. */
-export const vitestPlugin: FlatConfigBlock = vitest
+/**
+ * The plugin the block below needs, re-exported so a caller declares no version of its own.
+ *
+ * Typed as a PLUGIN rather than as a `FlatConfigBlock`, because it is not one: a plugin object carries
+ * `meta`, `configs` and `environments`, and ESLint rejects an entire config the moment one of those
+ * appears as a top-level entry. Calling it a block is what let `eslint-library.ts` spread it into
+ * `compose(...)`, and that config crashed on load for every consumer that used it. The type is derived
+ * from the field it has to be assigned to, so it cannot drift from what ESLint accepts there.
+ */
+export type ESLintPlugin = NonNullable<Linter.Config['plugins']>[string]
+
+export const vitestPlugin: ESLintPlugin = vitest
 
 /** The Vitest half of the test-integrity block, shared by every config that lints a Vitest suite. */
 export const testIntegrityRules: RuleTable = {

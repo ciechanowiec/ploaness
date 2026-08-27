@@ -34,7 +34,14 @@ export default compose(
   javascriptBlock(JAVASCRIPT_FILES),
   // A library's specs are held to the same integrity rules as an application's: the suite is a gate, so
   // a test that cannot fail is a gate that cannot fail.
-  vitestPlugin,
-  { files: ['tests/**'], rules: { ...testIntegrityRules } } satisfies FlatConfigBlock,
+  //
+  // The plugin is mounted here rather than spread as an entry of its own. A plugin is not a config
+  // block - ESLint rejects the whole config on the `meta` key it carries - and it belongs in the block
+  // that states the rules naming it, so the two cannot be separated by an edit.
+  {
+    files: ['tests/**'],
+    plugins: { vitest: vitestPlugin },
+    rules: { ...testIntegrityRules },
+  } satisfies FlatConfigBlock,
   prettierLast,
 )
