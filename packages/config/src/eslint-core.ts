@@ -378,6 +378,10 @@ export const guidelineRules: RuleTable = {
     'error',
     {
       prefixes: {
+        // React mandates it. A hook MUST begin with `use` or React's own rules of hooks do not apply to
+        // it, so a boolean-returning hook cannot be renamed to satisfy this rule - the only move left
+        // was a suppression on every such hook, spending a project's ceiling on a decision React made.
+        use: true,
         matches: true,
         reaches: true,
         opens: true,
