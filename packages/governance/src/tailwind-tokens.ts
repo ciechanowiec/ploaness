@@ -29,23 +29,48 @@ export interface ArbitraryValueViolation {
 // A utility with a bracketed value, not immediately followed by `:` (which would make it a variant).
 const ARBITRARY_VALUE: RegExp = /-\[[^\]]+\](?!:)/g
 
-// Utilities whose bracket takes a CSS PROPERTY rather than a value. `transition-[color,box-shadow]`
-// names which properties animate and `will-change-[margin-top]` names which one is about to; neither is
-// a colour, size, spacing, radius or motion value, which is what this rule exists to keep in the theme.
-// There is no theme namespace they could come from, so reporting them asked for a token that cannot
-// exist - and the only way out was a suppression, spending a real allowance on a false finding.
+// Utilities whose bracket takes something OTHER than a themeable value.
+//
+// `transition-[color,box-shadow]` names which properties animate and `will-change-[margin-top]` names
+// which one is about to. `flex-[1_0_auto]` is the CSS `flex` shorthand - a grow/shrink/basis triple
+// describing how a box behaves, not a colour, size, spacing, radius or motion value. Tailwind v4 has
+// namespaces for every kind of value this rule governs and none for any of these, so reporting them
+// asked for a token that cannot exist, and the only way out was a suppression: a real allowance spent
+// on a false finding.
+//
+// `flex-[1]` is NOT excused by this. It is still reported, because Tailwind ships `flex-1` for it - the
+// finding there is an arbitrary value written where a utility already exists, which is the defect.
+// Only the shorthand form, which no utility and no token can express, is out of scope.
 const PROPERTY_UTILITIES: readonly string[] = ['transition', 'will-change']
+
+// The `flex` shorthand, told apart from `flex-[1]` by carrying more than one component. Written as a
+// separate test rather than as another entry above, because `flex` is not a property utility: the
+// bracket holds values, there is simply no namespace any of them could come from.
+const FLEX_SHORTHAND: RegExp = /^-\[[^\s\]_]*[\s_][^\]]*\]$/
+
+const carriesFlexShorthand = (lineText: string, index: number, value: string): boolean =>
+  lineText.slice(0, index).endsWith('flex') && FLEX_SHORTHAND.test(value)
 
 const carriesProperty = (lineText: string, index: number): boolean =>
   PROPERTY_UTILITIES.some((utility: string): boolean => lineText.slice(0, index).endsWith(utility))
 
-// A bracketed value that reads a CSS custom property is the OPPOSITE of a hardcoded one. It is how a
-// value computed at render - a width from a prop, a gap from a CMS field - reaches a utility class, and
-// a static theme cannot hold a per-instance value. Reporting it demanded a token for something whose
-// whole purpose is not being known until the component renders.
+// A bracketed value that COMPUTES rather than states one is the opposite of a hardcoded value.
+//
+// `var(--x)` is how a value computed at render - a width from a prop, a gap from a CMS field - reaches a
+// utility class, and a static theme cannot hold a per-instance value.
+//
+// A calculation is judged by what it computes OVER, which is where this rule previously drew the line in
+// the wrong place. `calc(100px_+_2rem)` is arithmetic on two lengths that both belong in the theme, and
+// is still a finding. `calc(100%_-_1px)` is not: a percentage resolves against whatever contains the
+// element, so the number it produces is not knowable where a token would have to be written - the same
+// reason `var(--x)` is excused, reached by a different route. The same holds for a viewport unit.
 const CUSTOM_PROPERTY: RegExp = /var\(\s*--/
 
-const carriesCustomProperty = (value: string): boolean => CUSTOM_PROPERTY.test(value)
+// A length that only means something once the element has a container or a viewport.
+const CONTEXT_RELATIVE: RegExp = /\d(?:%|v(?:w|h|min|max)\b)/
+
+const carriesComputedValue = (value: string): boolean =>
+  CUSTOM_PROPERTY.test(value) || (value.includes('calc(') && CONTEXT_RELATIVE.test(value))
 
 /**
  * Find every arbitrary Tailwind value in one file's text.
@@ -58,7 +83,11 @@ export const findArbitraryValues = (content: string): readonly ArbitraryValueVio
     [...lineText.matchAll(ARBITRARY_VALUE)]
       .filter(
         (match: RegExpExecArray): boolean =>
-          !(carriesProperty(lineText, match.index) || carriesCustomProperty(match[0])),
+          !(
+            carriesProperty(lineText, match.index) ||
+            carriesComputedValue(match[0]) ||
+            carriesFlexShorthand(lineText, match.index, match[0])
+          ),
       )
       .map(
         (match: RegExpExecArray): ArbitraryValueViolation => ({
