@@ -13,13 +13,10 @@
         "@biomejs/biome",
         "@ploaness/assets",
         "@ploaness/config",
-        "@vitest/coverage-v8",
         "dependency-cruiser",
         "eslint",
-        "stylelint",
         "tsx",
-        "type-coverage",
-        "vitest"
+        "type-coverage"
       ]
     },
     "packages/config": {

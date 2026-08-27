@@ -45,7 +45,7 @@ const readJson = (root: string, relative: string): unknown => readSettings(root,
 // settings file, at the repository root, while the artefacts are member-relative - so a rule written
 // for one member would bind nothing in a workspace, and a gate per member would have several of them
 // fighting over one file. For a single member at the root the union is the list that always shipped.
-export const deniedArtefacts = (repository: Repository): readonly string[] =>
+const deniedArtefacts = (repository: Repository): readonly string[] =>
   deniedPathsFor(
     repository.members
       .filter((member: Member): boolean => member.isPayload)
