@@ -8,6 +8,7 @@ import {
   type ConfigReferenceViolation,
   type DocumentLocation,
   type DocumentViolation,
+  declaredDependencies,
   extractLiteralSourcePaths,
   findAgentDocuments,
   findDocumentReferenceViolations,
@@ -37,15 +38,20 @@ const biomeFilesJson = (context: Context): string =>
 // root doc names files that live inside a member, so resolving either against a single package.json
 // reports rot where there is none. What the union still catches is the only thing this gate is for: a
 // name that resolves NOWHERE.
-const scriptNamesFor = (repository: Repo, directory: string): ReadonlySet<string> => {
-  const member: Member | undefined = repository.members.find(
-    (candidate: Member): boolean => candidate.path === directory,
-  )
-  return new Set([
-    ...Object.keys(declaredScripts(repository)),
-    ...(member === undefined ? [] : Object.keys(declaredScripts(member))),
-  ])
-}
+const ownerOf = (repository: Repo, directory: string): Member | undefined =>
+  repository.members.find((candidate: Member): boolean => candidate.path === directory)
+
+const namesFrom = (
+  repository: Repo,
+  owner: Member | undefined,
+  read: (context: Context) => readonly string[],
+): ReadonlySet<string> =>
+  new Set([...read(repository), ...(owner === undefined ? [] : read(owner))])
+
+const scriptNames = (context: Context): readonly string[] => Object.keys(declaredScripts(context))
+
+const dependencyNames = (context: Context): readonly string[] =>
+  Object.keys(declaredDependencies(context.packageJson))
 
 /**
  * Every npm script and full-path file the agent docs name must still exist.
@@ -64,10 +70,12 @@ export const documentation = (
     existsAt,
   )
   const findings: readonly string[] = documents.flatMap(
-    (document: DocumentLocation): readonly string[] =>
-      findDocumentReferenceViolations({
+    (document: DocumentLocation): readonly string[] => {
+      const owner: Member | undefined = ownerOf(repository, document.directory)
+      return findDocumentReferenceViolations({
         markdown: readFileSync(path.join(repository.root, document.file), 'utf8'),
-        scriptNames: scriptNamesFor(repository, document.directory),
+        scriptNames: namesFrom(repository, owner, scriptNames),
+        packageNames: namesFrom(repository, owner, dependencyNames),
         // A path is tried inside the owning member first, then at the repository root, for the same
         // reason the script names are unioned.
         isExistingFile: (relativePath: string): boolean =>
@@ -76,7 +84,8 @@ export const documentation = (
       }).map(
         (violation: DocumentViolation): string =>
           `${document.file}: ${violation.reference} (${violation.kind}) ${violation.reason}`,
-      ),
+      )
+    },
   )
   return findings.length > 0
     ? failed(`${String(findings.length)} stale reference(s) in the agent docs`, findings)

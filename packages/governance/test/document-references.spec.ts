@@ -24,6 +24,7 @@ const run = (
     scriptNames: scripts,
     isExistingFile: existenceCheckOver(existingFiles),
     reservedWords: new Set<string>(),
+    packageNames: new Set<string>(),
   })
 
 describe('findDocumentReferenceViolations - scripts', () => {
@@ -97,6 +98,7 @@ describe('reserved words', () => {
       scriptNames: new Set<string>(),
       isExistingFile: () => true,
       reservedWords: new Set(['knip']),
+      packageNames: new Set<string>(),
     })
     expect(found).toEqual([])
   })
@@ -107,8 +109,43 @@ describe('reserved words', () => {
       scriptNames: new Set<string>(),
       isExistingFile: () => true,
       reservedWords: new Set<string>(),
+      packageNames: new Set<string>(),
     })
     expect(found).toHaveLength(1)
+  })
+})
+
+const runWithPackages = (
+  markdown: string,
+  packageNames: readonly string[],
+): readonly DocumentViolation[] =>
+  findDocumentReferenceViolations({
+    markdown,
+    scriptNames: scripts,
+    isExistingFile: existenceCheckOver([]),
+    reservedWords: new Set<string>(),
+    packageNames: new Set(packageNames),
+  })
+
+describe('module specifiers', () => {
+  // The wiring gate mandates this exact `extends` value, so documenting it must not be reported as a
+  // path that does not exist - the project is obliged to name it.
+  it('doesNotFlagASubpathOfADeclaredDependency', () => {
+    expect(runWithPackages('It extends `ploaness/tsconfig.json`.', ['ploaness'])).toEqual([])
+  })
+
+  it('flagsTheSameTokenWhenNoSuchDependencyIsDeclared', () => {
+    expect(runWithPackages('It extends `ploaness/tsconfig.json`.', [])).toHaveLength(1)
+  })
+
+  it('readsAScopedPackageNameAsBothOfItsSegments', () => {
+    expect(runWithPackages('See `@ploaness/config/biome.json`.', ['@ploaness/config'])).toEqual([])
+  })
+
+  // Only the leading segment is a package name. A repository path whose first directory happens to
+  // share a dependency name must still be judged as a file.
+  it('stillFlagsARepositoryPathUnderAnUnrelatedDirectory', () => {
+    expect(runWithPackages('See `src/lib/slug.ts`.', ['ploaness'])).toHaveLength(1)
   })
 })
 

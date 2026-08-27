@@ -28,6 +28,11 @@ interface DocumentReferenceInputs {
    * replaced, and documenting a gate must not be read as referencing a script that no longer exists.
    */
   readonly reservedWords: ReadonlySet<string>
+  /**
+   * The dependency names this document may name a subpath of. A token beginning with one is a module
+   * SPECIFIER rather than a repository path, so it is not judged as a file.
+   */
+  readonly packageNames: ReadonlySet<string>
 }
 
 const BACKTICK_TOKEN: RegExp = /`[^`\n]+`/g
@@ -54,11 +59,30 @@ const extractScriptReferences = (markdown: string): ReadonlySet<string> => {
   return new Set([...backticked, ...pnpmRunScripts(markdown)])
 }
 
-const extractPathReferences = (markdown: string): ReadonlySet<string> => {
+// A token beginning with the name of a declared dependency is a module SPECIFIER, not a repository
+// path, and the header above says this rule judges repository paths. `ploaness/tsconfig.json` is the
+// case that forced the distinction: the wiring gate mandates that exact `extends` value, so a project
+// documenting what another gate REQUIRES was reported for naming a file it is obliged to name.
+//
+// The exemption is derived from what the project declares rather than from a list of the harness's own
+// subpaths, which keeps the useful half: drop the dependency and the same reference is rot again.
+// A scope and a name: the most of a specifier that can still be a package name.
+const PACKAGE_NAME_SEGMENTS: number = 2
+
+const specifierPackage = (token: string): string => {
+  const [first = '', second = '']: readonly string[] = token.split('/', PACKAGE_NAME_SEGMENTS)
+  return first.startsWith('@') ? `${first}/${second}` : first
+}
+
+const extractPathReferences = (
+  markdown: string,
+  packageNames: ReadonlySet<string>,
+): ReadonlySet<string> => {
   const paths: readonly string[] = backtickTokens(markdown)
     .filter((token: string): boolean => token.includes('/') && !token.includes(' '))
     .map((token: string): string => stripTrailingGlob(token))
     .filter((token: string): boolean => !token.includes('*') && PATH_EXTENSION.test(token))
+    .filter((token: string): boolean => !packageNames.has(specifierPackage(token)))
   return new Set(paths)
 }
 
@@ -83,7 +107,9 @@ export const findDocumentReferenceViolations = (
       }),
     )
 
-  const pathViolations: readonly DocumentViolation[] = [...extractPathReferences(inputs.markdown)]
+  const pathViolations: readonly DocumentViolation[] = [
+    ...extractPathReferences(inputs.markdown, inputs.packageNames),
+  ]
     .filter((path: string): boolean => !inputs.isExistingFile(path))
     .map(
       (path: string): DocumentViolation => ({
