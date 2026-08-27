@@ -41,3 +41,23 @@ describe('findArbitraryValues', () => {
     expect(valuesIn('')).toEqual([])
   })
 })
+
+describe('utilities whose bracket takes a property rather than a value', () => {
+  it('accepts a transition naming the properties that animate', () => {
+    // Not a colour, size, spacing, radius or motion VALUE - there is no theme namespace it could come
+    // from, so reporting it asked for a token that cannot exist.
+    expect(findArbitraryValues('<div className="transition-[color,box-shadow]" />')).toEqual([])
+  })
+
+  it('accepts will-change naming the property about to change', () => {
+    expect(findArbitraryValues('<div className="will-change-[margin-top]" />')).toEqual([])
+  })
+
+  it('still reports a value on a utility that has a theme namespace', () => {
+    expect(findArbitraryValues('<div className="bg-[#0a7]" />')).toHaveLength(1)
+  })
+
+  it('still reports a duration, which motion tokens do cover', () => {
+    expect(findArbitraryValues('<div className="duration-[400ms]" />')).toHaveLength(1)
+  })
+})
