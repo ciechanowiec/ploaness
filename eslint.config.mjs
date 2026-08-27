@@ -10,13 +10,10 @@ import {
   compose,
   guidelineRules,
   immutabilityBlock,
-  NO_FAST_CHECK_SEED,
-  NO_INHERITANCE,
-  NO_LITERAL_ASSERTIONS,
-  NO_NETWORK_GUARD_ESCAPE,
-  NO_TEST_ORDER_ESCAPE,
   prettierLast,
+  testIdiomRules,
   testIntegrityRules,
+  testSuiteSyntaxRules,
   typeAwareParsing,
   vitestPlugin,
 } from '@ploaness/config/eslint-core'
@@ -78,26 +75,15 @@ export default compose(
       // repository publishes those rules and was not measured by them, which is the whole reason
       // eslint-core.js exists.
       ...testIntegrityRules,
-      // The literal-assertion ban, which the shipped config applies to a Payload project's tests.
-      // `NO_INHERITANCE` is spread in beside it because this key REPLACES the base setting rather than
-      // adding to it, so naming only the assertion selectors here silently disarmed the inheritance ban
-      // in every spec - the exact trap `eslint-core.js` documents.
-      'no-restricted-syntax': [
-        ...NO_INHERITANCE,
-        ...NO_LITERAL_ASSERTIONS,
-        ...NO_FAST_CHECK_SEED,
-        ...NO_TEST_ORDER_ESCAPE,
-        ...NO_NETWORK_GUARD_ESCAPE,
-      ],
-      // A test's expected value IS its specification. Naming it moves the specification away from the
-      // assertion that reads it, which makes the test harder to check by eye rather than easier - the
-      // opposite of what the bare-number ban exists to achieve. This is a role distinction, not a
-      // convenience: production code names its constants, and a spec states its literals.
-      '@typescript-eslint/no-magic-numbers': 'off',
-      // Fixture data repeats by nature; naming each occurrence is noise rather than clarity.
-      'sonarjs/no-duplicate-string': 'off',
-      // Specs assemble tokens from fragments so a rule under test does not match its own spec.
-      'unicorn/numeric-separators-style': 'off',
+      // Both tables whole, rather than the selectors spliced and the exemptions listed by hand. Splicing
+      // them here was correct and still drifted: this block named three of the five idiom rules the
+      // shipped configs name, so this repository's own specs were held to two rules it publishes an
+      // exemption from. A third hand-written copy of a policy drifts exactly as the second one did.
+      ...testIdiomRules,
+      // Spread WHOLE, because this key REPLACES the base setting rather than adding to it. Naming a
+      // subset here silently disarms the rest - the trap `eslint-core.js` documents, which this block
+      // fell into once already with the inheritance ban.
+      ...testSuiteSyntaxRules,
     },
   },
 

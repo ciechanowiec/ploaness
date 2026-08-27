@@ -14,7 +14,9 @@ import {
   immutabilityBlock,
   javascriptBlock,
   prettierLast,
+  testIdiomRules,
   testIntegrityRules,
+  testSuiteSyntaxRules,
   typeAwareParsing,
   vitestPlugin,
 } from './eslint-core.js'
@@ -51,10 +53,19 @@ export default compose(
   // The plugin is mounted here rather than spread as an entry of its own. A plugin is not a config
   // block - ESLint rejects the whole config on the `meta` key it carries - and it belongs in the block
   // that states the rules naming it, so the two cannot be separated by an edit.
+  //
+  // All three tables are the shared ones. This block used to carry the integrity rules alone, which read
+  // as complete and was not: a library's specs were held to the bare-number ban a Payload consumer's
+  // specs are exempt from, and guarded by two of the nineteen selectors rather than all of them. Neither
+  // gap is about serving an application, which is the only thing this config is meant to differ about.
   {
     files: ['tests/**'],
     plugins: { vitest: vitestPlugin },
-    rules: { ...testIntegrityRules },
+    rules: {
+      ...testIdiomRules,
+      ...testIntegrityRules,
+      ...testSuiteSyntaxRules,
+    },
   } satisfies FlatConfigBlock,
   reexportConfigBlock,
   prettierLast,

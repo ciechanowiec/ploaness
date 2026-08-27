@@ -25,14 +25,13 @@ import {
   type FlatConfigBlock,
   guidelineRules,
   immutabilityBlock,
-  NO_FAST_CHECK_SEED,
   NO_INHERITANCE,
-  NO_LITERAL_ASSERTIONS,
   NO_MOCK_PROPERTIES,
   NO_NETWORK_GUARD_ESCAPE,
-  NO_TEST_ORDER_ESCAPE,
   prettierLast,
+  testIdiomRules,
   testIntegrityRules,
+  testSuiteSyntaxRules,
   typeAwareParsing,
   vitestPlugin,
 } from './eslint-core.js'
@@ -247,22 +246,9 @@ export default compose(
   // ── Tests: real objects, casts, and long arrange-act-assert bodies are expected ──────────────
   {
     files: ['tests/**'],
-    rules: {
-      // Only framework idiom is relaxed here. Every rule that carries a rule of the governing standard -
-      // the size caps, the explicitness rules, the ban on a non-null assertion, the unsafe-any family -
-      // stays ON, because the standard says test code passes the same static-analysis checks as
-      // production code. A relaxation that made a test easier to write by making it less checked would
-      // exempt the suite from the contract it exists to enforce.
-      // A test's expected value IS its specification. Naming it moves the specification away from the
-      // assertion that reads it, which makes the test harder to check by eye rather than easier - the
-      // opposite of what the bare-number ban exists to achieve. This is a role distinction, not a
-      // convenience: production code names its constants, and a spec states its literals.
-      '@typescript-eslint/no-magic-numbers': 'off',
-      'sonarjs/no-duplicate-string': 'off', // fixture data repeats by nature; naming each is noise.
-      'unicorn/no-top-level-assignment-in-function': 'off', // standard vitest beforeAll pattern.
-      'unicorn/max-nested-calls': 'off', // expect(fn(arg(value))) assertions are idiomatic.
-      'unicorn/numeric-separators-style': 'off', // fixtures use Unicode code points (0x2026); ungrouped reads better.
-    },
+    // The exemptions are the shared ones, so a library consumer's specs and a Payload consumer's specs
+    // are exempt from the same rules for the same stated reason.
+    rules: { ...testIdiomRules },
   },
 
   // ── Test integrity: the suite is a gate, so the tests themselves are linted ──────────────────
@@ -281,13 +267,7 @@ export default compose(
       // A test must actually run and actually assert. The rules live in eslint-core.js, because the
       // ploaness repository's own suite is held to them too.
       ...testIntegrityRules,
-      'no-restricted-syntax': [
-        ...NO_INHERITANCE,
-        ...NO_LITERAL_ASSERTIONS,
-        ...NO_FAST_CHECK_SEED,
-        ...NO_TEST_ORDER_ESCAPE,
-        ...NO_NETWORK_GUARD_ESCAPE,
-      ],
+      ...testSuiteSyntaxRules,
 
       // React Testing Library: test components the way a user experiences them.
       'testing-library/await-async-queries': 'error',

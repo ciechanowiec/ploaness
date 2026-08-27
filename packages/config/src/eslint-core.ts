@@ -495,6 +495,32 @@ export const testIntegrityRules: RuleTable = {
   'vitest/prefer-hooks-on-top': 'error', // setup before assertions, so reading order matches run order.
 }
 
+/**
+ * The framework idiom a spec is written in, which the production rules were never aimed at.
+ *
+ * Only idiom is relaxed. Every rule that carries a rule of the governing standard - the size caps, the
+ * explicitness rules, the ban on a non-null assertion, the unsafe-any family - stays ON, because the
+ * standard says test code passes the same static-analysis checks as production code. A relaxation that
+ * made a test easier to write by making it less checked would exempt the suite from the contract it
+ * exists to enforce.
+ *
+ * Shared by every shipped config rather than stated in each, because what earns the exemption is being a
+ * SPEC rather than being a Payload application's spec. Stated twice it drifted: a library consumer's
+ * tests were held to the bare-number ban a Payload consumer's were not, and neither config was wrong
+ * read on its own, which is why nothing found it for as long as it stood.
+ */
+export const testIdiomRules: RuleTable = {
+  // A test's expected value IS its specification. Naming it moves the specification away from the
+  // assertion that reads it, which makes the test harder to check by eye rather than easier - the
+  // opposite of what the bare-number ban exists to achieve. This is a role distinction, not a
+  // convenience: production code names its constants, and a spec states its literals.
+  '@typescript-eslint/no-magic-numbers': 'off',
+  'sonarjs/no-duplicate-string': 'off', // fixture data repeats by nature; naming each is noise.
+  'unicorn/no-top-level-assignment-in-function': 'off', // the standard vitest beforeAll pattern.
+  'unicorn/max-nested-calls': 'off', // expect(fn(arg(value))) assertions are idiomatic.
+  'unicorn/numeric-separators-style': 'off', // fixtures use code points (0x2026); ungrouped reads better.
+}
+
 // Property tests must stay deterministic: one seed decides the whole suite, and a per-call override
 // reintroduces a gate whose verdict changes between two runs of an unchanged repository, which is the
 // one thing a check may never do.
@@ -616,6 +642,30 @@ const NO_TEST_ORDER_ESCAPE: readonly RestrictedSyntax[] = [
       "Do not reconfigure the runner from a spec. The sequence and its seed are the harness's.",
   },
 ]
+
+/**
+ * Everything a Vitest spec is guarded against, as ONE table.
+ *
+ * Assembled here rather than at each call site because a block that sets `no-restricted-syntax`
+ * REPLACES the setting rather than adding to it. A config listing four of these five has not weakened a
+ * rule anybody can read; it has silently dropped the fifth. The library config listed none of them and
+ * kept only the inheritance ban it inherited from the guideline layer, so a library's specs could assert
+ * a literal against itself, pin their own order, seed a property test per-call, and open a transport the
+ * network guard cannot reach - seventeen selectors, none of them Payload-specific.
+ *
+ * A table rather than the bare setting, so a call site spreads it as it spreads every other table here.
+ * Handed out as a setting it has to be re-wrapped under its key at each call site, and that re-wrapping
+ * is the replacement - the one move this constant exists to stop anybody making by hand.
+ */
+export const testSuiteSyntaxRules: RuleTable = {
+  'no-restricted-syntax': [
+    ...NO_INHERITANCE,
+    ...NO_LITERAL_ASSERTIONS,
+    ...NO_FAST_CHECK_SEED,
+    ...NO_TEST_ORDER_ESCAPE,
+    ...NO_NETWORK_GUARD_ESCAPE,
+  ],
+}
 
 /**
  * The same contract, applied to a file that is JavaScript rather than TypeScript.
