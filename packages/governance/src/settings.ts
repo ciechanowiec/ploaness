@@ -200,6 +200,12 @@ const DEFAULT_TYPOGRAPHY_EXCLUSIONS: readonly string[] = [
 const DEFAULT_JAVASCRIPT_ALLOWLIST: readonly string[] = [
   String.raw`${MEMBER_RELATIVE}eslint\.config\.mjs$`,
   String.raw`importMap\.js$`,
+  // ploaness admits Tailwind deliberately - the shipped stylelint configuration lists its at-rules as a
+  // CSS dialect a project may legitimately be written in. Tailwind v4 needs a PostCSS configuration, and
+  // Next reads it only as `.mjs` or `.js`. Anticipating the dialect in one gate while banning the file
+  // it requires in another left a project no move but an allowlist entry claiming a role it does not
+  // have: the file is not hand-written JavaScript by choice.
+  String.raw`${MEMBER_RELATIVE}postcss\.config\.(mjs|js)$`,
 ]
 
 /**
