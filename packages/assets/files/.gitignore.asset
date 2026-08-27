@@ -40,7 +40,9 @@ out/
 *.tsbuildinfo
 .type-coverage/
 packages/ploaness/biome.json
+packages/ploaness/biome-core.json
 packages/ploaness/tsconfig.json
+packages/ploaness/tsconfig-core.json
 
 # Next.js / Payload CMS
 .next/

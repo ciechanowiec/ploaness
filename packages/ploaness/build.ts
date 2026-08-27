@@ -28,7 +28,46 @@ const readJson = (specifier: string): Record<string, unknown> => {
   return asRecord(JSON.parse(readFileSync(resolved, 'utf8')))
 }
 
-const shared: Record<string, unknown> = readJson('@ploaness/config/biome')
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+// Child wins, but a section present in both is merged rather than replaced: the core carries
+// `linter.rules` and the framework half carries `linter.domains`, and a shallow overwrite would drop
+// every rule while reporting success.
+const merge = (
+  base: Record<string, unknown>,
+  overlay: Record<string, unknown>,
+): Record<string, unknown> => {
+  const merged: Record<string, unknown> = { ...base }
+  for (const [key, value] of Object.entries(overlay)) {
+    const existing: unknown = merged[key]
+    merged[key] = isPlainObject(existing) && isPlainObject(value) ? merge(existing, value) : value
+  }
+  return merged
+}
+
+// Follow a relative `extends` inside @ploaness/config and fold the parent in, so what ships is one
+// self-contained file. The alternative is the silent failure this whole script exists to avoid: Biome
+// resolves a nested extends against the project root rather than against the config declaring it, so a
+// consumer would receive the framework half alone and be linted by Biome's defaults.
+const flatten = (specifier: string): Record<string, unknown> => {
+  const config: Record<string, unknown> = readJson(specifier)
+  const parents: readonly string[] = [config['extends'] ?? []]
+    .flat()
+    .filter((entry: unknown): entry is string => typeof entry === 'string')
+  if (parents.length === 0) {
+    return config
+  }
+  const resolvedParents: Record<string, unknown> = parents.reduce(
+    (accumulated: Record<string, unknown>, parent: string): Record<string, unknown> =>
+      merge(accumulated, flatten(`@ploaness/config/${path.basename(parent, '.json')}`)),
+    {},
+  )
+  const { extends: _dropped, ...own } = config
+  return merge(resolvedParents, own)
+}
+
+const shared: Record<string, unknown> = flatten('@ploaness/config/biome')
 const generated: Record<string, unknown> = {
   ...shared,
   // A generated file: edit packages/config/biome.json instead.
@@ -38,13 +77,13 @@ const generated: Record<string, unknown> = {
 writeFileSync(path.join(here, 'biome.json'), `${JSON.stringify(generated, null, JSON_INDENT)}\n`)
 console.info(`ploaness: inlined biome.json (${String(Object.keys(generated).length)} sections)`)
 
-const sharedTsconfig: Record<string, unknown> = readJson('@ploaness/config/tsconfig')
-// A generated file: edit packages/config/tsconfig.json instead. `extends` is stripped rather than
-// followed, because the shared config is a leaf; if it ever gains a parent, that parent must be inlined
-// here too rather than left as a hop a consumer cannot resolve.
+// A generated file: edit packages/config/tsconfig.json instead. A parent is folded in rather than left
+// as a hop, because Next.js reads this file with its own tsconfig parser, which honours neither a
+// package exports map nor a chain it cannot resolve.
+const sharedTsconfig: Record<string, unknown> = flatten('@ploaness/config/tsconfig')
 if (typeof sharedTsconfig['extends'] === 'string') {
   throw new TypeError(
-    'the shared tsconfig gained an `extends`; inline its parent here before shipping',
+    'the shipped tsconfig still carries an `extends`; flattening did not resolve it',
   )
 }
 writeFileSync(
@@ -55,3 +94,11 @@ const compilerOptions: Record<string, unknown> = asRecord(sharedTsconfig['compil
 console.info(
   `ploaness: inlined tsconfig.json (${String(Object.keys(compilerOptions).length)} compiler options)`,
 )
+
+// The library halves ship as they are: each is already self-contained, and a member with no framework
+// extends it directly.
+for (const core of ['biome-core', 'tsconfig-core']) {
+  const body: Record<string, unknown> = flatten(`@ploaness/config/${core}`)
+  writeFileSync(path.join(here, `${core}.json`), `${JSON.stringify(body, null, JSON_INDENT)}\n`)
+  console.info(`ploaness: inlined ${core}.json`)
+}

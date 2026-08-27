@@ -12,7 +12,12 @@ import { COVERAGE_INCLUDE } from '@ploaness/governance'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 import { projectSettings as settings } from './project-settings.js'
-import { DETERMINISTIC_SEQUENCE, harnessSetupFile, projectSetupFiles } from './vitest-core.js'
+import {
+  COVERAGE_THRESHOLD,
+  DETERMINISTIC_SEQUENCE,
+  harnessSetupFile,
+  projectSetupFiles,
+} from './vitest-core.js'
 
 // Structural rather than Vite's own `UserConfig`, and the annotation is load-bearing rather than
 // stylistic. An emitted declaration naming `import('vite').UserConfig` would make `vite` resolvable
@@ -56,10 +61,10 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
         // perFile: every covered file must independently clear the bar. Without it one fully covered
         // file can mask an uncovered one in the aggregate, which is exactly how an untested helper hides.
         perFile: true,
-        lines: 80,
-        branches: 80,
-        functions: 80,
-        statements: 80,
+        lines: COVERAGE_THRESHOLD,
+        branches: COVERAGE_THRESHOLD,
+        functions: COVERAGE_THRESHOLD,
+        statements: COVERAGE_THRESHOLD,
       },
     },
   },

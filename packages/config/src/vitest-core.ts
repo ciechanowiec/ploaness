@@ -28,6 +28,14 @@ const PROJECT_SETUP_FILE: string = './vitest.setup.ts'
  * It carries no meaning. What matters is that it never changes, so a failing property is reproducible by
  * rerunning rather than by guessing which inputs the last run happened to draw.
  */
+/**
+ * The per-file coverage floor every governed member is held to.
+ *
+ * Declared here because two runner configurations now read it, and a floor written twice is a floor
+ * that will eventually differ between the members of one repository.
+ */
+export const COVERAGE_THRESHOLD: number = 80
+
 export const PROPERTY_TEST_SEED: number = 1_734_000_000
 
 // The order a shuffled suite runs in. It is fixed for the same reason the seed above is: a check has one

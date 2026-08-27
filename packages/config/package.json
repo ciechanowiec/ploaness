@@ -40,7 +40,18 @@
       "types": "./dist/access.d.ts",
       "default": "./dist/access.js"
     },
-    "./pins": "./pins.json"
+    "./pins": "./pins.json",
+    "./biome-core": "./biome-core.json",
+    "./tsconfig-core": "./tsconfig-core.json",
+    "./tsconfig-core.json": "./tsconfig-core.json",
+    "./eslint-library": {
+      "types": "./dist/eslint-library.d.ts",
+      "default": "./dist/eslint-library.js"
+    },
+    "./vitest-library": {
+      "types": "./dist/vitest-library.d.ts",
+      "default": "./dist/vitest-library.js"
+    }
   },
   "files": [
     "dist",
@@ -50,7 +61,9 @@
     "knip.json",
     "pins.json",
     "stylelint.json",
-    "tsconfig.json"
+    "tsconfig.json",
+    "biome-core.json",
+    "tsconfig-core.json"
   ],
   "scripts": {
     "build": "tsc --build tsconfig.build.json"

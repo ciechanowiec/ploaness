@@ -41,6 +41,17 @@
     "./runtime": {
       "types": "./dist/runtime.d.ts",
       "default": "./dist/runtime.js"
+    },
+    "./biome-core": "./biome-core.json",
+    "./tsconfig-core": "./tsconfig-core.json",
+    "./tsconfig-core.json": "./tsconfig-core.json",
+    "./eslint-library": {
+      "types": "./dist/eslint-library.d.ts",
+      "default": "./dist/eslint-library.js"
+    },
+    "./vitest-library": {
+      "types": "./dist/vitest-library.d.ts",
+      "default": "./dist/vitest-library.js"
     }
   },
   "bin": {
@@ -49,7 +60,9 @@
   "files": [
     "dist",
     "biome.json",
-    "tsconfig.json"
+    "tsconfig.json",
+    "biome-core.json",
+    "tsconfig-core.json"
   ],
   "scripts": {
     "build": "node build.ts && tsc --build tsconfig.build.json"
