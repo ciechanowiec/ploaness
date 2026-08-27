@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  type DocumentLocation,
   type DocumentViolation,
+  findAgentDocuments,
   findDocumentReferenceViolations,
 } from '../src/document-references.js'
 
@@ -107,5 +109,55 @@ describe('reserved words', () => {
       reservedWords: new Set<string>(),
     })
     expect(found).toHaveLength(1)
+  })
+})
+
+describe('findAgentDocuments', () => {
+  // The root is reached whether or not it is a member, and that is the whole reason the candidate list
+  // is not derived from the member list. pnpm does not require the workspace root to appear in
+  // `packages:`, and the project that exposed the defect does not list it.
+  it('readsTheRepositoryRootWhenItIsNotAMember', () => {
+    const found: readonly DocumentLocation[] = findAgentDocuments(
+      ['cms', 'fe'],
+      (file: string): boolean => file === 'AGENTS.md',
+    )
+    expect(found).toEqual([{ file: 'AGENTS.md', directory: '.' }])
+  })
+
+  it('readsEveryMembersOwnInstructionFiles', () => {
+    const found: readonly DocumentLocation[] = findAgentDocuments(
+      ['cms', 'fe'],
+      (): boolean => true,
+    )
+    expect(found.map((location: DocumentLocation): string => location.file)).toEqual([
+      'AGENTS.md',
+      'CLAUDE.md',
+      'cms/AGENTS.md',
+      'cms/CLAUDE.md',
+      'fe/AGENTS.md',
+      'fe/CLAUDE.md',
+    ])
+  })
+
+  it('pairsEachFileWithTheDirectoryWhoseScriptsItIsReadAgainst', () => {
+    const found: readonly DocumentLocation[] = findAgentDocuments(
+      ['cms'],
+      (file: string): boolean => file === 'cms/AGENTS.md',
+    )
+    expect(found).toEqual([{ file: 'cms/AGENTS.md', directory: 'cms' }])
+  })
+
+  // A single-package repository lists its root as its one member, so the root would otherwise be a
+  // candidate twice and every finding in it would be reported twice.
+  it('doesNotReadTheRootTwiceWhenItIsAlsoAMember', () => {
+    const found: readonly DocumentLocation[] = findAgentDocuments(['.'], (): boolean => true)
+    expect(found.map((location: DocumentLocation): string => location.file)).toEqual([
+      'AGENTS.md',
+      'CLAUDE.md',
+    ])
+  })
+
+  it('dropsAFileTheRepositoryDoesNotHave', () => {
+    expect(findAgentDocuments([], (): boolean => false)).toEqual([])
   })
 })

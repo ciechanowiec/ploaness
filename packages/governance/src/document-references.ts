@@ -8,6 +8,7 @@
 //      extension) - must exist on disk. Directory/glob references (`src/access/**`) and bare filenames
 //      are deliberately NOT checked: docs legitimately mention not-yet-existing dirs (e.g. the
 //      "no src/migrations yet" note) and use shorthand, and flagging those would make the gate lie.
+import { ROOT_MEMBER_PATH } from './workspace-policy.js'
 
 /** A documentation reference that no longer resolves to a real script or file. */
 export interface DocumentViolation {
@@ -94,3 +95,46 @@ export const findDocumentReferenceViolations = (
 
   return [...scriptViolations, ...pathViolations]
 }
+
+// Which instruction files a repository has, and whose scripts each one is read against. This was a
+// constant list joined onto the repository root, which meant a workspace's member docs were never read
+// at all: a real project carried three AGENTS.md, two of them naming a config file the harness forbids
+// and a pipeline no commit ever added, past a gate reporting that every reference resolved.
+//
+// The root is a candidate whether or not it is a MEMBER, and that is the whole reason this is a
+// function rather than a mapped member list. pnpm does not require the workspace root to appear in
+// `packages:`, and the project that exposed the defect does not list it - so deriving the candidates
+// from the member list alone would have stopped reading the root's own docs, trading one blind spot
+// for the other.
+
+/** The instruction files an agent reads, in the order it meets them. */
+const DOCUMENT_FILES: readonly string[] = ['AGENTS.md', 'CLAUDE.md']
+
+/** One instruction file, paired with the member that owns it. */
+export interface DocumentLocation {
+  /** Repo-relative path of the file. */
+  readonly file: string
+  /** Repo-relative directory it belongs to, {@link ROOT_MEMBER_PATH} at the repository root. */
+  readonly directory: string
+}
+
+const joinPath = (directory: string, file: string): string =>
+  directory === ROOT_MEMBER_PATH ? file : `${directory}/${file}`
+
+/**
+ * Locate every agent instruction file this repository holds.
+ * @param memberPaths the governed members, repo-relative.
+ * @param isExistingFile whether a repo-relative path exists.
+ * @returns one entry per file present, the root's first, then each member's in the order given.
+ */
+export const findAgentDocuments = (
+  memberPaths: readonly string[],
+  isExistingFile: (relativePath: string) => boolean,
+): readonly DocumentLocation[] =>
+  [ROOT_MEMBER_PATH, ...memberPaths.filter((path: string): boolean => path !== ROOT_MEMBER_PATH)]
+    .flatMap((directory: string): readonly DocumentLocation[] =>
+      DOCUMENT_FILES.map(
+        (file: string): DocumentLocation => ({ file: joinPath(directory, file), directory }),
+      ),
+    )
+    .filter((location: DocumentLocation): boolean => isExistingFile(location.file))

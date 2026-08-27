@@ -6,8 +6,10 @@ import path from 'node:path'
 import {
   asRecord,
   type ConfigReferenceViolation,
+  type DocumentLocation,
   type DocumentViolation,
   extractLiteralSourcePaths,
+  findAgentDocuments,
   findDocumentReferenceViolations,
   findMissingConfigReferences,
   findSkillManifestViolations,
@@ -15,10 +17,14 @@ import {
   requiredBiomeFiles,
   type SkillViolation,
 } from '@ploaness/governance'
-import { type Context, shippedDirectory, trackedFiles } from '../context.js'
+import {
+  type Context,
+  type Member,
+  type Repository as Repo,
+  shippedDirectory,
+  trackedFiles,
+} from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
-
-const DOC_FILES: readonly string[] = ['AGENTS.md', 'CLAUDE.md']
 
 const declaredScripts = (context: Context): Record<string, unknown> =>
   asRecord(asRecord(context.packageJson)['scripts'])
@@ -26,37 +32,55 @@ const declaredScripts = (context: Context): Record<string, unknown> =>
 const biomeFilesJson = (context: Context): string =>
   JSON.stringify(requiredBiomeFiles(context.settings.sourceRoots))
 
+// A doc is read against its OWN member and against the repository, never against one alone. A member
+// doc legitimately names a command the root declares - "run `verify:unmanaged` at the root" - and the
+// root doc names files that live inside a member, so resolving either against a single package.json
+// reports rot where there is none. What the union still catches is the only thing this gate is for: a
+// name that resolves NOWHERE.
+const scriptNamesFor = (repository: Repo, directory: string): ReadonlySet<string> => {
+  const member: Member | undefined = repository.members.find(
+    (candidate: Member): boolean => candidate.path === directory,
+  )
+  return new Set([
+    ...Object.keys(declaredScripts(repository)),
+    ...(member === undefined ? [] : Object.keys(declaredScripts(member))),
+  ])
+}
+
 /**
  * Every npm script and full-path file the agent docs name must still exist.
- * @param context the resolved project environment.
+ * @param repository the repository being judged, and the members whose docs it holds.
  * @param reservedWords words that look like a script but name something else, such as a gate. The
  *   registry supplies them, so this module does not have to import it back and create a cycle.
  */
 export const documentation = (
-  context: Context,
+  repository: Repo,
   reservedWords: ReadonlySet<string> = new Set<string>(),
 ): GateResult => {
-  const scriptNames: ReadonlySet<string> = new Set(Object.keys(declaredScripts(context)))
-  const isExistingFile = (relativePath: string): boolean =>
-    existsSync(path.join(context.root, relativePath))
-  const present: readonly string[] = DOC_FILES.filter((documentFile: string): boolean =>
-    existsSync(path.join(context.root, documentFile)),
+  const existsAt = (relativePath: string): boolean =>
+    existsSync(path.join(repository.root, relativePath))
+  const documents: readonly DocumentLocation[] = findAgentDocuments(
+    repository.members.map((member: Member): string => member.path),
+    existsAt,
   )
-  const findings: readonly string[] = present.flatMap((documentFile: string): readonly string[] =>
-    findDocumentReferenceViolations({
-      markdown: readFileSync(path.join(context.root, documentFile), 'utf8'),
-      scriptNames,
-      isExistingFile,
-      reservedWords,
-    }).map(
-      (violation: DocumentViolation): string =>
-        `${documentFile}: ${violation.reference} (${violation.kind}) ${violation.reason}`,
-    ),
+  const findings: readonly string[] = documents.flatMap(
+    (document: DocumentLocation): readonly string[] =>
+      findDocumentReferenceViolations({
+        markdown: readFileSync(path.join(repository.root, document.file), 'utf8'),
+        scriptNames: scriptNamesFor(repository, document.directory),
+        // A path is tried inside the owning member first, then at the repository root, for the same
+        // reason the script names are unioned.
+        isExistingFile: (relativePath: string): boolean =>
+          existsAt(path.join(document.directory, relativePath)) || existsAt(relativePath),
+        reservedWords,
+      }).map(
+        (violation: DocumentViolation): string =>
+          `${document.file}: ${violation.reference} (${violation.kind}) ${violation.reason}`,
+      ),
   )
-  const scanned: number = present.length
   return findings.length > 0
     ? failed(`${String(findings.length)} stale reference(s) in the agent docs`, findings)
-    : passed(`references in ${String(scanned)} agent doc(s) resolve`)
+    : passed(`references in ${String(documents.length)} agent doc(s) resolve`)
 }
 
 // Both the ploaness-owned configs and any the project still holds are scanned. A carve-out in the

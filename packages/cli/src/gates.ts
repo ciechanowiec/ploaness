@@ -42,7 +42,7 @@ import {
 } from './checks/toolchain.js'
 import { treeSnapshot, treeVerify } from './checks/tree.js'
 import { wiring } from './checks/wiring.js'
-import type { Context, Member, Repository as Repo } from './context.js'
+import type { Member, Repository as Repo } from './context.js'
 import type { GateResult } from './exec.js'
 
 /** What every gate declares, whatever it judges. */
@@ -240,8 +240,8 @@ const DEFAULT_GATES: readonly Gate[] = [
     // The gate identifiers are supplied as reserved words: documenting a gate must not be read as a
     // reference to a script that no longer exists, since the two share a vocabulary. ALL_GATES is read
     // when the gate runs, by which point this module has finished initialising.
-    run: (context: Context): GateResult =>
-      documentation(context, new Set(ALL_GATES.map((gate: Gate): string => gate.id))),
+    run: (repository: Repo): GateResult =>
+      documentation(repository, new Set(ALL_GATES.map((gate: Gate): string => gate.id))),
   },
   {
     id: 'skills',
