@@ -88,3 +88,24 @@ export const findDenialViolations = (
     )
   return [...missing, ...rePermitted]
 }
+
+/**
+ * The generated paths a repository denies, across every member that has any.
+ *
+ * The runtime reads one settings file, at the repository root, while the artefacts are named relative
+ * to the member that generates them. A rule written for one member would therefore bind nothing in a
+ * workspace. For a single member at the root the union is the artefact list unchanged, which is what
+ * keeps a single-package project's settings file byte-identical.
+ * @param memberPaths the repo-relative paths of the members that own generated artefacts.
+ * @param artefacts the member-relative paths a generator owns.
+ * @returns every repo-relative path the runtime must deny, in member order.
+ */
+export const deniedPathsFor = (
+  memberPaths: readonly string[],
+  artefacts: readonly string[],
+): readonly string[] =>
+  memberPaths.flatMap((memberPath: string): readonly string[] =>
+    artefacts.map((artefact: string): string =>
+      memberPath === '.' ? artefact : `${memberPath}/${artefact}`,
+    ),
+  )

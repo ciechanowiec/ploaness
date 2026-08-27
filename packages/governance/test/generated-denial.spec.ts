@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyDenyRules,
+  deniedPathsFor,
   findDenialViolations,
   GENERATED_ARTEFACTS,
   requiredDenyRules,
@@ -102,5 +103,32 @@ describe('applyDenyRules', () => {
       'deny'
     ] as readonly string[]
     expect(deny).toContain('Write(secrets.env)')
+  })
+})
+
+describe('deniedPathsFor', () => {
+  const Artefacts: readonly string[] = ['src/payload-types.ts', 'src/schema.ts']
+
+  it('leaves a single member at the root naming the artefacts unchanged', () => {
+    // The property that keeps a single-package project's runtime settings byte-identical.
+    expect(deniedPathsFor(['.'], Artefacts)).toEqual(Artefacts)
+  })
+
+  it('prefixes each artefact with the member that generates it', () => {
+    expect(deniedPathsFor(['apps/web'], Artefacts)).toEqual([
+      'apps/web/src/payload-types.ts',
+      'apps/web/src/schema.ts',
+    ])
+  })
+
+  it('covers every member that has generated files', () => {
+    expect(deniedPathsFor(['apps/web', 'apps/admin'], ['src/x.ts'])).toEqual([
+      'apps/web/src/x.ts',
+      'apps/admin/src/x.ts',
+    ])
+  })
+
+  it('denies nothing when no member generates anything', () => {
+    expect(deniedPathsFor([], Artefacts)).toEqual([])
   })
 })

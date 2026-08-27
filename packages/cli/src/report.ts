@@ -191,12 +191,19 @@ export const reportOutput = (outcome: GateOutcome): void => {
 }
 
 /** Print the one-line verdict for a gate that has just finished, and its findings when it did not pass. */
+// The member a gate was asked about, shown only when the answer could have been about another one. A
+// repository with a single member has nothing to disambiguate, so its log is the one that always
+// shipped - and the `[PASS] <id>` token the integration suite greps for is never touched either way.
+const memberSuffix = (outcome: GateOutcome): string =>
+  outcome.member === undefined || outcome.member === '.' ? '' : ` (${outcome.member})`
+
 export const reportGate = (outcome: GateOutcome, width: number): void => {
   const verdict: string = verdictOf(outcome.result)
   const identifier: string = outcome.gate.id.padEnd(width)
   const marker: string = IS_RICH ? (SYMBOLS[verdict] ?? '?') : `[${verdict}]`
-  const plain: string = `  ${marker} ${identifier}  ${outcome.result.summary}`
-  const decorated: string = `  ${paint(marker, COLOURS[verdict] ?? RESET)} ${identifier}  ${outcome.result.summary}`
+  const summary: string = `${outcome.result.summary}${memberSuffix(outcome)}`
+  const plain: string = `  ${marker} ${identifier}  ${summary}`
+  const decorated: string = `  ${paint(marker, COLOURS[verdict] ?? RESET)} ${identifier}  ${summary}`
   if (IS_INTERACTIVE) {
     write(CLEAR_LINE)
   }

@@ -4,12 +4,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   applyDenyRules,
+  deniedPathsFor,
   findDenialViolations,
   GENERATED_ARTEFACTS,
   type ParsedJson,
   parseJsonc,
 } from '@ploaness/governance'
-import type { Context } from '../context.js'
+import type { Member, Repository } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 // Matches the indent the shipped formatter settings declare.
@@ -40,11 +41,23 @@ const readSettings = (root: string, relative: string): ReadSettings => {
 const readJson = (root: string, relative: string): unknown => readSettings(root, relative).value
 
 /** Check that the agent runtime is denied write access to every generated artefact. */
-export const generatedDenial = (context: Context): GateResult => {
+// The deny list is the union over Payload members of `<member>/<artefact>`. The runtime reads one
+// settings file, at the repository root, while the artefacts are member-relative - so a rule written
+// for one member would bind nothing in a workspace, and a gate per member would have several of them
+// fighting over one file. For a single member at the root the union is the list that always shipped.
+export const deniedArtefacts = (repository: Repository): readonly string[] =>
+  deniedPathsFor(
+    repository.members
+      .filter((member: Member): boolean => member.isPayload)
+      .map((member: Member): string => member.path),
+    GENERATED_ARTEFACTS,
+  )
+
+export const generatedDenial = (context: Repository): GateResult => {
   const findings: readonly string[] = findDenialViolations(
     readJson(context.root, SETTINGS_PATH),
     readJson(context.root, LOCAL_SETTINGS_PATH),
-    GENERATED_ARTEFACTS,
+    deniedArtefacts(context),
   )
   return findings.length > 0
     ? failed(`${String(findings.length)} generated file(s) are writable by an agent`, [
@@ -62,7 +75,7 @@ export const generatedDenial = (context: Context): GateResult => {
  * @param context the resolved project environment.
  * @returns true when the file was created or changed.
  */
-export const hasWrittenDenyRules = (context: Context): boolean => {
+export const hasWrittenDenyRules = (context: Repository): boolean => {
   const full: string = path.join(context.root, SETTINGS_PATH)
   const existing: ReadSettings = readSettings(context.root, SETTINGS_PATH)
   if (existing.isMalformed) {
@@ -71,7 +84,7 @@ export const hasWrittenDenyRules = (context: Context): boolean => {
         'because merging into a file that could not be read would discard everything it holds',
     )
   }
-  const merged: Record<string, unknown> = applyDenyRules(existing.value, GENERATED_ARTEFACTS)
+  const merged: Record<string, unknown> = applyDenyRules(existing.value, deniedArtefacts(context))
   const text: string = `${JSON.stringify(merged, null, JSON_INDENT)}\n`
   if (existsSync(full) && readFileSync(full, 'utf8') === text) {
     return false
