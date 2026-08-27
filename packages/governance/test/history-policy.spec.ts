@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { type CommitShape, findMergeCommits, type HistoryViolation } from '../src/history-policy.js'
+import {
+  type CommitShape,
+  findMergeCommits,
+  type HistoryViolation,
+  isOwnedNamespace,
+  namespacesReachedBy,
+  OWNED_HISTORY_REVISIONS,
+} from '../src/history-policy.js'
 
 const commit = (overrides: Partial<CommitShape> = {}): CommitShape => ({
   sha: 'abcdef1234',
@@ -27,5 +34,41 @@ describe('findMergeCommits', () => {
 
   it('does not flag an ordinary commit that merely mentions merging', () => {
     expect(findMergeCommits([commit({ subject: 'docs: explain the merge policy' })])).toEqual([])
+  })
+})
+
+const namespacesOf = (revisions: readonly string[]): readonly string[] =>
+  revisions.flatMap((revision: string): readonly string[] => namespacesReachedBy(revision))
+
+const unownedNamespacesOf = (revisions: readonly string[]): readonly string[] =>
+  namespacesOf(revisions).filter((namespace: string): boolean => !isOwnedNamespace(namespace))
+
+describe('theRevisionsAHistoryGateWalks', () => {
+  it('reachesNoRefTheRepositoryCannotRewrite', () => {
+    expect(unownedNamespacesOf(OWNED_HISTORY_REVISIONS)).toStrictEqual([])
+  })
+
+  it('stillReachesTheBranchesThatHoldTheWork', () => {
+    expect(namespacesOf(OWNED_HISTORY_REVISIONS)).toContain('refs/heads/')
+  })
+
+  // An argument the table cannot describe reaches nothing, so a revision added to the list without being
+  // described here would satisfy the ownership assertion while walking anything at all.
+  it('reportsNoReachForAnArgumentItCannotDescribe', () => {
+    expect(namespacesReachedBy('--glob=refs/remotes/*')).toStrictEqual([])
+  })
+
+  // Which is what closes that hole: every revision the gates walk has to be one the table describes.
+  it('namesOnlyRevisionsWhoseReachIsDescribed', () => {
+    const undescribed: readonly string[] = OWNED_HISTORY_REVISIONS.filter(
+      (revision: string): boolean => namespacesReachedBy(revision).length === 0,
+    )
+    expect(undescribed).toStrictEqual([])
+  })
+
+  // Guards the premise: were every namespace owned, the assertion above would pass while saying nothing.
+  // `--all` is the spelling this rule exists to reject, so it has to fail the same test.
+  it('wouldRejectTheAllArgumentThatWalkedAServersRefs', () => {
+    expect(unownedNamespacesOf(['--all'])).toContain('refs/remotes/')
   })
 })

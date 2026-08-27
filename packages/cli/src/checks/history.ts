@@ -5,6 +5,7 @@ import {
   findMergeCommits,
   type HistoryViolation,
   isNonTrivial,
+  OWNED_HISTORY_REVISIONS,
   type ParsedMessage,
   parseMessage,
   parseNumstat,
@@ -76,10 +77,10 @@ export const commitMessageProblems = (context: Context, raw: string): readonly s
 // commit, and rewording a merge does not hide it.
 const PARENT_FORMAT: string = '--format=%H %P'
 
-/** The history is linear: a merge commit is prohibited wherever it sits. */
+/** The history is linear: a merge commit is prohibited wherever this repository owns it. */
 export const linearHistory = (context: Context): GateResult => {
   const commits: readonly CommitShape[] = nonEmptyLines(
-    git(context, ['log', '--all', PARENT_FORMAT]),
+    git(context, ['log', ...OWNED_HISTORY_REVISIONS, PARENT_FORMAT]),
   ).map((line: string): CommitShape => {
     const hashes: readonly string[] = line.trim().split(' ')
     return {
