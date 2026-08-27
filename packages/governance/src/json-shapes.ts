@@ -137,4 +137,13 @@ export const readKey = (raw: unknown, key: string): unknown => asRecord(raw)[key
 export const declaredDependencies = (packageJson: unknown): Record<string, string> => ({
   ...asStringRecord(readKey(packageJson, 'dependencies')),
   ...asStringRecord(readKey(packageJson, 'devDependencies')),
+  // Optional dependencies are INSTALLED dependencies whose absence is tolerated, so every rule about a
+  // declared version applies to them: a range still floats, a pin still has to match, and a Payload
+  // package still has to agree with its family. Left out, they were the one block a project could put a
+  // stale version in and have nothing notice - which is where a real consumer's platform-specific image
+  // packages sat, still naming the sharp release the project had just moved off.
+  //
+  // `peerDependencies` are deliberately NOT here. A peer is a requirement on the consumer's tree rather
+  // than a version this package installs, and a range is the correct way to express one.
+  ...asStringRecord(readKey(packageJson, 'optionalDependencies')),
 })

@@ -125,3 +125,30 @@ describe('declaredDependencies', () => {
     expect(declaredDependencies(undefined)).toEqual({})
   })
 })
+
+describe('declaredDependencies and the optional block', () => {
+  it('reads a package declared only as optional', () => {
+    // An optional dependency is an installed one whose absence is tolerated, so every version rule
+    // applies to it. Left out, it was the one block a stale version could sit in unnoticed.
+    expect(
+      declaredDependencies({ optionalDependencies: { '@img/sharp-linux-x64': '0.35.3' } }),
+    ).toEqual({ '@img/sharp-linux-x64': '0.35.3' })
+  })
+
+  it('does not read peer dependencies, which are a requirement rather than an install', () => {
+    expect(declaredDependencies({ peerDependencies: { react: '^19' } })).toEqual({})
+  })
+
+  it('keeps all three installed blocks together', () => {
+    const declared: Record<string, string> = declaredDependencies({
+      dependencies: { payload: '3.88.0' },
+      devDependencies: { vitest: '4.1.11' },
+      optionalDependencies: { sharp: '0.35.3' },
+    })
+    expect(
+      Object.keys(declared).sort((left: string, right: string): number =>
+        left.localeCompare(right),
+      ),
+    ).toEqual(['payload', 'sharp', 'vitest'])
+  })
+})
