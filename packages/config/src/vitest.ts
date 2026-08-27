@@ -44,6 +44,13 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
       'tests/int/**/*.int.spec.ts',
       'tests/int/**/*.int.spec.tsx',
       'tests/unit/**/*.unit.spec.ts',
+      // A component spec had no home. ploaness pins and ships React Testing Library, jest-dom,
+      // user-event and a jsdom environment - a stack that exists for exactly this - while collecting
+      // only `.ts` under unit and anything under int. So a project writing the component tests the
+      // harness equips it for had to mislabel them as integration tests or watch them silently stop
+      // running, which is what a real consumer's suite was doing when this was found.
+      'tests/component/**/*.component.spec.tsx',
+      'tests/component/**/*.component.spec.ts',
     ],
     // Run spec files one at a time. Each top-level test command gets one ephemeral database, but every
     // Payload-booting spec within that command shares it; in parallel, two boots could race to CREATE
