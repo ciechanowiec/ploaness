@@ -1,6 +1,8 @@
 {
   "$comment": "Every compiler setting ploaness owns, with nothing that assumes a framework. The sibling tsconfig.json adds the Next language-service plugin and nothing else, so a member with no Next application inherits the identical strictness rather than a second copy of it that could drift.",
+  "$comment-types": "A member extending this one runs on node and nothing else - ploaness requires node 26 and ESM - so it is told so. Left unset, a tooling member could not compile `import { readFileSync } from 'node:fs'`: automatic @types discovery does not reach the package under pnpm's layout, and a Next member never noticed because next-env.d.ts pulls the node types in behind it. ploaness declares exactly this in every one of its own package tsconfigs and did not ship it.",
   "compilerOptions": {
+    "types": ["node"],
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "allowJs": true,
     "skipLibCheck": true,
