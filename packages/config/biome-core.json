@@ -32,7 +32,6 @@
           }
         },
         "useSimplifiedLogicExpression": "error",
-        "noVoid": "error",
         "useLiteralKeys": "off",
         "noCommaOperator": "error",
         "noThisInStatic": "error"

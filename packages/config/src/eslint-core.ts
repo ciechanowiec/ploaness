@@ -270,6 +270,22 @@ export const guidelineRules: RuleTable = {
   '@typescript-eslint/no-unnecessary-condition': 'error',
   // Defect patterns - bugs the type-checker can prove.
   '@typescript-eslint/no-floating-promises': 'error',
+  // The rule above accepts exactly four spellings of a deliberately-discarded promise, and three of
+  // them are unavailable in the shape that most often needs one: an async function handed to a
+  // SYNCHRONOUS Node callback, which is every `net`/`http` connection listener, `process.on`, and
+  // `setInterval`. `await` is impossible in a synchronous callback; `.catch()` and
+  // `.then(undefined, fn)` are both reported by `unicorn/prefer-await`, which arrives on by preset.
+  // That leaves `void`, which `no-floating-promises` names in its own error text as the marker to
+  // use - and Biome's `noVoid` banned it, so a governed project had NO legal spelling at all.
+  // `ploaness format` drove a project into the wall rather than around it: ESLint's autofix inserts
+  // `void`, and the next Biome pass rejected what it had just written.
+  //
+  // So `noVoid` is gone from `biome-core.json` and the ban is stated here instead, where it can carry
+  // the one exemption that resolves the contradiction. `allowAsStatement` permits `void promise()`
+  // standing alone as a statement - the discard position, and the only one the other rule mandates -
+  // while `void 0` as an EXPRESSION stays banned, which is the obfuscation both tools were aimed at.
+  // A whole rule was not turned off; a rule was narrowed to what it meant, in the tool that can say so.
+  'no-void': ['error', { allowAsStatement: true }],
   '@typescript-eslint/no-misused-promises': 'error',
   '@typescript-eslint/default-param-last': 'error',
   '@typescript-eslint/require-array-sort-compare': ['error', { ignoreStringArrays: true }],
