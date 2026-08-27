@@ -28,7 +28,8 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { PROJECT_SETUP_FILE, requiredBiomeFiles } from '@ploaness/governance'
-import { ESLint, type Linter } from 'eslint'
+import { ESLint, Linter } from 'eslint'
+import functionalPlugin from 'eslint-plugin-functional'
 import { describe, expect, it } from 'vitest'
 import payloadConfig from '../dist/eslint.js'
 // The build output, not the source, for the reason `vitest-config.spec.ts` states.
@@ -43,6 +44,8 @@ const PROCESS_EXIT_RULE: string = 'unicorn/no-process-exit'
 const NO_LET_RULE: string = 'functional/no-let'
 const VERDICT: string = 'process.exitCode'
 const ENVIRONMENT: string = 'process.env.*'
+const RUNTIME_GLOBALS: string = 'globalThis'
+const GLOBAL_ASSIGNMENT_RULE: string = 'unicorn/no-global-object-property-assignment'
 
 const SOURCE_FILE: string = 'src/lib/example.ts'
 const SPEC_FILE: string = 'tests/unit/example.spec.ts'
@@ -125,24 +128,60 @@ const carriesAccessor = (
     accessors.includes(accessor),
   )
 
+/**
+ * Whether one rule is declared at ordinary source, keyed by config so a failure names which one drifted.
+ *
+ * Two carve-outs below are each load-bearing only while a DIFFERENT rule stays on, and asking that
+ * question twice by hand is what put this file over the function-length cap - the cap noticing a
+ * duplication rather than a long test.
+ */
+const declaredInEveryConfig = async (rule: string): Promise<Readonly<Record<string, boolean>>> =>
+  Object.fromEntries(
+    await Promise.all(
+      Object.entries(shippedConfigs).map(
+        async ([name, config]: [string, readonly Linter.Config[]]): Promise<
+          readonly [string, boolean]
+        > => {
+          const rules: Readonly<Record<string, unknown>> = await resolveRules(config, SOURCE_FILE)
+          return [name, rules[rule] !== undefined]
+        },
+      ),
+    ),
+  )
+
+/**
+ * What one snippet reports at one path under the SHIPPED setting for this rule, keyed by config.
+ *
+ * Read back out of the config rather than written here, so it asserts what a consumer's own file is told
+ * rather than that a literal in this file equals itself.
+ */
+const findingsAt = async (
+  code: string,
+  filePath: string,
+): Promise<Readonly<Record<string, readonly string[]>>> =>
+  Object.fromEntries(
+    await Promise.all(
+      Object.entries(shippedConfigs).map(
+        async ([name, config]: [string, readonly Linter.Config[]]): Promise<
+          readonly [string, readonly string[]]
+        > => {
+          const rules: Readonly<Record<string, unknown>> = await resolveRules(config, filePath)
+          const messages: readonly Linter.LintMessage[] = new Linter().verify(code, {
+            plugins: { functional: functionalPlugin },
+            rules: { [RULE]: rules[RULE] as Linter.RuleEntry },
+          })
+          return [name, messages.map((message: Linter.LintMessage): string => message.ruleId ?? '')]
+        },
+      ),
+    ),
+  )
+
 describe("a program's verdict, which is not data it owns", () => {
   // The carve-out is load-bearing only while the OTHER spelling stays banned. If this rule were ever
   // turned off, `process.exit()` would be legal again and the exemption below would be a convenience
   // rather than the single door it is meant to be.
   it('is the only door left open, because the other spelling of an exit stays banned', async () => {
-    const banned: Readonly<Record<string, boolean>> = Object.fromEntries(
-      await Promise.all(
-        Object.entries(shippedConfigs).map(
-          async ([name, config]: [string, readonly Linter.Config[]]): Promise<
-            readonly [string, boolean]
-          > => {
-            const rules: Readonly<Record<string, unknown>> = await resolveRules(config, SOURCE_FILE)
-            return [name, rules[PROCESS_EXIT_RULE] !== undefined]
-          },
-        ),
-      ),
-    )
-    expect(banned).toStrictEqual(everyConfig(true))
+    expect(await declaredInEveryConfig(PROCESS_EXIT_RULE)).toStrictEqual(everyConfig(true))
   })
 
   it('admits a program its verdict, in every config and in ordinary source', async () => {
@@ -159,7 +198,7 @@ describe('the environment, and the two roles that may set it', () => {
   // it. Stated by hand there, `process.exitCode` would silently stop being exempt in that one file.
   it('adds the environment WITHOUT dropping what the base block stated, at both paths', async () => {
     expect(await accessorsAt(PROJECT_SETUP_FILE)).toStrictEqual(
-      inEveryConfig([ENVIRONMENT, VERDICT]),
+      inEveryConfig([RUNTIME_GLOBALS, ENVIRONMENT, VERDICT]),
     )
     expect(await accessorsAt(SPEC_FILE)).toStrictEqual(inEveryConfig([ENVIRONMENT, VERDICT]))
   })
@@ -210,5 +249,55 @@ describe('the environment, and the two roles that may set it', () => {
   it('names the same setup file the required Biome block does', () => {
     const includes: unknown = requiredBiomeFiles(['src'])['includes']
     expect(Array.isArray(includes) ? includes : []).toContain(PROJECT_SETUP_FILE)
+  })
+})
+
+// The third role that file holds, and the narrowest. The two above are about the process; this one is
+// about the RUNTIME the process is running the suite in.
+//
+// ploaness mandates jsdom for `tests/component/**` and jsdom implements no `matchMedia`, no
+// `ResizeObserver`, no `IntersectionObserver`. Supplying one was reported by every route: `vi.stubGlobal`
+// by the mock ban, `test.environmentOptions` by the Vitest config having to be a bare re-export, and both
+// spellings of an assignment by `functional/immutable-data`. A harness that REQUIRES an environment and
+// then reports the only means of completing it is the shape this repository fixes by narrowing.
+describe('the test runtime, and the one place it may be completed', () => {
+  // The carve-out is load-bearing only while the sloppy spelling stays banned - the same property the two
+  // describes above assert of `process.exit()`. This rule bans `globalThis.x = fn` and names
+  // `Object.defineProperty` as its fix, so with it off the exemption would be a convenience.
+  it('is the only door left open, because assigning onto the global stays banned', async () => {
+    expect(await declaredInEveryConfig(GLOBAL_ASSIGNMENT_RULE)).toStrictEqual(everyConfig(true))
+  })
+
+  // Narrower than the environment carve-out beside it, deliberately. A spec MAY vary the environment,
+  // because a branch taken only when a variable is set cannot otherwise be reached; it may not swap a
+  // global, because a global installed for one case and not restored is visible to every case after it -
+  // which is the leak `vi.stubGlobal` is banned for. An API the runtime simply lacks is a fact about the
+  // run, so once per run is the granularity, and `vitest.setup.ts` is where a run is configured.
+  it('admits completing the runtime in the setup file, and at no other path', async () => {
+    const paths: readonly string[] = [SOURCE_FILE, SPEC_FILE, PROJECT_SETUP_FILE]
+    const found: readonly (readonly string[])[] = await Promise.all(
+      paths.map(async (filePath: string): Promise<readonly string[]> => {
+        const byConfig: Readonly<Record<string, readonly string[]>> = await accessorsAt(filePath)
+        return carriesAccessor(byConfig, RUNTIME_GLOBALS) ? [filePath] : []
+      }),
+    )
+    expect(found.flat()).toStrictEqual([PROJECT_SETUP_FILE])
+  })
+
+  // Why the pattern carries no trailing `.*`, asserted rather than described. An accessor pattern matches
+  // the path being written: `Object.defineProperty(globalThis, ...)` writes to the bare argument, so
+  // `globalThis` admits it, while `globalThis.matchMedia = fn` writes to `globalThis.matchMedia`, which
+  // `globalThis` does not match - and stays reported, by this rule as well as by the one above.
+  //
+  // Read back out of the shipped config and handed to the linter, so it asserts what a consumer's setup
+  // file is actually told rather than what this package's source happens to spell. Only the assignment
+  // half is checkable here: the `defineProperty` half of the rule asks the type-checker, which a bare
+  // `Linter` has no program for, and the settings assertion above is what guards that half from drift.
+  it('leaves an assignment onto a global reported, which is what the missing `.*` buys', async () => {
+    const findings: Readonly<Record<string, readonly string[]>> = await findingsAt(
+      'globalThis.matchMedia = fn',
+      PROJECT_SETUP_FILE,
+    )
+    expect(findings).toStrictEqual(everyConfig([RULE]))
   })
 })

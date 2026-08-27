@@ -748,6 +748,25 @@ const PROCESS_VERDICT: string = 'process.exitCode'
 // reports the only remaining door is aimed at the wrong thing.
 const PROCESS_ENVIRONMENT: string = 'process.env.*'
 
+// The global object, exempt in the setup file alone, so a project can supply an API its test runtime
+// does not implement.
+//
+// ploaness MANDATES jsdom for `tests/component/**` - the suite table in `vitest.ts` is not a project's
+// to change - and jsdom implements no `matchMedia`, no `ResizeObserver`, no `IntersectionObserver`. A
+// component that reads one cannot be rendered until something supplies it, and every way of supplying
+// it was closed: `vi.stubGlobal` by `NO_MOCK_PROPERTIES`, `test.environmentOptions` by the Vitest
+// config having to be a bare re-export, and both spellings of an assignment by the rules below. The
+// harness required an environment and then reported the only means of completing it.
+//
+// Written WITHOUT a trailing `.*`, which is the whole of the precision here rather than an oversight.
+// An accessor pattern matches the path being written, and for `Object.defineProperty(globalThis, ...)`
+// that path is the bare argument - so `globalThis` admits the call, while `globalThis.matchMedia = fn`
+// keeps the path `globalThis.matchMedia`, matches nothing, and stays reported. That leaves exactly one
+// legal spelling, and it is the one `unicorn/no-global-object-property-assignment` already demands: the
+// two rules were pointing at each other, one banning the assignment and naming `defineProperty` as its
+// fix, the other banning `defineProperty`. Same shape as the `void` marker, resolved the same way.
+const RUNTIME_GLOBALS: string = 'globalThis'
+
 // One constructor rather than an option object written at each site. A block that sets this rule REPLACES
 // its options rather than adding to them, so the setup file's block has to restate the base carve-out to
 // keep it - and restating it by hand is exactly how it would be dropped.
@@ -789,7 +808,7 @@ export const processConfigBlock = (): FlatConfigBlock => ({
   // rules naming it, which is the same reason `eslint-library.ts` mounts the Vitest plugin where it does.
   plugins: { functional },
   rules: {
-    'functional/immutable-data': immutableData([PROCESS_ENVIRONMENT]),
+    'functional/immutable-data': immutableData([PROCESS_ENVIRONMENT, RUNTIME_GLOBALS]),
   },
 })
 
