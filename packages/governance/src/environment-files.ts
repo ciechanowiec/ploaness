@@ -55,3 +55,40 @@ export const portOf = (serverUrl: string): string | undefined => {
     return undefined
   }
 }
+
+/**
+ * The variables a run must be GIVEN, as distinct from the ones it inherits.
+ *
+ * `process.loadEnvFile` is the answer where the process reading the files is the process that boots the
+ * project. A gate is not: it starts a CHILD, and mutating the gate's own environment to configure that
+ * child would take the project's settings into the harness for every gate after it. So the same
+ * precedence has to be rebuilt as an override map - and it is the REVERSE of what spawning does by
+ * default, where an override beats the inherited value. Here a file must LOSE to a variable the run
+ * already carries, for the reason stated above: that variable was there before any file was read.
+ *
+ * Returning only the names the run lacks is what makes that safe to hand to a plain merge. The
+ * alternative, merging the files under `process.env`, silently reinstates any name the parent happens
+ * to carry as empty rather than absent.
+ * @param current the environment the run already has, typically `process.env`.
+ * @param parsedFiles the parsed files, in the order {@link runEnvironmentFiles} returned them.
+ * @returns the names the run does not carry, each with the value of the FIRST file to declare it.
+ */
+export const runEnvironmentOverrides = (
+  current: Readonly<Record<string, string | undefined>>,
+  parsedFiles: readonly Readonly<Record<string, string | undefined>>[],
+): Readonly<Record<string, string>> =>
+  Object.fromEntries(
+    parsedFiles
+      .flatMap(
+        (
+          file: Readonly<Record<string, string | undefined>>,
+        ): readonly [string, string | undefined][] => Object.entries(file),
+      )
+      .filter(
+        (entry: readonly [string, string | undefined]): entry is [string, string] =>
+          entry[1] !== undefined && current[entry[0]] === undefined,
+      )
+      // Among the files the earliest wins, and `Object.fromEntries` gives the LAST entry for a repeated
+      // name, so the list is reversed rather than de-duplicated by hand.
+      .toReversed(),
+  )

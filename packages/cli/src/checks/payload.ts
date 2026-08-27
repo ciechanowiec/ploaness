@@ -5,16 +5,17 @@ import path from 'node:path'
 import {
   findPayloadViolations,
   findSourceViolations,
-  GENERATED_ARTEFACTS,
   type PayloadViolation,
 } from '@ploaness/governance'
-import { type Context, git, type Member, resolveProjectTool, trackedFiles } from '../context.js'
+import {
+  type Context,
+  git,
+  type Member,
+  resolveProjectTool,
+  runEnvironment,
+  trackedFiles,
+} from '../context.js'
 import { asFindings, failed, type GateResult, passed, type RunResult, runNode } from '../exec.js'
-
-// Declared once in governance, so the regeneration gate and the write-denial gate cannot disagree
-// about which artefacts are generated. They did: the schema file was denied by neither and diffed by
-// neither, so a hand edit to it passed.
-const GENERATED_PATHS: readonly string[] = GENERATED_ARTEFACTS
 
 // Resolution failure is an answer rather than an exception the caller must catch.
 const resolveProjectToolOrUndefined = (context: Context, tool: string): string | undefined => {
@@ -36,22 +37,32 @@ export const payloadGenerated = (context: Context): GateResult => {
   for (const target of ['generate:types', 'generate:importmap']) {
     const result: RunResult = runNode(payloadCli, [target], {
       cwd: context.root,
-      env: { NODE_OPTIONS: '--no-deprecation' },
+      // The project's own environment first, then the one option ploaness owns - so a `.env` cannot
+      // silence the deprecation flag, and every other variable the configuration reads is present.
+      env: { ...runEnvironment(context), NODE_OPTIONS: '--no-deprecation' },
     })
     if (result.code !== 0) {
       return failed(`payload ${target} failed`, asFindings(result.output))
     }
   }
-  const drifted: readonly string[] = GENERATED_PATHS.filter((target: string): boolean => {
-    if (!existsSync(path.join(context.root, target))) {
-      return false
-    }
-    try {
-      return git(context, ['diff', '--name-only', '--', target]).length > 0
-    } catch {
-      return false
-    }
-  })
+  // The SETTING rather than the constant behind it. Every other consumer of the artefact list already
+  // read the setting - the write denials, the biome carve-outs, the scaffolder - and this one did not,
+  // so a project that declared where its import map actually lives had that file denied, excluded, and
+  // regenerated, but never diffed. The gate then reported that the artefacts matched a configuration it
+  // had not compared them against, and the drift it had just written surfaced two gates later as an
+  // unexplained working-tree change.
+  const drifted: readonly string[] = context.settings.generatedArtefacts.filter(
+    (target: string): boolean => {
+      if (!existsSync(path.join(context.root, target))) {
+        return false
+      }
+      try {
+        return git(context, ['diff', '--name-only', '--', target]).length > 0
+      } catch {
+        return false
+      }
+    },
+  )
   return drifted.length > 0
     ? failed('generated Payload artefacts drifted from the configuration', [
         ...drifted.map((target: string): string => `${target} changed when regenerated`),

@@ -4,6 +4,7 @@ import { type Dirent, existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseEnv } from 'node:util'
 import {
   asRecord,
   asStringRecord,
@@ -21,6 +22,8 @@ import {
   readSettings,
   readWorkspacePackages,
   rebaseExclusion,
+  runEnvironmentFiles,
+  runEnvironmentOverrides,
   type Settings,
   selectProjects,
 } from '@ploaness/governance'
@@ -469,3 +472,30 @@ export const memberAt = (repository: Repository, cwd: string): Member | undefine
     })
   )
 }
+
+/**
+ * The environment variables a gate must hand a child process that BOOTS the project.
+ *
+ * A Payload configuration validates `process.env` at module scope, so a tool that evaluates it needs
+ * the project's own environment before it can run at all - and the Payload CLI, unlike Next, reads no
+ * `.env` itself. The other three gates that boot the project were each covered by something that does:
+ * `next build` reads them, and the runners ploaness ships load them from `vitest-setup.ts` and
+ * `playwright.ts`. The generator was the one path with nothing on it, so it evaluated the
+ * configuration with those variables absent and produced the artefacts of a project that does not
+ * exist.
+ *
+ * Parsing is `node:util`'s, which is the parser `process.loadEnvFile` uses, so a file read here and the
+ * same file read by the runners cannot be read two different ways.
+ * @param context the member whose environment files are read.
+ * @returns the variables to add, already narrowed to those the run does not carry.
+ */
+export const runEnvironment = (context: Context): Readonly<Record<string, string>> =>
+  runEnvironmentOverrides(
+    process.env,
+    runEnvironmentFiles((relativePath: string): boolean =>
+      existsSync(path.join(context.root, relativePath)),
+    ).map(
+      (file: string): Readonly<Record<string, string | undefined>> =>
+        parseEnv(readFileSync(path.join(context.root, file), 'utf8')),
+    ),
+  )
