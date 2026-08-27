@@ -285,3 +285,40 @@ export const findServerUrlCollisions = (origins: readonly MemberOrigin[]): reado
  */
 export const analysisBoundaries = (siblingPaths: readonly string[]): readonly string[] =>
   siblingPaths.map((sibling: string): string => `${sibling}/**`)
+
+/** Whether an ESLint run applies its fixable rules or reports what it finds. */
+export type EslintRunMode = 'fix' | 'report'
+
+/**
+ * The arguments an ESLint run takes, whether it is judging a member or writing to one.
+ *
+ * The boundary has to ride on the command line rather than sit in a configuration file, because ESLint
+ * resolves its ignores from the working directory: a run started at a workspace root renders the ROOT's
+ * settings over a member's files, so the framework glue and generated artefacts that member declares are
+ * simply absent from what that run sees. `analysisBoundaries` states where to stop; this states that
+ * both runs are told.
+ *
+ * They were not. The gate carried the boundary and `ploaness format` did not, which is the worse of the
+ * two halves to get wrong: a judge reaching too far reports a finding somebody argues with, while a
+ * WRITER reaching too far edits files no gate will ever look at. A root-started format rewrote a Payload
+ * member's generated import map - stripping the `@type` annotation and rewriting an import - and every
+ * gate in the repository stayed green, because each member's own run correctly excludes that file.
+ *
+ * The mode flag is the only legitimate difference. `--max-warnings=0` is a verdict, which a run that
+ * writes does not render; `ploaness format` deliberately succeeds while findings remain, since the
+ * unfixable ones are for `ploaness verify` to report.
+ * @param siblingPaths the other members' paths, relative to this member's directory.
+ * @param mode whether this run writes fixes or renders a verdict.
+ * @returns the full argument list, the target first.
+ */
+export const eslintArguments = (
+  siblingPaths: readonly string[],
+  mode: EslintRunMode,
+): readonly string[] => [
+  '.',
+  mode === 'fix' ? '--fix' : '--max-warnings=0',
+  ...analysisBoundaries(siblingPaths).flatMap((pattern: string): readonly string[] => [
+    '--ignore-pattern',
+    pattern,
+  ]),
+]

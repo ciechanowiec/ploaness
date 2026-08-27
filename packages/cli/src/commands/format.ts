@@ -1,9 +1,9 @@
 // Formatting. It writes; it never judges. Review what it
 // changed before committing, because a formatter that runs unattended is how unreviewed edits enter a
 // repository.
-import { biomeWrite } from '../checks/toolchain.js'
-import { type Member, type Repository, resolveTool } from '../context.js'
-import { type RunResult, runNode } from '../exec.js'
+import { biomeWrite, eslintWrite } from '../checks/toolchain.js'
+import type { Member, Repository } from '../context.js'
+import type { RunResult } from '../exec.js'
 
 // Each member is formatted against its own configuration. Both tools resolve a relative glob against
 // the config that declares it, so running once at the repository root would format one member's files
@@ -12,11 +12,15 @@ const formatMember = (member: Member, isSolo: boolean): number => {
   if (!isSolo) {
     console.info(`\n${member.path}`)
   }
-  // The invocation lives beside the gate that judges what this writes, so the two cannot disagree
-  // about which files Biome touches. This function once carried its own copy of it.
+  // Each invocation lives beside the gate that judges what it writes, so the two cannot disagree about
+  // which files the tool touches. Both functions once carried their own copy of it, and the ESLint half
+  // stayed that way a tool longer: it was told `.` and nothing else, so a run started at a workspace
+  // root descended into every member and applied the ROOT's rules to files that member excludes. It
+  // rewrote a generated import map, and no gate could report it - each member's own run correctly
+  // ignores that file, which is exactly why the writer had to be told where to stop.
   const biome: RunResult = biomeWrite(member)
   console.info(biome.output)
-  const eslint: RunResult = runNode(resolveTool('eslint'), ['.', '--fix'], { cwd: member.root })
+  const eslint: RunResult = eslintWrite(member)
   if (eslint.output.length > 0) {
     console.info(eslint.output)
   }

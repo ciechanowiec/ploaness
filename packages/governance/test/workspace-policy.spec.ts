@@ -2,6 +2,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   analysisBoundaries,
+  eslintArguments,
   findGovernedMembers,
   findPayloadMemberViolations,
   findRepositoryRoot as findRepoRoot,
@@ -269,5 +270,37 @@ describe('analysisBoundaries', () => {
 
   it('gives a member with no sibling nothing to exclude', () => {
     expect(analysisBoundaries([])).toStrictEqual([])
+  })
+})
+
+// The joint between the gate and the formatter, which is the thing that actually drifted. Each read its
+// own argument list, they agreed about the target and disagreed about the boundary, and the half that
+// was wrong was the half that WRITES - so nothing reported it. Asserted as "the two lists differ by the
+// mode flag and by nothing else" rather than against a literal, because a literal would pass while both
+// call sites were wrong together.
+const withoutMode = (mode: 'fix' | 'report'): readonly string[] =>
+  eslintArguments(['cms', 'fe'], mode).filter(
+    (argument: string): boolean => argument !== '--fix' && argument !== '--max-warnings=0',
+  )
+
+describe('eslintArguments', () => {
+  it('tells a writing run exactly the boundary it tells a judging run', () => {
+    expect(withoutMode('fix')).toStrictEqual(withoutMode('report'))
+  })
+
+  it('stops a run at every sibling, so a root-started one cannot reach into a member', () => {
+    expect(eslintArguments(['cms', 'fe'], 'fix')).toStrictEqual([
+      '.',
+      '--fix',
+      '--ignore-pattern',
+      'cms/**',
+      '--ignore-pattern',
+      'fe/**',
+    ])
+  })
+
+  it('renders a verdict when judging and applies fixes when writing', () => {
+    expect(eslintArguments([], 'report')).toStrictEqual(['.', '--max-warnings=0'])
+    expect(eslintArguments([], 'fix')).toStrictEqual(['.', '--fix'])
   })
 })

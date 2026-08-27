@@ -7,6 +7,7 @@ import path from 'node:path'
 import {
   analysisBoundaries,
   asRecord,
+  eslintArguments,
   type MemberKind,
   memberKindOf,
   pureLogicRule,
@@ -68,32 +69,31 @@ export const biomeSchema = (): GateResult => {
       ])
 }
 
-// `--max-warnings=0` is the backstop behind the severity escalation in `eslint-core.js`. That
-// escalation raises what the current presets declare; this flag fails the build on a warning whatever
-// its source, including a preset added later whose severities nobody re-read.
-// The member boundary `analysisBoundaries` states, reaching ESLint as flags. It is told `.`, everything
-// under the directory it runs in, and a project's config file is required to be a bare re-export, so
-// there was no seam anywhere for a root to say where it ends. What a root-started run reported from
-// inside a member was not that member's verdict: on a real project, 43 findings against files whose own
-// gate reports none - a generated import map the member excludes, and a route layer the member declares
-// as framework glue.
+// Which files the run covers is `eslintArguments`' to decide, so that the writing run below cannot
+// answer it differently. What stays here is why this run renders a verdict at all: `--max-warnings=0` is
+// the backstop behind the severity escalation in `eslint-core.js`. That escalation raises what the
+// current presets declare; the flag fails the build on a warning whatever its source, including a preset
+// added later whose severities nobody re-read.
 /** The type-aware lint layer, which catches what a syntax-only linter cannot. */
 export const eslint = (context: Member): GateResult =>
   fromRun(
-    runNode(
-      resolveTool('eslint'),
-      [
-        '.',
-        '--max-warnings=0',
-        ...analysisBoundaries(context.siblingPaths).flatMap(
-          (pattern: string): readonly string[] => ['--ignore-pattern', pattern],
-        ),
-      ],
-      { cwd: context.root },
-    ),
+    runNode(resolveTool('eslint'), [...eslintArguments(context.siblingPaths, 'report')], {
+      cwd: context.root,
+    }),
     'ESLint reports no defect',
     'ESLint reports at least one defect',
   )
+
+/**
+ * The same run with its fixable rules applied, used by `ploaness format`.
+ *
+ * It lives beside the gate that judges what it writes, for the reason `biomeWrite` does: the two must
+ * not disagree about which files the tool touches, and the arguments they share say so in one place.
+ */
+export const eslintWrite = (context: Member): RunResult =>
+  runNode(resolveTool('eslint'), [...eslintArguments(context.siblingPaths, 'fix')], {
+    cwd: context.root,
+  })
 
 // `--max-warnings=0` because the shipped config asks Stylelint to report a descriptionless, needless, or
 // wrongly scoped disable, and Stylelint reports those at warning severity. A warning severity does not
