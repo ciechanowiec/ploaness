@@ -4,7 +4,13 @@
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { asRecord, type MemberKind, memberKindOf, pureLogicRule } from '@ploaness/governance'
+import {
+  analysisBoundaries,
+  asRecord,
+  type MemberKind,
+  memberKindOf,
+  pureLogicRule,
+} from '@ploaness/governance'
 import { type Context, type Member, readJson, resolveTool, shippedDirectory } from '../context.js'
 import { failed, fromRun, type GateResult, passed, type RunResult, runNode } from '../exec.js'
 
@@ -65,10 +71,26 @@ export const biomeSchema = (): GateResult => {
 // `--max-warnings=0` is the backstop behind the severity escalation in `eslint-core.js`. That
 // escalation raises what the current presets declare; this flag fails the build on a warning whatever
 // its source, including a preset added later whose severities nobody re-read.
+// The member boundary `analysisBoundaries` states, reaching ESLint as flags. It is told `.`, everything
+// under the directory it runs in, and a project's config file is required to be a bare re-export, so
+// there was no seam anywhere for a root to say where it ends. What a root-started run reported from
+// inside a member was not that member's verdict: on a real project, 43 findings against files whose own
+// gate reports none - a generated import map the member excludes, and a route layer the member declares
+// as framework glue.
 /** The type-aware lint layer, which catches what a syntax-only linter cannot. */
-export const eslint = (context: Context): GateResult =>
+export const eslint = (context: Member): GateResult =>
   fromRun(
-    runNode(resolveTool('eslint'), ['.', '--max-warnings=0'], { cwd: context.root }),
+    runNode(
+      resolveTool('eslint'),
+      [
+        '.',
+        '--max-warnings=0',
+        ...analysisBoundaries(context.siblingPaths).flatMap(
+          (pattern: string): readonly string[] => ['--ignore-pattern', pattern],
+        ),
+      ],
+      { cwd: context.root },
+    ),
     'ESLint reports no defect',
     'ESLint reports at least one defect',
   )
@@ -200,13 +222,12 @@ export const typeCoverage = (context: Context): GateResult =>
   )
 
 /** Dead code, unused files, and unused dependencies. */
-// A member's analysis must stop at its own boundary. knip walks everything below the directory it runs
-// in, so at a workspace root that includes the sibling packages - and it then reports each sibling's
-// entry point as an unused file, because from the root's perspective nothing imports it. Each sibling
-// is a separate analysis with its own entries, which is exactly what running the gate per member does.
+// The member boundary `analysisBoundaries` states, reaching knip. It takes the patterns as configuration
+// rather than as a flag, and its own config is a shipped file a project may not edit - so the boundary
+// has to be rendered into a copy for the run rather than passed on the command line as ESLint's is.
 const knipConfig = (context: Member): string => {
-  const siblings: readonly string[] = context.siblingPaths
-  if (siblings.length === 0) {
+  const boundaries: readonly string[] = analysisBoundaries(context.siblingPaths)
+  if (boundaries.length === 0) {
     return configFile('knip.json')
   }
   const shipped: Record<string, unknown> = asRecord(readJson(configFile('knip.json')))
@@ -214,11 +235,7 @@ const knipConfig = (context: Member): string => {
   const rendered: string = path.join(directory, 'knip.json')
   writeFileSync(
     rendered,
-    `${JSON.stringify(
-      { ...shipped, ignore: siblings.map((sibling: string): string => `${sibling}/**`) },
-      null,
-      JSON_INDENT,
-    )}\n`,
+    `${JSON.stringify({ ...shipped, ignore: boundaries }, null, JSON_INDENT)}\n`,
   )
   return rendered
 }

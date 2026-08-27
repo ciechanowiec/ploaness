@@ -43,6 +43,15 @@ const web: Record<string, unknown> = {
   type: 'module',
   dependencies: rootManifest['dependencies'],
   devDependencies: rootManifest['devDependencies'],
+  // Declared here and nowhere above, which is the whole point of it: see the route it exempts below.
+  ploaness: {
+    frameworkGlue: [
+      {
+        pattern: 'src/app/api/**',
+        reason: "the route layer is Next's own mount, whose signatures the framework decides",
+      },
+    ],
+  },
 }
 
 // A library declares the harness - that is what makes it governed - and the test packages its own specs
@@ -81,6 +90,19 @@ for (const moved of MOVED) {
 
 writeJson(at('apps', 'web', 'package.json'), web)
 writeJson(at('packages', 'ui', 'package.json'), ui)
+
+// A file the application's OWN settings exempt and the root's do not. The shipped configurations read
+// their settings from the package.json of the WORKING DIRECTORY, so a member's declarations are
+// invisible to a run started at the root: the block that relaxes the framework glue is rendered from
+// the ROOT's `frameworkGlue`, under which this route is ordinary source owing a return type, a module
+// boundary type, and an `await`. That divergence is what makes the root's eslint assertion load-bearing
+// rather than decorative, and it is the exact shape that reported 43 findings against a member whose
+// own gate reported none.
+mkdirSync(at('apps', 'web', 'src', 'app', 'api', 'health'), { recursive: true })
+writeFileSync(
+  at('apps', 'web', 'src', 'app', 'api', 'health', 'route.ts'),
+  "export const GET = async () => new Response('ok')\n",
+)
 
 // The library needs something to be a library ABOUT, or the suite gate passes it for holding no source
 // and proves less than it looks like it does.

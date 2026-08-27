@@ -658,6 +658,15 @@ new_workspace pass-workspace
 expect pass-workspace preflight PASS
 expect pass-workspace install-scripts PASS
 expect pass-workspace conventions PASS
+# Both halves of one joint. `apps/web` declares a framework-glue exemption covering its route layer, so
+# its own run passes; the root declares none, and the shipped configurations read their settings from the
+# working directory - so a root that walked into the member would judge that route by the ROOT's
+# settings and report three findings the member's own gate does not. ESLint is told `.`, which is
+# everything below the directory it runs in, and a project's config file is required to be a bare
+# re-export, so the boundary is the only place that divergence can be stopped. Asserted against a real
+# tree rather than as a unit test because what is being checked is which files the tool read.
+expect_in pass-workspace apps/web eslint PASS
+expect pass-workspace eslint PASS
 
 # pnpm honours the install allowlist only at the workspace root, so a member cannot carry one - and
 # before the scopes this reported a PASS from inside a member, having read no file at all.

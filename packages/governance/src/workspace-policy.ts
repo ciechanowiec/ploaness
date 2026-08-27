@@ -266,3 +266,22 @@ export const findServerUrlCollisions = (origins: readonly MemberOrigin[]): reado
             'server and sweep the wrong one',
         ]
   })
+
+/**
+ * The patterns that stop an analyzer walking below this member into another member.
+ *
+ * A tool that reads everything under the directory it runs in has no idea where a package ends, and at a
+ * workspace root every sibling sits underneath. knip reported each sibling's entry point as an unused
+ * file that way; ESLint reported findings no member's own gate reports, because a shipped configuration
+ * reads its settings from the working directory - so the framework glue and the generated artefacts a
+ * member declares are absent from the configuration a root-started run renders, whichever config file
+ * that run resolves. Nothing is lost by stopping: each sibling is a separate analysis, under its own
+ * settings and its own entry points, which is what running the gate per member does.
+ *
+ * Shared rather than spelled out at each call site, because a boundary two analyzers disagree about is
+ * one analyzer reaching past it.
+ * @param siblingPaths the other members' paths, relative to this member's directory.
+ * @returns one recursive ignore pattern per sibling.
+ */
+export const analysisBoundaries = (siblingPaths: readonly string[]): readonly string[] =>
+  siblingPaths.map((sibling: string): string => `${sibling}/**`)

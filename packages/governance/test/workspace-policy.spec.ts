@@ -1,5 +1,7 @@
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  analysisBoundaries,
   findGovernedMembers,
   findPayloadMemberViolations,
   findRepositoryRoot as findRepoRoot,
@@ -242,5 +244,30 @@ describe('hasRuntime', () => {
 
   it('gives none of the three to a library', () => {
     expect(hasRuntime('library')).toBe(false)
+  })
+})
+
+// Asserted through the matcher the analyzers use rather than against the literal, because the string is
+// not the promise: what each of them is handed is a glob, and what matters is which files it covers.
+const coversFile = (siblingPaths: readonly string[], file: string): boolean =>
+  analysisBoundaries(siblingPaths).some((pattern: string): boolean =>
+    path.matchesGlob(file, pattern),
+  )
+
+describe('analysisBoundaries', () => {
+  it('stops the analysis at every depth inside a sibling, not at the sibling directory', () => {
+    expect(coversFile(['cms'], 'cms/src/collections/Media.ts')).toBe(true)
+  })
+
+  it('leaves the member its own sources', () => {
+    expect(coversFile(['cms', 'fe'], 'src/index.ts')).toBe(false)
+  })
+
+  it('does not stop at a member whose name merely begins with a sibling name', () => {
+    expect(coversFile(['cms'], 'cms-legacy/src/index.ts')).toBe(false)
+  })
+
+  it('gives a member with no sibling nothing to exclude', () => {
+    expect(analysisBoundaries([])).toStrictEqual([])
   })
 })
