@@ -62,6 +62,7 @@
                 "selector": {
                   "kind": "objectLiteralProperty"
                 },
+                "match": "_*(.+)",
                 "formats": ["camelCase", "CONSTANT_CASE", "PascalCase"]
               }
             ]

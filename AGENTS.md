@@ -219,6 +219,25 @@ Note what the ceiling does NOT count: it measures files whose extension is code,
 why the asset-body check is a script rather than a function, and why the fixture mutations are programs
 in `it/lib/` rather than arguments to `node -e`.
 
+### A field a framework reserved is not a name the project chose
+
+`useNamingConvention` judged `_status` - Payload's own draft/published column, present in every query a
+project writes against a drafts-enabled collection. It cannot be renamed: it is the schema. The same is
+true of `__typename` from GraphQL and `_id` from Mongo. Reporting them asked a project to rename a field
+it does not own, and the only way out was a suppression.
+
+The carve-out is a capture group on the ONE convention rather than a second convention beside it:
+`match` is `_*(.+)`, so the leading underscores are stripped and what remains is held to the same
+formats as every other property. That distinction is not cosmetic - a `match` with no `formats` is a
+REQUIREMENT rather than an exemption, and adding one as a second entry made every property in the
+repository have to start with an underscore. 2478 findings, from a rule meant to admit six.
+
+So `_status` and `__typename` pass because `status` and `typename` are camelCase, while
+`_My_Weird_Name` still fails: the underscore buys nothing on its own, which is what stops it becoming an
+escape hatch. It sits in `biome-core.json` rather than the Payload config because a leading underscore is
+a wire-format convention rather than a Payload one, and one rule both configs share cannot drift from
+itself.
+
 ### Tailwind is a dialect in both CSS gates, not one
 
 `packages/config/stylelint.json` lists the full Tailwind v4 at-rule set deliberately, arguing Tailwind is
