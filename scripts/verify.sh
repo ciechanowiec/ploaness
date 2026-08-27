@@ -113,6 +113,31 @@ step type-coverage "$cli_bin/type-coverage" \
 # nothing but the tree first, then the ones that need a registry or a container. `gates.ts` orders them
 # differently, because it is ordering a Payload project's run rather than this one - and the comment
 # here used to claim it followed that order, which it has not for some time.
+# Whichever repository-scope gates are NOT run above, named with the reason each cannot apply here. A
+# gate absent from both lists is a gate nobody decided about, which is the failure that let `arch` sit
+# unrun while a module cycle grew behind it. `preflight` and `wiring` judge a consumer's installation of
+# the harness; `assets` judges managed files a consumer receives and this repository does not; the tree
+# fingerprint brackets a gate run rather than being one; `generated-denial` is about artefacts only a
+# Payload project generates.
+inapplicable_gates='preflight wiring assets tree-snapshot tree-verify generated-denial'
+
+check_gate_coverage() {
+    missing=''
+    for id in $(node "$ploaness_bin" gates --scope=repository --ids); do
+        case " $(grep -o '^gate [a-z-]*' "$0" | cut -d' ' -f2 | tr '\n' ' ') $inapplicable_gates " in
+            *" $id "*) ;;
+            *) missing="$missing $id" ;;
+        esac
+    done
+    if [ -n "$missing" ]; then
+        echo "repository-scope gate(s) neither run nor declared inapplicable:$missing" >&2
+        echo 'add each to this script, or to inapplicable_gates with the reason it cannot apply' >&2
+        exit 1
+    fi
+    echo 'gate coverage: every repository-scope gate is run here or declared inapplicable'
+}
+check_gate_coverage
+
 gate biome-schema
 gate conventions
 gate tailwind-tokens
@@ -127,6 +152,10 @@ gate vulnerabilities
 gate install-scripts
 gate deps
 gate actions
+# Run rather than declared inapplicable, which is what the guide asks for wherever a gate CAN answer:
+# with no Dockerfile and no compose file it passes over an empty set without starting a container, and
+# the day somebody adds one it is already linted rather than newly unlinted.
+gate docker
 gate secrets
 
 step test pnpm run test

@@ -95,7 +95,7 @@ pnpm exec ploaness init
 [[project-files]]
 === Project Files
 
-. A https://payloadcms.com[Payload CMS^] project keeps five project files of its own in the working tree. Each project file points at the shipped analyzer settings and adds only what the analyzer has to read from the repository root:
+. A https://payloadcms.com[Payload CMS^] project keeps five project files of its own, one set per xref:#members[member]. Each project file points at the shipped analyzer settings and adds only what the analyzer has to read from the directory that declares it:
 +
 [cols="2,5"]
 |===
@@ -118,6 +118,64 @@ pnpm exec ploaness init
 |===
 . Biome and TypeScript resolve a relative glob against the directory of the file that declares it. A glob left inside `node_modules` matches no file in the working tree, which is why the two blocks sit at the repository root. _ploaness_ still owns their text, and the xref:#wiring-gate[`wiring` gate] compares them character for character.
 . A https://payloadcms.com[Payload CMS^] project never names an `@ploaness/...` package. Under the `node_modules` layout that pnpm creates, a https://payloadcms.com[Payload CMS^] project can't resolve a package it doesn't depend on directly, so every entry point it needs is re-exported through `ploaness` itself.
+
+[[workspaces]]
+=== Workspaces
+
+. _ploaness_ governs a repository rather than a directory. A repository holding one package is the case
+where those are the same thing, and it is what most projects are - nothing below changes anything for it.
+. [[members,member]]A _member_ is a package _ploaness_ governs. A package is a member when it declares
+`ploaness` as a dependency, which is not a switch: under pnpm's strict layout a package that does not
+depend on the harness cannot resolve `ploaness/biome` or `ploaness/eslint` from its own configuration
+files, so its wiring could not work whatever it declared. A pnpm project that is neither a member nor
+inside a member's xref:#configuration[`sourceRoots`] is reported by the xref:#wiring-gate[`wiring` gate],
+so removing the declaration to escape the gates is loud rather than silent.
+. Each member has a _kind_, derived from what it declares and never from what it says about itself:
++
+[cols="2,5"]
+|===
+| Kind | What it receives
+
+| Payload application
+| Declares `payload`. Every gate, every managed file, and the Payload-shaped configurations.
+
+| application
+| Declares `next` but not `payload`. Everything except the Payload rules and the access-boundary sweep,
+because a https://nextjs.org[Next.js^] application reading a CMS over HTTP still has a build, a client
+bundle and a browser suite to govern.
+
+| library
+| Declares neither. The framework-neutral configurations - `ploaness/biome-core`,
+`ploaness/tsconfig-core.json`, `ploaness/eslint-library`, `ploaness/vitest-library` - and no browser
+configuration, because it has no application to drive.
+|===
+. Every xref:#gates[gate] judges one of three scopes:
++
+[cols="2,5"]
+|===
+| Scope | What it judges
+
+| repository
+| The tracked tree, the dependency graph, the history, and the xref:#managed-files[managed files] a tool
+reads from the tree root. Runs once. The install-script allowlist and the `overrides` block are read here
+and nowhere else, because that is the only place pnpm honours them.
+
+| package
+| One member's own source, configuration and suite. Runs once per member.
+
+| Payload
+| The rules about https://payloadcms.com[Payload CMS^] itself. Runs only for the members that declare it.
+|===
+. The gate order is unchanged: it is the registry's order, and a repository with one member produces
+exactly the sequence _ploaness_ ran before members existed. A repository with several interleaves them,
+and the run log names the member each gate was asked about.
+. A member declares its own xref:#configuration[configuration] under the `ploaness` key of its own
+package.json, layered onto whatever the repository root declared. A list a project adds to stays
+additive; a threshold is honoured only when it is stricter; a command list or an origin describes one
+package, so the member's answer stands.
+. `ploaness init` writes each member the project files its own kind is judged against, and the three
+xref:#project-scripts[project scripts] once, at the repository root - which is where a run is invoked
+and where it fans out from.
 
 [[commands]]
 == Commands
@@ -403,6 +461,13 @@ that at the config root rather than on the collection.
 | `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `.clinerules`, `.github/copilot-instructions.md`
 | The entry-point file a coding agent other than Claude reads. A xref:#reference-file[reference file] need not exist, and the xref:#sync-command[] never writes one, because which agents a https://payloadcms.com[Payload CMS^] project uses is the project's own decision. One that does exist carries nothing but a pointer at `AGENTS.md`: the rules live in the root instruction file, so no two agents are held to two contracts. The form of the pointer is the tool's own, so the check reads for the name rather than demanding one spelling.
 |===
+. Each managed path also states WHERE it lives, which a repository holding more than one package has to
+say rather than assume. The instruction files and the dotfiles are _repository_ paths: git, an editor and
+a coding agent read them from the tree root, and one contract per repository is the whole point of them.
+The three executable sweeps are _member_ paths, because each interrogates one running application and two
+applications are two sets of answers rather than one shared file - the access-boundary sweep narrower
+still, to the members that serve an `/api/access` to ask. A xref:#forbidden-file[] must not exist in
+either half, because a copy shadows what _ploaness_ supplies wherever it sits.
 . `README-guideline-software-project.adoc` states the rules the https://payloadcms.com[Payload CMS^] project is held to, in a form that names no tool. `.ploaness/agent-guide.md` maps those rules onto _ploaness_. Both are xref:#pinned-file[pinned], so raising the _ploaness_ version updates them in every https://payloadcms.com[Payload CMS^] project at once.
 . `.dockerignore` bounds what a Docker build sends to the daemon, which is decided before the first
 instruction runs. Without it a https://payloadcms.com[Payload CMS^] project sends well over a gigabyte,
@@ -482,6 +547,19 @@ the helper was *called*, so `.ploaness/agent-guide.md` states that as a rule an 
 [cols="3,3,5"]
 |===
 | Key | Default | Use
+
+| `frameworkGlue`
+| the generated Payload mount
+| Paths holding framework-generated scaffolding, which the lint pass relaxes rather than judges. Additive,
+  so a Payload project that declares none is held to exactly what it always was. A
+  https://nextjs.org[Next.js^] application that is not a Payload one declares its own, because its route
+  handlers and layouts have the same property and no path _ploaness_ could guess.
+
+| `pureLogicRoots`
+| `src/access`, `src/lib`
+| The directories forming the pure-logic floor, which may depend on nothing else under a source root.
+  Additive. The layer map is the one genuinely project-shaped part of an architecture contract, and a
+  governed project may not own the analyzer's configuration file to state it.
 
 | `sourceRoots`
 | `src`, `tests`, `scripts`

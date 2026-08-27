@@ -47,10 +47,22 @@ scope, not an oversight, and it must not be worked around by weakening `prefligh
 
 What substitutes for it reimplements no rule. `ploaness gate <id>` builds its context from the working
 directory and never runs `preflight`, so every gate whose rule is about a repository's shape rather than
-about Payload runs here unchanged. `scripts/verify.sh` is that list, and `pnpm run verify` runs it:
+about Payload runs here unchanged.
+
+`preflight` now asks whether the REPOSITORY contains a Payload member rather than whether one directory
+declares Payload, which is the same refusal one level up: a workspace legitimately holds packages that
+are not applications, and refusing each of those would refuse the repository they belong to. ploaness
+still has no Payload member, so it still cannot run `ploaness verify` on itself. That is unchanged and
+deliberate. What did change is that the list below is no longer trusted to be complete on its own: a gate
+declares its scope in the registry, and `scripts/verify.sh` asks `ploaness gates --scope=repository
+--ids` whether it runs every one of them. A gate in neither the run list nor the declared-inapplicable
+list fails the check, which is the failure that let `arch` sit unrun while a cycle grew behind it - and
+it found `docker` missing the first time it ran. The ORDER stays this script's own, because it is
+ordering this repository's run rather than a Payload project's. `scripts/verify.sh` is that list, and
+`pnpm run verify` runs it:
 `biome-schema`, `conventions`, `tailwind-tokens`, `editorconfig`, `suppressions`, `config-refs`,
 `docs`, `skills`, `image-assets`, `licenses`, `vulnerabilities`, `install-scripts`, `deps`, `actions`,
-`secrets`, `require-full-history`, `commit-history`, and `linear-history`, around the build, the type
+`secrets`, `docker`, `require-full-history`, `commit-history`, and `linear-history`, around the build, the type
 check, the lint, and the unit suite. That order is the script's own - the reads that need nothing but the tree
 first, then the ones that need a registry or a container - and is not the order `gates.ts` runs them in,
 which is ordering a Payload project's run rather than this one.
@@ -98,10 +110,31 @@ registry would produce on demand; `packages/cli/src/checks/images.ts` holds the 
 What remains genuinely inapplicable is `preflight`, `wiring`, and `assets`, which judge a consumer's
 installation of ploaness; `payload-generated`, `payload-rules`, and `generated-denial`, which are about
 Payload - the last of those denies write access to the three artefacts `payload generate` owns, and this
-repository has none of them; `css`, `docker`, `bundle`, and `e2e`, for which this repository has no
-stylesheet, Dockerfile, client bundle, or browser. Everything else is on. A gate that ploaness cannot turn on itself is a gate this repository
+repository has none of them; `css`, `bundle`, and `e2e`, for which this repository has no stylesheet,
+client bundle, or browser. `docker` runs: with no container definition it passes over an empty set
+without starting one, and the day somebody adds a Dockerfile it is already linted. Everything else is on. A gate that ploaness cannot turn on itself is a gate this repository
 is not held to, so prefer adding one here over asserting that it cannot apply - `arch` was absent on
 that reasoning, and a module cycle grew in `packages/governance` where nothing was looking.
+
+### Three scopes, and why the run order did not move
+
+A gate judges a repository, a package, or a Payload package. The distinction is not cosmetic: reading a
+repository-level fact from a package's directory is what made `install-scripts` demand a workspace file
+where one cannot exist, and made the overrides check report no violation because it had read no file at
+all - vouching for pins the root had already replaced. The workspace file is a field of the repository
+half now, so a package-scope rule cannot reach it. That is the difference between a bug fixed and a bug
+made unrepresentable, and `wiring-partition.spec.ts` asserts it as a property.
+
+Registry order remains the only ordering rule, and that is a decision rather than an omission. Grouping
+a run by member reads better in a multi-member report and was the first design here; it was dropped
+because it also reorders a SINGLE-member run, which is every consumer that exists today. A project's
+first finding would have changed without one rule changing. Making workspaces work is not a licence to
+renumber the run for projects that have no workspace, so `run-plan.spec.ts` pins the one-member sequence
+against the list that shipped, and `it/project` passes byte-identically with no assertion edited.
+
+A member's kind - Payload, application, library - is derived from what it declares, never declared. A
+package cannot receive a weaker configuration by describing itself differently, and the pins state which
+kinds must declare them, so a shared library is not told to depend on Payload.
 
 A tracked-tree fingerprint brackets the whole run. A verification that rewrote a source file would
 describe a tree nobody committed, so `build` regenerating a stale asset body is reported as a failure to

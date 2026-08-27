@@ -36,10 +36,34 @@ Verbose mode (--verbose) prints what the gate's tool wrote, passing or failing.`
 
 const HELP_COMMANDS: ReadonlySet<string> = new Set<string>(['--help', '-h', 'help'])
 
-const listGates = (): number => {
-  for (const gate of ALL_GATES) {
-    const scope: string = gate.isExtended ? 'extended' : 'default '
-    console.info(`${scope}  ${gate.id.padEnd(GATE_ID_COLUMN)} ${gate.title}`)
+const GATE_SCOPES: ReadonlySet<string> = new Set<string>(['repository', 'package', 'payload'])
+
+// Wide enough for the longest scope name, so the titles beside them line up.
+const GATE_SCOPE_COLUMN: number = 10
+
+// `--scope` and `--ids` exist so a script can ask which gates judge a repository's shape rather than
+// keeping its own copy of the answer. ploaness's own verification runs such a list, in an order it
+// chooses deliberately; what it could not do before was notice a NEW repository-scope gate that nobody
+// had added to it - which is the failure that let `arch` sit unrun while a cycle grew behind it.
+const SCOPE_OPTION: string = '--scope='
+const IDS_OPTION: string = '--ids'
+
+const listGates = (rest: readonly string[]): number => {
+  const requested: string | undefined = rest
+    .find((argument: string): boolean => argument.startsWith(SCOPE_OPTION))
+    ?.slice(SCOPE_OPTION.length)
+  const selected: readonly Gate[] = ALL_GATES.filter(
+    (gate: Gate): boolean => requested === undefined || gate.scope === requested,
+  )
+  for (const gate of selected) {
+    if (rest.includes(IDS_OPTION)) {
+      console.info(gate.id)
+    } else {
+      const mode: string = gate.isExtended ? 'extended' : 'default '
+      console.info(
+        `${mode}  ${gate.id.padEnd(GATE_ID_COLUMN)} ${gate.scope.padEnd(GATE_SCOPE_COLUMN)} ${gate.title}`,
+      )
+    }
   }
   return 0
 }
@@ -72,7 +96,7 @@ const COMMANDS: Readonly<Record<string, CommandRunner>> = {
   format: (repo: Repo): number => format(repo),
   sync: (repo: Repo): number => sync(repo),
   init: (repo: Repo): number => init(repo),
-  gates: (): number => listGates(),
+  gates: (_repository: Repo, rest: readonly string[]): number => listGates(rest),
   gate: async (repo: Repo, rest: readonly string[]): Promise<number> =>
     await runOneGate(repo, rest[0], rest.includes(VERBOSE_OPTION)),
   'commit-message': (repo: Repo, rest: readonly string[]): number =>
@@ -107,7 +131,14 @@ const acceptsArguments: Readonly<Record<string, (rest: readonly string[]) => boo
   format: (rest: readonly string[]): boolean => rest.length === 0,
   sync: (rest: readonly string[]): boolean => rest.length === 0,
   init: (rest: readonly string[]): boolean => rest.length === 0,
-  gates: (rest: readonly string[]): boolean => rest.length === 0,
+  // A scope must name one ploaness knows, so a typo lists nothing rather than silently listing
+  // everything - which for a script asking "have I missed a gate" would answer yes when it should not.
+  gates: (rest: readonly string[]): boolean =>
+    rest.every(
+      (argument: string): boolean =>
+        argument === IDS_OPTION ||
+        (argument.startsWith(SCOPE_OPTION) && GATE_SCOPES.has(argument.slice(SCOPE_OPTION.length))),
+    ),
   gate: (rest: readonly string[]): boolean => {
     const [id, ...options] = rest
     return id !== undefined && !id.startsWith('-') && hasDistinctMembersOf(options, GATE_OPTIONS)
