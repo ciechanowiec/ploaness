@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { findPayloadViolations } from '../src/payload-policy.js'
+import { findPayloadViolations, findSourceViolations } from '../src/payload-policy.js'
+import type { PayloadViolation } from '../src/payload-source.js'
 import { stripComments, topLevelSlice } from '../src/source-text.js'
 
 const rulesOf = (source: string): readonly string[] =>
@@ -98,18 +99,30 @@ describe('no-override-access', () => {
   })
 })
 
+// The import rule is about the language rather than about Payload, so it moved out of the framework set
+// and is asked for through `findSourceViolations`. Every package is held to it now, not only the ones
+// that happen to have Payload in them.
+const sourceRulesOf = (source: string): readonly string[] =>
+  findSourceViolations(source).map((violation: PayloadViolation): string => violation.rule)
+
 describe('no-deep-relative-imports', () => {
   it('flags a parent-relative import', () => {
-    expect(rulesOf("import { thing } from '../lib/thing'")).toEqual(['no-deep-relative-imports'])
+    expect(sourceRulesOf("import { thing } from '../lib/thing'")).toEqual([
+      'no-deep-relative-imports',
+    ])
   })
 
   it('accepts a same-directory import', () => {
-    expect(rulesOf("import { thing } from './thing'")).toEqual([])
+    expect(sourceRulesOf("import { thing } from './thing'")).toEqual([])
   })
 
   it('exempts test helpers and the generated import map', () => {
-    expect(rulesOf("import { seed } from '../helpers/seed'")).toEqual([])
-    expect(rulesOf("import { importMap } from '../importMap'")).toEqual([])
+    expect(sourceRulesOf("import { seed } from '../helpers/seed'")).toEqual([])
+    expect(sourceRulesOf("import { importMap } from '../importMap'")).toEqual([])
+  })
+
+  it('is not part of the framework rule set, which only a Payload package can break', () => {
+    expect(rulesOf("import { thing } from '../lib/thing'")).toEqual([])
   })
 })
 

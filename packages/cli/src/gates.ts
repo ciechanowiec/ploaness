@@ -182,8 +182,10 @@ const DEFAULT_GATES: readonly Gate[] = [
   },
   {
     id: 'payload-rules',
-    scope: 'payload',
-    title: 'Payload usage rules',
+    // Package rather than payload scope: the import rule inside it is about the language, and holding
+    // it here meant it ran only where Payload did.
+    scope: 'package',
+    title: 'source usage rules',
     isExtended: false,
     run: payloadRules,
   },

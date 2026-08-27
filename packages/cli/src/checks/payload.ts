@@ -4,10 +4,11 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   findPayloadViolations,
+  findSourceViolations,
   GENERATED_ARTEFACTS,
   type PayloadViolation,
 } from '@ploaness/governance'
-import { type Context, git, resolveProjectTool, trackedFiles } from '../context.js'
+import { type Context, git, type Member, resolveProjectTool, trackedFiles } from '../context.js'
 import { asFindings, failed, type GateResult, passed, type RunResult, runNode } from '../exec.js'
 
 // Declared once in governance, so the regeneration gate and the write-denial gate cannot disagree
@@ -61,8 +62,17 @@ export const payloadGenerated = (context: Context): GateResult => {
 
 const SOURCE_EXTENSIONS: readonly string[] = ['.ts', '.tsx']
 
-/** Apply the Payload source rules to every tracked TypeScript file under the declared source roots. */
-export const payloadRules = (context: Context): GateResult => {
+// The language rules apply to every package; the Payload ones only to a package that has Payload to
+// misuse. Held together, the import rule ran only where Payload did - so a frontend beside the CMS, the
+// place a parent-relative import is MOST likely because it has no Payload config to anchor on, was the
+// one package never checked for it.
+const violationsIn = (source: string, isPayload: boolean): readonly PayloadViolation[] => [
+  ...findSourceViolations(source),
+  ...(isPayload ? findPayloadViolations(source) : []),
+]
+
+/** Apply the source rules to every tracked TypeScript file under the declared source roots. */
+export const payloadRules = (context: Member): GateResult => {
   const roots: readonly string[] = context.settings.sourceRoots
   const candidates: readonly string[] = trackedFiles(context.root).filter(
     (file: string): boolean =>
@@ -72,12 +82,12 @@ export const payloadRules = (context: Context): GateResult => {
       existsSync(path.join(context.root, file)),
   )
   const findings: readonly string[] = candidates.flatMap((file: string): readonly string[] =>
-    findPayloadViolations(readFileSync(path.join(context.root, file), 'utf8')).map(
+    violationsIn(readFileSync(path.join(context.root, file), 'utf8'), context.isPayload).map(
       (violation: PayloadViolation): string =>
         `${file}:${String(violation.line)} [${violation.rule}] ${violation.reason}`,
     ),
   )
   return findings.length > 0
-    ? failed(`${String(findings.length)} Payload usage violation(s)`, findings)
-    : passed(`${String(candidates.length)} source file(s) use Payload within the rules`)
+    ? failed(`${String(findings.length)} source usage violation(s)`, findings)
+    : passed(`${String(candidates.length)} source file(s) follow the usage rules`)
 }

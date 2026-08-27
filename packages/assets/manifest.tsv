@@ -68,4 +68,6 @@ GEMINI.md	REFERENCE	REPOSITORY
 .dependency-cruiser.json	FORBIDDEN	EVERYWHERE
 knip.json	FORBIDDEN	EVERYWHERE
 .gitleaks.toml	FORBIDDEN	EVERYWHERE
-plugins	FORBIDDEN	EVERYWHERE
+# `plugins` is NOT a forbidden path. What shadows the shipped GritQL rules is the biome.json key that
+# loads them, which the wiring gate owns; the directory name is one a project may legitimately use for
+# something else entirely.

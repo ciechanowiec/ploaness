@@ -141,6 +141,23 @@ const findDeepRelativeImports = (source: string): readonly PayloadViolation[] =>
  * @param source the file contents.
  * @returns one violation per defect, grouped by rule.
  */
+/**
+ * The rules that are about the language rather than about Payload.
+ *
+ * Reaching for a parent-relative import instead of the path alias is a defect in any package. Held
+ * inside the Payload rule set it ran only where Payload did, so a frontend beside the CMS - the place a
+ * deep relative import is most likely, since it has no Payload to anchor on - was never checked.
+ * @param source the file's text.
+ * @returns one violation per offending line.
+ */
+export const findSourceViolations = (source: string): readonly PayloadViolation[] =>
+  findDeepRelativeImports(stripComments(source))
+
+/**
+ * The rules that are about Payload itself, which only a Payload package can break.
+ * @param source the file's text.
+ * @returns one violation per offending line.
+ */
 export const findPayloadViolations = (source: string): readonly PayloadViolation[] => {
   // Every rule reads the code, never the prose around it. A comment that names a banned construct in
   // order to explain why the code avoids it must not be reported as that construct.
@@ -148,7 +165,6 @@ export const findPayloadViolations = (source: string): readonly PayloadViolation
   return [
     ...findUnboundedCalls(code),
     ...findOverrideAccess(code),
-    ...findDeepRelativeImports(code),
     ...findUndeclaredAccess(code),
     ...findUnhardenedAuth(code),
     ...findAnonymousDraftReads(code),

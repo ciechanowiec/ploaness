@@ -233,7 +233,17 @@ const ALLOWED_TSCONFIG_COMPILER_OPTIONS: ReadonlySet<string> = new Set([
 
 // Biome sections ploaness owns outright. A consumer redeclaring one of them replaces the harness rules
 // for that section wholesale, which is a silent downgrade rather than an addition.
-const OWNED_BIOME_SECTIONS: readonly string[] = ['linter', 'formatter', 'javascript', 'assist']
+// `plugins` is here rather than as a forbidden PATH. Forbidding a top-level directory called `plugins`
+// caught the thing it meant to - a project's own GritQL rules shadowing the shipped ones - and also any
+// unrelated directory that happened to share the name. What actually shadows is the key that loads
+// them, and a project declaring it is replacing ploaness's rules for that section like any other.
+const OWNED_BIOME_SECTIONS: readonly string[] = [
+  'linter',
+  'formatter',
+  'javascript',
+  'assist',
+  'plugins',
+]
 
 const checkDependency = (packageJson: Record<string, unknown>): readonly WiringViolation[] =>
   Object.hasOwn(declaredDependencies(packageJson), 'ploaness')
