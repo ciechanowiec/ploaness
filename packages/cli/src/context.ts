@@ -1,6 +1,6 @@
 // Everything a gate needs to know about the project it is judging, resolved once per run.
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { type Dirent, existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -214,6 +214,8 @@ export const trackedFiles = (root: string): readonly string[] =>
     cwd: root,
     encoding: 'utf8',
     maxBuffer: MAX_OUTPUT_BYTES,
+    // A directory that is not a repository is a case the caller handles, not a diagnosis to print.
+    stdio: ['ignore', 'pipe', 'ignore'],
   })
     .split('\0')
     .filter((file: string): boolean => file !== '')
@@ -223,6 +225,9 @@ export const git = (context: Context, commandArguments: readonly string[]): stri
   execFileSync('git', [...commandArguments], {
     cwd: context.root,
     encoding: 'utf8',
+    // git writes its own diagnosis to stderr, which for a directory that is not a repository is not a
+    // finding but noise around one the caller reports itself.
+    stdio: ['ignore', 'pipe', 'ignore'],
     maxBuffer: MAX_OUTPUT_BYTES,
   }).trim()
 
@@ -263,8 +268,39 @@ const manifestDirectories = (root: string): readonly string[] => {
   try {
     return trackedManifestDirectories(root)
   } catch {
-    return [ROOT_MEMBER_PATH]
+    // Not a repository yet. `ploaness init` is run on exactly such a tree - a fresh checkout, or a
+    // workspace being adopted before its first commit - and answering "one project, the root" there
+    // would scaffold the root and silently leave every other package unwired.
+    return walkManifestDirectories(root)
   }
+}
+
+// Bounded and exclusionary on purpose. A full walk of a workspace would descend into every dependency's
+// own dependencies; nothing ploaness governs is nested deeper than a couple of directories, and neither
+// an installed package nor a tool's cache is a project this repository owns.
+const WALK_DEPTH: number = 3
+const isSkipped = (name: string): boolean => name.startsWith('.') || name === 'node_modules'
+
+const walkManifestDirectories = (
+  root: string,
+  relative: string = ROOT_MEMBER_PATH,
+  depth: number = 0,
+): readonly string[] => {
+  const absolute: string = relative === ROOT_MEMBER_PATH ? root : path.join(root, relative)
+  const here: readonly string[] = existsSync(path.join(absolute, MANIFEST)) ? [relative] : []
+  if (depth >= WALK_DEPTH) {
+    return here
+  }
+  const children: readonly string[] = readdirSync(absolute, { withFileTypes: true })
+    .filter((entry: Dirent): boolean => entry.isDirectory() && !isSkipped(entry.name))
+    .flatMap((entry: Dirent): readonly string[] =>
+      walkManifestDirectories(
+        root,
+        relative === ROOT_MEMBER_PATH ? entry.name : path.join(relative, entry.name),
+        depth + 1,
+      ),
+    )
+  return [...here, ...children]
 }
 
 const trackedManifestDirectories = (root: string): readonly string[] =>

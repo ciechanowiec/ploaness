@@ -5,12 +5,13 @@
 import {
   asOptionalText,
   asStringRecord,
-  declaredDependencies,
+  findPayloadMemberViolations,
   findPnpmRuntimeViolations,
+  type MemberShape,
   minimumNodeMajor,
   pinnedPnpmVersion,
 } from '@ploaness/governance'
-import { type Context, readPins } from '../context.js'
+import { type Member, type Repository, readPins } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 // Read from `pins.json`, not written here. The floor was a constant in this file, which made it a rule
@@ -28,20 +29,27 @@ const requiredPnpm = (): string | undefined =>
 
 // The two questions preflight asks about the project itself, separated from the runtime question so
 // neither has to accumulate into a shared list.
-const projectProblems = (context: Context): readonly string[] => {
-  if (context.packageJson === undefined) {
+// Asked of the REPOSITORY rather than of one directory. A workspace legitimately holds packages that
+// are not Payload applications - a shared library, a frontend reading the CMS over HTTP - and refusing
+// each of those individually would refuse the repository they belong to. What ploaness still will not
+// judge is a repository with no Payload in it anywhere, which is the same refusal, one level up.
+const projectProblems = (repository: Repository): readonly string[] => {
+  if (repository.packageJson === undefined) {
     return ['no package.json found; run ploaness from the repository root']
   }
-  return Object.hasOwn(declaredDependencies(context.packageJson), 'payload')
-    ? []
-    : [
-        'this project does not declare "payload"; ploaness governs Payload CMS projects ' +
-          'and will not judge another kind',
-      ]
+  return findPayloadMemberViolations(
+    repository.members.map(
+      (member: Member): MemberShape => ({
+        path: member.path,
+        isPayload: member.isPayload,
+        sourceRoots: member.settings.sourceRoots,
+      }),
+    ),
+  )
 }
 
 /** Verify the project is a Payload application on a supported runtime. */
-export const preflight = (context: Context): GateResult => {
+export const preflight = (context: Repository): GateResult => {
   const projectFindings: readonly string[] = projectProblems(context)
   const nodeMajor: number = Number(process.versions.node.split('.', 1)[0] ?? '0')
   const required: number | undefined = requiredNodeMajor()

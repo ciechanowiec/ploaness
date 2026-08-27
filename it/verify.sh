@@ -122,6 +122,35 @@ expect() {
     echo "ok $name: $gate is $verdict${needle:+ (${needle})}"
 }
 
+# Assert a gate's verdict when it is run from INSIDE a member rather than at the repository root. Both
+# scope defects were only visible from there: at the root the gates read the right files by accident.
+expect_in() {
+    name="$1"
+    member="$2"
+    gate="$3"
+    verdict="$4"
+    needle="${5-}"
+    directory="$scratch/$name/$member"
+    if output="$(cd "$directory" && "$scratch/$name/node_modules/.bin/ploaness" gate "$gate" 2>&1)"; then
+        actual=PASS
+    else
+        actual=FAIL
+    fi
+    if [ "$actual" != "$verdict" ]; then
+        echo "FAILED $name: gate $gate in $member was $actual, expected $verdict" >&2
+        echo "$output" | sed 's/^/    /' >&2
+        failures=$((failures + 1))
+        return
+    fi
+    if [ -n "$needle" ] && ! printf '%s' "$output" | grep -q "$needle"; then
+        echo "FAILED $name: gate $gate in $member was $verdict but never mentioned \"$needle\"" >&2
+        echo "$output" | sed 's/^/    /' >&2
+        failures=$((failures + 1))
+        return
+    fi
+    echo "ok $name: $gate in $member is $verdict${needle:+ (${needle})}"
+}
+
 # Assert an ordinary CLI command's exit status and one piece of its report. Gate assertions use the
 # structured marker above; commands such as `commit-message` and `init` deliberately have no gate marker.
 expect_command() {
@@ -604,6 +633,60 @@ it('reaches a host beyond this machine', async () => {
 })
 REMOTE
 expect_suite fail-guard-blocks-remote FAIL 'no network beyond the machine'
+
+
+# ── Workspace cases ─────────────────────────────────────────────────────────────────────────────────
+#
+# `it/project` proves the single-package path and is untouched by all of this: every assertion above ran
+# against the shape that shipped before members existed. These prove the other path, and two of them
+# fail on the code that preceded the scopes - which is why they are written as fixtures rather than left
+# to unit tests.
+new_workspace() {
+    name="$1"
+    new_case "$name"
+    node "$here/lib/make-workspace.ts" "$scratch/$name"
+    # `init` runs AFTER the reshaping, so the pass case doubles as the regression test that the
+    # scaffolder writes each member the configuration its own kind is judged against.
+    (cd "$scratch/$name" && ./node_modules/.bin/ploaness init >/dev/null)
+    # Member discovery reads the tracked tree, so a workspace case needs a history before any rule about
+    # which packages exist can answer.
+    commit_case "$name" 'feat(fixture): a governed workspace' \
+        'A repository holding an application and a library, both declaring the harness.'
+}
+
+new_workspace pass-workspace
+expect pass-workspace preflight PASS
+expect pass-workspace install-scripts PASS
+expect pass-workspace conventions PASS
+
+# pnpm honours the install allowlist only at the workspace root, so a member cannot carry one - and
+# before the scopes this reported a PASS from inside a member, having read no file at all.
+new_workspace fail-member-install-allowlist
+node "$here/lib/drop-install-allowlist.ts" "$scratch/fail-member-install-allowlist/pnpm-workspace.yaml"
+expect_in fail-member-install-allowlist apps/web install-scripts FAIL 'onlyBuiltDependencies'
+
+# An override at the root replaces a version a MEMBER declared. Read from the member's own directory
+# there was no workspace file to find, so the gate vouched for a pin that never took effect.
+new_workspace fail-member-override
+# Added INTO the existing overrides block rather than appended as a second one: pnpm reads the first
+# block a file declares, so a duplicate key would be a defect the fixture never actually introduced.
+sed -i '' 's/^overrides:$/overrides:\
+  vitest: 3.0.0/' "$scratch/fail-member-override/pnpm-workspace.yaml"
+expect_in fail-member-override apps/web wiring FAIL 'redefines a version ploaness pins'
+
+# A library is not an application. Pointing it at the framework configuration would have it judged
+# against files it does not have.
+new_workspace fail-library-framework-config
+printf "import ploaness from 'ploaness/eslint'\n\nexport default ploaness\n" \
+    > "$scratch/fail-library-framework-config/packages/ui/eslint.config.mjs"
+expect fail-library-framework-config wiring FAIL 'ploaness/eslint-library'
+
+# Dropping the harness declaration removes a package from the governed set, which without this rule
+# would be a silent way to take a whole application out of verification.
+new_workspace fail-ungoverned-project
+node "$here/lib/delete-dependency.ts" "$scratch/fail-ungoverned-project/packages/ui/package.json" ploaness
+expect fail-ungoverned-project wiring FAIL 'ploaness does not govern'
+
 
 echo
 if [ "$failures" -eq 0 ]; then

@@ -1,6 +1,6 @@
 {
   "$comment": "Everything ploaness pins that it cannot pin by declaring a dependency. A pinned analyzer is a real dependency of a ploaness package, so its version has exactly one source; nothing here can be, because ploaness imports none of it and declaring it would install a second Payload, Next, React, or set of type definitions into a project that already has one - and two copies of @types/react in a single tree is not merely waste, it is a class of type error that reads as the project's fault. This file is that one source instead. It is data rather than code: a group carries the rule that applies to it, so adding one needs no change anywhere else.",
-  "$required": "A required group is declared by every governed project and matched exactly. An unrequired group is matched only when the project declares it, and is never forced on a project with no use for it. That distinction is not a convenience: a Payload project on MongoDB has no Postgres driver, and requiring one would make ploaness dictate a database rather than a version. Requiring a package a project does not need would also manufacture a dependency the dead-code gate then rightly reports as unused.",
+  "$required": "A group states the member KINDS that must declare it. A kind is derived from what a package declares - Payload, or Next, or neither - never from what it says about itself. The split matters because a workspace holds packages that are not all applications: requiring a shared library to declare Payload would manufacture a dependency the dead-code gate then rightly reports as unused, and requiring a Next frontend to declare Payload would make ploaness dictate an architecture rather than a version. A group required by no kind is matched when a package declares it and forced on nobody, which is how ploaness owns the version of a Postgres driver without deciding that every governed project uses Postgres.",
   "packageManager": "pnpm@11.9.0",
   "$engines": "Only `node` is stated here. The pnpm entry is derived from `packageManager` above, because Corepack reads one field and an installer reads the other and two literals for one version will not stay equal - these two had already stopped agreeing in meaning, an exact `pnpm@11.9.0` beside a `>=11` floor.",
   "engines": {
@@ -8,31 +8,37 @@
   },
   "groups": [
     {
-      "name": "framework",
-      "required": true,
-      "why": "The application itself. A governed project is a Payload application, built by Next, rendered by React, serving images through sharp and a GraphQL API through graphql, which payload declares as a peer. This is what the preflight gate already assumes rather than something the pins impose. Only `payload` is listed for its own family: every @payloadcms/* package a project declares is required to match it, so a project that adds a Payload plugin is covered by the rule that already exists.",
+      "name": "payload",
+      "requiredFor": ["payload"],
+      "why": "The Payload application itself, and the two packages Payload declares as peers. Only a member that IS a Payload application needs any of them; a frontend reading that application over HTTP needs none.",
       "versions": {
         "payload": "3.88.0",
-        "next": "16.3.2",
-        "react": "19.2.8",
-        "react-dom": "19.2.8",
         "sharp": "0.35.3",
         "graphql": "16.14.2"
       }
     },
     {
-      "name": "types",
-      "required": true,
-      "why": "Type definitions travel with what they describe, and they are pinned for the toolchain's reason rather than the framework's: a type package is an input to tsc, so a patch release changes what type-checks while the project stays unchanged. They carry their own version lines rather than the version of the package they describe, so unlike the Payload family they cannot be derived and have to be written down.",
+      "name": "web",
+      "requiredFor": ["payload", "application"],
+      "why": "What any Next application renders with, whether or not Payload is mounted inside it. A public frontend has the same build, the same client bundle and the same React version to agree about.",
       "versions": {
-        "@types/node": "26.3.0",
+        "next": "16.3.2",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
         "@types/react": "19.2.18",
         "@types/react-dom": "19.2.5"
       }
     },
     {
+      "name": "runtime-types",
+      "requiredFor": ["payload", "application", "library"],
+      "why": "The definitions describing the runtime every governed package compiles against. Pinned for the toolchain's reason rather than the framework's: a type package is an input to tsc, so a patch release changes what type-checks while the project stays unchanged.",
+      "versions": {
+        "@types/node": "26.3.0"
+      }
+    },
+    {
       "name": "ecosystem",
-      "required": false,
       "why": "Packages a Payload project commonly reaches for, none of which every project needs: a database driver and its types, a loader for .env, a cross-platform way to set a variable in a package script, and the bundler a project reaches for when it runs Storybook or a Vite build. ploaness owns the version of each so no two governed projects disagree about one, and forces none of them on a project that has no use for it. Being popular is not what earns a place here, or this list would become a catalogue of every library a project might like: a package belongs when its version can change what a gate decides, or when a second copy of it in one tree is a defect rather than waste. `vite` is the clearest case of the second. ploaness's own vitest and React plugin resolve a vite of their own, so a project declaring a different one installs two - and @vitejs/plugin-react declares vite as a PEER, which makes the mismatch a loading failure rather than mere duplication. ploaness cannot close that by declaring vite itself, because under the strict layout a project's own build cannot reach ploaness's copy; only the project can declare the instance its build loads, which is exactly what a pin is for.",
       "versions": {
         "pg": "8.23.0",

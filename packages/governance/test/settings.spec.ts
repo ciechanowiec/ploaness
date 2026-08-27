@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { matchesRole } from '../src/file-roles.js'
 import { readSettings, type Settings } from '../src/settings.js'
 
 describe('readSettings', () => {
@@ -19,7 +20,11 @@ describe('readSettings', () => {
       },
     })
     expect(settings.typographyExclusions).toContain('^vendor/')
-    expect(settings.typographyExclusions).toContain(String.raw`^src/payload-types\.ts$`)
+    // Asserted by what the shipped default MATCHES rather than by its literal text. It has to reach a
+    // generated file at the repository root and the same file inside a member, and pinning the string
+    // made the second case a spec change rather than a finding.
+    expect(matchesRole('src/payload-types.ts', settings.typographyExclusions)).toBe(true)
+    expect(matchesRole('apps/web/src/payload-types.ts', settings.typographyExclusions)).toBe(true)
   })
 
   it('ignores an unmanaged entry that records no reason', () => {

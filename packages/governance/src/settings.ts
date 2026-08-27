@@ -173,15 +173,21 @@ const DEFAULT_FRAMEWORK_GLUE: readonly string[] = ['src/app/(payload)/**', 'src/
 /** The pure-logic floor a Payload project has by convention. */
 const DEFAULT_PURE_LOGIC_ROOTS: readonly string[] = ['src/access', 'src/lib']
 
+// `(^|/)` rather than `^`: these are ploaness's own patterns, and they name files RELATIVE TO A MEMBER.
+// The tracked-tree gates walk the whole repository, so anchoring at the repository root would exempt
+// `src/payload-types.ts` in a single-package project and miss `apps/web/src/payload-types.ts` in a
+// workspace - reporting a generated file as a typography defect in one shape and not the other.
+const MEMBER_RELATIVE: string = '(^|/)'
+
 const DEFAULT_TYPOGRAPHY_EXCLUSIONS: readonly string[] = [
-  String.raw`^\.claude/`,
-  String.raw`^src/payload-types\.ts$`,
-  String.raw`^src/payload-generated-schema\.ts$`,
+  String.raw`${MEMBER_RELATIVE}\.claude/`,
+  String.raw`${MEMBER_RELATIVE}src/payload-types\.ts$`,
+  String.raw`${MEMBER_RELATIVE}src/payload-generated-schema\.ts$`,
   String.raw`importMap\.js$`,
 ]
 
 const DEFAULT_JAVASCRIPT_ALLOWLIST: readonly string[] = [
-  String.raw`^eslint\.config\.mjs$`,
+  String.raw`${MEMBER_RELATIVE}eslint\.config\.mjs$`,
   String.raw`importMap\.js$`,
 ]
 
