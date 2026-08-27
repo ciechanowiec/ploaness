@@ -9,12 +9,12 @@ import {
 } from '../src/paired-assets.js'
 
 const catalogue: readonly ManagedAsset[] = [
-  { path: 'README-guideline-software-project.adoc', disposition: 'PINNED' },
-  { path: '.ploaness/agent-guide.md', disposition: 'PINNED' },
-  { path: 'tests/e2e/a11y.e2e.spec.ts', disposition: 'PINNED' },
-  { path: 'AGENTS.md', disposition: 'SECTION' },
-  { path: '.gitignore', disposition: 'SEED' },
-  { path: '.gitleaks.toml', disposition: 'FORBIDDEN' },
+  { path: 'README-guideline-software-project.adoc', disposition: 'PINNED', scope: 'REPOSITORY' },
+  { path: '.ploaness/agent-guide.md', disposition: 'PINNED', scope: 'REPOSITORY' },
+  { path: 'tests/e2e/a11y.e2e.spec.ts', disposition: 'PINNED', scope: 'REPOSITORY' },
+  { path: 'AGENTS.md', disposition: 'SECTION', scope: 'REPOSITORY' },
+  { path: '.gitignore', disposition: 'SEED', scope: 'REPOSITORY' },
+  { path: '.gitleaks.toml', disposition: 'FORBIDDEN', scope: 'REPOSITORY' },
 ]
 
 const pathsOf = (pairs: readonly PairedAsset[]): readonly string[] =>
@@ -57,14 +57,14 @@ describe('pairedAssets', () => {
   it('pairs a newly managed path by default, so forgetting to mirror one cannot pass', () => {
     const added: readonly ManagedAsset[] = [
       ...catalogue,
-      { path: '.tool-versions', disposition: 'PINNED' },
+      { path: '.tool-versions', disposition: 'PINNED', scope: 'REPOSITORY' },
     ]
     expect(pathsOf(pairedAssets(added))).toContain('.tool-versions')
   })
 
   it('places the generated body under the assets directory with the packed suffix', () => {
     const pair: PairedAsset | undefined = pairedAssets([
-      { path: '.npmrc', disposition: 'PINNED' },
+      { path: '.npmrc', disposition: 'PINNED', scope: 'REPOSITORY' },
     ])[0]
     expect(pair?.assetPath).toBe('files/.npmrc.asset')
   })

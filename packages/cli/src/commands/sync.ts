@@ -1,17 +1,17 @@
 // `ploaness sync`: the only command that writes managed files. Everything else reads them.
 import { type SyncChange, syncAssets } from '../checks/assets.js'
 import { hasWrittenDenyRules } from '../checks/generated.js'
-import type { Context } from '../context.js'
+import type { Repository } from '../context.js'
 
 /** Materialise the managed files, then report exactly what changed. */
-export const sync = (context: Context): number => {
+export const sync = (repository: Repository): number => {
   // The write denial is repaired here rather than in `init` alone, because the gate that requires it
   // tells the project to run `ploaness sync`. A repair the advice cannot perform sends the project
   // round a loop, which is the one thing a managed-file finding must never do.
-  const denialChange: readonly SyncChange[] = hasWrittenDenyRules(context)
+  const denialChange: readonly SyncChange[] = hasWrittenDenyRules(repository)
     ? [{ action: 'wrote', path: '.claude/settings.json' }]
     : []
-  const changes: readonly SyncChange[] = [...syncAssets(context), ...denialChange]
+  const changes: readonly SyncChange[] = [...syncAssets(repository), ...denialChange]
   if (changes.length === 0) {
     console.info('ploaness sync: every managed path already matches the catalogue.')
     return 0

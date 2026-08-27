@@ -11,17 +11,23 @@ import {
 } from 'node:fs'
 import path from 'node:path'
 import {
+  type AssetHost,
   type AssetState,
   type AssetViolation,
   applyManagedSection,
   findAssetViolations,
+  hasRuntime,
   type ManagedAsset,
+  memberAssets,
+  memberKindOf,
   type ParsedManifest,
   parseManifest,
+  ROOT_MEMBER_PATH,
+  repositoryAssets,
   syncAction,
   type UnmanagedAsset,
 } from '@ploaness/governance'
-import { type Context, shippedDirectory } from '../context.js'
+import { type Context, type Member, type Repository, shippedDirectory } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 const assetsRoot = (): string => shippedDirectory('@ploaness/assets')
@@ -60,6 +66,54 @@ const packagingDefects = (assets: readonly ManagedAsset[]): readonly string[] =>
 const unmanagedPaths = (context: Context): readonly string[] =>
   context.settings.unmanagedAssets.map((entry: UnmanagedAsset): string => entry.path)
 
+// What each half of the repository is judged against. A member holds the sweeps for the server it runs
+// and the forbidden paths that shadow ploaness wherever they sit; everything a tool reads from the tree
+// root is judged once, at the root.
+const hostOf = (member: Member): AssetHost => ({
+  hasRuntime: hasRuntime(memberKindOf(member.packageJson)),
+  isPayload: member.isPayload,
+})
+
+interface AssetSite {
+  readonly root: string
+  /** Repo-relative prefix for a finding, empty at the repository root. */
+  readonly label: string
+  readonly assets: readonly ManagedAsset[]
+  readonly unmanaged: readonly string[]
+}
+
+const sitesOf = (repository: Repository, all: readonly ManagedAsset[]): readonly AssetSite[] => {
+  const isSolo: boolean = repository.members.length <= 1
+  const atRoot: readonly ManagedAsset[] = repositoryAssets(all)
+  // A member sitting AT the repository root shares its directory, so a path that applies to both - any
+  // forbidden one - would be judged twice and reported twice for a single file. The repository site has
+  // already spoken for those.
+  const spokenFor: ReadonlySet<string> = new Set(
+    atRoot.map((asset: ManagedAsset): string => asset.path),
+  )
+  const memberSite = (member: Member): AssetSite => {
+    const applicable: readonly ManagedAsset[] = memberAssets(all, hostOf(member))
+    return {
+      root: member.root,
+      label: isSolo || member.path === ROOT_MEMBER_PATH ? '' : `${member.path}/`,
+      assets:
+        member.root === repository.root
+          ? applicable.filter((asset: ManagedAsset): boolean => !spokenFor.has(asset.path))
+          : applicable,
+      unmanaged: unmanagedPaths(member),
+    }
+  }
+  return [
+    {
+      root: repository.root,
+      label: '',
+      assets: atRoot,
+      unmanaged: unmanagedPaths(repository),
+    },
+    ...repository.members.map((member: Member): AssetSite => memberSite(member)),
+  ]
+}
+
 const stateOf =
   (root: string) =>
   (assetPath: string): AssetState => {
@@ -71,8 +125,8 @@ const stateOf =
     return { isPresent: isExists, actual, expected: shippedBody(assetPath) }
   }
 
-/** Verify the working tree matches the managed-file catalogue. */
-export const assets = (context: Context): GateResult => {
+/** Verify the working tree matches the managed-file catalogue, at the root and in every member. */
+export const assets = (repository: Repository): GateResult => {
   const parsed: ParsedManifest = catalogue()
   if (parsed.problems.length > 0) {
     return failed('the ploaness asset manifest is malformed', parsed.problems)
@@ -84,19 +138,19 @@ export const assets = (context: Context): GateResult => {
       'this is a ploaness packaging defect; report it',
     ])
   }
-  const violations: readonly AssetViolation[] = findAssetViolations(
-    parsed.assets,
-    unmanagedPaths(context),
-    stateOf(context.root),
+  const sites: readonly AssetSite[] = sitesOf(repository, parsed.assets)
+  const findings: readonly string[] = sites.flatMap((site: AssetSite): readonly string[] =>
+    findAssetViolations(site.assets, site.unmanaged, stateOf(site.root)).map(
+      (violation: AssetViolation): string => `${site.label}${violation.path}: ${violation.reason}`,
+    ),
   )
-  return violations.length > 0
-    ? failed(
-        `${String(violations.length)} managed-file defect(s)`,
-        violations.map(
-          (violation: AssetViolation): string => `${violation.path}: ${violation.reason}`,
-        ),
-      )
-    : passed(`${String(parsed.assets.length)} managed path(s) match the catalogue`)
+  const checked: number = sites.reduce(
+    (total: number, site: AssetSite): number => total + site.assets.length,
+    0,
+  )
+  return findings.length > 0
+    ? failed(`${String(findings.length)} managed-file defect(s)`, findings)
+    : passed(`${String(checked)} managed path(s) match the catalogue`)
 }
 
 /**
@@ -151,8 +205,8 @@ const spliceSection = (
 }
 
 /** Apply one catalogue entry to the working tree, reporting the change it made. */
-const syncOne = (context: Context, asset: ManagedAsset): SyncChange | undefined => {
-  const target: string = path.join(context.root, asset.path)
+const syncOne = (root: string, asset: ManagedAsset): SyncChange | undefined => {
+  const target: string = path.join(root, asset.path)
   const action: ReturnType<typeof syncAction> = syncAction(asset, existsSync(target))
   if (action === 'delete') {
     rmSync(target, { recursive: true, force: true })
@@ -176,17 +230,26 @@ const syncOne = (context: Context, asset: ManagedAsset): SyncChange | undefined 
  * project's own edits survive, a FORBIDDEN path is removed, and a SECTION file has only its marked
  * block replaced so the project's own text around it is carried through untouched.
  */
-export const syncAssets = (context: Context): readonly SyncChange[] => {
-  const owned: ReadonlySet<string> = new Set(unmanagedPaths(context))
-  return catalogue()
-    .assets.filter((asset: ManagedAsset): boolean => !owned.has(asset.path))
-    .map((asset: ManagedAsset): SyncChange | undefined => syncOne(context, asset))
-    .filter((change: SyncChange | undefined): change is SyncChange => change !== undefined)
+export const syncAssets = (repository: Repository): readonly SyncChange[] => {
+  const sites: readonly AssetSite[] = sitesOf(repository, catalogue().assets)
+  return sites.flatMap((site: AssetSite): readonly SyncChange[] => {
+    const owned: ReadonlySet<string> = new Set(site.unmanaged)
+    return site.assets
+      .filter((asset: ManagedAsset): boolean => !owned.has(asset.path))
+      .map((asset: ManagedAsset): SyncChange | undefined => syncOne(site.root, asset))
+      .filter((change: SyncChange | undefined): change is SyncChange => change !== undefined)
+      .map(
+        (change: SyncChange): SyncChange => ({
+          action: change.action,
+          path: `${site.label}${change.path}`,
+        }),
+      )
+  })
 }
 
 /** Write a managed file only when the path is absent, used by `ploaness init`. */
-export const hasSeededFile = (context: Context, assetPath: string, body: string): boolean => {
-  const target: string = path.join(context.root, assetPath)
+export const hasSeededFile = (root: string, assetPath: string, body: string): boolean => {
+  const target: string = path.join(root, assetPath)
   if (existsSync(target)) {
     return false
   }

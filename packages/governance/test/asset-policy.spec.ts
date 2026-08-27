@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  type AssetHost,
+  type AssetScope,
   type AssetState,
   type AssetViolation,
   applyManagedSection,
   checkAsset,
   findAssetViolations,
   type ManagedAsset,
+  memberAssets,
   type ParsedManifest,
   parseManifest,
   readManagedSection,
+  repositoryAssets,
   SECTION_BEGIN,
   SECTION_END,
   syncAction,
@@ -24,13 +28,24 @@ const state = (overrides: Partial<AssetState> = {}): AssetState => ({
 describe('parseManifest', () => {
   it('reads entries and ignores comments and blank lines', () => {
     const parsed: ParsedManifest = parseManifest(
-      '# a comment\n\nCLAUDE.md\tPINNED\n.gitignore\tSEED\n',
+      '# a comment\n\nCLAUDE.md\tPINNED\tREPOSITORY\n.gitignore\tSEED\tREPOSITORY\n',
     )
     expect(parsed.assets).toEqual([
-      { path: 'CLAUDE.md', disposition: 'PINNED' },
-      { path: '.gitignore', disposition: 'SEED' },
+      { path: 'CLAUDE.md', disposition: 'PINNED', scope: 'REPOSITORY' },
+      { path: '.gitignore', disposition: 'SEED', scope: 'REPOSITORY' },
     ])
     expect(parsed.problems).toEqual([])
+  })
+
+  // A managed file placed in the wrong half of a workspace is either demanded where it cannot be or
+  // ignored where it must be. Neither should be reachable by leaving a column off or misspelling it.
+  it.each([
+    ['no scope at all', 'CLAUDE.md\tPINNED\n'],
+    ['a scope it does not know', 'CLAUDE.md\tPINNED\tSOMEWHERE\n'],
+  ])('refuses a row with %s', (_name: string, row: string) => {
+    const parsed: ParsedManifest = parseManifest(row)
+    expect(parsed.assets).toEqual([])
+    expect(parsed.problems).toHaveLength(1)
   })
 
   it('reports a malformed row rather than dropping it silently', () => {
@@ -41,9 +56,13 @@ describe('parseManifest', () => {
 })
 
 describe('checkAsset', () => {
-  const pinned: ManagedAsset = { path: 'CLAUDE.md', disposition: 'PINNED' }
-  const seed: ManagedAsset = { path: '.gitignore', disposition: 'SEED' }
-  const forbidden: ManagedAsset = { path: 'knip.json', disposition: 'FORBIDDEN' }
+  const pinned: ManagedAsset = { path: 'CLAUDE.md', disposition: 'PINNED', scope: 'REPOSITORY' }
+  const seed: ManagedAsset = { path: '.gitignore', disposition: 'SEED', scope: 'REPOSITORY' }
+  const forbidden: ManagedAsset = {
+    path: 'knip.json',
+    disposition: 'FORBIDDEN',
+    scope: 'REPOSITORY',
+  }
 
   it('accepts a pinned file that matches', () => {
     expect(checkAsset(pinned, state())).toBeUndefined()
@@ -72,12 +91,14 @@ describe('checkAsset', () => {
   })
 })
 
-const agents: ManagedAsset = { path: 'AGENTS.md', disposition: 'SECTION' }
+const agents: ManagedAsset = { path: 'AGENTS.md', disposition: 'SECTION', scope: 'REPOSITORY' }
 const drifted = (): AssetState => state({ actual: 'edited' })
 
 describe('findAssetViolations', () => {
   it('skips a path the project has taken over', () => {
-    const assets: readonly ManagedAsset[] = [{ path: 'CLAUDE.md', disposition: 'PINNED' }]
+    const assets: readonly ManagedAsset[] = [
+      { path: 'CLAUDE.md', disposition: 'PINNED', scope: 'REPOSITORY' },
+    ]
     expect(findAssetViolations(assets, [], drifted)).toHaveLength(1)
     expect(findAssetViolations(assets, ['CLAUDE.md'], drifted)).toEqual([])
   })
@@ -85,18 +106,26 @@ describe('findAssetViolations', () => {
 
 describe('syncAction', () => {
   it('always rewrites a pinned file so drift is repaired', () => {
-    expect(syncAction({ path: 'a', disposition: 'PINNED' }, true)).toBe('write')
-    expect(syncAction({ path: 'a', disposition: 'PINNED' }, false)).toBe('write')
+    expect(syncAction({ path: 'a', disposition: 'PINNED', scope: 'REPOSITORY' }, true)).toBe(
+      'write',
+    )
+    expect(syncAction({ path: 'a', disposition: 'PINNED', scope: 'REPOSITORY' }, false)).toBe(
+      'write',
+    )
   })
 
   it('writes a seed file only when it is absent', () => {
-    expect(syncAction({ path: 'a', disposition: 'SEED' }, true)).toBe('skip')
-    expect(syncAction({ path: 'a', disposition: 'SEED' }, false)).toBe('write')
+    expect(syncAction({ path: 'a', disposition: 'SEED', scope: 'REPOSITORY' }, true)).toBe('skip')
+    expect(syncAction({ path: 'a', disposition: 'SEED', scope: 'REPOSITORY' }, false)).toBe('write')
   })
 
   it('deletes a forbidden path that exists', () => {
-    expect(syncAction({ path: 'a', disposition: 'FORBIDDEN' }, true)).toBe('delete')
-    expect(syncAction({ path: 'a', disposition: 'FORBIDDEN' }, false)).toBe('skip')
+    expect(syncAction({ path: 'a', disposition: 'FORBIDDEN', scope: 'REPOSITORY' }, true)).toBe(
+      'delete',
+    )
+    expect(syncAction({ path: 'a', disposition: 'FORBIDDEN', scope: 'REPOSITORY' }, false)).toBe(
+      'skip',
+    )
   })
 })
 
@@ -219,7 +248,11 @@ const holding = (actual: string | undefined): AssetState => ({
 })
 
 describe('a tool-specific instruction file', () => {
-  const reference: ManagedAsset = { path: 'GEMINI.md', disposition: 'REFERENCE' }
+  const reference: ManagedAsset = {
+    path: 'GEMINI.md',
+    disposition: 'REFERENCE',
+    scope: 'REPOSITORY',
+  }
 
   // A project that uses only one agent carries only its entry point. Requiring the file would make
   // ploaness decide which tools the project uses.
@@ -255,5 +288,60 @@ describe('a tool-specific instruction file', () => {
   it('is never written by sync, present or absent', () => {
     expect(syncAction(reference, true)).toBe('skip')
     expect(syncAction(reference, false)).toBe('skip')
+  })
+})
+
+const CATALOGUE: readonly ManagedAsset[] = [
+  { path: '.editorconfig', disposition: 'PINNED', scope: 'REPOSITORY' },
+  { path: 'tests/e2e/a11y.e2e.spec.ts', disposition: 'PINNED', scope: 'APPLICATION' },
+  { path: 'tests/e2e/access-boundary.e2e.spec.ts', disposition: 'PINNED', scope: 'PAYLOAD' },
+  { path: 'knip.json', disposition: 'FORBIDDEN', scope: 'EVERYWHERE' },
+]
+
+const pathsOf = (assets: readonly ManagedAsset[]): readonly string[] =>
+  assets.map((asset: ManagedAsset): string => asset.path)
+
+const scopesOf = (assets: readonly ManagedAsset[]): readonly AssetScope[] =>
+  assets.map((asset: ManagedAsset): AssetScope => asset.scope)
+
+const forRepository = (): readonly string[] => pathsOf(repositoryAssets(CATALOGUE))
+
+const forMember = (overrides: Partial<AssetHost> = {}): readonly string[] =>
+  pathsOf(memberAssets(CATALOGUE, host(overrides)))
+
+const host = (overrides: Partial<AssetHost> = {}): AssetHost => ({
+  hasRuntime: true,
+  isPayload: true,
+  ...overrides,
+})
+
+describe('where a managed path applies', () => {
+  it('keeps the instruction files at the repository root', () => {
+    expect(forRepository()).toEqual(['.editorconfig', 'knip.json'])
+  })
+
+  it('gives a Payload member every sweep', () => {
+    expect(forMember()).toEqual([
+      'tests/e2e/a11y.e2e.spec.ts',
+      'tests/e2e/access-boundary.e2e.spec.ts',
+      'knip.json',
+    ])
+  })
+
+  it('withholds the access-boundary sweep from an application with no Payload', () => {
+    // It asks Payload itself what it grants an anonymous caller. A Next application has no such
+    // endpoint, so the sweep would fail on a project that did nothing wrong.
+    expect(forMember({ isPayload: false })).toEqual(['tests/e2e/a11y.e2e.spec.ts', 'knip.json'])
+  })
+
+  it('gives a member with no application nothing but the forbidden paths', () => {
+    expect(forMember({ hasRuntime: false, isPayload: false })).toEqual(['knip.json'])
+  })
+
+  it('forbids a shadowing config in both halves at once', () => {
+    const atRoot: readonly AssetScope[] = scopesOf(repositoryAssets(CATALOGUE))
+    const inMember: readonly AssetScope[] = scopesOf(memberAssets(CATALOGUE, host()))
+    expect(atRoot).toContain('EVERYWHERE')
+    expect(inMember).toContain('EVERYWHERE')
   })
 })

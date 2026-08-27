@@ -25,10 +25,25 @@
 /** How ploaness treats a path in the consumer working tree. */
 export type Disposition = 'PINNED' | 'SEED' | 'FORBIDDEN' | 'SECTION' | 'REFERENCE'
 
-/** One catalogue entry: a repo-relative path and the disposition ploaness applies to it. */
+/**
+ * Where a managed path lives.
+ *
+ * REPOSITORY is what git, an editor or a coding agent reads from the tree root: one contract per
+ * repository, not one per package, and a second copy inside a member would be a second answer to the
+ * same question. APPLICATION is what belongs to a member that serves one - the executable sweeps, each
+ * interrogating one running server, so two applications are two sets of answers rather than one shared
+ * file. PAYLOAD narrows that to the members that can answer at all: the access-boundary sweep asks
+ * Payload itself what it grants an anonymous caller, and a Next application with no Payload has no such
+ * endpoint to ask. EVERYWHERE is for a forbidden path, where a copy at the root OR inside any member
+ * would shadow what ploaness supplies.
+ */
+export type AssetScope = 'REPOSITORY' | 'APPLICATION' | 'PAYLOAD' | 'EVERYWHERE'
+
+/** One catalogue entry: a repo-relative path, its disposition, and where it lives. */
 export interface ManagedAsset {
   readonly path: string
   readonly disposition: Disposition
+  readonly scope: AssetScope
 }
 
 /** A managed-file defect found in the consumer working tree. */
@@ -66,8 +81,19 @@ const DISPOSITIONS: ReadonlySet<string> = new Set<string>([
 // the set above stops compiling instead of parsing into a value no rule handles.
 const isDisposition = (raw: string): raw is Disposition => DISPOSITIONS.has(raw)
 
-// A manifest row is a path and a disposition, and nothing else.
-const MANIFEST_COLUMNS: number = 2
+const SCOPES: ReadonlySet<string> = new Set<string>([
+  'REPOSITORY',
+  'APPLICATION',
+  'PAYLOAD',
+  'EVERYWHERE',
+])
+
+const isScope = (raw: string): raw is AssetScope => SCOPES.has(raw)
+
+// A manifest row is a path, a disposition and a scope, and nothing else. A row missing the third column
+// is malformed rather than defaulted: a managed file placed in the wrong half of a workspace is either
+// demanded where it cannot be or ignored where it must be, and neither should be reachable by omission.
+const MANIFEST_COLUMNS: number = 3
 
 /** Opens the block ploaness owns inside a SECTION file. */
 export const SECTION_BEGIN: string = '<!-- BEGIN PLOANESS MANAGED INSTRUCTIONS -->'
@@ -160,17 +186,25 @@ const readManifestRow = (index: number, line: string): ParsedRow => {
   if (trimmed.length === 0 || trimmed.startsWith('#')) {
     return { asset: undefined, problem: undefined }
   }
-  const [path, disposition] = trimmed.split('\t', MANIFEST_COLUMNS)
-  if (path === undefined || disposition === undefined || !isDisposition(disposition)) {
+  const [path, disposition, scope] = trimmed.split('\t', MANIFEST_COLUMNS)
+  if (
+    path === undefined ||
+    disposition === undefined ||
+    scope === undefined ||
+    !isDisposition(disposition) ||
+    !isScope(scope)
+  ) {
     return {
       asset: undefined,
-      // Rendered from DISPOSITIONS rather than written out. The list was spelled a third time here and
-      // had already drifted: REFERENCE was missing, so a typo in a REFERENCE row produced advice that
+      // Rendered from the sets rather than written out. The list was spelled a third time here and had
+      // already drifted: REFERENCE was missing, so a typo in a REFERENCE row produced advice that
       // contradicted the set the parser actually accepts.
-      problem: `manifest line ${String(index + 1)}: expected "<path>", a tab, then ${[...DISPOSITIONS].join(', ')}`,
+      problem:
+        `manifest line ${String(index + 1)}: expected "<path>", a tab, one of ` +
+        `${[...DISPOSITIONS].join(', ')}, a tab, then one of ${[...SCOPES].join(', ')}`,
     }
   }
-  return { asset: { path, disposition }, problem: undefined }
+  return { asset: { path, disposition, scope }, problem: undefined }
 }
 
 /**
@@ -359,3 +393,42 @@ export const syncAction = (asset: ManagedAsset, isPresent: boolean): SyncAction 
   }
   return 'write'
 }
+
+/** What a member can hold a managed file for, derived from its kind. */
+export interface AssetHost {
+  readonly hasRuntime: boolean
+  readonly isPayload: boolean
+}
+
+/**
+ * The catalogue entries that apply at the repository root.
+ * @param assets the whole catalogue.
+ * @returns the repository-scope entries and the forbidden paths, which apply everywhere.
+ */
+export const repositoryAssets = (assets: readonly ManagedAsset[]): readonly ManagedAsset[] =>
+  assets.filter(
+    (asset: ManagedAsset): boolean => asset.scope === 'REPOSITORY' || asset.scope === 'EVERYWHERE',
+  )
+
+/**
+ * The catalogue entries that apply inside one member.
+ *
+ * A library receives only the forbidden paths: it has no server to sweep, so a spec that drives one
+ * would be a managed file demanding a browser the package was never going to open.
+ * @param assets the whole catalogue.
+ * @param host what the member can hold, derived from its kind.
+ * @returns the entries that apply to that member.
+ */
+export const memberAssets = (
+  assets: readonly ManagedAsset[],
+  host: AssetHost,
+): readonly ManagedAsset[] =>
+  assets.filter((asset: ManagedAsset): boolean => {
+    if (asset.scope === 'EVERYWHERE') {
+      return true
+    }
+    if (host.isPayload && asset.scope === 'PAYLOAD') {
+      return true
+    }
+    return host.hasRuntime && asset.scope === 'APPLICATION'
+  })

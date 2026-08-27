@@ -7,25 +7,36 @@
 #   SECTION   ploaness owns the marked block at the top; the project owns the text below it.
 #   REFERENCE the path need not exist; if it does it carries nothing but a pointer at AGENTS.md.
 #
+# The third column says WHERE the path lives, which a repository holding more than one package has to
+# state rather than assume:
+#
+#   REPOSITORY  the tree root only. Git, an editor and a coding agent read from there, and one contract
+#               per repository is the point - a second copy inside a package would be a second answer.
+#   APPLICATION each member that serves one. The sweeps interrogate a running server, so two
+#               applications are two sets of answers rather than one shared file.
+#   PAYLOAD     each member that can answer at all. Only Payload serves /api/access.
+#   EVERYWHERE  the root and every member. A forbidden path shadows what ploaness supplies wherever it
+#               sits, so it must not exist in either half.
+#
 # Project documentation belongs to the consuming project. The governing standard and the agent guide are
 # the exceptions, because together they declare the contract every agent is held to. CLAUDE.md is a fixed
 # tool entry point, and AGENTS.md carries the block that points at all three.
 
-README-guideline-software-project.adoc	PINNED
-.ploaness/agent-guide.md	PINNED
-AGENTS.md	SECTION
-CLAUDE.md	PINNED
-.editorconfig	PINNED
-.gitattributes	PINNED
-.nvmrc	PINNED
-.npmrc	PINNED
+README-guideline-software-project.adoc	PINNED	REPOSITORY
+.ploaness/agent-guide.md	PINNED	REPOSITORY
+AGENTS.md	SECTION	REPOSITORY
+CLAUDE.md	PINNED	REPOSITORY
+.editorconfig	PINNED	REPOSITORY
+.gitattributes	PINNED	REPOSITORY
+.nvmrc	PINNED	REPOSITORY
+.npmrc	PINNED	REPOSITORY
 # Docker sends the whole directory to the daemon before it reads the first instruction, so what is left
 # out is decided here or not at all. The entry that matters is `.env`: the stock Payload Dockerfile does
 # `COPY . .` in its builder stage, so an env file in the context lands in that layer and stays in the
 # build cache. PINNED rather than SEED for that reason - a project that quietly drops that line puts
 # secrets in a layer, and nothing downstream would report it.
-.dockerignore	PINNED
-.gitignore	SEED
+.dockerignore	PINNED	REPOSITORY
+.gitignore	SEED	REPOSITORY
 
 # The three entries below are executable specs rather than configurations. Each judges something only a
 # running application knows, and each is PINNED for the reason every other rule belongs to the harness:
@@ -33,28 +44,28 @@ CLAUDE.md	PINNED
 #
 # Static rules cannot see a contrast defect that appears only under :hover or :focus, nor a page nobody
 # remembered to add to a scan list, so this one crawls instead of reading.
-tests/e2e/a11y.e2e.spec.ts	PINNED
+tests/e2e/a11y.e2e.spec.ts	PINNED	APPLICATION
 # A Next.js application serves no security header unless the project sets one, and every static gate
 # stays green while it does not: the page renders and the build passes. Only the running application
 # knows what it sends, so this asks it.
-tests/e2e/security-headers.e2e.spec.ts	PINNED
+tests/e2e/security-headers.e2e.spec.ts	PINNED	APPLICATION
 # The static rules can see that a project decided each operation, and can see an inline always-true
 # rule. They cannot see what `read: anyone` decides, nor what Payload made of the config after
 # sanitisation, so a project can satisfy every one of them and still serve every document to every
 # stranger. Payload reports its own verdict at /api/access; this asks for it with no credential.
-tests/e2e/access-boundary.e2e.spec.ts	PINNED
+tests/e2e/access-boundary.e2e.spec.ts	PINNED	PAYLOAD
 # The entry-point file a coding agent other than Claude reads. None is required - a project that uses
 # only one agent carries only its file - but one that exists carries nothing but a pointer at AGENTS.md.
 # The standard puts the rules in the root instruction file and lets a tool-specific one only reference
 # it, so two agents working the same repository cannot be answering to two different contracts.
-GEMINI.md	REFERENCE
-.cursorrules	REFERENCE
-.windsurfrules	REFERENCE
-.clinerules	REFERENCE
-.github/copilot-instructions.md	REFERENCE
+GEMINI.md	REFERENCE	REPOSITORY
+.cursorrules	REFERENCE	REPOSITORY
+.windsurfrules	REFERENCE	REPOSITORY
+.clinerules	REFERENCE	REPOSITORY
+.github/copilot-instructions.md	REFERENCE	REPOSITORY
 
-.stylelintrc.json	FORBIDDEN
-.dependency-cruiser.json	FORBIDDEN
-knip.json	FORBIDDEN
-.gitleaks.toml	FORBIDDEN
-plugins	FORBIDDEN
+.stylelintrc.json	FORBIDDEN	EVERYWHERE
+.dependency-cruiser.json	FORBIDDEN	EVERYWHERE
+knip.json	FORBIDDEN	EVERYWHERE
+.gitleaks.toml	FORBIDDEN	EVERYWHERE
+plugins	FORBIDDEN	EVERYWHERE
