@@ -288,7 +288,7 @@ const EXTENDED_GATES: readonly Gate[] = [
     scope: 'repository',
     title: 'commit messages across the whole history',
     isExtended: true,
-    run: (context: Context): GateResult => commitHistory(context, ['HEAD']),
+    run: commitHistory,
   },
   {
     id: 'linear-history',

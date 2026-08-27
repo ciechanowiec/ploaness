@@ -39,10 +39,16 @@ export const requireFullHistory = (context: Context): GateResult => {
 /**
  * Validate commit messages. Every commit is held to every rule, including the ones git writes for you: a
  * merge, a revert, or an autosquash subject must be given a conforming form by hand.
+ *
+ * It walks the same refs `linearHistory` does, and the default is the shared constant rather than a
+ * literal so the two cannot drift apart. Walking only HEAD was the earlier spelling and it left a hole
+ * this repository's own rules describe: a branch off HEAD's ancestry is history the repository owns and
+ * can rewrite, so a banned message there is a violation nothing reported. A real project carried an
+ * agent-attribution trailer on such a branch past a passing gate.
  */
 export const commitHistory = (
   context: Context,
-  revisionArguments: readonly string[] = ['HEAD'],
+  revisionArguments: readonly string[] = OWNED_HISTORY_REVISIONS,
 ): GateResult => {
   const shas: readonly string[] = shasOf(context, revisionArguments)
   const findings: readonly string[] = shas.flatMap((sha: string): readonly string[] => {

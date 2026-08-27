@@ -48,8 +48,15 @@ describe('theRevisionsAHistoryGateWalks', () => {
     expect(unownedNamespacesOf(OWNED_HISTORY_REVISIONS)).toStrictEqual([])
   })
 
-  it('stillReachesTheBranchesThatHoldTheWork', () => {
-    expect(namespacesOf(OWNED_HISTORY_REVISIONS)).toContain('refs/heads/')
+  // Containing `refs/heads/` was the earlier assertion and a bare `HEAD` satisfies it, which is how the
+  // message gate came to walk one branch while claiming the whole history. The complete owned set is
+  // derived from the table rather than restated, so a namespace added there is covered on the next run.
+  it('reachesEveryNamespaceTheRepositoryOwns', () => {
+    const owned: readonly string[] = namespacesReachedBy('--all').filter(isOwnedNamespace)
+    expect(owned.length).toBeGreaterThan(1)
+    for (const namespace of owned) {
+      expect(namespacesOf(OWNED_HISTORY_REVISIONS)).toContain(namespace)
+    }
   })
 
   // An argument the table cannot describe reaches nothing, so a revision added to the list without being

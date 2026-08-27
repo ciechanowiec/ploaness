@@ -2,6 +2,7 @@
 // hooks, because a hook is local, opt-in, and bypassable with --no-verify, so CI is the only place a
 // rule can actually be held. `commit-history` runs the same policy as a gate.
 import { existsSync, readFileSync } from 'node:fs'
+import { OWNED_HISTORY_REVISIONS } from '@ploaness/governance'
 import { commitHistory, commitMessageProblems } from '../checks/history.js'
 import type { Context } from '../context.js'
 import type { GateResult } from '../exec.js'
@@ -60,7 +61,7 @@ export const commitMessage = (
     return 1
   }
   if (mode === '--all') {
-    return checkHistory(context, ['HEAD'])
+    return checkHistory(context, OWNED_HISTORY_REVISIONS)
   }
   if (mode === '--range') {
     return checkHistory(context, [value ?? 'HEAD'])
