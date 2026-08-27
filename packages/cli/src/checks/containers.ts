@@ -5,7 +5,13 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { CONTAINER_IMAGES, renderGitleaksConfig } from '@ploaness/governance'
+import {
+  CONTAINER_IMAGES,
+  type ComposeProject,
+  composeProjectsIn,
+  dockerfilesIn,
+  renderGitleaksConfig,
+} from '@ploaness/governance'
 import { type Context, trackedFiles } from '../context.js'
 import {
   asFindings,
@@ -97,47 +103,54 @@ export const secrets = (context: Context): GateResult =>
     )
   })
 
-// Discovered from the tracked tree rather than from a fixed list: a project may keep a Dockerfile in any
-// directory, and a hard-coded path would silently skip the ones it did not anticipate.
-const isDockerfile = (file: string): boolean => {
-  const name: string = path.basename(file)
-  return name === 'Dockerfile' || name.endsWith('.Dockerfile') || name.startsWith('Dockerfile.')
-}
-
+// Both kinds are discovered from the tracked tree, by the rules in `governance`. The compose half used to
+// look at the repository root alone, so a project keeping its application - and its compose file - in a
+// member directory had that file validated by nothing, while the Dockerfile beside it was linted.
 const dockerfiles = (context: Context): readonly string[] =>
-  trackedFiles(context.root)
-    .filter((file: string): boolean => isDockerfile(file))
-    .toSorted((left: string, right: string): number => left.localeCompare(right))
+  dockerfilesIn(trackedFiles(context.root))
+
+const composeProjects = (context: Context): readonly ComposeProject[] =>
+  composeProjectsIn(trackedFiles(context.root))
 
 // Compose ships both as a `docker` subcommand and as a standalone binary, and which one a machine has is
 // not a property of the project. Try the modern form first and accept the legacy one, failing only when
 // neither can validate the file.
-const COMPOSE_FILES: readonly string[] = [
-  'docker-compose.yml',
-  'docker-compose.yaml',
-  'compose.yml',
-  'compose.yaml',
-]
-
-const validateCompose = (root: string): RunResult => {
-  const modern: RunResult = run('sh', ['-c', 'docker compose config > /dev/null'], { cwd: root })
+//
+// Run from the project's own directory rather than from the repository root, because that is what decides
+// what compose reads: the override files beside it, the `.env` it interpolates from, and the build
+// contexts its relative paths name.
+const validateCompose = (directory: string): RunResult => {
+  const modern: RunResult = run('sh', ['-c', 'docker compose config > /dev/null'], {
+    cwd: directory,
+  })
   return modern.code === 0
     ? modern
-    : run('sh', ['-c', 'docker-compose config > /dev/null'], { cwd: root })
+    : run('sh', ['-c', 'docker-compose config > /dev/null'], { cwd: directory })
 }
 
-const composeFile = (context: Context): string | undefined =>
-  COMPOSE_FILES.find((file: string): boolean => existsSync(path.join(context.root, file)))
-
-/** Validate the compose file, if the project ships one. */
-const composeFindings = (context: Context): readonly string[] => {
-  const found: string | undefined = composeFile(context)
-  if (found === undefined) {
-    return []
-  }
-  const compose: RunResult = validateCompose(context.root)
-  return compose.code === 0 ? [] : [`${found}:`, ...asFindings(compose.output)]
+interface ValidatedCompose {
+  readonly project: ComposeProject
+  readonly result: RunResult
 }
+
+const validateComposeProjects = (
+  context: Context,
+  projects: readonly ComposeProject[],
+): readonly ValidatedCompose[] =>
+  projects.map(
+    (project: ComposeProject): ValidatedCompose => ({
+      project,
+      result: validateCompose(path.join(context.root, project.directory)),
+    }),
+  )
+
+// A missing daemon is reported as itself rather than as a pile of findings about files no tool could
+// read. It is asked of the compose results too, which it was not: a project shipping only a compose file
+// met a missing Docker as shell noise from a command that never ran.
+const firstMissingDaemon = (results: readonly RunResult[]): GateResult | undefined =>
+  results
+    .map((result: RunResult): GateResult | undefined => requireDocker(result, 'the container gate'))
+    .find((entry: GateResult | undefined): boolean => entry !== undefined)
 
 interface LintedDockerfile {
   readonly target: string
@@ -156,36 +169,35 @@ const lintDockerfile = (context: Context, target: string): RunResult =>
 
 // What the gate actually looked at, so a pass never claims more than it checked. The summary read
 // "N Dockerfile(s) and the compose file are valid" whether or not a compose file existed.
-const describeTargets = (dockerfileCount: number, hasCompose: boolean): string => {
+const describeTargets = (dockerfileCount: number, composeCount: number): string => {
   const parts: readonly string[] = [
     ...(dockerfileCount > 0 ? [`${String(dockerfileCount)} Dockerfile(s)`] : []),
-    ...(hasCompose ? ['the compose file'] : []),
+    ...(composeCount > 0 ? [`${String(composeCount)} compose project(s)`] : []),
   ]
   return parts.length === 0
     ? 'the project ships no container definition'
     : `${parts.join(' and ')} are valid`
 }
 
-/** Lint every Dockerfile and validate the compose file. */
+/** Lint every Dockerfile and validate every compose project. */
 export const containers = (context: Context): GateResult => {
   const targets: readonly string[] = dockerfiles(context)
-  const hasCompose: boolean = composeFile(context) !== undefined
+  const projects: readonly ComposeProject[] = composeProjects(context)
   // A project whose database comes from compose and whose app is built by Next ships no Dockerfile at
   // all - the common Payload layout. Returning here on that count alone meant its compose file was
   // never validated, and the gate reported a pass having read nothing.
-  if (!hasCompose && targets.length === 0) {
+  if (projects.length === 0 && targets.length === 0) {
     return passed('the project ships no container definition')
   }
-  // Lint every Dockerfile first, then judge. A missing daemon is reported as itself rather than as a
-  // pile of findings about files no tool could read.
+  // Run every tool first, then judge.
   const linted: readonly LintedDockerfile[] = targets.map(
     (target: string): LintedDockerfile => ({ target, result: lintDockerfile(context, target) }),
   )
-  const missing: GateResult | undefined = linted
-    .map((entry: LintedDockerfile): GateResult | undefined =>
-      requireDocker(entry.result, 'the container gate'),
-    )
-    .find((entry: GateResult | undefined): boolean => entry !== undefined)
+  const validated: readonly ValidatedCompose[] = validateComposeProjects(context, projects)
+  const missing: GateResult | undefined = firstMissingDaemon([
+    ...linted.map((entry: LintedDockerfile): RunResult => entry.result),
+    ...validated.map((entry: ValidatedCompose): RunResult => entry.result),
+  ])
   if (missing !== undefined) {
     return missing
   }
@@ -193,11 +205,13 @@ export const containers = (context: Context): GateResult => {
     ...linted.flatMap((entry: LintedDockerfile): readonly string[] =>
       entry.result.code === 0 ? [] : [`${entry.target}:`, ...asFindings(entry.result.output)],
     ),
-    ...composeFindings(context),
+    ...validated.flatMap((entry: ValidatedCompose): readonly string[] =>
+      entry.result.code === 0 ? [] : [`${entry.project.file}:`, ...asFindings(entry.result.output)],
+    ),
   ]
   return findings.length > 0
     ? failed('container definitions have defects', findings)
-    : passed(describeTargets(targets.length, hasCompose))
+    : passed(describeTargets(targets.length, projects.length))
 }
 
 /** Lint the GitHub Actions workflows. */
