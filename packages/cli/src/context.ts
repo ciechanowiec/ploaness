@@ -251,7 +251,20 @@ const hasEntry = (directory: string, entry: string): boolean =>
 // Candidate project directories come from the tracked tree rather than from a filesystem walk, so a
 // directory git does not know about - a build output, an ignored scratch copy, an uninstalled example -
 // can never become a governed member.
-const manifestDirectories = (root: string): readonly string[] =>
+// Candidate project directories come from the tracked tree rather than a filesystem walk, so a
+// directory git does not know about - a build output, an ignored scratch copy - can never become a
+// governed member. A directory that is not a repository at all has exactly one project, itself: the
+// integration fixtures install into such a directory before any commit exists, and asking git there
+// fails rather than answering.
+const manifestDirectories = (root: string): readonly string[] => {
+  try {
+    return trackedManifestDirectories(root)
+  } catch {
+    return [ROOT_MEMBER_PATH]
+  }
+}
+
+const trackedManifestDirectories = (root: string): readonly string[] =>
   trackedFiles(root)
     .filter((file: string): boolean => path.basename(file) === MANIFEST)
     .map((file: string): string => {
