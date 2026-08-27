@@ -15,6 +15,7 @@ import {
   javascriptBlock,
   prettierLast,
   processConfigBlock,
+  specEnvironmentBlock,
   testIdiomRules,
   testIntegrityRules,
   testSuiteSyntaxRules,
@@ -51,6 +52,8 @@ export default compose(
   // The setup file's role, straight after the block it narrows. It must come later: a block that sets
   // this rule replaces its options, so stating the role first would have the general block undo it.
   processConfigBlock(),
+  // And the spec's, which is to vary the environment rather than to fix it. Same ordering constraint.
+  specEnvironmentBlock(),
   javascriptBlock(JAVASCRIPT_FILES),
   // A library's specs are held to the same integrity rules as an application's: the suite is a gate, so
   // a test that cannot fail is a gate that cannot fail.

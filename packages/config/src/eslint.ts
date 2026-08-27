@@ -30,6 +30,7 @@ import {
   NO_NETWORK_GUARD_ESCAPE,
   prettierLast,
   processConfigBlock,
+  specEnvironmentBlock,
   testIdiomRules,
   testIntegrityRules,
   testSuiteSyntaxRules,
@@ -103,6 +104,9 @@ export default compose(
   // The setup file's role, straight after the block it narrows. It must come later: a block that sets
   // this rule replaces its options, so stating the role first would have the general block undo it.
   processConfigBlock(),
+
+  // And the spec's, which is to vary the environment rather than to fix it. Same ordering constraint.
+  specEnvironmentBlock(),
 
   // ── Documenting comment blocks on hand-written modules. Default-safe: every src/ TypeScript module
   //    is in scope, with only the app/route layer, scripts, and generated files exempted (they carry

@@ -777,6 +777,33 @@ export const processConfigBlock = (): FlatConfigBlock => ({
   },
 })
 
+/**
+ * A spec's need to VARY the environment, which the setup file's carve-out does not cover.
+ *
+ * The block above admits `process.env` at `vitest.setup.ts`, which configures the process once, before
+ * any spec reads it. That is not the same permission a spec needs: a branch taken only when a variable
+ * is unset, and another taken only when it is set, cannot both be observed from a value fixed for the
+ * whole run. Varying it per case was the missing half, and every mechanism for doing so was banned -
+ * `vi.stubEnv` by the mock ban, `test.env` by the Vitest config having to be a bare re-export, and a
+ * direct assignment by this rule. Three bans meeting over one need, while the coverage floor still
+ * required the branch. Found by a consumer whose endpoint returns 503 with no API key configured, which
+ * no legal test could reach.
+ *
+ * The exemption is the environment and nothing else, so `no-let` and every other in-place mutation still
+ * apply to a spec - and it is `tests/**` in both shipped configs rather than the Vitest globs alone,
+ * because two configs that disagree about one path are what `eslint-process-scope.spec.ts` exists to
+ * catch.
+ */
+export const specEnvironmentBlock = (): FlatConfigBlock => ({
+  files: ['tests/**'],
+  // Mounted for the reason the block above states: a rule whose plugin no matching block defines makes
+  // ESLint reject the entire config.
+  plugins: { functional },
+  rules: {
+    'functional/immutable-data': immutableData([PROCESS_ENVIRONMENT]),
+  },
+})
+
 /** The shared selectors, re-exported so a scoped block can spread rather than restate them. */
 export {
   NO_FAST_CHECK_SEED,
