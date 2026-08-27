@@ -2,18 +2,6 @@
   "extends": "./dependency-cruiser-core.json",
   "forbidden": [
     {
-      "name": "pure-logic-stays-pure",
-      "severity": "error",
-      "comment": "src/access and src/lib are the pure-logic floor: they must depend on nothing else in src (only types and third-party libs). If you need framework data, pass it in as a plain value. This is what keeps them unit-testable without mocks.",
-      "from": {
-        "path": "^src/(access|lib)/"
-      },
-      "to": {
-        "path": "^src/",
-        "pathNot": "^src/(access|lib)/|^src/payload-types\\.ts$"
-      }
-    },
-    {
       "name": "nothing-imports-app",
       "severity": "error",
       "comment": "The Next.js app/routing layer (src/app) is the top layer: it composes everything else and nothing imports it back. Phrased as 'anything outside src/app must not import src/app' rather than enumerating the lower layers, so a NEW source directory is governed automatically without anyone remembering to add it here.",
@@ -39,5 +27,6 @@
         "pathNot": ["node_modules/@types/"]
       }
     }
-  ]
+  ],
+  "$comment": "The Payload layer map, minus the pure-logic floor. That rule is rendered per project from the declared pureLogicRoots, because the floor is the one genuinely project-shaped part of an architecture contract and a project may not own this file to state it."
 }

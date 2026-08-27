@@ -78,6 +78,24 @@ export interface Settings {
   readonly unmanagedAssets: readonly UnmanagedAsset[]
   /** Repo-relative path patterns exempt from the typography ban (generated files only). */
   readonly typographyExclusions: readonly string[]
+  /**
+   * Paths holding framework-generated scaffolding, which the lint pass relaxes rather than judges.
+   *
+   * The relaxation set is real and correct; expressing it only as `src/app/(payload)/**` made it
+   * unreachable for anything else. A Next application that is not a Payload one has route handlers and
+   * layouts with exactly the same property - written by a framework to a shape a project does not
+   * choose - and no way to say so. Additive to the Payload paths, so declaring nothing keeps the
+   * contract a Payload project already had.
+   */
+  readonly frameworkGlue: readonly string[]
+  /**
+   * Directories that form the pure-logic floor: they may depend on nothing else under the source root.
+   *
+   * The architecture contract calls the layer map "the one genuinely project-shaped part" and then
+   * hard-coded it to `src/access` and `src/lib`. A project placing pure logic elsewhere had no way to
+   * state that without owning a forbidden file. Additive, so the shipped floor still holds.
+   */
+  readonly pureLogicRoots: readonly string[]
   /** Every exclusion the project declared, honoured or not, so a gate can judge them. */
   readonly declaredExclusions: readonly DeclaredExclusion[]
   /** Repo-relative path patterns exempt from the hand-written-JavaScript ban. */
@@ -148,6 +166,13 @@ const DEFAULT_ANALYSIS_ENV: Readonly<Record<string, string>> = {
 
 // Generated artefacts every Payload project carries. They are defaults rather than hard-coded skips, so
 // a project that renames them can declare its own, but no project has to restate the obvious.
+// The scaffolding Payload generates. A project declaring nothing is held to exactly this, which is the
+// set that shipped before the role was declarable.
+const DEFAULT_FRAMEWORK_GLUE: readonly string[] = ['src/app/(payload)/**', 'src/payload.config.ts']
+
+/** The pure-logic floor a Payload project has by convention. */
+const DEFAULT_PURE_LOGIC_ROOTS: readonly string[] = ['src/access', 'src/lib']
+
 const DEFAULT_TYPOGRAPHY_EXCLUSIONS: readonly string[] = [
   String.raw`^\.claude/`,
   String.raw`^src/payload-types\.ts$`,
@@ -323,6 +348,8 @@ interface DeclaredLists {
   readonly javascript: readonly DeclaredExclusion[]
   readonly coverage: readonly DeclaredExclusion[]
   readonly routes: readonly DeclaredExclusion[]
+  readonly glue: readonly DeclaredExclusion[]
+  readonly layers: readonly DeclaredExclusion[]
 }
 
 // The kind travels with the setting because this is the only place the answer is not a guess: by the
@@ -332,6 +359,8 @@ const readDeclaredLists = (raw: Record<string, unknown>): DeclaredLists => ({
   javascript: asDeclaredExclusions(raw['javascriptAllowlist'], 'javascriptAllowlist', 'regex'),
   coverage: asDeclaredExclusions(raw['coverageExclude'], 'coverageExclude', 'glob'),
   routes: asDeclaredExclusions(raw['accessibilitySkipRoutes'], 'accessibilitySkipRoutes', 'route'),
+  glue: asDeclaredExclusions(raw['frameworkGlue'], 'frameworkGlue', 'glob'),
+  layers: asDeclaredExclusions(raw['pureLogicRoots'], 'pureLogicRoots', 'glob'),
 })
 
 /**
@@ -347,6 +376,8 @@ export const readSettings = (packageJson: unknown): Settings => {
     javascript: declaredJavascript,
     coverage: declaredCoverage,
     routes: declaredRoutes,
+    glue: declaredGlue,
+    layers: declaredLayers,
   }: DeclaredLists = readDeclaredLists(raw)
   return {
     // Additive, like every other list field. Replacing the default let a project declare `["src"]` and
@@ -357,11 +388,15 @@ export const readSettings = (packageJson: unknown): Settings => {
     ],
     unmanagedAssets: asUnmanagedAssets(raw['unmanagedAssets']),
     typographyExclusions: [...DEFAULT_TYPOGRAPHY_EXCLUSIONS, ...honoured(declaredTypography)],
+    frameworkGlue: [...DEFAULT_FRAMEWORK_GLUE, ...honoured(declaredGlue)],
+    pureLogicRoots: [...DEFAULT_PURE_LOGIC_ROOTS, ...honoured(declaredLayers)],
     declaredExclusions: [
       ...declaredTypography,
       ...declaredJavascript,
       ...declaredCoverage,
       ...declaredRoutes,
+      ...declaredGlue,
+      ...declaredLayers,
     ],
     javascriptAllowlist: [...DEFAULT_JAVASCRIPT_ALLOWLIST, ...honoured(declaredJavascript)],
     coverageExclude: [...DEFAULT_COVERAGE_EXCLUDE, ...honoured(declaredCoverage)],

@@ -34,6 +34,7 @@ import {
   typeAwareParsing,
   vitestPlugin,
 } from './eslint-core.js'
+import { projectSettings as settings } from './project-settings.js'
 
 const NO_INLINE_CONFIG_FUNCTIONS_SELECTOR: string = 'ArrowFunctionExpression, FunctionExpression'
 const NO_INLINE_CONFIG_FUNCTIONS_MESSAGE: string =
@@ -77,15 +78,12 @@ export default compose(
   typeAwareParsing({ projectService: true }),
   { rules: guidelineRules },
 
-  // Immutability: every hand-written TypeScript, with the generated Payload files exempt by role.
+  // Immutability: every hand-written TypeScript, with the framework's own scaffolding exempt by role.
+  // The role is declarable rather than a fixed path, because a project that mounts its framework
+  // elsewhere has the same generated files under a name ploaness cannot guess.
   immutabilityBlock(
     ['**/*.ts', '**/*.tsx'],
-    [
-      'src/app/(payload)/**',
-      'src/payload.config.ts',
-      'src/payload-types.ts',
-      'src/payload-generated-schema.ts',
-    ],
+    [...settings.frameworkGlue, 'src/payload-types.ts', 'src/payload-generated-schema.ts'],
   ),
 
   // ── Documenting comment blocks on hand-written modules. Default-safe: every src/ TypeScript module
@@ -137,7 +135,7 @@ export default compose(
   //    of `src/app/**` - `(frontend)`, `oauth`, and any route you hand-write are real code and stay
   //    fully strict so the gate keeps biting as the app grows. ─────────────────────────────────────
   {
-    files: ['src/app/(payload)/**', 'src/payload.config.ts'],
+    files: [...settings.frameworkGlue],
     rules: {
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',
@@ -157,7 +155,7 @@ export default compose(
   //    framework re-exports like `export const GET = REST_GET(config)`. Custom app code is NOT
   //    exempted, and payload.config.ts keeps typedef. ───────────────────────────────────────────
   {
-    files: ['src/app/(payload)/**'],
+    files: [...settings.frameworkGlue],
     rules: {
       '@typescript-eslint/typedef': 'off',
     },

@@ -4,6 +4,7 @@
 // needs no fixture repository to exercise its edge cases.
 
 export * from './agent-references.js'
+export * from './architecture-layers.js'
 export * from './asset-policy.js'
 export * from './banned-typography.js'
 export * from './bundle-budget.js'

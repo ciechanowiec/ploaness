@@ -1,10 +1,11 @@
 // The gates that delegate to a tool. Each one points the tool at the ploaness-owned configuration rather
 // than trusting a file in the consumer tree, because most of those files are FORBIDDEN paths: the
 // project has no copy to drift from.
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { asRecord } from '@ploaness/governance'
-import { type Context, readJson, resolveTool, shippedDirectory } from '../context.js'
+import { asRecord, type MemberKind, memberKindOf, pureLogicRule } from '@ploaness/governance'
+import { type Context, type Member, readJson, resolveTool, shippedDirectory } from '../context.js'
 import { failed, fromRun, type GateResult, passed, type RunResult, runNode } from '../exec.js'
 
 const configFile = (name: string): string => path.join(shippedDirectory('@ploaness/config'), name)
@@ -97,13 +98,42 @@ export const css = (context: Context): GateResult =>
   )
 
 /** Module architecture: layer boundaries, cycles, and import hygiene. */
-export const architecture = (context: Context): GateResult =>
+// The layer map is rendered rather than shipped, because the pure-logic floor is the one genuinely
+// project-shaped part of the contract and a governed project may not own the analyzer's config file to
+// state it. Written outside the working tree, so a verification run still writes nothing a fingerprint
+// would notice, and pointed at the shipped rules by absolute path so the relative extends still resolves.
+// Matches the indent every JSON file ploaness writes.
+const JSON_INDENT: number = 2
+
+const architectureConfig = (context: Context, kind: MemberKind): string => {
+  const shipped: string = configFile(
+    kind === 'library' ? 'dependency-cruiser-core.json' : 'dependency-cruiser.json',
+  )
+  const floor: Record<string, unknown> | undefined = pureLogicRule(context.settings.pureLogicRoots)
+  if (floor === undefined) {
+    return shipped
+  }
+  const directory: string = mkdtempSync(path.join(tmpdir(), 'ploaness-arch-'))
+  const rendered: string = path.join(directory, 'dependency-cruiser.json')
+  writeFileSync(
+    rendered,
+    `${JSON.stringify({ extends: shipped, forbidden: [floor] }, null, JSON_INDENT)}\n`,
+  )
+  return rendered
+}
+
+const architectureArguments = (context: Member): readonly string[] => {
+  const kind: MemberKind = memberKindOf(context.packageJson)
+  return [...context.settings.sourceRoots, '--config', architectureConfig(context, kind)]
+}
+
+export const architecture = (context: Member): GateResult =>
   fromRun(
     runNode(
       resolveTool('dependency-cruiser', 'depcruise'),
       // Every declared source root, not `src` alone: the acyclic-dependency rule is about the
       // repository's dependency units, and a cycle through `scripts` or `tests` is still a cycle.
-      [...context.settings.sourceRoots, '--config', configFile('dependency-cruiser.json')],
+      architectureArguments(context),
       { cwd: context.root },
     ),
     'module architecture holds',
