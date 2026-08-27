@@ -219,6 +219,18 @@ Note what the ceiling does NOT count: it measures files whose extension is code,
 why the asset-body check is a script rather than a function, and why the fixture mutations are programs
 in `it/lib/` rather than arguments to `node -e`.
 
+### Tailwind is a dialect in both CSS gates, not one
+
+`packages/config/stylelint.json` lists the full Tailwind v4 at-rule set deliberately, arguing Tailwind is
+a CSS dialect a Payload project may legitimately be written in. Biome's CSS parser had not been told the
+same thing, and the consequence was worse than an inconsistent verdict: `@theme` and `@apply` are not
+lint findings to Biome, they are SYNTAX ERRORS, so a Tailwind stylesheet failed to parse and aborted
+formatting for the whole run. One stylesheet, passing `css` and unparseable to `biome`.
+
+`css.parser.tailwindDirectives` in `biome-core.json` is that decision reaching the second gate. It
+teaches the parser a dialect and turns no rule off, which is why it is not a relaxation - the same
+reasoning that admitted the at-rules to stylelint, applied where it was missing.
+
 ### The suite runs under the guard it ships
 
 `packages/config/src/vitest-setup.ts` is loaded ahead of every other setup file, here and in a consumer. It
