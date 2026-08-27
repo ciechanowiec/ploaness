@@ -273,6 +273,15 @@ const checkExactVersions = (packageJson: Record<string, unknown>): readonly Wiri
 // exists instead of by an entry somebody has to remember.
 const PAYLOAD_SCOPE: string = '@payloadcms/'
 
+/**
+ * The package whose presence makes a project a Payload application.
+ *
+ * Exported because `preflight` and `workspace-policy` both ask the question and both wrote the literal
+ * themselves. The name decides which scope's gates a member receives, so it is not a string to keep
+ * three copies of.
+ */
+export const PAYLOAD_PACKAGE: string = 'payload'
+
 const checkPayloadFamily = (
   packageJson: Record<string, unknown>,
   payloadVersion: string | undefined,
