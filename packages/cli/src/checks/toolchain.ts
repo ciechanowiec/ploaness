@@ -1,7 +1,7 @@
 // The gates that delegate to a tool. Each one points the tool at the ploaness-owned configuration rather
 // than trusting a file in the consumer tree, because most of those files are FORBIDDEN paths: the
 // project has no copy to drift from.
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { asRecord, type MemberKind, memberKindOf, pureLogicRule } from '@ploaness/governance'
@@ -122,23 +122,31 @@ const architectureConfig = (context: Context, kind: MemberKind): string => {
   return rendered
 }
 
-const architectureArguments = (context: Member): readonly string[] => {
-  const kind: MemberKind = memberKindOf(context.packageJson)
-  return [...context.settings.sourceRoots, '--config', architectureConfig(context, kind)]
-}
+// Every declared source root, not `src` alone: the acyclic-dependency rule is about the package's
+// dependency units, and a cycle through `scripts` or `tests` is still a cycle. Only the roots that
+// EXIST, though - the analyzer refuses a directory it cannot open, so a package holding shared scripts
+// and no `src` failed on the shape of its own layout rather than on anything about its architecture.
+const presentSourceRoots = (context: Member): readonly string[] =>
+  context.settings.sourceRoots.filter((root: string): boolean =>
+    existsSync(path.join(context.root, root)),
+  )
 
-export const architecture = (context: Member): GateResult =>
-  fromRun(
+export const architecture = (context: Member): GateResult => {
+  const roots: readonly string[] = presentSourceRoots(context)
+  if (roots.length === 0) {
+    return passed('this package holds no source directory to cruise')
+  }
+  const kind: MemberKind = memberKindOf(context.packageJson)
+  return fromRun(
     runNode(
       resolveTool('dependency-cruiser', 'depcruise'),
-      // Every declared source root, not `src` alone: the acyclic-dependency rule is about the
-      // repository's dependency units, and a cycle through `scripts` or `tests` is still a cycle.
-      architectureArguments(context),
+      [...roots, '--config', architectureConfig(context, kind)],
       { cwd: context.root },
     ),
     'module architecture holds',
     'the module architecture contract is broken',
   )
+}
 
 // Roles with no hand-written type surface to measure: framework glue, generated files, views, and
 // configuration. Measuring them would dilute the score rather than sharpen it.
