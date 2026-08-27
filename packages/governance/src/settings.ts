@@ -248,6 +248,13 @@ const DEFAULT_COVERAGE_EXCLUDE: readonly string[] = [
   'src/seed/**',
   'src/**/*.d.ts',
   'src/**/*.tsx',
+  // Seeded by ploaness rather than written by the project, and verified end to end by
+  // `security-headers.e2e.spec.ts` - an asset ploaness also seeds, and which shipping made the
+  // end-to-end suite mandatory. Without this line every consumer meets a coverage failure on day one,
+  // on a file it did not author, and answers it by restating the same exclusion in its own manifest.
+  // A unit test would assert that the policy builder returns the string it returns; the sweep asks the
+  // running application what it actually sent, which is the question worth failing on.
+  'src/proxy.ts',
 ]
 
 const isTextArray = (raw: unknown): raw is readonly string[] =>
