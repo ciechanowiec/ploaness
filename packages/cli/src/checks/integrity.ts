@@ -69,6 +69,8 @@ export const bundle = (context: Context): GateResult => {
   return report.isWithinBudget
     ? passed(summary)
     : failed(`${summary} and is over budget`, [
-        'investigate the added weight, or raise ploaness.bundleBudgetBytes deliberately if justified',
+        // Not "raise the setting": `readSettings` clamps it with `Math.min`, so a project can only
+        // ever lower it. Advising an action the code forbids is the defect this message used to be.
+        "investigate the added weight; the ceiling is the harness's, and a project may only lower it",
       ])
 }

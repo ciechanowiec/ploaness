@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { BUNDLE_BUDGET_BYTES } from '../src/bundle-budget.js'
 import { matchesRole } from '../src/file-roles.js'
 import { readSettings, type Settings } from '../src/settings.js'
 
@@ -6,7 +7,7 @@ describe('readSettings', () => {
   it('returns the strict defaults for a project that declares nothing', () => {
     const settings: Settings = readSettings({})
     expect(settings.sourceRoots).toEqual(['src', 'tests', 'scripts'])
-    expect(settings.bundleBudgetBytes).toBe(900 * 1024)
+    expect(settings.bundleBudgetBytes).toBe(BUNDLE_BUDGET_BYTES)
     expect(settings.unmanagedAssets).toEqual([])
     expect(settings.pretest).toEqual([])
   })
@@ -43,7 +44,7 @@ describe('readSettings', () => {
 
   it('falls back to the default when a value has the wrong type', () => {
     expect(readSettings({ ploaness: { bundleBudgetBytes: 'big' } }).bundleBudgetBytes).toBe(
-      900 * 1024,
+      BUNDLE_BUDGET_BYTES,
     )
     expect(readSettings({ ploaness: { sourceRoots: 'src' } }).sourceRoots).toEqual([
       'src',
@@ -53,7 +54,26 @@ describe('readSettings', () => {
   })
 
   it('rejects a non-positive bundle budget', () => {
-    expect(readSettings({ ploaness: { bundleBudgetBytes: 0 } }).bundleBudgetBytes).toBe(900 * 1024)
+    expect(readSettings({ ploaness: { bundleBudgetBytes: 0 } }).bundleBudgetBytes).toBe(
+      BUNDLE_BUDGET_BYTES,
+    )
+  })
+})
+
+// The direction is the whole rule, and it was stated wrongly where it mattered: the `bundle` gate's
+// finding advised raising `ploaness.bundleBudgetBytes`, which this clamp forbids. A project may hold
+// itself to less than the harness asks and never to more.
+describe('the bundle ceiling clamps in one direction only', () => {
+  it('honours a smaller declared bundle budget', () => {
+    expect(
+      readSettings({ ploaness: { bundleBudgetBytes: BUNDLE_BUDGET_BYTES - 1 } }).bundleBudgetBytes,
+    ).toBe(BUNDLE_BUDGET_BYTES - 1)
+  })
+
+  it('ignores a larger declared bundle budget, so the ceiling can only be lowered', () => {
+    expect(
+      readSettings({ ploaness: { bundleBudgetBytes: BUNDLE_BUDGET_BYTES + 1 } }).bundleBudgetBytes,
+    ).toBe(BUNDLE_BUDGET_BYTES)
   })
 
   // The analysis environment exists so a static gate can IMPORT a Payload config, which validates
