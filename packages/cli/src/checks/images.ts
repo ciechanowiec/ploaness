@@ -130,7 +130,9 @@ export const imageFreshness = async (): Promise<ImageReport> => {
     return {
       scanned: 0,
       lines: [],
-      failure: `${String(declared.length - pinned.length)} pinned image(s) are not written as <repo>:<tag>@sha256:<digest>`,
+      failure:
+        `${String(declared.length - pinned.length)} pinned image(s) are not written as ` +
+        '<repo>:<tag>@sha256:<digest>',
     }
   }
   try {
