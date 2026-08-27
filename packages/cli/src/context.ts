@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import {
   asRecord,
   asStringRecord,
+  type DeclaredExclusion,
   findGovernedMembers,
   findRepositoryRoot,
   isPayloadProject,
@@ -20,6 +21,7 @@ import {
   readRawSettings,
   readSettings,
   readWorkspacePackages,
+  rebaseExclusion,
   type Settings,
   selectProjects,
 } from '@ploaness/governance'
@@ -55,6 +57,14 @@ export interface Member extends Context {
   readonly path: string
   /** Whether this member declares Payload, which decides if the Payload-scope gates ask about it. */
   readonly isPayload: boolean
+  /**
+   * The other members' paths, relative to THIS member's directory.
+   *
+   * An analyzer that walks everything below where it runs has to be told where this package stops. At
+   * a workspace root every sibling sits underneath, and without this each sibling's entry point is
+   * reported as an unused file by a run that was never analysing it.
+   */
+  readonly siblingPaths: readonly string[]
 }
 
 /**
@@ -317,12 +327,36 @@ const readManifest = (root: string, projectPath: string): unknown =>
 // A member's settings sit on top of the repository's rather than replacing them, so a fact declared
 // once at the root - a generated directory the typography ban must skip, a stricter bundle budget -
 // reaches every package without being restated in each.
-const createMember = (
-  root: string,
-  projectPath: string,
-  isEnforced: boolean,
-  repositoryBlock: Record<string, unknown> = {},
-): Member => {
+// The members that sit INSIDE this one, named relative to it. A member elsewhere in the tree is not
+// below the directory an analyzer walks, so naming it would ignore a path that never appears; and one
+// that is below must be named the way the walk will see it, from here rather than from the root.
+const nestedWithin = (memberPath: string, every: readonly string[]): readonly string[] => {
+  if (memberPath === ROOT_MEMBER_PATH) {
+    return every.filter((other: string): boolean => other !== ROOT_MEMBER_PATH)
+  }
+  const prefix: string = `${memberPath}/`
+  return every
+    .filter((other: string): boolean => other.startsWith(prefix))
+    .map((other: string): string => other.slice(prefix.length))
+}
+
+/** What building one member needs beyond the manifest it reads for itself. */
+interface MemberInputs {
+  readonly root: string
+  readonly projectPath: string
+  readonly isEnforced: boolean
+  /** The repository's own settings block, which the member's own layers onto. */
+  readonly repositoryBlock?: Record<string, unknown>
+  readonly siblings?: readonly string[]
+}
+
+const createMember = ({
+  root,
+  projectPath,
+  isEnforced,
+  repositoryBlock = {},
+  siblings = [],
+}: MemberInputs): Member => {
   const packageJson: unknown = readManifest(root, projectPath)
   return {
     root: projectPath === ROOT_MEMBER_PATH ? root : path.join(root, projectPath),
@@ -331,6 +365,7 @@ const createMember = (
     isEnforced,
     path: projectPath,
     isPayload: isPayloadProject(packageJson),
+    siblingPaths: siblings,
   }
 }
 
@@ -353,16 +388,46 @@ export const createRepository = (cwd: string, isEnforced: boolean): Repository =
     }),
   )
   const packageJson: unknown = readManifest(root, ROOT_MEMBER_PATH)
+  const memberPaths: readonly string[] = findGovernedMembers(projects)
+  const members: readonly Member[] = memberPaths.map(
+    (projectPath: string): Member =>
+      createMember({
+        root,
+        projectPath,
+        isEnforced,
+        repositoryBlock: ploanessBlock(packageJson),
+        siblings: nestedWithin(projectPath, memberPaths),
+      }),
+  )
   return {
     root,
     packageJson,
-    settings: readSettings(packageJson),
+    settings: withMemberExclusions(readSettings(packageJson), members),
     isEnforced,
     workspaceFile,
     projects,
-    members: findGovernedMembers(projects).map(
-      (projectPath: string): Member => createMember(root, projectPath, isEnforced),
-    ),
+    members,
+  }
+}
+
+// The gates that walk the tracked tree run once, at the root, while a member declares its exclusions
+// relative to itself. Without this a generated directory a member correctly excused starts failing
+// them, because the pattern it wrote is anchored one directory above where the gate is looking.
+const withMemberExclusions = (base: Settings, members: readonly Member[]): Settings => {
+  const rebased: readonly DeclaredExclusion[] = members.flatMap(
+    (member: Member): readonly DeclaredExclusion[] =>
+      member.settings.declaredExclusions.map(
+        (entry: DeclaredExclusion): DeclaredExclusion => rebaseExclusion(member.path, entry),
+      ),
+  )
+  const patternsFor = (setting: string): readonly string[] =>
+    rebased
+      .filter((entry: DeclaredExclusion): boolean => entry.setting === setting)
+      .map((entry: DeclaredExclusion): string => entry.pattern)
+  return {
+    ...base,
+    typographyExclusions: [...base.typographyExclusions, ...patternsFor('typographyExclusions')],
+    javascriptAllowlist: [...base.javascriptAllowlist, ...patternsFor('javascriptAllowlist')],
   }
 }
 
@@ -398,6 +463,10 @@ export const memberAt = (repository: Repository, cwd: string): Member | undefine
   }
   return (
     repository.members.find((member: Member): boolean => member.path === innermost.path) ??
-    createMember(repository.root, innermost.path, repository.isEnforced)
+    createMember({
+      root: repository.root,
+      projectPath: innermost.path,
+      isEnforced: repository.isEnforced,
+    })
   )
 }

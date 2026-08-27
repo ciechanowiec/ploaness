@@ -200,9 +200,32 @@ export const typeCoverage = (context: Context): GateResult =>
   )
 
 /** Dead code, unused files, and unused dependencies. */
-export const knip = (context: Context): GateResult =>
+// A member's analysis must stop at its own boundary. knip walks everything below the directory it runs
+// in, so at a workspace root that includes the sibling packages - and it then reports each sibling's
+// entry point as an unused file, because from the root's perspective nothing imports it. Each sibling
+// is a separate analysis with its own entries, which is exactly what running the gate per member does.
+const knipConfig = (context: Member): string => {
+  const siblings: readonly string[] = context.siblingPaths
+  if (siblings.length === 0) {
+    return configFile('knip.json')
+  }
+  const shipped: Record<string, unknown> = asRecord(readJson(configFile('knip.json')))
+  const directory: string = mkdtempSync(path.join(tmpdir(), 'ploaness-knip-'))
+  const rendered: string = path.join(directory, 'knip.json')
+  writeFileSync(
+    rendered,
+    `${JSON.stringify(
+      { ...shipped, ignore: siblings.map((sibling: string): string => `${sibling}/**`) },
+      null,
+      JSON_INDENT,
+    )}\n`,
+  )
+  return rendered
+}
+
+export const knip = (context: Member): GateResult =>
   fromRun(
-    runNode(resolveTool('knip'), ['--config', configFile('knip.json')], {
+    runNode(resolveTool('knip'), ['--config', knipConfig(context)], {
       cwd: context.root,
       // knip traces the graph by importing the project, and a Payload config validates `process.env`
       // at module scope. Without placeholders the analysis dies on configuration rather than on code.
