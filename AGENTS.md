@@ -238,6 +238,12 @@ escape hatch. It sits in `biome-core.json` rather than the Payload config becaus
 a wire-format convention rather than a Payload one, and one rule both configs share cannot drift from
 itself.
 
+The same convention covers a `typeProperty`, and for the same reason one level up: an interface that
+describes something the project did not define has to spell it the way its source does. `ProcessEnv` is
+the case that forced it - `NEXT_PUBLIC_CMS_URL` is the environment variable's actual name, so a governed
+project could not type `process.env` at all without a suppression, which is a strange thing for a
+harness that ships an `analysisEnv` setting to demand.
+
 ### Tailwind is a dialect in both CSS gates, not one
 
 `packages/config/stylelint.json` lists the full Tailwind v4 at-rule set deliberately, arguing Tailwind is
