@@ -121,6 +121,16 @@ describe('no-deep-relative-imports', () => {
     expect(sourceRulesOf("import { importMap } from '../importMap'")).toEqual([])
   })
 
+  it('exempts a helper reached from a nested spec directory', () => {
+    expect(sourceRulesOf("import { seed } from '../../../helpers/seed'")).toEqual([])
+  })
+
+  it('reports a climb that lands inside source rather than on a helper root', () => {
+    expect(sourceRulesOf("import { seed } from '../../src/helpers/seed'")).toEqual([
+      'no-deep-relative-imports',
+    ])
+  })
+
   it('is not part of the framework rule set, which only a Payload package can break', () => {
     expect(rulesOf("import { thing } from '../lib/thing'")).toEqual([])
   })

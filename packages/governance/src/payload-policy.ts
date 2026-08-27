@@ -117,7 +117,13 @@ const findOverrideAccess = (source: string): readonly PayloadViolation[] =>
 const RELATIVE_IMPORT: RegExp = /\b(?:from|import)\s*(?:\(\s*)?['"](\.\.\/[^'"]*)['"]/g
 // Test helpers live outside the `@/` alias root, and the Payload admin import map is generated. The
 // exemption is anchored at a path boundary so `../helpersOfMine` is not excused by `../helpers`.
-const RELATIVE_IMPORT_EXEMPT: RegExp = /^\.\.\/(?:helpers|importMap)(?:\/|$)/
+//
+// The ascent repeats, because its LENGTH was never part of that reason. Anchored at exactly one `../`,
+// the exemption reached a spec sitting directly under `tests/` and no deeper - so a suite whose
+// directories mirror `src/`, which is the ordinary layout, could not import the helpers the exemption
+// exists to admit. What still discriminates is the segment the climb LANDS on: `../../../helpers/x` is
+// a helper root reached from depth, while `../../../src/helpers/x` climbed into source and is reported.
+const RELATIVE_IMPORT_EXEMPT: RegExp = /^(?:\.\.\/)+(?:helpers|importMap)(?:\/|$)/
 
 const findDeepRelativeImports = (source: string): readonly PayloadViolation[] =>
   [...source.matchAll(RELATIVE_IMPORT)].flatMap(
