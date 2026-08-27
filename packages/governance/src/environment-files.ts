@@ -34,3 +34,24 @@ export const runEnvironmentFiles = (
   isExistingFile: (relativePath: string) => boolean,
 ): readonly string[] =>
   RUN_ENVIRONMENT_FILES.filter((file: string): boolean => isExistingFile(file))
+
+/**
+ * The port an origin names, as a string a child process's environment can carry.
+ *
+ * A project declares the origin its application serves, and ploaness starts that application itself.
+ * Reading the origin without reading the port meant the two disagreed: the server was started on the
+ * framework's default while the runner waited on the declared one, so the only setting that exists to
+ * describe a non-default port made the run hang rather than work.
+ * @param serverUrl the declared origin.
+ * @returns the port, or undefined when the origin names none and the default applies.
+ */
+export const portOf = (serverUrl: string): string | undefined => {
+  try {
+    const port: string = new URL(serverUrl).port
+    return port.length > 0 ? port : undefined
+  } catch {
+    // A malformed origin is the project's to fix, and the gate that drives it will say so far more
+    // clearly than a crash inside a configuration file that no stack trace points at.
+    return undefined
+  }
+}

@@ -69,6 +69,14 @@ export interface AuxiliaryServer {
   readonly command: string
   /** The origin Playwright waits for before the suite starts. */
   readonly url: string
+  /**
+   * The directory to start it in, relative to the member under test.
+   *
+   * A sibling application is started from its own package, not from the one being tested. Without this
+   * the only way to say so was a `cd` inside the command, which then resolves the framework binary from
+   * the wrong package's `.bin` - correct exactly while the two packages pin the same version.
+   */
+  readonly cwd?: string
 }
 
 /** The parameters a consuming project may declare under the `ploaness` key of its package.json. */
@@ -278,7 +286,13 @@ const asAuxiliaryServers = (raw: unknown): readonly AuxiliaryServer[] =>
         const record: Record<string, unknown> = asRecord(entry)
         const command: string = asText(record['command']).trim()
         const url: string = asText(record['url']).trim()
-        return command.length > 0 && url.length > 0 ? [{ command, url }] : []
+        if (command.length === 0 || url.length === 0) {
+          return []
+        }
+        // Optional, unlike the two above: a server started in the package under test needs no
+        // directory, and only a sibling application does.
+        const cwd: string = asText(record['cwd']).trim()
+        return [cwd.length > 0 ? { command, url, cwd } : { command, url }]
       })
     : []
 

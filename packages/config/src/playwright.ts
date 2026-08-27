@@ -11,7 +11,7 @@
 // and every threshold, ban and pinned spec above is the same whatever they say.
 import { existsSync } from 'node:fs'
 import { defineConfig, devices } from '@playwright/test'
-import { runEnvironmentFiles } from '@ploaness/governance'
+import { portOf, runEnvironmentFiles } from '@ploaness/governance'
 import { projectSettings } from './project-settings.js'
 
 // Read before anything else, because a spec module is what needs it. Playwright evaluates this config
@@ -40,6 +40,15 @@ const CI_RETRIES: number = 2
 // `ReturnType` rather than the runner's own exported type: naming that type would import it, which is
 // the dependency the annotation below exists to avoid. This binding is module-local, so it reaches no
 // declaration file either way.
+// Spread rather than assigned, so an origin naming no port leaves the framework's default in place
+// rather than setting PORT to the string "undefined".
+const withPort = (
+  base: Readonly<Record<string, string>>,
+  port: string | undefined,
+): Readonly<Record<string, string>> => (port === undefined ? base : { ...base, PORT: port })
+
+const declaredPort: string | undefined = portOf(projectSettings.serverUrl)
+
 const declared: ReturnType<typeof defineConfig> = defineConfig({
   testDir: './tests/e2e',
   timeout: TEST_TIMEOUT_MS,
@@ -69,7 +78,13 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
       url: projectSettings.serverUrl,
       reuseExistingServer: !isContinuousIntegration,
       timeout: SERVER_TIMEOUT_MS,
-      env: { NEXT_TELEMETRY_DISABLED: '1', NODE_OPTIONS: '--no-deprecation' },
+      // The port comes from the declared origin. Without it the server started on the framework's
+      // default while the runner waited on the origin the project declared, so the one setting that
+      // exists to describe a non-default port made the run hang instead of work.
+      env: withPort(
+        { NEXT_TELEMETRY_DISABLED: '1', NODE_OPTIONS: '--no-deprecation' },
+        declaredPort,
+      ),
     },
     // The same budget and the same reuse rule as the application: an auxiliary server is started by the
     // same runner on the same cold machine, so a shorter one would fail for the reason that one is long.
@@ -78,7 +93,11 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
       url: server.url,
       reuseExistingServer: !isContinuousIntegration,
       timeout: SERVER_TIMEOUT_MS,
-      env: { NODE_OPTIONS: '--no-deprecation' },
+      // A sibling application is started from its own directory, not from the package under test. The
+      // only alternative was a `cd` inside the command, which resolves the binary from the wrong
+      // package's `.bin` and works right up until the two versions differ.
+      ...(server.cwd !== undefined && { cwd: server.cwd }),
+      env: withPort({ NODE_OPTIONS: '--no-deprecation' }, portOf(server.url)),
     })),
   ],
 })
