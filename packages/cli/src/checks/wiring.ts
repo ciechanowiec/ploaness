@@ -175,6 +175,7 @@ const memberViolations = (member: Member): readonly WiringViolation[] => {
     packageJson: member.packageJson,
     kind,
     isNestedMember: member.path !== ROOT_MEMBER_PATH,
+    nestedMembers: member.siblingPaths,
     requiredBiomeFiles: requiredBiomeFiles(
       member.settings.sourceRoots,
       kind,

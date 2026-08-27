@@ -71,6 +71,7 @@ const packageHalf = (): readonly string[] =>
     packageJson: BROKEN.packageJson,
     kind: 'payload',
     isNestedMember: false,
+    nestedMembers: [],
     requiredBiomeFiles: BROKEN.requiredBiomeFiles,
     eslintConfig: BROKEN.eslintConfig,
     vitestConfig: BROKEN.vitestConfig,

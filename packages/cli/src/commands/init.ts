@@ -13,6 +13,7 @@ import {
   REQUIRED_SCRIPTS,
   ROOT_MEMBER_PATH,
   requiredBiomeFiles,
+  tsconfigPathsFor,
   wiringTargetsFor,
 } from '@ploaness/governance'
 import { hasSeededFile } from '../checks/assets.js'
@@ -52,12 +53,16 @@ const pathAliases = (kind: MemberKind): Readonly<Record<string, readonly string[
     ? { '@/*': ['./src/*'], '@payload-config': ['./src/payload.config.ts'] }
     : { '@/*': ['./src/*'] }
 
-const tsconfigStub = (kind: MemberKind, targets: MemberWiringTargets): string =>
+const tsconfigStub = (
+  kind: MemberKind,
+  targets: MemberWiringTargets,
+  nestedMembers: readonly string[],
+): string =>
   `${JSON.stringify(
     {
       extends: targets.tsconfigExtends,
       compilerOptions: { paths: pathAliases(kind) },
-      ...targets.tsconfigPaths,
+      ...tsconfigPathsFor(targets.tsconfigPaths, nestedMembers),
     },
     null,
     JSON_INDENT,
@@ -69,7 +74,7 @@ const stubs = (member: Member): Readonly<Record<string, string>> => {
   return {
     'eslint.config.mjs': reexportStub(targets.eslintSpecifier),
     'biome.json': biomeStub(member, kind, targets),
-    'tsconfig.json': tsconfigStub(kind, targets),
+    'tsconfig.json': tsconfigStub(kind, targets, member.siblingPaths),
     'vitest.config.mts': reexportStub(targets.vitestSpecifier),
     // A member with no application is not given a browser configuration, because the rule does not ask
     // it for one.

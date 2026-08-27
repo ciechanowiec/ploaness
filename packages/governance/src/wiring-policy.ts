@@ -173,6 +173,30 @@ export const LIBRARY_TSCONFIG_PATHS: Readonly<Record<string, readonly string[]>>
 }
 
 /**
+ * The `include` and `exclude` one member must carry, given the members nested inside it.
+ *
+ * The required `include` is a recursive TypeScript glob, which at a WORKSPACE ROOT sweeps every
+ * member's sources into the root's own project - under the ROOT's `paths`, where a member's `@/*`
+ * resolves to the wrong directory. eoc's root read the CMS scripts that way and failed `types` on
+ * imports that resolve perfectly well inside the CMS. Excluding them is not a relaxation: a member's
+ * analysis stops at its own boundary, which is the rule `knipConfig` already applies for the same
+ * reason, and each nested member is compiled by its own run.
+ *
+ * Derived rather than declared, so a member cannot exclude a sibling it does not contain and cannot
+ * forget one it does - and `ploaness init` writes exactly what the rule then asks for.
+ * @param base the paths for this member's kind.
+ * @param nestedMembers the repo-relative paths of the governed members inside this one.
+ * @returns the same paths, with every nested member excluded.
+ */
+export const tsconfigPathsFor = (
+  base: Readonly<Record<string, readonly string[]>>,
+  nestedMembers: readonly string[],
+): Readonly<Record<string, readonly string[]>> =>
+  nestedMembers.length === 0
+    ? base
+    : { ...base, exclude: [...(base['exclude'] ?? []), ...nestedMembers] }
+
+/**
  * Everything a member of one kind must point at.
  *
  * Declared once and consumed by both the rule and `ploaness init`, for the reason the whole module
@@ -430,6 +454,7 @@ const checkBiome = (
 const checkTsconfig = (
   config: string | undefined,
   targets: MemberWiringTargets,
+  nestedMembers: readonly string[],
 ): readonly WiringViolation[] => {
   if (config === undefined) {
     return [
@@ -460,7 +485,9 @@ const checkTsconfig = (
         reason: 'ploaness owns this compiler option; remove the local override',
       }),
     )
-  const wrongPaths: readonly WiringViolation[] = Object.entries(targets.tsconfigPaths)
+  const wrongPaths: readonly WiringViolation[] = Object.entries(
+    tsconfigPathsFor(targets.tsconfigPaths, nestedMembers),
+  )
     .filter(
       ([key, value]: readonly [string, unknown]): boolean =>
         JSON.stringify(parsed[key]) !== JSON.stringify(value),
@@ -520,6 +547,13 @@ export interface PackageWiringInputs {
    * the member, because `root` describes the file that declares it rather than the file it extends.
    */
   readonly isNestedMember: boolean
+  /**
+   * The governed members nested INSIDE this one, repo-relative.
+   *
+   * Empty for every member of a single-package project and for a leaf member of a workspace; non-empty
+   * only for a member that contains others, which in practice is the workspace root.
+   */
+  readonly nestedMembers: readonly string[]
   /** The `files` block this member's biome.json must carry, from {@link requiredBiomeFiles}. */
   readonly requiredBiomeFiles: Readonly<Record<string, unknown>>
   readonly eslintConfig: string | undefined
@@ -606,7 +640,7 @@ export const findPackageWiringViolations = (
       targets.biomeExtends,
       inputs.isNestedMember,
     ),
-    ...checkTsconfig(inputs.tsconfig, targets),
+    ...checkTsconfig(inputs.tsconfig, targets, inputs.nestedMembers),
   ]
 }
 
@@ -635,6 +669,9 @@ export const findWiringViolations = (inputs: WiringInputs): readonly WiringViola
     packageJson: inputs.packageJson,
     kind: 'payload',
     isNestedMember: false,
+    // A single-package project has no members inside it, which is what makes this composition equal to
+    // what shipped before the workspace split.
+    nestedMembers: [],
     requiredBiomeFiles: inputs.requiredBiomeFiles,
     eslintConfig: inputs.eslintConfig,
     vitestConfig: inputs.vitestConfig,
