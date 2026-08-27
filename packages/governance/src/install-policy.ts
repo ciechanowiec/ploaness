@@ -5,9 +5,11 @@
 // declaration untouched - so the gate passes while the code runs against a version ploaness never saw.
 // The same shape of escape silences the vulnerability gate through `pnpm.auditConfig`.
 //
-// The reader is deliberately small. It is not a YAML parser: it looks for the two block keys pnpm reads
-// at the top level of a workspace file, which is where they must appear to take effect.
+// The reader lives in `yaml-blocks.ts`. It is deliberately small and not a YAML parser: it looks for the
+// block keys pnpm reads at the top level of a workspace file, which is where they must appear to take
+// effect.
 import { readKey } from './json-shapes.js'
+import { declaresTopLevelKey, topLevelMappingEntries } from './yaml-blocks.js'
 
 /**
  * The install-config keys that can redefine a resolved version.
@@ -37,57 +39,21 @@ export interface OverrideEntry {
   readonly specifier: string
 }
 
-const isTopLevelKey = (line: string, key: string): boolean =>
-  new RegExp(String.raw`^${key}\s*:`).test(line)
-
-const isIndented = (line: string): boolean => /^\s+\S/.test(line)
-
-// The lines of a top-level block, which run until the next unindented line.
-const blockBody = (lines: readonly string[], key: string): readonly string[] => {
-  const start: number = lines.findIndex((line: string): boolean => isTopLevelKey(line, key))
-  if (start === -1) {
-    return []
-  }
-  const rest: readonly string[] = lines.slice(start + 1)
-  const end: number = rest.findIndex(
-    (line: string): boolean => line.trim().length > 0 && !isIndented(line),
-  )
-  return end === -1 ? rest : rest.slice(0, end)
-}
-
-const withoutQuotes = (value: string): string => value.replaceAll(/^['"]|['"]$/g, '')
-
 /**
  * Read the package names whose resolved version an install config redefines.
  * @param workspaceFile the contents of pnpm-workspace.yaml, or an empty string when absent.
  * @returns one entry per redefined package, naming the block it came from.
  */
-export const findOverrides = (workspaceFile: string): readonly OverrideEntry[] => {
-  const lines: readonly string[] = workspaceFile.split('\n')
-  return OVERRIDE_KEYS.flatMap((key: string): readonly OverrideEntry[] =>
-    blockBody(lines, key)
-      .map((line: string): string => line.trim())
-      .filter((line: string): boolean => line.length > 0 && !line.startsWith('#'))
-      .flatMap((line: string): readonly OverrideEntry[] => {
-        // The FIRST colon, not the last. A YAML value carries colons of its own - `npm:preact@10`,
-        // `link:../fork`, `git+ssh://...` - and splitting at the last one read `react: npm:preact@10`
-        // as a package called "react: npm", which then matched nothing in the pinned set. Every alias
-        // form, which is exactly how a pinned package is swapped for another, walked straight through
-        // the rule that exists to catch it.
-        const separator: number = line.indexOf(':')
-        if (separator === -1) {
-          return []
-        }
-        return [
-          {
-            key,
-            packageName: withoutQuotes(line.slice(0, separator).trim()),
-            specifier: withoutQuotes(line.slice(separator + 1).trim()),
-          },
-        ]
+export const findOverrides = (workspaceFile: string): readonly OverrideEntry[] =>
+  OVERRIDE_KEYS.flatMap((key: string): readonly OverrideEntry[] =>
+    topLevelMappingEntries(workspaceFile, key).map(
+      ([packageName, specifier]: readonly [string, string]): OverrideEntry => ({
+        key,
+        packageName,
+        specifier,
       }),
+    ),
   )
-}
 
 /**
  * Decide whether an install config names the dependencies allowed to run an install script.
@@ -99,9 +65,7 @@ export const declaresInstallScriptAllowlist = (
   workspaceFile: string,
   packageJson: unknown,
 ): boolean => {
-  if (
-    workspaceFile.split('\n').some((line: string): boolean => isTopLevelKey(line, ALLOWLIST_KEY))
-  ) {
+  if (declaresTopLevelKey(workspaceFile, ALLOWLIST_KEY)) {
     return true
   }
   return Array.isArray(readKey(readKey(packageJson, 'pnpm'), ALLOWLIST_KEY))
