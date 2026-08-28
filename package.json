@@ -27,6 +27,7 @@
     "@vitest/coverage-v8": "4.1.11",
     "eslint": "10.9.1",
     "fast-check": "4.9.0",
+    "ploaness": "workspace:*",
     "publint": "0.3.24",
     "typescript": "6.0.3",
     "vitest": "4.1.11"

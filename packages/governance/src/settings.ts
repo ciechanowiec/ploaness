@@ -161,6 +161,13 @@ export interface Settings {
    */
   readonly accessibilitySkipRoutes: readonly string[]
   /**
+   * How many routes the accessibility sweep may discover before it stops and fails.
+   *
+   * A ceiling on the sweep's cost, not a statement about the site. It is honoured only downward: a
+   * project may hold itself to a smaller crawl, and none may buy a pass by declaring a larger one.
+   */
+  readonly accessibilityRouteBudget: number
+  /**
    * Placeholder environment supplied to the gates that must IMPORT the project to analyse it. A Payload
    * config validates `process.env` at module scope, so a purely static analyser cannot load it in a bare
    * shell. These values are never connected to and never read as real configuration; they only let the
@@ -231,6 +238,14 @@ const DEFAULT_SERVER_URL: string = 'http://localhost:3000'
 // and axe run against the admin bundle judges Payload's markup rather than the project's. A project
 // that moved either route adds its own; no project may take these away.
 const DEFAULT_SKIPPED_ROUTES: readonly string[] = ['/admin', '/api']
+
+// A CMS exists so that people who do not commit can publish pages, so the route count grows without any
+// change to the repository. A cap set where a small site sits therefore fails on an editor's ordinary
+// Tuesday, on a site that is perfectly accessible, and the only valve a project holds is the skip list -
+// which means excusing real public pages from accessibility checking so that the accessibility check
+// passes. That is the wrong trade to leave a team, so the ceiling is set where a growing site lives and
+// the sweep's own clock is bounded separately.
+const DEFAULT_ACCESSIBILITY_ROUTE_BUDGET: number = 250
 
 // Roles that carry no unit-test seam in any Payload application: framework glue verified end to end,
 // generated files, and operational data scripts. A project adds to this; it never shrinks it.
@@ -422,6 +437,13 @@ export const readSettings = (packageJson: unknown): Settings =>
 export const ploanessBlock = (packageJson: unknown): Record<string, unknown> =>
   asRecord(asRecord(packageJson)['ploaness'])
 
+// Every numeric ceiling is read this way, and the shared reading IS the rule: a project may hold itself
+// to a smaller number, and can never buy a pass by declaring a bigger one. Stating it once is what stops
+// the second ceiling drifting from the first - the same drift `STRICTEST_NUMBER` guards one level up,
+// where a workspace member could otherwise widen what the root declared.
+const clampedCeiling = (declared: unknown, shipped: number): number =>
+  Math.min(shipped, asPositiveInteger(declared, shipped))
+
 /**
  * Read an already-layered raw settings block into a fully defaulted settings object.
  * @param raw the raw block, after any layering.
@@ -460,12 +482,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     ],
     javascriptAllowlist: [...DEFAULT_JAVASCRIPT_ALLOWLIST, ...honoured(declaredJavascript)],
     coverageExclude: [...DEFAULT_COVERAGE_EXCLUDE, ...honoured(declaredCoverage)],
-    // Only a stricter budget is honoured. A project could otherwise declare a budget large enough to
-    // pass anything, which is a threshold the harness owns rather than one it leaves open.
-    bundleBudgetBytes: Math.min(
-      DEFAULT_BUNDLE_BUDGET_BYTES,
-      asPositiveInteger(raw['bundleBudgetBytes'], DEFAULT_BUNDLE_BUDGET_BYTES),
-    ),
+    bundleBudgetBytes: clampedCeiling(raw['bundleBudgetBytes'], DEFAULT_BUNDLE_BUDGET_BYTES),
     maxSuppressions: asNonNegativeInteger(raw['maxSuppressions']),
     vulnerabilitySeverity:
       typeof raw['vulnerabilitySeverity'] === 'string' ? raw['vulnerabilitySeverity'] : undefined,
@@ -477,6 +494,10 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     serverUrl: typeof raw['serverUrl'] === 'string' ? raw['serverUrl'] : DEFAULT_SERVER_URL,
     auxiliaryServers: asAuxiliaryServers(raw['auxiliaryServers']),
     accessibilitySkipRoutes: [...DEFAULT_SKIPPED_ROUTES, ...honoured(declaredRoutes)],
+    accessibilityRouteBudget: clampedCeiling(
+      raw['accessibilityRouteBudget'],
+      DEFAULT_ACCESSIBILITY_ROUTE_BUDGET,
+    ),
     analysisEnv: { ...DEFAULT_ANALYSIS_ENV, ...asStringRecord(raw['analysisEnv']) },
   }
 }

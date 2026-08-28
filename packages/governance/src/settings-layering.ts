@@ -31,6 +31,7 @@ const ADDITIVE: ReadonlySet<string> = new Set<string>([
 // asked for and never to less, which is the same direction `readSettings` already clamps the shipped
 // defaults in.
 const STRICTEST_NUMBER: ReadonlySet<string> = new Set<string>([
+  'accessibilityRouteBudget',
   'bundleBudgetBytes',
   'maxSuppressions',
 ])

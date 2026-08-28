@@ -266,3 +266,35 @@ describe('settings that cannot loosen the harness', () => {
     expect(raised).toBe(shipped)
   })
 })
+
+// The ceiling exists so a runaway crawl cannot hang CI, and the sweep FAILS on reaching it - so a project
+// that could raise it would answer "too many pages to check" by declaring a bigger number, and a project
+// that could not lower it has no way to hold itself to a shorter run. Both directions are wrong; only
+// downward is honoured.
+describe('the accessibility route budget clamps in one direction only', () => {
+  const shipped: number = readSettings({}).accessibilityRouteBudget
+
+  it('honours a smaller declared route budget', () => {
+    expect(
+      readSettings({ ploaness: { accessibilityRouteBudget: shipped - 1 } })
+        .accessibilityRouteBudget,
+    ).toBe(shipped - 1)
+  })
+
+  it('ignores a larger declared route budget, so the ceiling can only be lowered', () => {
+    expect(
+      readSettings({ ploaness: { accessibilityRouteBudget: shipped + 1 } })
+        .accessibilityRouteBudget,
+    ).toBe(shipped)
+  })
+
+  it('falls back to the shipped ceiling for a value that is not a positive integer', () => {
+    // A typo must never widen a rule, which for this key means never lifting the cap.
+    expect(
+      readSettings({ ploaness: { accessibilityRouteBudget: 0 } }).accessibilityRouteBudget,
+    ).toBe(shipped)
+    expect(
+      readSettings({ ploaness: { accessibilityRouteBudget: 'lots' } }).accessibilityRouteBudget,
+    ).toBe(shipped)
+  })
+})

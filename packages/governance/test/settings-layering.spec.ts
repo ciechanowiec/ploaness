@@ -199,3 +199,20 @@ describe('readMemberSettings', () => {
     expect(readMemberSettings({}, Own)).toEqual(readRawSettings(Own))
   })
 })
+
+// The same direction as the bundle budget, and registered beside it: a member holding itself to a
+// shorter crawl is stricter, while one declaring a longer crawl than the root allowed is not.
+describe('layerSettingBlocks, the accessibility ceiling', () => {
+  it('honours the smaller route budget whichever half declared it', () => {
+    expect(
+      layered({ accessibilityRouteBudget: 200 }, { accessibilityRouteBudget: 40 })[
+        'accessibilityRouteBudget'
+      ],
+    ).toBe(40)
+    expect(
+      layered({ accessibilityRouteBudget: 40 }, { accessibilityRouteBudget: 200 })[
+        'accessibilityRouteBudget'
+      ],
+    ).toBe(40)
+  })
+})

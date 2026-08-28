@@ -588,6 +588,31 @@ commit_case pass-managed-suppression 'feat(fixture): forbid every suppression th
     "$CONFORMING_BODY"
 expect pass-managed-suppression suppressions PASS
 
+# The accessibility route ceiling, read the way the managed sweep reads it: through the `ploaness/a11y`
+# subpath, from a project's own package.json. This suite runs no browser, so what it proves is the chain
+# rather than the crawl - the clamp in `readSettings`, the constant `@ploaness/config/a11y` derives, and
+# the export map that carries it to the name the spec imports. A ceiling a project could RAISE would be
+# no ceiling: reaching it fails the sweep, so the pressure on a team is always upward, and the answer to
+# "too many pages to check" must be the harness measuring rather than the project declaring.
+new_case pass-route-budget-lowered
+edit_json "$scratch/pass-route-budget-lowered/package.json" ploaness.accessibilityRouteBudget 10
+commit_case pass-route-budget-lowered 'feat(fixture): hold the sweep to a shorter crawl' \
+    "$CONFORMING_BODY"
+expect_command pass-route-budget-lowered PASS 'accessibilityRouteBudget=10' \
+    node "$lib/print-a11y-budget.ts"
+
+new_case pass-route-budget-raised
+edit_json "$scratch/pass-route-budget-raised/package.json" ploaness.accessibilityRouteBudget 100000
+commit_case pass-route-budget-raised 'feat(fixture): declare a longer crawl than the harness allows' \
+    "$CONFORMING_BODY"
+# Compared against what the UNTOUCHED fixture reports rather than against a copy of the number. A shell
+# literal here would be a second statement of a default `settings.ts` already makes, and it would go
+# quietly wrong the day the harness raises the ceiling after measuring - which is the one change this
+# assertion most needs to survive.
+shipped_budget="$(cd "$scratch/pass" && node "$lib/print-a11y-budget.ts")"
+expect_command pass-route-budget-raised PASS "$shipped_budget" \
+    node "$lib/print-a11y-budget.ts"
+
 # Text the project owns below the block is not ploaness's to judge, so adding some must not fail.
 new_case pass-section-project-text
 printf '\n## Project notes\n\nThe project owns everything below the managed block.\n' \

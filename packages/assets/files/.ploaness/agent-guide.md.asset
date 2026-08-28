@@ -105,11 +105,15 @@ ploaness governs all of the following domains:
   reachable from the home page and runs axe on each. A route's default state is scanned in full; the
   `:hover` and `:focus` states of its interactive controls are scanned for contrast alone, which is the
   defect those states actually hide. Site chrome is swept once, because one stylesheet renders it
-  everywhere, and the content of `main` is swept per route. The crawl stops and fails at 50 routes, so a
+  everywhere, and the content of `main` is swept per route. The crawl stops and fails at 250 routes, so a
   passing sweep never describes a site whose remaining pages were silently left unread. It is a managed file: edit it and the
-  assets gate reports drift. What the project declares about it is the origin (`ploaness.serverUrl`) and
+  assets gate reports drift. What the project declares about it is the origin (`ploaness.serverUrl`),
   any further route prefix the crawl must not follow (`ploaness.accessibilitySkipRoutes`, which adds to
-  `/admin` and `/api` rather than replacing them). A finding is a defect in the page, never in the sweep:
+  `/admin` and `/api` rather than replacing them), and a smaller route ceiling than the shipped one
+  (`ploaness.accessibilityRouteBudget`, honoured only downward). Reaching the ceiling is a failure
+  rather than a truncation, and the answer to it is the harness raising the ceiling after measuring:
+  narrowing the crawl to fit means excusing real public pages from accessibility checking so that the
+  accessibility check passes. A finding is a defect in the page, never in the sweep:
   repair the markup or the contrast rather than narrowing what is scanned.
 - **Security headers:** a sweep ploaness pins into `tests/e2e/security-headers.e2e.spec.ts` asks the
   running application what it answers with. A Next.js application sends no security header unless the
@@ -312,7 +316,10 @@ default, so a typo can never widen a rule.
 | `typographyExclusions` | the generated Payload files | Paths the typography ban skips, as a regex. |
 | `javascriptAllowlist` | `eslint.config.mjs`, `importMap.js` | Paths the hand-written JavaScript ban skips, as a regex. |
 | `coverageExclude` | the framework glue, the generated files, the components | Paths left out of coverage, as a glob. |
-| `bundleBudgetBytes` | `921600` | The ceiling on gzipped client JavaScript. Only a smaller value is honoured. |
+| `frameworkGlue` | `src/app/(payload)/**`, `src/payload.config.ts` | Paths holding framework-written scaffolding, which the lint pass relaxes rather than judges. Added to. |
+| `generatedArtefacts` | where Payload puts them in a stock installation | Paths a generator owns, which no rule judges and no agent may edit. Added to, for an admin panel mounted elsewhere. |
+| `pureLogicRoots` | `src/access`, `src/lib` | Directories that may depend on nothing else under the source root. Added to. |
+| `bundleBudgetBytes` | `1126400` | The ceiling on gzipped client JavaScript. Only a smaller value is honoured. |
 | `maxSuppressions` | the earned ceiling | A stricter ceiling; `0` permits none. A looser value is ignored. |
 | `vulnerabilitySeverity` | `moderate` | The severity that fails the gate. Only a stricter value is honoured. |
 | `vulnerabilityAllowlist` | empty | `advisory`, `reason`, and `addedOn`. An entry missing one is dropped. An advisory carried by ploaness's own dependencies is recorded by ploaness, not here. |
@@ -321,6 +328,7 @@ default, so a typo can never widen a rule.
 | `auxiliaryServers` | empty | Servers the end-to-end run starts beside the application. `command` and `url`. An entry missing either is dropped. The application is still started first and still answers at `serverUrl`. |
 | `publicAccess` | empty | Anonymous permissions the project grants on purpose. `entity`, `operation`, and `reason`. An entry missing one is dropped, which restores the finding rather than excusing it. |
 | `accessibilitySkipRoutes` | `/admin`, `/api` | Route prefixes the sweep skips, added to those two. A route is a URL, so the reach rule above does not judge it. |
+| `accessibilityRouteBudget` | `250` | How many routes the sweep may discover before it stops and fails. Only a smaller value is honoured. |
 | `analysisEnv` | `PAYLOAD_SECRET`, `DATABASE_URL` | Placeholder environment for the gates that import the project. |
 | `pretest` | empty | A command run before the `tests`, `build`, and `e2e` gates. |
 | `testWrapper` | empty | An argument list wrapping the process those gates run. |

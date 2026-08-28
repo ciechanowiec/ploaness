@@ -1,6 +1,7 @@
 // ploaness owns this file. Edit the harness, not this copy: `ploaness verify` compares it byte for byte
-// and `ploaness sync` restores it. The one thing a project declares about it - route prefixes the crawl
-// must not follow - goes under the `ploaness` key of package.json, as `accessibilitySkipRoutes`.
+// and `ploaness sync` restores it. The two things a project declares about it - route prefixes the crawl
+// must not follow, and a smaller route ceiling than the shipped one - go under the `ploaness` key of
+// package.json, as `accessibilitySkipRoutes` and `accessibilityRouteBudget`.
 //
 // Accessibility has to stay default-safe as a site grows. Rather than a hand-maintained list of pages to
 // scan, which someone will eventually forget to extend, this sweep crawls every public route reachable
@@ -11,20 +12,23 @@
 // behaviour assertions still belong in the project's own feature specs.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, type Locator, type Page, type Response, test } from '@playwright/test'
-import { SKIPPED_ROUTE_PREFIXES } from 'ploaness/a11y'
+import { MAX_SWEEP_ROUTES, SKIPPED_ROUTE_PREFIXES } from 'ploaness/a11y'
 
 // Taken from the public surface of the builder this spec already imports, rather than from `axe-core`,
 // which is a transitive package no project declares.
 type AxeResults = Awaited<ReturnType<AxeBuilder['analyze']>>
 
-// Safety valve so a runaway crawl cannot hang CI. Hitting it fails, because a pass must describe every
-// reachable route rather than only the prefix that fit below the cap.
-const MAX_ROUTES: number = 50
-
 // The sweep scans every interactive control in three states on every route, so its cost grows with the
-// site. The budget is per discovered route, bounded by MAX_ROUTES, so it scales as pages are added
-// instead of flaking against a fixed timeout.
+// site. The budget is per discovered route, so it scales as pages are added instead of flaking against a
+// fixed timeout.
 const MILLISECONDS_PER_ROUTE: number = 50_000
+
+// ...and then the whole sweep is bounded regardless of the route count, because the two numbers answer
+// different questions. Per-route generosity exists for a framework compiling a page for the first time,
+// which is a cost paid once per page; multiplying it by every route describes a machine that never warms
+// up. Left unbounded it also sets how long a HUNG sweep burns a team's CI before anything is reported,
+// and at a route ceiling in the hundreds that reached several hours.
+const MAX_SWEEP_MILLISECONDS: number = 3_600_000
 
 // Scan the site's semantic regions - chrome and content alike - but not a framework's dev-only overlay,
 // which lives in a separate portal outside them and would otherwise raise findings about the framework.
@@ -98,7 +102,7 @@ const enqueueRoutes = (hrefs: readonly string[], origin: string, state: CrawlSta
     if (route === null || state.seen.has(route) || state.dropped.has(route)) {
       continue
     }
-    if (state.seen.size >= MAX_ROUTES) {
+    if (state.seen.size >= MAX_SWEEP_ROUTES) {
       state.dropped.add(route)
     } else {
       state.seen.add(route)
@@ -215,7 +219,7 @@ test.describe('Accessibility sweep', () => {
     ).toBe(true)
     expect(
       discovery.isCapped,
-      `a11y sweep reached the ${String(MAX_ROUTES)}-route cap; raise the harness limit only after ` +
+      `a11y sweep reached the ${String(MAX_SWEEP_ROUTES)}-route cap; raise the harness limit only after ` +
         'measuring the resulting run time',
     ).toBe(false)
     const [first] = routes
@@ -225,7 +229,7 @@ test.describe('Accessibility sweep', () => {
       // a zero timeout as no timeout at all, so an empty sweep would have disarmed it.
       return
     }
-    test.setTimeout(routes.length * MILLISECONDS_PER_ROUTE)
+    test.setTimeout(Math.min(routes.length * MILLISECONDS_PER_ROUTE, MAX_SWEEP_MILLISECONDS))
     // The chrome is identical site-wide, so sweep its interactive states once, on the first route.
     await page.goto(`${origin}${first}`)
     await scanInteractiveStates(page, 'site chrome', CHROME_CONTROLS)
