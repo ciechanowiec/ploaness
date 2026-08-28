@@ -32,6 +32,10 @@ const MILLISECONDS_PER_ROUTE: number = 50_000
 // erroring on a missing include target.
 const REGIONS: readonly string[] = ['header', 'main', 'footer']
 
+// The crawl is link-based, so it starts from the one route every site has. Whether this answers is
+// what separates a crawl that ran from one that could not start.
+const SEED_ROUTE: string = '/'
+
 // A path ending in an extension is a static asset, not a page: axe has nothing to say about it and
 // `goto` would download it.
 const STATIC_ASSET: RegExp = /\.[a-z\d]+$/i
@@ -79,6 +83,10 @@ interface CrawlState {
   readonly seen: Set<string>
   readonly queue: string[]
   readonly dropped: Set<string>
+  // Every route that answered, whether or not it turned out to be public. A route that forwards out of
+  // the public surface answers and is not swept, and only this set can tell that apart from a site that
+  // did not answer at all.
+  readonly answered: Set<string>
 }
 
 // Routes refused by the cap are collected rather than counted, so the caller learns THAT the crawl was
@@ -102,13 +110,15 @@ const enqueueRoutes = (hrefs: readonly string[], origin: string, state: CrawlSta
 interface RouteDiscovery {
   readonly routes: readonly string[]
   readonly isCapped: boolean
+  readonly hasSeedAnswered: boolean
 }
 
 const discoverRoutes = async (page: Page, origin: string): Promise<RouteDiscovery> => {
   const state: CrawlState = {
-    seen: new Set<string>(['/']),
-    queue: ['/'],
+    seen: new Set<string>([SEED_ROUTE]),
+    queue: [SEED_ROUTE],
     dropped: new Set<string>(),
+    answered: new Set<string>(),
   }
   const reachable: string[] = []
   while (state.queue.length > 0) {
@@ -122,6 +132,7 @@ const discoverRoutes = async (page: Page, origin: string): Promise<RouteDiscover
       // rather than scanning a page the project never rendered.
       continue
     }
+    state.answered.add(routePath)
     // Where a navigation LANDS is judged by the same list as where a link points. Applied only to
     // hrefs, the skip list let a redirect walk the crawl into the prefix it exists to keep it out of:
     // a headless CMS whose `/` forwards to `/admin` had its admin panel swept, and every finding was
@@ -138,7 +149,11 @@ const discoverRoutes = async (page: Page, origin: string): Promise<RouteDiscover
       )
     enqueueRoutes(hrefs, origin, state)
   }
-  return { routes: reachable, isCapped: state.dropped.size > 0 }
+  return {
+    routes: reachable,
+    isCapped: state.dropped.size > 0,
+    hasSeedAnswered: state.answered.has(SEED_ROUTE),
+  }
 }
 /* eslint-enable functional/immutable-data -- the crawl above is the only place this spec mutates */
 
@@ -187,19 +202,33 @@ test.describe('Accessibility sweep', () => {
     expect(origin, 'the ploaness Playwright config must declare a server URL').not.toEqual('')
     const discovery: RouteDiscovery = await discoverRoutes(page, origin)
     const routes: readonly string[] = discovery.routes
-    expect(routes.length, 'no public routes were discovered').toBeGreaterThan(0)
+    // What this guards is that the crawl RAN, not that the site has pages to sweep. Those are two
+    // claims, and asserting the second failed a Payload application that is correct: a headless
+    // deployment serves the admin panel and the API here and its public site elsewhere, so every route
+    // it has is one this sweep is required to skip, and the empty result was the right answer rather
+    // than a broken crawl. The seed answering separates them - a server that is down, or a root that
+    // errors, still fails - and it is derived from what the application does rather than declared, so
+    // there is nothing here for a project to claim falsely.
+    expect(
+      discovery.hasSeedAnswered,
+      `the crawl could not start: ${SEED_ROUTE} did not answer`,
+    ).toBe(true)
     expect(
       discovery.isCapped,
       `a11y sweep reached the ${String(MAX_ROUTES)}-route cap; raise the harness limit only after ` +
         'measuring the resulting run time',
     ).toBe(false)
+    const [first] = routes
+    if (first === undefined) {
+      // The seed answered and forwarded out of the public surface, so there is no page to judge.
+      // Returning here rather than falling through also keeps the budget below honest: Playwright reads
+      // a zero timeout as no timeout at all, so an empty sweep would have disarmed it.
+      return
+    }
     test.setTimeout(routes.length * MILLISECONDS_PER_ROUTE)
     // The chrome is identical site-wide, so sweep its interactive states once, on the first route.
-    const [first] = routes
-    if (first !== undefined) {
-      await page.goto(`${origin}${first}`)
-      await scanInteractiveStates(page, 'site chrome', CHROME_CONTROLS)
-    }
+    await page.goto(`${origin}${first}`)
+    await scanInteractiveStates(page, 'site chrome', CHROME_CONTROLS)
     for (const route of routes) {
       await scanRoute(page, origin, route)
     }
