@@ -54,7 +54,8 @@ describe('classifyImageFailure', (): void => {
         classifyImageFailure(GATE, {
           code: 1,
           output:
-            'toomanyrequests: You have reached your unauthenticated pull rate limit. https://www.docker.com/increase-rate-limit',
+            'toomanyrequests: You have reached your unauthenticated pull rate limit. ' +
+            'https://www.docker.com/increase-rate-limit',
         }),
       ),
     ).toBe('rateLimited')
@@ -66,7 +67,8 @@ describe('classifyImageFailure', (): void => {
         classifyImageFailure(GATE, {
           code: 1,
           output:
-            'Error response from daemon: Get "https://registry-1.docker.io/v2/": dial tcp: lookup registry-1.docker.io: no such host',
+            'Error response from daemon: Get "https://registry-1.docker.io/v2/": ' +
+            'dial tcp: lookup registry-1.docker.io: no such host',
         }),
       ),
     ).toBe('unreachable')
@@ -115,7 +117,8 @@ describe('classifyImageFailure, the reference-resolution frame', (): void => {
           code: 1,
           output:
             `${RESOLVE}"registry.invalid/x:v1": failed to do request: ` +
-            'Head "https://registry.invalid/v2/x/manifests/v1": dial tcp: lookup registry.invalid on 192.168.5.1:53: no such host',
+            'Head "https://registry.invalid/v2/x/manifests/v1": dial tcp: ' +
+            'lookup registry.invalid on 192.168.5.1:53: no such host',
         }),
       ),
     ).toBe('unreachable')
@@ -154,7 +157,8 @@ describe('classifyContainerExit', (): void => {
       classifyContainerExit(GATE, {
         code: 1,
         output:
-          'Finding: AWS_SECRET=REDACTED\nCommit: 1a2b3c\nMessage: fix: retry when the registry says no such host\nFile: src/config.ts',
+          'Finding: AWS_SECRET=REDACTED\nCommit: 1a2b3c\n' +
+          'Message: fix: retry when the registry says no such host\nFile: src/config.ts',
       }),
     ).toBeUndefined()
   })

@@ -62,15 +62,58 @@ describe('license allowlist', () => {
   })
 })
 
+// Which identifiers the policy admits, as opposed to how it evaluates an expression over them.
+// Separate from the evaluator specs above because the two answer to different changes: one moves
+// when the allowlist is widened, the other when the SPDX parser is touched.
+describe('license allowlist membership', () => {
+  // The joint between the bare deprecated ids and the `+` stripping. A policy admits a licence, not a
+  // spelling of one, so every SPDX form of an admitted licence has to resolve to the same verdict -
+  // and `LGPL-3.0+` only reaches a verdict because the bare id it strips to is on the list.
+  it('permits every SPDX spelling of a licence the policy admits', () => {
+    expect(isLicenseAllowed('LGPL-3.0')).toBe(true)
+    expect(isLicenseAllowed('LGPL-3.0+')).toBe(true)
+    expect(isLicenseAllowed('LGPL-2.1')).toBe(true)
+    expect(isLicenseAllowed('LGPL-2.1-or-later')).toBe(true)
+    expect(isLicenseAllowed('Python-2.0')).toBe(isLicenseAllowed('PSF-2.0'))
+  })
+
+  // The expressions below are the ones the surveyed packages actually declare, rather than bare ids:
+  // `pako` writes the AND, `jsts` writes the OR across two Eclipse licences, and `argparse` moved from
+  // `Python-2.0` to `PSF-2.0` between 3.0.0 and 3.0.1 without changing its terms.
+  it('permits the permissive licenses that popular packages declare', () => {
+    expect(isLicenseAllowed('(MIT AND Zlib)')).toBe(true)
+    expect(isLicenseAllowed('(EDL-1.0 OR EPL-1.0)')).toBe(true)
+    expect(isLicenseAllowed('PSF-2.0')).toBe(true)
+    expect(isLicenseAllowed('Unicode-3.0')).toBe(true)
+    expect(isLicenseAllowed('Artistic-2.0')).toBe(true)
+    expect(isLicenseAllowed('BSL-1.0')).toBe(true)
+  })
+
+  // Widening an allowlist is the change that leaks, and these are the four classes it must not reach.
+  // `BSD` is unresolvable rather than unknown - it names a family whose 4-clause member carries an
+  // advertising obligation, so guessing grants terms nobody granted. `Hippocratic-2.1` restricts the
+  // field of use and is therefore not open source, whatever its intent. And the `+` suffix that admits
+  // `LGPL-3.0+` must not admit `GPL-3.0+`, which is the same code path over a licence nothing permits.
+  it('still rejects source-available, field-of-use, and ambiguous licenses', () => {
+    expect(isLicenseAllowed('BUSL-1.1')).toBe(false)
+    expect(isLicenseAllowed('Elastic-2.0')).toBe(false)
+    expect(isLicenseAllowed('Hippocratic-2.1')).toBe(false)
+    expect(isLicenseAllowed('BSD')).toBe(false)
+    expect(isLicenseAllowed('GPL-3.0+')).toBe(false)
+  })
+})
+
 // Property-based tests assert the SPDX-expression invariants over every generated combination of
 // operands, rather than the handful enumerated above. The fixed global seed (vitest.setup.ts) keeps
 // them deterministic. (Each `it` also carries a concrete example assertion, since the unit scope's
 // assertions-in-tests rule - unlike the integration scope - does not recognise `fc.assert`.)
 describe('license allowlist properties (fast-check)', () => {
-  const allowedId: fc.Arbitrary<'MIT' | 'Apache-2.0' | 'ISC' | 'MPL-2.0' | 'LGPL-3.0-only'> =
-    fc.constantFrom('MIT', 'Apache-2.0', 'ISC', 'MPL-2.0', 'LGPL-3.0-only')
-  const deniedId: fc.Arbitrary<'GPL-3.0-only' | 'AGPL-3.0' | 'UNKNOWN' | 'BUSL-1.1'> =
-    fc.constantFrom('GPL-3.0-only', 'AGPL-3.0', 'UNKNOWN', 'BUSL-1.1')
+  const allowedId: fc.Arbitrary<
+    'MIT' | 'Apache-2.0' | 'ISC' | 'MPL-2.0' | 'LGPL-3.0-only' | 'LGPL-3.0' | 'Zlib'
+  > = fc.constantFrom('MIT', 'Apache-2.0', 'ISC', 'MPL-2.0', 'LGPL-3.0-only', 'LGPL-3.0', 'Zlib')
+  const deniedId: fc.Arbitrary<
+    'GPL-3.0-only' | 'AGPL-3.0' | 'UNKNOWN' | 'BUSL-1.1' | 'Hippocratic-2.1' | 'BSD'
+  > = fc.constantFrom('GPL-3.0-only', 'AGPL-3.0', 'UNKNOWN', 'BUSL-1.1', 'Hippocratic-2.1', 'BSD')
   const anyId: fc.Arbitrary<string> = fc.oneof(allowedId, deniedId)
   const Allowed: ReadonlySet<string> = new Set([
     'MIT',
@@ -78,6 +121,8 @@ describe('license allowlist properties (fast-check)', () => {
     'ISC',
     'MPL-2.0',
     'LGPL-3.0-only',
+    'LGPL-3.0',
+    'Zlib',
   ])
 
   it('allows an OR expression iff at least one operand is allowed', () => {

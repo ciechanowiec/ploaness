@@ -9,27 +9,69 @@ import { escapeForRegex } from './text-escapes.js'
 // not carry, and a lint fix that reaches for it produces code that does not compile.
 
 // Permissive licenses: no copyleft obligations, safe for an MIT-licensed template.
+// Three entries are here for a reason the identifier does not show. `PSF-2.0` and `Python-2.0` are the
+// same terms under two names, which is not a distinction a consumer can act on: `argparse` - reached
+// through `js-yaml`, so present in almost every tree rather than chosen - shipped 3.0.0 as the second
+// and 3.0.1 as the first. `EDL-1.0` carries the Eclipse name but is the BSD-3-Clause text, so it
+// belongs beside BSD rather than beside EPL. `X11` is a separate SPDX id from `MIT` for the same
+// terms, and a package that picks it is not asking for anything MIT does not already grant.
 const PERMISSIVE: readonly string[] = [
   '0BSD',
+  'AFL-2.1',
+  'AFL-3.0',
   'Apache-2.0',
+  'Artistic-2.0',
   'BSD-2-Clause',
   'BSD-3-Clause',
+  'BSL-1.0',
   'BlueOak-1.0.0',
   'CC-BY-3.0',
   'CC-BY-4.0',
   'CC0-1.0',
+  'EDL-1.0',
   'ISC',
   'MIT',
   'MIT-0',
+  'MulanPSL-2.0',
+  'NCSA',
+  'OFL-1.1',
+  'PSF-2.0',
+  'PostgreSQL',
   'Python-2.0',
+  'UPL-1.0',
+  'Unicode-3.0',
+  'Unicode-DFS-2016',
   'Unlicense',
+  'W3C',
   'WTFPL',
+  'X11',
+  'Zlib',
 ]
 
-// Weak copyleft, permitted only as UNMODIFIED dependencies: the file-level (MPL) and dynamic-linking
-// (LGPL) copyleft does not reach this project's own source. Each id is listed explicitly so it stays
-// a conscious decision. Strong copyleft (GPL, AGPL) is deliberately absent and therefore rejected.
-const WEAK_COPYLEFT: readonly string[] = ['LGPL-3.0-only', 'LGPL-3.0-or-later', 'MPL-2.0']
+// Weak copyleft, permitted only as UNMODIFIED dependencies: the file-level (MPL, EPL, CDDL) and
+// dynamic-linking (LGPL) copyleft does not reach this project's own source. Each id is listed
+// explicitly so it stays a conscious decision. Strong copyleft (GPL, AGPL) is deliberately absent and
+// therefore rejected, and so is a license that restricts the field of use - `Hippocratic-2.1` reads as
+// an ethical licence and is not an open-source one, which is a distinction only this list records.
+//
+// The bare `LGPL-2.1` and `LGPL-3.0` are DEPRECATED SPDX ids, and they are here because a policy
+// admits a license rather than a spelling of one: listing `-only` and `-or-later` while omitting the
+// form most packages actually write rejected the licence this list was written to permit. The `+`
+// suffix reaches the bare id too, so `LGPL-3.0+` resolves here rather than nowhere.
+const WEAK_COPYLEFT: readonly string[] = [
+  'CDDL-1.0',
+  'CDDL-1.1',
+  'EPL-1.0',
+  'EPL-2.0',
+  'LGPL-2.1',
+  'LGPL-2.1-only',
+  'LGPL-2.1-or-later',
+  'LGPL-3.0',
+  'LGPL-3.0-only',
+  'LGPL-3.0-or-later',
+  'MPL-1.1',
+  'MPL-2.0',
+]
 
 const ALLOWED: ReadonlySet<string> = new Set<string>([...PERMISSIVE, ...WEAK_COPYLEFT])
 
