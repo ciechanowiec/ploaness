@@ -26,12 +26,24 @@ import {
   type LicensedPackage,
   type ManifestResolver,
   type ManifestSource,
+  mapWithConcurrency,
+  NETWORKED_TOOL_TIMEOUT_MS,
+  REGISTRY_CONCURRENCY,
   RELEASE_AGE_FLOOR_HOURS,
+  REQUEST_TIMEOUT_MS,
   type ReleaseAge,
   type VulnerabilityReport,
 } from '@ploaness/governance'
 import { type Context, manifestPathFrom, readJson, trackedFiles } from '../context.js'
-import { failed, type GateResult, passed, type RunResult, run, withOutput } from '../exec.js'
+import {
+  failed,
+  type GateResult,
+  passed,
+  type RunResult,
+  run,
+  TIMED_OUT_CODE,
+  withOutput,
+} from '../exec.js'
 import { type ImageReport, imageFreshness } from './images.js'
 
 interface PnpmLicenseEntry {
@@ -186,10 +198,18 @@ const parseLicenseInventory = (
   }
 }
 
+// A deadline on every attempt, not on the lookup as a whole. A registry that accepts the connection and
+// then says nothing is the failure this catches, and it is the one an unbounded `fetch` waits out
+// forever: `REGISTRY_ATTEMPTS` retries an inconclusive attempt, but an attempt that never concludes is
+// never retried either. Three bounded attempts fail in a knowable time; one unbounded attempt does not
+// fail at all.
 /** One registry attempt: an answer, or undefined when the attempt was inconclusive and may be retried. */
 const fetchOrUndefined = async (name: string): Promise<Response | undefined> => {
   try {
-    return await fetch(versionDocumentUrl(name), { headers: { accept: 'application/json' } })
+    return await fetch(versionDocumentUrl(name), {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
   } catch {
     return undefined
   }
@@ -264,6 +284,7 @@ const publishedAt = async (name: string, version: string): Promise<number | unde
   try {
     const response: Response = await fetch(searchDocumentUrl(name), {
       headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
     if (!response.ok) {
       return undefined
@@ -325,8 +346,10 @@ const describeUpdates = async (
   reported: readonly FreshnessFinding[],
   now: number,
 ): Promise<readonly string[]> =>
-  await Promise.all(
-    reported.map(async (finding: FreshnessFinding): Promise<string> => {
+  await mapWithConcurrency(
+    reported,
+    REGISTRY_CONCURRENCY,
+    async (finding: FreshnessFinding): Promise<string> => {
       if (!isHeldCandidate(finding)) {
         return describeReported(finding)
       }
@@ -337,21 +360,28 @@ const describeUpdates = async (
       return isHeldByReleaseAge(age)
         ? describeHeld(finding, hoursPublished(age))
         : describeReported(finding)
-    }),
+    },
   )
 
 // One lookup per distinct name, fanned back out across the coordinates that share it. A workspace
 // declaring the same analyzer in three manifests must not ask the registry three times.
+//
+// Windowed rather than all at once. `Promise.all` over the distinct names opened a socket per dependency
+// - several hundred on a real workspace - which is what a public registry rate-limits and what a
+// corporate proxy drops. Both arrive here as `unreachable`, so the gate blamed the network for a load
+// the harness itself had generated.
 const lookUpEach = async (names: readonly string[]): Promise<ReadonlyMap<string, Lookup>> =>
   new Map(
-    await Promise.all(
-      names.map(async (name: string): Promise<readonly [string, Lookup]> => {
+    await mapWithConcurrency(
+      names,
+      REGISTRY_CONCURRENCY,
+      async (name: string): Promise<readonly [string, Lookup]> => {
         try {
           return [name, await latestVersion(name)]
         } catch {
           return [name, { kind: 'unreachable' }]
         }
-      }),
+      },
     ),
   )
 
@@ -417,6 +447,11 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
   if (unreachable.length > 0) {
     return failed('the npm registry was unreachable, so freshness cannot be proven', [
       `no "latest" resolved for: ${unreachable.slice(0, MAX_LISTED_NAMES).join(', ')}`,
+      // Stated so a reader can tell a registry that refused from one that never answered. Both land
+      // here, and only the second is worth investigating as a proxy or firewall rather than as an
+      // outage - which is unreadable from a message that says only "unreachable".
+      `each of ${String(REGISTRY_ATTEMPTS)} attempt(s) was given ${String(REQUEST_TIMEOUT_MS)}ms, so ` +
+        'a name listed above was either refused or never answered within that bound',
       'this gate is fail-closed by design; retry with network access',
     ])
   }
@@ -494,12 +529,20 @@ const parseAudit = (output: string): readonly Advisory[] | undefined => {
 export const vulnerabilities = (context: Context): GateResult => {
   // No `--prod` filter: the standard is explicit that build and test packages count, because a build
   // tool runs with build privileges and its vulnerability is reachable by anyone who can change the repo.
-  const result: RunResult = run('pnpm', ['audit', '--json'], { cwd: context.root })
+  // Deadlined because it asks the advisory database over the network. Without one, a registry that
+  // accepts the connection and stalls holds the whole verification open with nothing printed.
+  const result: RunResult = run('pnpm', ['audit', '--json'], {
+    cwd: context.root,
+    timeoutMs: NETWORKED_TOOL_TIMEOUT_MS,
+  })
   // `stdout` for the reason the licence gate reads it: a pnpm warning on stderr used to be concatenated
   // into the payload and reported as the advisory database being unreachable.
   const advisories: readonly Advisory[] | undefined = parseAudit(result.stdout)
   if (advisories === undefined) {
     return failed('the advisory database was unreachable, so vulnerabilities cannot be proven', [
+      ...(result.code === TIMED_OUT_CODE
+        ? [`the audit did not answer within ${String(NETWORKED_TOOL_TIMEOUT_MS)}ms and was stopped`]
+        : []),
       result.output.split('\n').slice(0, MAX_REPORTED_LINES).join('\n'),
       'this gate is fail-closed by design; retry with network access',
     ])

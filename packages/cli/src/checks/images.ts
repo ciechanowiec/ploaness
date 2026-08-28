@@ -19,13 +19,13 @@ import {
   isArray,
   judgeContainer,
   parseContainerReference,
+  REQUEST_TIMEOUT_MS,
 } from '@ploaness/governance'
 
 const DOCKER_HUB: string = 'https://hub.docker.com'
 const PAGE_SIZE: number = 100
 // Enough for the largest repository the harness pins; hadolint publishes several hundred tags.
 const MAX_PAGES: number = 10
-const REQUEST_TIMEOUT_MS: number = 30_000
 const FIRST_PAGE: number = 1
 
 /** What the image half of the freshness report found, or why it could not look. */
