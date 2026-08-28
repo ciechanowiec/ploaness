@@ -3,6 +3,7 @@
 // here. The split is what makes the rules cheap to test exhaustively: a pure function over strings
 // needs no fixture repository to exercise its edge cases.
 
+export * from './access-boundary.js'
 export * from './agent-references.js'
 export * from './architecture-layers.js'
 export * from './asset-policy.js'

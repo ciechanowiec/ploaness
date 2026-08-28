@@ -11,51 +11,17 @@
 // Payload answers the question itself. `/api/access` reports, for the caller making the request, what
 // each collection and global permits. Called with no credentials it is exactly the anonymous view: one
 // request, every entity, and the framework's own verdict rather than a guess drawn from the source.
+//
+// What that answer MEANS is decided in the harness, not here. Payload sanitises the response before
+// sending it, so a grant arrives in one of two shapes depending on whether a query constraint survived
+// beside it, and reading only the object shape reported the constrained grants while missing the open
+// ones. No unit test can reach a spec, which is why the decision does not live in one.
 import { type APIResponse, expect, test } from '@playwright/test'
-import { PUBLIC_ACCESS, type PublicAccess } from 'ploaness/access'
+import { type AccessReport, PUBLIC_ACCESS, undeclaredGrants } from 'ploaness/access'
 
 // Payload's own endpoint for "what may the caller making this request do". Not a project route, so it
 // exists in every Payload application and needs no discovery.
 const ACCESS_ENDPOINT: string = '/api/access'
-
-// A write is never a default a project should be able to reach by accident: Payload grants none of
-// these to an anonymous caller unless the project's own rule says so. `read` is judged too, but it is
-// the one a public site legitimately grants, which is what `publicAccess` exists to record.
-const OPERATIONS: readonly string[] = ['create', 'read', 'update', 'delete']
-
-// Payload reports a permission as `{ permission: boolean }` rather than a bare boolean, and adds
-// field-level entries beside the operations. Only the operation's own verdict is read here.
-interface Permission {
-  readonly permission?: boolean
-}
-
-interface AccessResults {
-  readonly canAccessAdmin?: boolean
-  readonly collections?: Record<string, Record<string, Permission>>
-  readonly globals?: Record<string, Record<string, Permission>>
-}
-
-/** One anonymous permission the running application actually grants. */
-interface Granted {
-  readonly entity: string
-  readonly operation: string
-}
-
-const isDeclared = (granted: Granted): boolean =>
-  PUBLIC_ACCESS.some(
-    (declared: PublicAccess): boolean =>
-      declared.entity === granted.entity && declared.operation === granted.operation,
-  )
-
-const grantsOf = (entities: Record<string, Record<string, Permission>>): readonly Granted[] =>
-  Object.entries(entities).flatMap(
-    ([entity, permissions]: [string, Record<string, Permission>]): readonly Granted[] =>
-      OPERATIONS.filter(
-        (operation: string): boolean => permissions[operation]?.permission === true,
-      ).map((operation: string): Granted => ({ entity, operation })),
-  )
-
-const describeGrant = (granted: Granted): string => `${granted.entity}.${granted.operation}`
 
 test.describe('Access boundary', () => {
   test('an unauthenticated caller receives only the access the project declared', async ({
@@ -72,22 +38,15 @@ test.describe('Access boundary', () => {
       anonymous.ok(),
       `${ACCESS_ENDPOINT} did not answer; every Payload application serves it`,
     ).toBe(true)
-    const results: AccessResults = (await anonymous.json()) as AccessResults
+    const report: AccessReport = (await anonymous.json()) as AccessReport
 
     expect(
-      results.canAccessAdmin ?? false,
+      report.canAccessAdmin ?? false,
       'the admin panel must not admit an unauthenticated caller',
     ).toBe(false)
 
-    const granted: readonly Granted[] = [
-      ...grantsOf(results.collections ?? {}),
-      ...grantsOf(results.globals ?? {}),
-    ]
-    const undeclared: readonly string[] = granted
-      .filter((one: Granted): boolean => !isDeclared(one))
-      .map((one: Granted): string => describeGrant(one))
     expect(
-      undeclared,
+      undeclaredGrants(report, PUBLIC_ACCESS),
       'the running application grants these to anyone, and the project has not said it meant to. ' +
         'Close the access rule, or record the grant under ploaness.publicAccess with the reason ' +
         'it is intended',
