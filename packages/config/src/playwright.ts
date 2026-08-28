@@ -64,16 +64,41 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel: 'chromium' } }],
-  // The application under test first, then whatever the project's own specs also need running. A
-  // declared server is ADDED here rather than substituted: `baseURL` above still points at the
-  // application, so the pinned accessibility sweep drives the same origin whatever a project declares.
-  // Without this a project had no way to say so at all, because the wiring gate requires
-  // playwright.config.ts to be a bare re-export of this file.
+  // Auxiliary servers first, then the application under test. Playwright awaits each entry in this
+  // list before starting the next, so the order is the difference between a run and a deadlock: a
+  // frontend that renders from a headless CMS cannot answer its own origin until that CMS answers, and
+  // starting the application first spent the entire server budget waiting on a page whose dependency
+  // this list had not reached yet. The reverse cannot be needed - an auxiliary that required the
+  // application under test to be up already could never be started from here at all - so the
+  // application goes last.
+  //
+  // A declared server is ADDED here rather than substituted, and `baseURL` names the application
+  // wherever it sits in this list, so the pinned accessibility sweep drives the same origin whatever a
+  // project declares. Without this a project had no way to say so at all, because the wiring gate
+  // requires playwright.config.ts to be a bare re-export of this file.
   webServer: [
+    // A sibling application is started from its own directory, which is what lets the framework read
+    // that package's environment files, config and sources rather than the tested package's. It does
+    // NOT change how the command's binary is resolved: Playwright leaves PATH alone, so a bare binary
+    // name still resolves out of the package the runner was invoked from. A project that pins
+    // different versions in the two packages should say `node_modules/.bin/<binary>`, which is
+    // relative to the directory named here.
+    ...projectSettings.auxiliaryServers.map((server) => ({
+      command: server.command,
+      url: server.url,
+      reuseExistingServer: !isContinuousIntegration,
+      // The same budget and the same reuse rule as the application: an auxiliary server is started by
+      // the same runner on the same cold machine, so a shorter one would fail for the reason that one
+      // is long.
+      timeout: SERVER_TIMEOUT_MS,
+      ...(server.cwd !== undefined && { cwd: server.cwd }),
+      env: withPort({ NODE_OPTIONS: '--no-deprecation' }, portOf(server.url)),
+    })),
     {
-      // Invoked as a bare binary rather than through a package script. Playwright puts the project's
-      // `node_modules/.bin` on PATH, and a nested package manager spawned here inherits expectations
-      // from its parent that do not hold inside a test runner.
+      // Invoked as a bare binary rather than through a package script, because a nested package manager
+      // spawned here inherits expectations from its parent that do not hold inside a test runner. The
+      // name resolves out of the ambient PATH, which the package manager that started the run points at
+      // this member's `node_modules/.bin` - which is the member under test, so it is the right one.
       command: 'next dev',
       url: projectSettings.serverUrl,
       reuseExistingServer: !isContinuousIntegration,
@@ -86,19 +111,6 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
         declaredPort,
       ),
     },
-    // The same budget and the same reuse rule as the application: an auxiliary server is started by the
-    // same runner on the same cold machine, so a shorter one would fail for the reason that one is long.
-    ...projectSettings.auxiliaryServers.map((server) => ({
-      command: server.command,
-      url: server.url,
-      reuseExistingServer: !isContinuousIntegration,
-      timeout: SERVER_TIMEOUT_MS,
-      // A sibling application is started from its own directory, not from the package under test. The
-      // only alternative was a `cd` inside the command, which resolves the binary from the wrong
-      // package's `.bin` and works right up until the two versions differ.
-      ...(server.cwd !== undefined && { cwd: server.cwd }),
-      env: withPort({ NODE_OPTIONS: '--no-deprecation' }, portOf(server.url)),
-    })),
   ],
 })
 

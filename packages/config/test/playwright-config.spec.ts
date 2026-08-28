@@ -37,19 +37,15 @@ describe('focused Playwright tests', () => {
   })
 })
 
-// The joint between the settings reader and the config that acts on it. Both halves matter: the
-// application must stay first whatever a project declares, because `baseURL` and the pinned
-// accessibility sweep drive that origin - and the declared servers must arrive whole, because the
+// The joint between the settings reader and the config that acts on it. Both halves matter, and the
+// ORDER is the half that was wrong: Playwright awaits each webServer entry before starting the next, so
+// an application that cannot answer until a declared server does was waited on until the budget ran out
+// while that server sat unstarted behind it. The declared servers must also arrive whole, because the
 // re-exported config leaves a project no other way to start one.
 describe('the servers the end-to-end run starts', () => {
-  it('drives the application the project declares an origin for, first', async () => {
+  it('starts exactly the auxiliary servers the project declared, in order, before the application', async () => {
     const config: PlaywrightConfig = await loadConfig()
-    expect(config.webServer?.[0]?.url).toBe(projectSettings.serverUrl)
-  })
-
-  it('starts exactly the auxiliary servers the project declared, in order, after it', async () => {
-    const config: PlaywrightConfig = await loadConfig()
-    expect(config.webServer?.slice(1)).toEqual(
+    expect(config.webServer?.slice(0, projectSettings.auxiliaryServers.length)).toEqual(
       projectSettings.auxiliaryServers.map(
         (server: WebServer): WebServer => ({
           command: server.command,
@@ -57,5 +53,10 @@ describe('the servers the end-to-end run starts', () => {
         }),
       ),
     )
+  })
+
+  it('drives the application the project declares an origin for, last', async () => {
+    const config: PlaywrightConfig = await loadConfig()
+    expect(config.webServer?.at(-1)?.url).toBe(projectSettings.serverUrl)
   })
 })
