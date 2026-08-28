@@ -1,0 +1,231 @@
+name: 'Publish npm release'
+
+# The five packages are one release. They pin each other at an exact version, so a run that
+# publishes four of them leaves `ploaness` installable and unresolvable - which is why the order
+# below is the dependency order, and why nothing is published before the whole verification passes.
+#
+# Authentication is npm trusted publishing (OIDC), not a token. npm revoked classic tokens in
+# December 2025 and caps a write-enabled granular token at ninety days, so a stored credential is a
+# chore that expires. The `id-token: write` permission below is what replaces it, and it also
+# produces the provenance attestation linking each tarball to this workflow and this commit.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Version already declared in packages/ploaness/package.json'
+        required: true
+        default: '1.0.0'
+        type: string
+      publish:
+        description: 'Publish permanently after verification'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: 'npm-release'
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      # The full history, because three gates read it: `require-full-history` refuses a shallow
+      # clone outright, `commit-history` judges every message, and the secret scan runs gitleaks in
+      # git mode over every commit.
+      - name: 'Checkout complete history'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: 'Validate release request'
+        env:
+          CONFIRM_PUBLISH: ${{ inputs.publish }}
+          IS_PRIVATE: ${{ github.event.repository.private }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -eu
+          if [ "$GITHUB_REF" != 'refs/heads/main' ]; then
+            echo 'Run releases from the main branch.' >&2
+            exit 1
+          fi
+          if [ "$CONFIRM_PUBLISH" != 'true' ]; then
+            echo 'Permanent publication was not confirmed.' >&2
+            exit 1
+          fi
+          # A prerelease and a build identifier are both admitted, because npm supports them. What
+          # is rejected is anything that is not a semantic version at all: npm publishes whatever
+          # it is given, and a published version can never be replaced.
+          semver='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+          if ! [[ "$RELEASE_VERSION" =~ $semver ]]; then
+            echo 'The release version must be a semantic version.' >&2
+            exit 1
+          fi
+          # npm mints a provenance attestation only for a package published from a PUBLIC
+          # repository, and the publish step below asks for one. Asked here, the failure names its
+          # reason; asked by npm, it arrives at the fourth tarball of five, after three of them have
+          # been published and can never be replaced.
+          if [ "$IS_PRIVATE" != 'false' ]; then
+            echo 'Provenance needs a public repository. Make it public, or drop --provenance.' >&2
+            exit 1
+          fi
+
+      # Before setup-node, so the dependency cache can key on the pnpm lockfile. The pnpm version
+      # comes from `packageManager` in package.json rather than from a literal here, which is one
+      # fewer pair of values that must stay equal.
+      - name: 'Install pnpm'
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: 'Set up Node from .nvmrc'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      # No `registry-url` above, deliberately: setup-node would write an .npmrc line binding the
+      # registry to NODE_AUTH_TOKEN, and an empty token there fails authentication BEFORE the OIDC
+      # exchange is attempted. The default registry is already registry.npmjs.org.
+      #
+      # Trusted publishing needs npm 11.5.1 or newer, which is the one thing the bundled npm is not
+      # guaranteed to be. Asking for it explicitly turns a confusing failure at publish time into a
+      # version printed at the top of the log.
+      - name: 'Install an npm that can publish with OIDC'
+        run: |
+          set -eu
+          npm install --global npm@latest
+          npm --version
+
+      - name: 'Install dependencies'
+        run: pnpm install --frozen-lockfile
+
+      # Two questions, asked before anything is built. Whether this commit declares the version
+      # being released - `pnpm run verify` proves the other ten sites agree with it, so only the
+      # meta package is compared here. And whether npm already has it: a published version is
+      # immutable, so a re-run after a partial failure has to be able to recover the tag and the
+      # GitHub Release without attempting a publication that cannot succeed.
+      - name: 'Validate declared version and registry state'
+        id: release_state
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -eu
+          declared="$(node -p "require('./packages/ploaness/package.json').version")"
+          if [ "$declared" != "$RELEASE_VERSION" ]; then
+            echo "packages/ploaness/package.json declares $declared, not $RELEASE_VERSION." >&2
+            exit 1
+          fi
+          version_url="https://registry.npmjs.org/ploaness/$RELEASE_VERSION"
+          status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$version_url")"
+          if [ "$status" = '200' ]; then
+            echo 'registry_published=true' >> "$GITHUB_OUTPUT"
+            echo "npm already contains ploaness@$RELEASE_VERSION; recovering GitHub metadata."
+            exit 0
+          fi
+          if [ "$status" != '404' ]; then
+            echo "The npm availability check returned HTTP $status." >&2
+            exit 1
+          fi
+          echo 'registry_published=false' >> "$GITHUB_OUTPUT"
+
+      # The whole verification, not a subset: the build, the type check, both lint passes, the unit
+      # suite, every repository-scope gate, the packaging checks over the packed tarballs, and the
+      # consumer fixtures. It also leaves dist-tarballs/ populated, which is what the next step
+      # publishes - the artefacts that were verified, rather than a second pack nobody checked.
+      - name: 'Run verification'
+        if: steps.release_state.outputs.registry_published != 'true'
+        run: pnpm run verify
+
+      # Dependency order, so the registry never holds a package whose siblings it cannot resolve.
+      # npm does not check that a dependency exists at publish time, so nothing but this order
+      # prevents a window in which `ploaness` installs and then fails.
+      #
+      # `--provenance` is explicit rather than left to the trusted-publishing default, because the
+      # attestation is the point: it states which workflow, at which commit, produced this tarball.
+      # Access is public through each manifest's `publishConfig`, so it is not restated here.
+      - name: 'Publish the verified tarballs'
+        id: publish
+        if: steps.release_state.outputs.registry_published != 'true'
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -eu
+          order='ploaness-governance ploaness-assets ploaness-config ploaness-cli ploaness'
+          for package in $order; do
+            tarball="dist-tarballs/$package-$RELEASE_VERSION.tgz"
+            if [ ! -f "$tarball" ]; then
+              echo "The verification produced no $tarball." >&2
+              exit 1
+            fi
+            echo "Publishing $tarball"
+            npm publish "$tarball" --provenance
+          done
+
+      - name: 'Create and push release tag'
+        id: release_tag
+        if: >-
+          steps.release_state.outputs.registry_published == 'true' ||
+          steps.publish.outcome == 'success'
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -eu
+          tag="v$RELEASE_VERSION"
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            tag_commit="$(git rev-list --max-count=1 "$tag")"
+            if [ "$tag_commit" != "$GITHUB_SHA" ]; then
+              echo "Tag $tag already identifies another commit." >&2
+              exit 1
+            fi
+            echo "Tag $tag already identifies this commit."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag --annotate "$tag" --message "Release $RELEASE_VERSION"
+          git push origin "refs/tags/$tag"
+
+      # npm serves a published version from its own CDN as soon as the publish returns, so there is
+      # no sync to wait for. What is worth proving is that all five resolve TOGETHER, which is the
+      # failure the publication order exists to prevent and the one a per-package probe would miss.
+      - name: 'Smoke-test the published release'
+        if: steps.publish.outcome == 'success'
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -eu
+          smoke="$RUNNER_TEMP/ploaness-smoke"
+          rm -rf "$smoke"
+          mkdir -p "$smoke"
+          cd "$smoke"
+          npm init --yes > /dev/null
+          npm install --no-audit --no-fund "ploaness@$RELEASE_VERSION"
+          installed="$(node -p "require('ploaness/package.json').version")"
+          if [ "$installed" != "$RELEASE_VERSION" ]; then
+            echo "The registry served ploaness $installed, not $RELEASE_VERSION." >&2
+            exit 1
+          fi
+          ./node_modules/.bin/ploaness gates > /dev/null
+
+      - name: 'Create metadata-only GitHub Release'
+        if: >-
+          always() &&
+          steps.release_tag.outcome == 'success' &&
+          (steps.release_state.outputs.registry_published == 'true' ||
+           steps.publish.outcome == 'success')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -eu
+          tag="v$RELEASE_VERSION"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "GitHub Release $tag already exists."
+            exit 0
+          fi
+          gh release create "$tag" --verify-tag --title "ploaness // $RELEASE_VERSION" --notes ''

@@ -4,6 +4,15 @@
   "description": "Files ploaness materialises into a consumer working tree, because tools ploaness does not run read them from there.",
   "license": "MIT",
   "author": "Herman Ciechanowiec <herman@ciechanowiec.eu>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ciechanowiec/ploaness.git",
+    "directory": "packages/assets"
+  },
+  "homepage": "https://github.com/ciechanowiec/ploaness#readme",
+  "bugs": {
+    "url": "https://github.com/ciechanowiec/ploaness/issues"
+  },
   "type": "module",
   "exports": {
     "./manifest": "./manifest.tsv",

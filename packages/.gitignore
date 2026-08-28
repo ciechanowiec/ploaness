@@ -1,0 +1,11 @@
+# `scripts/lib/write-publication-files.ts` writes a LICENSE and a README.md beside each package.json before
+# packing, because npm packs both whether or not `files` names them. Both are derived - the licence from
+# the root file, the page from fields the manifest already declares - so neither is committed.
+#
+# Declared here rather than at the repository root, and that is the whole point of this file. The root
+# `.gitignore` is SEED: `packages/assets/build.ts` copies it verbatim into the body every consumer
+# receives from `ploaness init`. `packages/ploaness/biome.json` there is inert in a Payload project - no
+# such path exists - but `packages/*/LICENSE` is NOT inert, because a Payload workspace with `packages/*`
+# members has real licence files in exactly those places, and the seed would have told git to ignore them.
+*/LICENSE
+*/README.md

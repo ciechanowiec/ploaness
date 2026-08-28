@@ -144,9 +144,26 @@ Two legs are required before a change is finished: `pnpm run verify`, which cove
 and calls `pnpm run it` against the packed packages, and a real consumer project for the gates that shell
 out to a Payload toolchain. `pnpm run it` remains available as a declared subset while iterating.
 
-Nothing runs those two legs but a person. This repository ships no workflow, so `gate actions` passes
-here over an empty set. That is worth knowing when reading a green tree: it says the last person to run
-the legs saw them pass, not that they pass now.
+The first leg runs on a push. `.github/workflows/verify-self.yml` runs `scripts/verify.sh` on every
+push and pull request against main, and installs nothing that script does not need - a workflow that
+restated a check would be a second place for a rule to live. The second leg has no runner, because a
+real Payload project is what it needs, so a green run states that the harness's own source verifies
+and nothing about a consumer's.
+
+Those two workflows are also what finally gave `gate actions` something to read: for as long as this
+repository shipped no workflow at all, that gate passed without opening a file, which is the same
+shape of silence `arch` sat in.
+
+### The five packages carry one version
+
+The five pin each other at an EXACT version, because `workspace:*` does not resolve when a package is
+installed from a tarball outside its workspace - which is how `it/` verifies the harness. Nothing
+derives those numbers from a single value, so the version is written down in every manifest, in the
+tarball filenames the fixture installs by path, and in the `:ploaness-version:` the user guide renders
+its install snippet from. `scripts/lib/check-release-version.ts` measures every one of those sites
+against what `packages/ploaness` declares, and `pnpm run verify` runs it as the `release-version` step
+before anything expensive - a bump that misses the fixture used to fail at install time with a missing
+file, which names the symptom and not the cause.
 
 ### TypeScript is held at 6 by the lint pass, not by inertia
 

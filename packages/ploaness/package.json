@@ -12,6 +12,15 @@
   ],
   "license": "MIT",
   "author": "Herman Ciechanowiec <herman@ciechanowiec.eu>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ciechanowiec/ploaness.git",
+    "directory": "packages/ploaness"
+  },
+  "homepage": "https://github.com/ciechanowiec/ploaness#readme",
+  "bugs": {
+    "url": "https://github.com/ciechanowiec/ploaness/issues"
+  },
   "type": "module",
   "exports": {
     "./eslint": {

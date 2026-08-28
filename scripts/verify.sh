@@ -71,6 +71,12 @@ step lint       pnpm run lint
 step lint:eslint pnpm run lint:eslint
 step lint:assets sh "$root/scripts/lib/check-asset-bodies.sh"
 
+# The five packages are one release, pinned to each other at an exact version, and nothing derives
+# that version from one place. It is written down eleven times, and `pack` names five of those in
+# the tarball filenames the fixture installs by path - so a bump that misses one halts here rather than
+# in an install error that reports a missing file.
+step release-version node "$root/scripts/lib/check-release-version.ts"
+
 # Three analyzers the `ploaness verify` gates run against a Payload layout. Their rules are about a
 # repository's shape, so they apply here unchanged; only the globs differ, which is what the `-repo`
 # configs carry. They are invoked from the CLI package's own install rather than through

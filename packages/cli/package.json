@@ -4,6 +4,15 @@
   "description": "The executable half of ploaness: the verification gates and the commands that run them.",
   "license": "MIT",
   "author": "Herman Ciechanowiec <herman@ciechanowiec.eu>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ciechanowiec/ploaness.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/ciechanowiec/ploaness#readme",
+  "bugs": {
+    "url": "https://github.com/ciechanowiec/ploaness/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

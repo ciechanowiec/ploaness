@@ -1,0 +1,64 @@
+name: 'Verify ploaness'
+
+# The first of the two legs AGENTS.md names, run on a push rather than on a person remembering.
+# `scripts/verify.sh` is the whole of it: this file installs what that script needs and then gets out
+# of the way, because a workflow that restated a check would be a second place for a rule to live.
+#
+# The second leg has no runner here. It is a real Payload project driving the gates that shell out to
+# a Payload toolchain, and no fixture substitutes for it - so a green run on this workflow is a
+# statement about the harness's own source, not about a consumer's.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Cancelled on a newer push to the same ref, which the release workflow deliberately does NOT do: a
+# superseded verification tells nobody anything, while a cancelled publication leaves npm holding
+# part of a release.
+concurrency:
+  group: 'verify-${{ github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      # The full history, because three gates read it: `require-full-history` refuses a shallow
+      # clone outright, `commit-history` judges every message, and the secret scan runs gitleaks in
+      # git mode over every commit.
+      - name: 'Checkout complete history'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Before setup-node, so the dependency cache can key on the pnpm lockfile. The pnpm version
+      # comes from `packageManager` in package.json rather than from a literal here, which is one
+      # fewer pair of values that must stay equal.
+      - name: 'Install pnpm'
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: 'Set up Node from .nvmrc'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: 'Install dependencies'
+        run: pnpm install --frozen-lockfile
+
+      # Docker is preinstalled on the GitHub-hosted ubuntu runners, and the four analyzer images the
+      # verification needs - gitleaks, hadolint, actionlint, shellcheck - are pinned by digest in
+      # `packages/governance/src/toolchain-pins.ts`. Nothing is installed for them here: an image
+      # this workflow acquired by any other route would be an image no digest vouched for.
+      #
+      # `pnpm run verify` also packs the five packages and installs them into the `it/` fixture, so
+      # this single command covers the packaging and the consumer-resolution path as well.
+      - name: 'Verify'
+        run: pnpm run verify

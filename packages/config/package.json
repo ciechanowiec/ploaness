@@ -4,6 +4,15 @@
   "description": "Analyzer and tool configurations owned by ploaness: ESLint, Biome, TypeScript, Vitest, Stylelint, dependency-cruiser, knip.",
   "license": "MIT",
   "author": "Herman Ciechanowiec <herman@ciechanowiec.eu>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ciechanowiec/ploaness.git",
+    "directory": "packages/config"
+  },
+  "homepage": "https://github.com/ciechanowiec/ploaness#readme",
+  "bugs": {
+    "url": "https://github.com/ciechanowiec/ploaness/issues"
+  },
   "type": "module",
   "exports": {
     "./eslint": {
