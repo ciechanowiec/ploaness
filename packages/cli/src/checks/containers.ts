@@ -8,14 +8,16 @@ import path from 'node:path'
 import {
   CONTAINER_IMAGES,
   type ComposeProject,
+  classifyContainerExit,
+  classifyImageFailure,
   composeProjectsIn,
+  type DockerFailure,
   dockerfilesIn,
   renderGitleaksConfig,
 } from '@ploaness/governance'
 import { type Context, trackedFiles } from '../context.js'
 import {
   asFindings,
-  COMMAND_NOT_FOUND,
   failed,
   fromRun,
   type GateResult,
@@ -30,15 +32,45 @@ const GITLEAKS_IMAGE: string = CONTAINER_IMAGES.gitleaks
 const HADOLINT_IMAGE: string = CONTAINER_IMAGES.hadolint
 const ACTIONLINT_IMAGE: string = CONTAINER_IMAGES.actionlint
 
-const isDockerMissing = (result: RunResult): boolean =>
-  result.code === COMMAND_NOT_FOUND || result.output.includes('ENOENT')
+const describeFailure = (failure: DockerFailure): GateResult =>
+  failed(failure.summary, failure.remedies)
 
-const requireDocker = (result: RunResult, gate: string): GateResult | undefined =>
-  isDockerMissing(result)
-    ? failed(`${gate} needs Docker, which is not available`, [
-        'Docker is already required for the Payload test database; start it and retry',
-      ])
-    : undefined
+// The image is acquired as a step of its own, BEFORE any analyzer runs, and that ordering is the repair
+// rather than an optimisation. It puts "the analyzer could not be obtained" on a command whose output
+// docker wrote in full, so the failure can be read honestly; leaving the pull implicit in `docker run`
+// left one exit code carrying two questions, and a rate-limited pull answered the wrong one - the secret
+// scan reported a secret in the git history because gitleaks had never started.
+//
+// `docker image inspect` is local and costs nothing on a machine that has already pulled, which is every
+// machine after the first run.
+const acquireImage = (context: Context, image: string, gate: string): GateResult | undefined => {
+  const present: RunResult = run('docker', ['image', 'inspect', '--format', '{{.Id}}', image], {
+    cwd: context.root,
+  })
+  if (present.code === 0) {
+    return undefined
+  }
+  const pulled: RunResult = run('docker', ['pull', image], { cwd: context.root })
+  const failure: DockerFailure | undefined = classifyImageFailure(gate, pulled)
+  return failure === undefined ? undefined : describeFailure(failure)
+}
+
+// Asked only when a run failed, and answered by docker rather than by the analyzer's output. The reserved
+// exit codes settle it outright; otherwise the question is whether docker is STILL well, which closes the
+// narrow window where the daemon dies between the pull and the run without letting a commit message the
+// scanner quoted decide whether a finding is real.
+const dockerFault = (
+  context: Context,
+  image: string,
+  gate: string,
+  result: RunResult,
+): GateResult | undefined => {
+  if (result.code === 0) {
+    return undefined
+  }
+  const reserved: DockerFailure | undefined = classifyContainerExit(gate, result)
+  return reserved === undefined ? acquireImage(context, image, gate) : describeFailure(reserved)
+}
 
 // The scanner's configuration is rendered outside the working tree and mounted read-only. A copy in the
 // tree is a forbidden path, because it could shadow or weaken the tool's own rules; rendering it here
@@ -86,6 +118,7 @@ const scanSecrets = (context: Context, configDirectory: string, target: string):
 
 /** Scan the commit history for committed secrets. */
 export const secrets = (context: Context): GateResult =>
+  acquireImage(context, GITLEAKS_IMAGE, 'the secret scan') ??
   withRenderedConfig(context, (configDirectory: string): GateResult => {
     // `git` mode, not `dir`. The standard asks for the tracked content and the commit history, and
     // history mode covers both: every tracked file's content is in some commit. `dir` mode has no git
@@ -94,7 +127,7 @@ export const secrets = (context: Context): GateResult =>
     // times slower, and every finding it added came from a dependency rather than from this project.
     const history: RunResult = scanSecrets(context, configDirectory, 'git')
     return (
-      requireDocker(history, 'the secret scan') ??
+      dockerFault(context, GITLEAKS_IMAGE, 'the secret scan', history) ??
       fromRun(
         history,
         'no secret found in the git history',
@@ -144,18 +177,24 @@ const validateComposeProjects = (
     }),
   )
 
-// A missing daemon is reported as itself rather than as a pile of findings about files no tool could
-// read. It is asked of the compose results too, which it was not: a project shipping only a compose file
-// met a missing Docker as shell noise from a command that never ran.
-const firstMissingDaemon = (results: readonly RunResult[]): GateResult | undefined =>
-  results
-    .map((result: RunResult): GateResult | undefined => requireDocker(result, 'the container gate'))
-    .find((entry: GateResult | undefined): boolean => entry !== undefined)
+const CONTAINER_GATE: string = 'the container gate'
+
+const firstReserved = (results: readonly RunResult[]): GateResult | undefined => {
+  const reserved: DockerFailure | undefined = results
+    .map((result: RunResult): DockerFailure | undefined =>
+      classifyContainerExit(CONTAINER_GATE, result),
+    )
+    .find((entry: DockerFailure | undefined): boolean => entry !== undefined)
+  return reserved === undefined ? undefined : describeFailure(reserved)
+}
 
 interface LintedDockerfile {
   readonly target: string
   readonly result: RunResult
 }
+
+const lintResults = (linted: readonly LintedDockerfile[]): readonly RunResult[] =>
+  linted.map((entry: LintedDockerfile): RunResult => entry.result)
 
 // The file is fed on stdin through the argv form rather than through a shell redirection. It used to be
 // interpolated into an `sh -c` string with `JSON.stringify` around it, which is JSON quoting and not
@@ -166,6 +205,23 @@ const lintDockerfile = (context: Context, target: string): RunResult =>
     cwd: context.root,
     input: readFileSync(path.join(context.root, target), 'utf8'),
   })
+
+// Compose is judged on its exit code alone: it needs no analyzer image, so there is nothing to re-check
+// and its output quotes the project's own YAML. The Dockerfile half asks the further question, once for
+// the whole run rather than once per file - the answer cannot differ between two files linted seconds
+// apart, and asking per file would re-pull an image on every genuine finding.
+const containerFault = (
+  context: Context,
+  linted: readonly LintedDockerfile[],
+  validated: readonly ValidatedCompose[],
+): GateResult | undefined =>
+  firstReserved([
+    ...lintResults(linted),
+    ...validated.map((entry: ValidatedCompose): RunResult => entry.result),
+  ]) ??
+  (lintResults(linted).some((result: RunResult): boolean => result.code !== 0)
+    ? acquireImage(context, HADOLINT_IMAGE, CONTAINER_GATE)
+    : undefined)
 
 // What the gate actually looked at, so a pass never claims more than it checked. The summary read
 // "N Dockerfile(s) and the compose file are valid" whether or not a compose file existed.
@@ -189,17 +245,19 @@ export const containers = (context: Context): GateResult => {
   if (projects.length === 0 && targets.length === 0) {
     return passed('the project ships no container definition')
   }
+  const unavailable: GateResult | undefined =
+    targets.length > 0 ? acquireImage(context, HADOLINT_IMAGE, CONTAINER_GATE) : undefined
+  if (unavailable !== undefined) {
+    return unavailable
+  }
   // Run every tool first, then judge.
   const linted: readonly LintedDockerfile[] = targets.map(
     (target: string): LintedDockerfile => ({ target, result: lintDockerfile(context, target) }),
   )
   const validated: readonly ValidatedCompose[] = validateComposeProjects(context, projects)
-  const missing: GateResult | undefined = firstMissingDaemon([
-    ...linted.map((entry: LintedDockerfile): RunResult => entry.result),
-    ...validated.map((entry: ValidatedCompose): RunResult => entry.result),
-  ])
-  if (missing !== undefined) {
-    return missing
+  const faulted: GateResult | undefined = containerFault(context, linted, validated)
+  if (faulted !== undefined) {
+    return faulted
   }
   const findings: readonly string[] = [
     ...linted.flatMap((entry: LintedDockerfile): readonly string[] =>
@@ -219,13 +277,21 @@ export const actions = (context: Context): GateResult => {
   if (!existsSync(path.join(context.root, '.github', 'workflows'))) {
     return passed('the project ships no workflows')
   }
+  const unavailable: GateResult | undefined = acquireImage(
+    context,
+    ACTIONLINT_IMAGE,
+    'the workflow gate',
+  )
+  if (unavailable !== undefined) {
+    return unavailable
+  }
   const result: RunResult = run(
     'docker',
     ['run', '--rm', '-v', `${context.root}:/repo`, '--workdir', '/repo', ACTIONLINT_IMAGE],
     { cwd: context.root },
   )
   return (
-    requireDocker(result, 'the workflow gate') ??
+    dockerFault(context, ACTIONLINT_IMAGE, 'the workflow gate', result) ??
     fromRun(result, 'workflows pass actionlint', 'a workflow does not pass actionlint')
   )
 }

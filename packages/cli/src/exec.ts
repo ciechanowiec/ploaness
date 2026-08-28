@@ -2,6 +2,9 @@
 // the runner present one verdict whether a gate shelled out to a tool or evaluated a rule in process.
 import { type SpawnSyncReturns, spawnSync } from 'node:child_process'
 import path from 'node:path'
+// Owned by `governance` because the docker-failure classifier decides on it too, and a number two
+// modules must agree about will not stay agreed about while each states it.
+import { COMMAND_NOT_FOUND } from '@ploaness/governance'
 
 /** The outcome of one gate. */
 export interface GateResult {
@@ -45,6 +48,15 @@ export interface RunOptions {
   readonly env?: Readonly<Record<string, string>>
   /** Text to write to the child's stdin, for a tool that reads its subject there. */
   readonly input?: string
+  /**
+   * Kill the tool after this many milliseconds, reporting `TIMED_OUT_CODE`.
+   *
+   * Omitted means the tool decides when it is done, which is right for an analyzer reading the tree and
+   * wrong for anything that opens a socket. A hung request produced no output and no verdict, so on a
+   * team's CI a stuck gate was indistinguishable from a stuck build - and unlike a gate failure, nothing
+   * said which it was, because nothing ended.
+   */
+  readonly timeoutMs?: number
 }
 
 /** The raw outcome of a child process. */
@@ -72,18 +84,31 @@ const MAX_OUTPUT_BYTES: number = MAX_OUTPUT_MIB * KIB_PER_MIB * BYTES_PER_KIB
 // A tool that could not start and a tool that produced more output than the buffer holds are different
 // problems, and reporting both as 127 made the second read as "Docker is not available". The buffer
 // case is named for what it is.
+// The third case is a tool killed for exceeding its deadline. It is not a tool that is missing, and
+// saying "not installed" about a registry that merely hung sends a team looking for the wrong thing.
+//
+// Matched on the message because node writes it - `spawnSync <cmd> ETIMEDOUT` - so no output a tool
+// produced can reach this decision, which is the same guarantee the `maxBuffer` line already relies on.
 const OUT_OF_BUFFER: string = 'ENOBUFS'
+const TIMED_OUT: string = 'ETIMEDOUT'
+
+/** The exit status reported for a tool killed for exceeding the deadline its caller set. */
+export const TIMED_OUT_CODE: number = 124
 
 const startupFailure = (error: Error): RunResult => {
-  const isOverflow: boolean = error.message.includes('maxBuffer')
-  const output: string = isOverflow
-    ? `${OUT_OF_BUFFER}: the tool produced more than ${String(MAX_OUTPUT_MIB)} MiB of output`
-    : error.message
-  return { code: isOverflow ? 1 : COMMAND_NOT_FOUND, output, stdout: '' }
+  if (error.message.includes('maxBuffer')) {
+    return {
+      code: 1,
+      output: `${OUT_OF_BUFFER}: the tool produced more than ${String(MAX_OUTPUT_MIB)} MiB of output`,
+      stdout: '',
+    }
+  }
+  return error.message.includes(TIMED_OUT)
+    ? { code: TIMED_OUT_CODE, output: `${TIMED_OUT}: ${error.message}`, stdout: '' }
+    : { code: COMMAND_NOT_FOUND, output: error.message, stdout: '' }
 }
 
-/** The exit status a shell reports when the command itself could not be found. */
-export const COMMAND_NOT_FOUND: number = 127
+export { COMMAND_NOT_FOUND } from '@ploaness/governance'
 
 // A process killed by a signal reports no status at all, and reporting it as an ordinary failure hid
 // the one fact that explains it - an out-of-memory kill during a build looks exactly like a build that
@@ -124,6 +149,7 @@ export const run = (
     maxBuffer: MAX_OUTPUT_BYTES,
     env: withProjectBinaries(options.cwd, options.env),
     ...(options.input !== undefined && { input: options.input }),
+    ...(options.timeoutMs !== undefined && { timeout: options.timeoutMs }),
   })
   if (result.error !== undefined) {
     return startupFailure(result.error)
