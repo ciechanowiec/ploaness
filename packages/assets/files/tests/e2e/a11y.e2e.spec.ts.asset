@@ -54,8 +54,9 @@ const parseUrl = (href: string, origin: string): URL | null => {
   }
 }
 
-// Reduce an href to a same-origin page path, or null to skip it: an external link, a route the project
-// declared out of scope, a static asset, or a bare anchor resolving to a page already queued.
+// Reduce an href - or a URL a navigation landed on - to a same-origin page path, or null to skip it: an
+// external link, a route the project declared out of scope, a static asset, or a bare anchor resolving
+// to a page already queued.
 const toRoute = (href: string, origin: string): string | null => {
   const url: URL | null = parseUrl(href, origin)
   if (url?.origin !== origin) {
@@ -119,6 +120,14 @@ const discoverRoutes = async (page: Page, origin: string): Promise<RouteDiscover
     if (response?.ok() !== true) {
       // A link can point at a not-yet-built route; it answers outside the layout, so skip it entirely
       // rather than scanning a page the project never rendered.
+      continue
+    }
+    // Where a navigation LANDS is judged by the same list as where a link points. Applied only to
+    // hrefs, the skip list let a redirect walk the crawl into the prefix it exists to keep it out of:
+    // a headless CMS whose `/` forwards to `/admin` had its admin panel swept, and every finding was
+    // about a framework's markup the project cannot edit. `/` is the case that cannot be avoided by
+    // not linking to it, because the crawl seeds it.
+    if (toRoute(page.url(), origin) === null) {
       continue
     }
     reachable.push(routePath)
