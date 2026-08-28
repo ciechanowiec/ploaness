@@ -678,6 +678,16 @@ expect pass-workspace conventions PASS
 expect_in pass-workspace apps/web eslint PASS
 expect pass-workspace eslint PASS
 
+# The three gates that need a server. A library declares neither Payload nor Next, so it has no build,
+# no client bundle and no browser - and `assets` already withholds the managed specs from it on exactly
+# that test. Each of these failed before the guard: `next` resolves from any member of a workspace where
+# one member is an application, because pnpm keeps a compatibility hoist node's resolution walks into,
+# so the question "is the tool reachable" answered yes everywhere. `e2e` was the worse half, failing a
+# library for the absence of a `playwright.config.ts` the catalogue is right not to give it.
+expect_in pass-workspace packages/ui build PASS 'no runtime of its own'
+expect_in pass-workspace packages/ui bundle PASS 'no runtime of its own'
+expect_in pass-workspace packages/ui e2e PASS 'no runtime of its own'
+
 # pnpm honours the install allowlist only at the workspace root, so a member cannot carry one - and
 # before the scopes this reported a PASS from inside a member, having read no file at all.
 new_workspace fail-member-install-allowlist

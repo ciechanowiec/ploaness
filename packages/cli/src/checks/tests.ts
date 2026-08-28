@@ -4,7 +4,13 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { CODE_EXTENSIONS, carriesSourceCode, hasExtension } from '@ploaness/governance'
-import { type Context, type Member, resolveProjectTool, trackedFiles } from '../context.js'
+import {
+  type Context,
+  hasOwnRuntime,
+  type Member,
+  resolveProjectTool,
+  trackedFiles,
+} from '../context.js'
 import {
   asFindings,
   failed,
@@ -97,6 +103,12 @@ export const tests = (context: Member): GateResult =>
 
 /** Run the Playwright end-to-end suite. */
 export const endToEnd = (context: Context): GateResult => {
+  // A library has no browser to drive, and `assets` already withholds the managed specs from one on the
+  // same test. Without this the two gates contradicted each other: the catalogue correctly gave a
+  // library no `playwright.config.ts`, and this gate then failed it for the file's absence.
+  if (!hasOwnRuntime(context)) {
+    return passed('this package has no runtime of its own, so there is no end-to-end suite')
+  }
   // Not optional, and no longer treated as such. ploaness ships the accessibility sweep as a managed
   // spec, so a project with no Playwright config is a project whose managed files are missing rather
   // than one that opted out; reporting a pass here would hide that behind a green gate.
@@ -133,8 +145,11 @@ export const endToEnd = (context: Context): GateResult => {
 }
 
 /** Produce the production build, which the bundle gate then measures. */
-export const build = (context: Context): GateResult =>
-  withPretest(context, (): GateResult => {
+export const build = (context: Context): GateResult => {
+  if (!hasOwnRuntime(context)) {
+    return passed('this package has no runtime of its own, so there is nothing to build')
+  }
+  return withPretest(context, (): GateResult => {
     const next: string | undefined = resolveProjectToolOrUndefined(context, 'next')
     if (next === undefined) {
       return failed('next could not be resolved from the project', [
@@ -154,3 +169,4 @@ export const build = (context: Context): GateResult =>
       'the production build failed',
     )
   })
+}

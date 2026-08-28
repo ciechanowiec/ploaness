@@ -11,7 +11,9 @@ import {
   type DeclaredExclusion,
   findGovernedMembers,
   findRepositoryRoot,
+  hasRuntime,
   isPayloadProject,
+  memberKindOf,
   type ParsedJson,
   type ProjectManifest,
   parseJsonc,
@@ -180,6 +182,21 @@ export const resolveTool = (
   }
   return path.join(path.dirname(manifestPath), bin)
 }
+
+/**
+ * Whether this member has a server of its own, and so a build, a client bundle and a browser to drive.
+ *
+ * Asked of the MANIFEST rather than of the install. `next` resolves from a workspace root that declares
+ * nothing at all, because pnpm keeps a compatibility hoist at `node_modules/.pnpm/node_modules` that
+ * node's resolution walks into - so "is the tool reachable" answers yes for every member of a repository
+ * where any one member is an application. That is what sent `next build` at a root holding no `app`
+ * directory, and the failure named the missing directory rather than the member that should never have
+ * been built.
+ * @param context the member to judge.
+ * @returns true for a Payload or Next application, false for a library.
+ */
+export const hasOwnRuntime = (context: Context): boolean =>
+  hasRuntime(memberKindOf(context.packageJson))
 
 /**
  * Resolve a tool from the CONSUMER's install rather than the harness's. Vitest, Playwright, Next, and

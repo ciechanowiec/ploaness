@@ -11,7 +11,7 @@ import {
   isSupportedImagePath,
   validateImageBytes,
 } from '@ploaness/governance'
-import { type Context, trackedFiles } from '../context.js'
+import { type Context, hasOwnRuntime, trackedFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 /** Decode every tracked image and fail on any that is corrupt or truncated. */
@@ -50,6 +50,12 @@ const asKiB = (bytes: number): string => `${(bytes / BYTES_PER_KIB).toFixed(KIB_
  * change moves the bundle. That determinism is why this is a gate and a Lighthouse score is not.
  */
 export const bundle = (context: Context): GateResult => {
+  // A library ships no client bundle, so there is no `.next/static` to measure and its absence is not
+  // a missing build. Reported as a pass here for the same reason `build` reports one: the member has no
+  // runtime, which is a fact about what it declares rather than a step somebody skipped.
+  if (!hasOwnRuntime(context)) {
+    return passed('this package has no runtime of its own, so it ships no client bundle')
+  }
   const staticDirectory: string = path.join(context.root, '.next', 'static')
   if (!existsSync(staticDirectory)) {
     return failed('the production build output is missing', [
