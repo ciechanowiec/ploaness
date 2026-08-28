@@ -722,10 +722,8 @@ expect_in fail-member-install-allowlist apps/web install-scripts FAIL 'onlyBuilt
 # An override at the root replaces a version a MEMBER declared. Read from the member's own directory
 # there was no workspace file to find, so the gate vouched for a pin that never took effect.
 new_workspace fail-member-override
-# Added INTO the existing overrides block rather than appended as a second one: pnpm reads the first
-# block a file declares, so a duplicate key would be a defect the fixture never actually introduced.
-sed -i '' 's/^overrides:$/overrides:\
-  vitest: 3.0.0/' "$scratch/fail-member-override/pnpm-workspace.yaml"
+node "$here/lib/add-override.ts" \
+    "$scratch/fail-member-override/pnpm-workspace.yaml" vitest 3.0.0
 expect_in fail-member-override apps/web wiring FAIL 'redefines a version ploaness pins'
 
 # A library is not an application. Pointing it at the framework configuration would have it judged
