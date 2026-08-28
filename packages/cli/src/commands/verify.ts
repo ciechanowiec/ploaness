@@ -97,11 +97,12 @@ const runPlan = async (
  * @returns the process exit code.
  */
 export const verify = async (repository: Repo, isExtended: boolean): Promise<number> => {
+  const started: number = Date.now()
   const planned: readonly PlannedGate[] = planFor(repository, isExtended)
   const width: number = identifierWidth(planned)
   reportHeader(isExtended, planned.length)
   const outcomes: readonly GateOutcome[] = await runPlan(planned, repository, width)
-  return reportVerdict(outcomes, isExtended, repository.isEnforced)
+  return reportVerdict(outcomes, isExtended, repository.isEnforced, Date.now() - started)
 }
 
 /**

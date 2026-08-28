@@ -13,7 +13,7 @@
       "why": "The Payload application itself, and the two packages Payload declares as peers. Only a member that IS a Payload application needs any of them; a frontend reading that application over HTTP needs none.",
       "versions": {
         "payload": "3.88.0",
-        "sharp": "0.35.3",
+        "sharp": "0.35.4",
         "graphql": "16.14.2"
       }
     },
@@ -22,7 +22,7 @@
       "requiredFor": ["payload", "application"],
       "why": "What any Next application renders with, whether or not Payload is mounted inside it. A public frontend has the same build, the same client bundle and the same React version to agree about.",
       "versions": {
-        "next": "16.3.2",
+        "next": "16.3.3",
         "react": "19.2.8",
         "react-dom": "19.2.8",
         "@types/react": "19.2.18",
@@ -34,7 +34,7 @@
       "requiredFor": ["payload", "application", "library"],
       "why": "The definitions describing the runtime every governed package compiles against. Pinned for the toolchain's reason rather than the framework's: a type package is an input to tsc, so a patch release changes what type-checks while the project stays unchanged.",
       "versions": {
-        "@types/node": "26.3.0"
+        "@types/node": "26.4.0"
       }
     },
     {

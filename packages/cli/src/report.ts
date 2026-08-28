@@ -245,13 +245,13 @@ export const reportVerdict = (
   outcomes: readonly GateOutcome[],
   isExtended: boolean,
   isEnforced: boolean,
+  totalDurationMs: number = outcomes.reduce(
+    (sum: number, outcome: GateOutcome): number => sum + outcome.durationMs,
+    0,
+  ),
 ): number => {
   const failures: readonly GateOutcome[] = outcomes.filter(
     (outcome: GateOutcome): boolean => !outcome.result.ok,
-  )
-  const total: number = outcomes.reduce(
-    (sum: number, outcome: GateOutcome): number => sum + outcome.durationMs,
-    0,
   )
   const counts: string = [
     `${String(tally(outcomes, PASS))} passed`,
@@ -259,8 +259,9 @@ export const reportVerdict = (
     `${String(outcomes.length)} gates`,
   ].join('  ')
   const mode: string = isExtended ? 'Extended verification' : 'Default verification'
+  const summary: string = `${counts}  total: ${duration(totalDurationMs)}`
   line('')
-  line(spread(`  ${counts}`, duration(total), `  ${paint(counts, DIM)}`))
+  line(`  ${paint(summary, DIM)}`)
   const ranking: string | undefined = slowest(outcomes)
   if (ranking !== undefined) {
     line(paint(ranking, DIM))
