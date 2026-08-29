@@ -35,7 +35,9 @@ ploaness governs all of the following domains:
   entry point and its default re-export; one further statement fails the gate. `biome.json` extends
   `ploaness/biome` and declares only its `files` block. `tsconfig.json` extends the literal path
   `ploaness/tsconfig.json`, because Next.js does not read an exports map, and adds only the compiler
-  options ploaness leaves open. A project that rewrites `verify`, appends rules after the harness ESLint
+  options ploaness leaves open. Those two blocks sit at the member root because Biome and TypeScript
+  resolve a relative glob against the directory of the file that declares it, and a glob left inside
+  `node_modules` would match nothing in the working tree. A project that rewrites `verify`, appends rules after the harness ESLint
   config, redeclares a Biome section, overrides a compiler option, or replaces the vitest or Playwright
   config fails this domain rather than passing quietly. So does one that redefines a pinned version
   through an install override, or silences the vulnerability gate through `pnpm.auditConfig`. A setting
@@ -77,11 +79,16 @@ ploaness governs all of the following domains:
 - **Generated output:** the Payload types and admin import map must match the configuration that
   produces them.
 - **Versions:** ploaness owns two sets of them. The toolchain is every package whose version changes
-  what a gate does. The rest is `pins.json`, in groups: the framework (`payload`, `next`, `react`,
-  `react-dom`, `sharp`, `graphql`) and its type definitions (`@types/node`, `@types/react`,
-  `@types/react-dom`), which every governed project declares; and the ecosystem (`pg`, `@types/pg`,
-  `dotenv`, `cross-env`), which is matched when declared and required of nobody, because a project on
-  MongoDB has no Postgres driver. A type package is pinned for the toolchain's reason: it is an input
+  what a gate does, and it is read from ploaness's own manifests, so there is no second copy to drift.
+  The rest is `pins.json`, in four groups, each naming the member kinds that must declare it. `payload`
+  (`payload`, `sharp`, `graphql`) is required of a Payload application alone. `web` (`next`, `react`,
+  `react-dom`, `@types/react`, `@types/react-dom`) is required of every Next application, whether or
+  not Payload is mounted inside it. `runtime-types` (`@types/node`) is required of every member.
+  `ecosystem` (`pg`, `@types/pg`, `dotenv`, `cross-env`, `vite`) is matched when declared and required
+  of nobody, because a project on MongoDB has no Postgres driver. `vite` sits there because ploaness's
+  own test runner and React plugin resolve a vite of their own, and that plugin declares vite as a
+  PEER, so a project declaring a different one gets a loading failure rather than mere duplication.
+  A type package is pinned for the toolchain's reason: it is an input
   to tsc, so a patch release changes what type-checks while the project stays unchanged. `packageManager`
   and `engines` are pinned too - Corepack runs exactly the package manager named, so it decides how
   every other pin resolves. `engines.pnpm` is the exact version `packageManager` names rather than a
@@ -161,6 +168,43 @@ ploaness governs all of the following domains:
 
 Do not treat a domain omitted from one command's output as ungoverned. The shipped configurations and
 the ploaness gates together define the executable contract.
+
+### Workspaces
+
+ploaness governs a repository rather than a directory. A repository holding one package is the case
+where those are the same thing, and it is what most projects are: nothing here changes anything for it.
+
+A **member** is a package ploaness governs, and a package is a member when it declares `ploaness` as a
+dependency. That is not a switch to flip. Under pnpm's strict layout a package that does not depend on
+the harness cannot resolve `ploaness/biome` or `ploaness/eslint` from its own configuration files, so
+its wiring could not work whatever it declared. A pnpm project that is neither a member nor inside a
+member's `sourceRoots` is reported by the `wiring` gate, so removing the declaration to escape the gates
+is loud rather than silent.
+
+Each member has a **kind**, derived from what it declares and never from what it says about itself. A
+package cannot receive a weaker configuration by describing itself differently.
+
+| Kind | Derived from | What it receives |
+| --- | --- | --- |
+| Payload application | declares `payload` | Every gate, every managed file, and the Payload-shaped configurations. |
+| application | declares `next`, not `payload` | Everything except the Payload rules and the access-boundary sweep. A Next.js frontend reading a CMS over HTTP still has a build, a client bundle, and a browser suite to govern. |
+| library | declares neither | The framework-neutral configurations - `ploaness/biome-core`, `ploaness/tsconfig-core.json`, `ploaness/eslint-library`, `ploaness/vitest-library` - and no browser configuration, because it has no application to drive. |
+
+Every gate judges one of three **scopes**: `repository` for the tracked tree, the dependency graph, the
+history, and the managed files a tool reads from the tree root; `package` for one member's own source,
+configuration, and suite; `payload` for the rules about Payload itself. The install-script allowlist and
+the `overrides` block are read at repository scope and nowhere else, because that is the only place pnpm
+honours them.
+
+The run order is the registry's order, unchanged. A repository with one member produces exactly the
+sequence ploaness ran before members existed, and a repository with several interleaves them, with the
+run log naming the member each gate was asked about.
+
+A member declares its own settings under the `ploaness` key of its own `package.json`, layered onto
+whatever the repository root declared. A list a project adds to stays additive, a threshold is honoured
+only when it is stricter, and a command list or an origin describes one package, so the member's answer
+stands. `ploaness init` writes each member the project files its own kind is judged against, and the
+three project scripts once, at the repository root.
 
 ### Project Layout
 
@@ -243,7 +287,7 @@ third verdict.
 
 `--enforce=false` is the exception, and the reason the flag exists. A report-only run carries on past a
 failing gate, so one run lists every finding a project has instead of handing them over one rerun at a
-time. Use it while adopting ploaness, to see the size of the job. It still exits 0 and it is still not
+time. Reach for it to survey what is outstanding, not to finish. It still exits 0 and it is still not
 a pass. `preflight` and `wiring` stop it anyway: below a failing one, ploaness either may not judge this
 project or cannot tell whether what it is judging is what it thinks.
 
@@ -259,6 +303,61 @@ what its underlying tool actually wrote - passing or failing, whole and unfilter
 audit a verdict rather than take it on faith: "no vulnerability at or above moderate" is a claim, and
 the scanner's own output is the evidence for it. A full run has no such flag, because thirty-eight
 transcripts bury the one finding the report exists to surface.
+
+### Default Verification Gates
+
+Default verification runs 32 gates, in the order below. A repository-scope gate runs once; a
+package-scope gate runs once per member; a Payload-scope gate runs only for the members that declare
+Payload. `tree-verify` is last in both tiers, because the extended gates are the ones most able to
+rewrite a tracked file.
+
+| Gate | Scope | What it verifies |
+| --- | --- | --- |
+| `preflight` | repository | The repository meets the harness requirements and holds a Payload member. |
+| `wiring` | repository | The scripts, the five project files, and the pinned versions are intact and nothing undoes them. |
+| `assets` | repository | Every managed file matches what ploaness ships. |
+| `tree-snapshot` | repository | Records a fingerprint of the working tree. |
+| `types` | package | `tsc --noEmit`. |
+| `biome` | package | Formatting and the fast lint pass. |
+| `biome-schema` | repository | The `$schema` in `biome.json` names the installed Biome version. |
+| `eslint` | package | The type-aware lint pass. |
+| `conventions` | repository | The typography ban and the hand-written JavaScript ban, over every tracked text file. |
+| `editorconfig` | repository | Every tracked text file matches the pinned `.editorconfig`, and no code line passes 120 characters. |
+| `suppressions` | package | The suppression count against the earned ceiling, over the project's own files. |
+| `css` | package | Stylelint over every style sheet under the source roots, with Tailwind v4 accepted as written. |
+| `tailwind-tokens` | package | Every visual value in the markup comes from the theme rather than an arbitrary value. |
+| `arch` | package | dependency-cruiser: layering, cycles, and orphans. |
+| `type-coverage` | package | Type coverage of 100% over hand-written TypeScript. |
+| `payload-generated` | payload | The generated Payload types and admin import map are current. |
+| `generated-denial` | repository | The agent runtime is denied write access to every generated artefact. |
+| `payload-rules` | package | The Payload usage rules, including access control and drafts. |
+| `config-refs` | package | No analyzer setting carves out a path that no longer exists or matches nothing. |
+| `secrets` | repository | gitleaks over the git history, plus the declared `secretAllowlist`. |
+| `licenses` | repository | The license of every dependency sits inside the allowlist. |
+| `vulnerabilities` | repository | No resolved package carries an advisory at or above the declared severity. |
+| `install-scripts` | repository | The allowlist naming which dependencies may run a build or postinstall script. |
+| `deps` | repository | No declared dependency is two or more major versions behind. Pinned images are reported, never failed. |
+| `image-assets` | repository | Every tracked image decodes as the format its bytes claim. |
+| `docs` | repository | The agent documentation names no script and no file that has gone. |
+| `skills` | repository | The metadata header of every `SKILL.md`. |
+| `docker` | repository | hadolint over every Dockerfile, and `docker compose config`. |
+| `actions` | repository | actionlint over every workflow. |
+| `knip` | package | Dead code, unused files, and unused dependencies. |
+| `tests` | package | The suite and its per-file coverage floors, under the network guard and the shuffle. |
+| `tree-verify` | repository | The working tree is unchanged since `tree-snapshot` ran. |
+
+### Extended Verification Gates
+
+Extended verification adds six gates to the tier above.
+
+| Gate | Scope | What it verifies |
+| --- | --- | --- |
+| `require-full-history` | repository | The clone carries the whole history. |
+| `commit-history` | repository | Every commit message in the history. |
+| `linear-history` | repository | No merge commit anywhere in the history. |
+| `build` | package | The production build. |
+| `bundle` | package | The gzipped client JavaScript stays under the bundle budget. |
+| `e2e` | package | The end-to-end suite, including the three sweeps ploaness ships into it. |
 
 ## Layer 5: Exceptions and Repairs
 

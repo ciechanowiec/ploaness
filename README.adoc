@@ -1,5 +1,5 @@
 [.text-justify]
-= _ploaness_ User Guide
+= _ploaness_
 :reproducible:
 :doctype: article
 :author: Herman Ciechanowiec
@@ -43,622 +43,107 @@ ifdef::backend-html5+not-env-github[]
 ++++
 endif::[]
 
-[cols=">.^1,<.^1"]
-|===
-| *Guide last modified:* | {docdatetime}
-| *Guide generated:* | {localdatetime}
-|===
-
 [[overview]]
 == Overview
 
-. _ploaness_ is a quality harness for https://payloadcms.com[Payload CMS^] projects. A https://payloadcms.com[Payload CMS^] project declares one dependency on the `ploaness` package and receives from it the analyzer settings, the xref:#managed-files[managed files], the commit rules, the xref:#payload-cms-usage-rules[], and the xref:#gates[gates] that inspect it.
-. This guide is written for an engineer who adds _ploaness_ version `{ploaness-version}` to a https://payloadcms.com[Payload CMS^] project and then runs its xref:#verification-commands[verification commands]. It explains xref:#quick-start[how to add _ploaness_], xref:#commands[how to run it], xref:#gates[what each gate verifies], and xref:#configuration[how to configure it].
+. _ploaness_ is a quality harness for https://payloadcms.com[Payload CMS^] projects. A project declares one dependency on the `ploaness` package and receives back the analyzer settings, the commit rules, the xref:#managed-files[managed files], and the xref:#gates[gates] that inspect the project. Nothing is copied into the project, so no setting drifts from the one the harness ships.
+. This guide is written for an engineer who attaches _ploaness_ version `{ploaness-version}` to a https://payloadcms.com[Payload CMS^] project, or works day to day in a project that already runs the harness. The guide covers what the harness does, what the harness requires, and the steps that attach the harness. The guide doesn't state the individual rules, which _ploaness_ installs into the project for the coding agent that repairs them.
 
-[[quick-start]]
-== Quick Start
+[[harness-structure]]
+== Harness Structure
+
+[[gates]]
+=== Gates
+
+. A [[gate,gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding,finding]]_finding_ is one problem a gate reports. Default verification runs 32 gates. Extended verification adds six more, covering the history, the production build, the client bundle, and the browser suite.
+. A run stops at the first failing gate and names how many gates the run didn't reach. Stopping there is deliberate: a gate is free to leave the tree in a shape the next gate misreads, and a column of passes beneath a failure would describe a state nobody established.
+
+[[managed-files]]
+=== Managed Files
+
+_ploaness_ owns the text of certain files in the project, among them the editor settings, the ignore files, and the agent instructions. `ploaness sync` writes those files, and a gate reports any that were edited afterwards. A managed file is owned rather than suggested for the reason a rule is: a check a project can rewrite isn't a check.
 
 [[requirements]]
-=== Requirements
+== Requirements
 
-. _ploaness_ runs on Node 26 or newer.
-. The https://payloadcms.com[Payload CMS^] project declares the https://www.npmjs.com/package/payload[`payload` package^] among its dependencies. Every rule _ploaness_ applies is a rule about https://payloadcms.com[Payload CMS^].
-. Three xref:#gates[gates] run their analyzer in a container: xref:#secrets-gate[`secrets`], xref:#docker-gate[`docker`], and xref:#actions-gate[`actions`]. Each analyzer needs a reachable Docker daemon, and each image is pinned by digest so an upstream release can't change a verdict.
-. Two xref:#gates[gates] read a public service by design and fail when it's unreachable: xref:#vulnerabilities-gate[`vulnerabilities`] reads the advisory database, and `deps` reads the package registry and the public image registry.
-. _ploaness_ pins two sets of versions, and the xref:#wiring-gate[`wiring` gate] rejects any other value for either.
-+
-The *toolchain* is every package whose version changes what a xref:#gates[gate] does: `vitest`, `@vitest/coverage-v8`, `typescript`, `jsdom`, `fast-check`, the `@testing-library` packages, `@playwright/test`, `@axe-core/playwright`, and `tsx`, which the xref:#e2e-gate[`e2e`] gate starts the run through. A https://payloadcms.com[Payload CMS^] project declares the ones its own files import and declares the rest only if it uses them, at the pinned version either way. The expected version is read from _ploaness_'s own manifests, so there is no second copy to drift.
-+
-The *framework* is `payload`, `next`, `react`, `react-dom`, `sharp`, and `graphql`, which https://payloadcms.com[Payload CMS^] declares as a peer, together with the type definitions that describe the framework and the runtime beneath it: `@types/node`, `@types/react`, and `@types/react-dom`. Every governed https://payloadcms.com[Payload CMS^] project declares all nine. The framework packages are what the xref:#preflight-gate[`preflight` gate] already assumes; the type packages are pinned for the toolchain's reason rather than the framework's, because a type package is an input to the type checker and a patch release changes what type-checks while the project stays unchanged.
-+
-The *ecosystem* is `pg`, `@types/pg`, `dotenv`, `cross-env`, and `vite`. _ploaness_ owns the version of each so no two governed projects disagree about one, and requires none of them, because a https://payloadcms.com[Payload CMS^] project on MongoDB has no Postgres driver and requiring one would make _ploaness_ dictate a database rather than a version. An unrequired pin is matched when the project declares it and forced on nobody. `vite` is pinned because _ploaness_'s own test runner and React plugin resolve a vite of their own: a https://payloadcms.com[Payload CMS^] project declaring a different one installs two, and the plugin declares vite as a peer, so the mismatch breaks loading rather than merely wasting space.
-+
-These versions are written in `pins.json` rather than declared as dependencies of _ploaness_, because _ploaness_ imports none of them and declaring them would install a second https://payloadcms.com[Payload CMS^], Next, React, or set of type definitions into a project that already has one. Two copies of `@types/react` in one dependency tree is a class of type error that reads as the project's fault. Each group in that file carries the rule that applies to it, so adding a group changes no code.
-. `packageManager` is pinned to an exact package-manager version, and the `engines` block states the runtime _ploaness_ requires. Corepack runs exactly the package manager named, so it decides how every other pinned version resolves: the same lockfile can produce a different tree under a different one, which would make every pin above it a statement about a graph nobody built. The xref:#preflight-gate[`preflight` gate] reads the Node that is actually running; the `engines` block is the separate statement a https://payloadcms.com[Payload CMS^] project makes to an installer, a container image, and a reader.
-. Every `@payloadcms/...` package a https://payloadcms.com[Payload CMS^] project declares carries the pinned `payload` version. https://payloadcms.com[Payload CMS^] fails at runtime when its own packages disagree, and the rule is derived from the pin rather than written as a list, so a project that adds a https://payloadcms.com[Payload CMS^] plugin is covered by the rule that already exists.
-. No declared dependency carries a range. A `^`, `~`, comparator, wildcard, or partial version resolves to whichever release is newest at install time, which is the same hole pinning the toolchain closes, one layer down: the xref:#build-gate[`build`], xref:#tests-gate[`tests`], and xref:#e2e-gate[`e2e`] gates would run against something nobody wrote down. A specifier naming an artefact rather than a range, such as a local tarball or a workspace link, is not a range and is left alone.
-. An install override may redefine a package the https://payloadcms.com[Payload CMS^] project does *not* declare, and may not redefine one it does. The permitted case is a transitive package carrying an advisory with no upgrade path above it, which the project can reach no other way. The forbidden case is a package whose version the project already wrote down: two declarations of one version don't stay equal, and the one that loses is the one every reader believes.
+. _ploaness_ runs on Node 26 or newer, under pnpm 11 or newer, in a Git working tree.
+. A project declares a dependency on the https://www.npmjs.com/package/payload[`payload` package^]. Every rule _ploaness_ applies is a rule about https://payloadcms.com[Payload CMS^], and the harness refuses to run without that dependency.
+. _ploaness_ sets a pin on every package whose version can change a verdict, and rejects any other value. A project matching those pins is what makes a passing run mean the same thing twice.
+. Some gates run their analyzer in a container and need a reachable Docker daemon, and others read the advisory database or the package registry over the network. A gate whose daemon, database, or registry is unreachable fails rather than passes.
 
-[[installation]]
-=== Installation
+[[adding-ploaness-to-a-project]]
+== Adding _ploaness_ to a Project
 
-. Add and xref:#init-command[initialize] _ploaness_:
+. Add the package:
 +
-[source,shell]
+[source,bash,subs="attributes+"]
 ----
-pnpm add -D ploaness
-pnpm exec ploaness init
+pnpm add -D ploaness@{ploaness-version}
 ----
-. The xref:#init-command[`ploaness init` command] writes three [[project-scripts,project scripts]]_project scripts_ into `package.json`: `verify`, `verify:full`, and `format`. It then creates the xref:#project-files[project files] and writes the xref:#managed-files[managed files]. It never overwrites a file that already exists.
-. Review and commit the changes.
-
-[[project-files]]
-=== Project Files
-
-. A https://payloadcms.com[Payload CMS^] project keeps five project files of its own, one set per xref:#members[member]. Each project file points at the shipped analyzer settings and adds only what the analyzer has to read from the directory that declares it:
+. Write the wiring and the xref:#managed-files[managed files], then install what those files pull in:
 +
-[cols="2,5"]
-|===
-| File | Content
-
-| `biome.json`
-| `{ "extends": ["ploaness/biome"] }` and the `files` block that selects what Biome reads.
-
-| `tsconfig.json`
-| `{ "extends": "ploaness/tsconfig.json" }`, the https://payloadcms.com[Payload CMS^] project's own `paths`, and the `include` and `exclude` globs.
-
-| `eslint.config.mjs`
-| An import of `ploaness/eslint` and its default re-export.
-
-| `vitest.config.mts`
-| A re-export of `ploaness/vitest`.
-
-| `playwright.config.ts`
-| A re-export of `ploaness/playwright`.
-|===
-. Biome and TypeScript resolve a relative glob against the directory of the file that declares it. A glob left inside `node_modules` matches no file in the working tree, which is why the two blocks sit at the repository root. _ploaness_ still owns their text, and the xref:#wiring-gate[`wiring` gate] compares them character for character.
-. A https://payloadcms.com[Payload CMS^] project never names an `@ploaness/...` package. Under the `node_modules` layout that pnpm creates, a https://payloadcms.com[Payload CMS^] project can't resolve a package it doesn't depend on directly, so every entry point it needs is re-exported through `ploaness` itself.
-
-[[workspaces]]
-=== Workspaces
-
-. _ploaness_ governs a repository rather than a directory. A repository holding one package is the case
-where those are the same thing, and it is what most projects are - nothing below changes anything for it.
-. [[members,member]]A _member_ is a package _ploaness_ governs. A package is a member when it declares
-`ploaness` as a dependency, which is not a switch: under pnpm's strict layout a package that does not
-depend on the harness cannot resolve `ploaness/biome` or `ploaness/eslint` from its own configuration
-files, so its wiring could not work whatever it declared. A pnpm project that is neither a member nor
-inside a member's xref:#configuration[`sourceRoots`] is reported by the xref:#wiring-gate[`wiring` gate],
-so removing the declaration to escape the gates is loud rather than silent.
-. Each member has a _kind_, derived from what it declares and never from what it says about itself:
+[source,bash]
+----
+pnpm exec ploaness init && pnpm install
+----
 +
-[cols="2,5"]
-|===
-| Kind | What it receives
-
-| Payload application
-| Declares `payload`. Every gate, every managed file, and the Payload-shaped configurations.
-
-| application
-| Declares `next` but not `payload`. Everything except the Payload rules and the access-boundary sweep,
-because a https://nextjs.org[Next.js^] application reading a CMS over HTTP still has a build, a client
-bundle and a browser suite to govern.
-
-| library
-| Declares neither. The framework-neutral configurations - `ploaness/biome-core`,
-`ploaness/tsconfig-core.json`, `ploaness/eslint-library`, `ploaness/vitest-library` - and no browser
-configuration, because it has no application to drive.
-|===
-. Every xref:#gates[gate] judges one of three scopes:
-+
-[cols="2,5"]
-|===
-| Scope | What it judges
-
-| repository
-| The tracked tree, the dependency graph, the history, and the xref:#managed-files[managed files] a tool
-reads from the tree root. Runs once. The install-script allowlist and the `overrides` block are read here
-and nowhere else, because that is the only place pnpm honours them.
-
-| package
-| One member's own source, configuration and suite. Runs once per member.
-
-| Payload
-| The rules about https://payloadcms.com[Payload CMS^] itself. Runs only for the members that declare it.
-|===
-. The gate order is unchanged: it is the registry's order, and a repository with one member produces
-exactly the sequence _ploaness_ ran before members existed. A repository with several interleaves them,
-and the run log names the member each gate was asked about.
-. A member declares its own xref:#configuration[configuration] under the `ploaness` key of its own
-package.json, layered onto whatever the repository root declared. A list a project adds to stays
-additive; a threshold is honoured only when it is stricter; a command list or an origin describes one
-package, so the member's answer stands.
-. `ploaness init` writes each member the project files its own kind is judged against, and the three
-xref:#project-scripts[project scripts] once, at the repository root - which is where a run is invoked
-and where it fans out from.
+`ploaness init` writes the project's scripts, creates the configuration files that point at the shipped settings, and materializes the xref:#managed-files[managed files]. `ploaness init` never overwrites a file that already exists, and names every file left in place.
+. Hand the project to a coding agent and ask the agent to bring the project up to the harness. `ploaness init` has already written the instructions that agent reads: a managed block at the top of `AGENTS.md` points at `.ploaness/agent-guide.md`, which states every rule and the order to work in.
 
 [[commands]]
 == Commands
 
-. Every command runs through the `ploaness` executable. The xref:#init-command[`ploaness init`] command writes the three xref:#project-scripts[project scripts] into `package.json`, so xref:#default-verification[`pnpm run verify`] invokes the same implementation as `pnpm exec ploaness verify`:
-+
+Every command runs through the `ploaness` executable:
+
 [cols="3,5"]
 |===
 | Command | Behavior
 
-| [[default-verification,default verification]]`ploaness verify`
-| Runs the xref:#default-gates[32 default verification gates].
+| `ploaness verify`
+| Runs the default verification gates. Written as `pnpm run verify`.
 
-| [[extended-verification,extended verification]]`ploaness verify --extended`
-| Runs xref:#default-verification[] and the xref:#extended-gates[6 extended verification gates] as well.
+| `ploaness verify --extended`
+| Runs the default verification gates and the six extended gates as well. Written as `pnpm run verify:full`.
 
 | `ploaness format`
-| Rewrites the files selected by Biome and applies the fixes ESLint can make on its own.
+| Rewrites the files Biome selects and applies the fixes ESLint can make unaided. Written as `pnpm run format`.
 
-| [[sync-command,the sync command]]`ploaness sync`
-| Writes the xref:#managed-files[managed files] and names the ones it refuses to overwrite.
+| `ploaness sync`
+| Writes the xref:#managed-files[managed files], and names every file `ploaness sync` refuses to overwrite.
 
-| [[init-command]]`ploaness init`
-| Writes the xref:#project-scripts[project scripts], xref:#project-files[project files], and xref:#managed-files[managed files].
+| `ploaness init`
+| Writes the scripts, the configuration files, and the xref:#managed-files[managed files].
 
 | `ploaness gate <id> [--verbose]`
-| Runs one xref:#gates[gate], for debugging. `--verbose` also prints what the gate's tool wrote.
+| Runs one xref:#gate[gate]. `--verbose` also prints the whole unedited output of that gate's analyzer.
 
 | `ploaness gates`
-| Prints every xref:#gates[gate] in run order.
+| Prints every xref:#gate[gate] in run order.
 
 | `ploaness commit-message <file>`
-| Verifies one commit message. It reads `--range <base>..<head>` or `--all` in place of a file.
+| Verifies one commit message. `ploaness commit-message` reads `--range <base>..<head>` or `--all` in place of a file.
 |===
-. [[verbose-mode,verbose mode]]A xref:#gates[gate] reports a verdict rather than a transcript, and `--verbose` prints what its underlying tool actually wrote, passing or failing, whole and unfiltered. It's how a https://payloadcms.com[Payload CMS^] project audits a verdict instead of taking it on faith: "no vulnerability at or above moderate" is a claim, and the scanner's own output is the evidence for it. Only `ploaness gate` reads the flag. A whole run doesn't, because a transcript per gate buries the one xref:#finding[finding] the report exists to surface.
-. [[verification-commands,verification commands]]The two verification commands are xref:#default-verification[] and xref:#extended-verification[]. Both read one flag, [[report-only-mode,report-only mode]]`--enforce=false`, which carries the run past a failing xref:#gates[gate] rather than stopping at it, so one run lists every xref:#finding[finding] the https://payloadcms.com[Payload CMS^] project has. It then exits with status `0`. That flag enables no further gate, and the status it exits with isn't a pass. It's for surveying a project that is already wired, not for running it, and every run in that mode says so in its own output. It is NOT the way to survey a project before adopting _ploaness_: the xref:#preflight-gate[`preflight`] and xref:#wiring-gate[`wiring`] gates are preconditions, so they stop a report-only run too, and a project that has not finished wiring never reaches the gates it wanted to survey. `ploaness gate <id>` is what answers that question - it builds its context from the working directory and runs one gate without `preflight`, which is how _ploaness_ surveys itself.
-. For example, xref:#extended-verification[`ploaness verify --extended --enforce=false`] runs the xref:#default-gates[default verification gates] and xref:#extended-gates[extended verification gates] in xref:#report-only-mode[report-only mode].
 
-[[gates]]
-== Gates
+Both verification commands read one flag, `--enforce=false`, which carries the run past a failing xref:#gate[gate] instead of stopping there, so a single run lists every xref:#finding[finding] the project has. The run then exits with status `0`, and that status isn't a pass. Reach for the flag to measure the size of the job, not to declare the job done.
 
-. A _gate_ is one named verification operation that a xref:#verification-commands[verification command] runs. A failing gate stops the run, and the report names the gate it halted at and how many gates it didn't reach. In xref:#report-only-mode[] the run carries on instead, so that one run lists every xref:#finding[finding].
-. A [[finding]]_finding_ is one problem reported by a gate. An analyzer's native output has its own name and becomes a finding only when a gate reports it. A run reports the findings of one gate, because nothing below a failing gate has been verified: a gate is free to leave the tree in a shape the next one misreads, and a column of passes beneath a failure describes a state nobody established.
-. The gate order is fixed, and it decides which finding a https://payloadcms.com[Payload CMS^] project sees first. The structural gates that catch a mis-wired project run before the analyzers whose output would be harder to read, and the xref:#tree-snapshot-gate[fingerprint of the working tree] is taken before any gate can rewrite a file and compared again after every gate has run. The xref:#preflight-gate[`preflight` gate] and the xref:#wiring-gate[`wiring` gate] lead: the first decides whether _ploaness_ may judge the project at all, and the second whether the thing being judged is the one _ploaness_ thinks it is. They're the two gates that stop even a xref:#report-only-mode[report-only] run, because a survey of findings below either would be a list of verdicts about nothing.
+[[installed-documentation]]
+== Installed Documentation
 
-[[default-gates]]
-=== Default Verification Gates
-
-xref:#default-verification[] runs the following 32 gates.
+`ploaness init` installs the full contract into the project, where the agent working on that project reads the contract:
 
 [cols="2,5"]
 |===
-| Gate | Behavior
+| Path | Content
 
-| [[preflight-gate]]`preflight`
-| The https://payloadcms.com[Payload CMS^] project meets the xref:#requirements[].
+| `.ploaness/agent-guide.md`
+| Every rule, every setting, and the order the commands run in. Read `.ploaness/agent-guide.md` before repairing a xref:#finding[finding].
 
-| [[wiring-gate,the wiring gate]]`wiring`
-| The xref:#project-scripts[project scripts] and xref:#project-files[project files] that arm _ploaness_ are intact, and nothing in the https://payloadcms.com[Payload CMS^] project undoes them: a xref:#project-files[project file] can't be replaced by a local one, and an install override can't redefine a version _ploaness_ pins. Where verification runs is the project's own decision, so the gate rules on nothing outside the repository's own files.
+| `README-guideline-software-project.adoc`
+| The governing standard the harness maps onto. The standard states the rules themselves.
 
-| [[assets-gate]]`assets`
-| The xref:#managed-files[managed files] match what _ploaness_ ships.
-
-| [[tree-snapshot-gate]]`tree-snapshot`
-| Records a fingerprint of the working tree.
-
-| `types`
-| `tsc --noEmit`.
-
-| `biome`
-| Formatting and the fast lint pass.
-
-| `biome-schema`
-| The `$schema` in `biome.json` names the installed Biome version.
-
-| `eslint`
-| The type-aware lint pass.
-
-| `conventions`
-| The ban on typographic characters and on hand-written JavaScript, across every tracked text file.
-
-| [[editorconfig-gate]]`editorconfig`
-| Every tracked text file matches the pinned `.editorconfig`, and no code line passes 120 characters.
-
-| [[suppressions-gate]]`suppressions`
-| The suppression count against xref:#suppression-ceiling[the suppression ceiling], over the https://payloadcms.com[Payload CMS^] project's own files rather than the xref:#managed-files[managed] ones.
-
-| [[css-gate]]`css`
-| Stylelint over every style sheet under the source roots. Tailwind v4 is accepted as written: its at-rules and its mandatory `@import "tailwindcss"` string form both pass, so a https://payloadcms.com[Payload CMS^] project styled with it needs no configuration of its own, which is just as well because `.stylelintrc.json` is xref:#forbidden-file[forbidden]. A misspelled at-rule still fails.
-
-| [[tailwind-tokens-gate]]`tailwind-tokens`
-| Every visual value in the markup comes from the Tailwind theme, applied through a utility class. An arbitrary value such as `bg-[#0a7]` or `p-[13px]` hardcodes the number and quietly stops the design system being the one place it lives, which nothing else notices: the page renders and the build passes. An arbitrary *variant* (`data-[state=open]:...`) isn't a value and isn't a finding. A https://payloadcms.com[Payload CMS^] project that styles without https://tailwindcss.com[Tailwind^] writes none of these, so the gate reports nothing rather than needing to be turned off.
-
-| `arch`
-| dependency-cruiser.
-
-| `type-coverage`
-| Type coverage of 100% over hand-written TypeScript.
-
-| `payload-generated`
-| The generated https://payloadcms.com[Payload CMS^] artefacts are current.
-
-| [[generated-denial-gate]]`generated-denial`
-| The agent runtime is denied write access to every generated artefact.
-
-| [[payload-rules-gate]]`payload-rules`
-| The xref:#payload-cms-usage-rules[].
-
-| `config-refs`
-| No analyzer setting carves out a path that no longer exists, and no declared exclusion matches nothing the gate it narrows would have judged.
-
-| [[secrets-gate]]`secrets`
-| gitleaks over the git history, on the tool's own rules plus the declared `secretAllowlist`.
-
-| `licenses`
-| The license of every dependency sits inside the allowlist.
-
-| [[vulnerabilities-gate]]`vulnerabilities`
-| No package in the resolved set carries a known vulnerability at or above the declared severity. The
-  advisory database must be reachable.
-
-| [[install-scripts-gate]]`install-scripts`
-| The https://payloadcms.com[Payload CMS^] project names the dependencies permitted to run a build or
-  postinstall script. An empty list is a valid answer; leaving the list undeclared is not.
-
-| `deps`
-| No dependency the https://payloadcms.com[Payload CMS^] project declares is two or more major versions behind. The update report covers the project's own manifests and the _ploaness_ manifests it inherits, naming the manifest that declares each coordinate. A coordinate an inherited manifest declares is measured the same way and reported the same way, but never fails the build: its version belongs to _ploaness_, so the repair is upgrading _ploaness_ rather than editing the project. The same report covers the container images _ploaness_ pins for the analyzers it runs in one. An image is reported and never fails: the two-major bound is a claim about a release line, and an image tag isn't required to carry one. Each line names the analyzer, the newer tag, and the whole reference that replaces the pin, so moving it is a copy rather than a lookup. A tag that no longer resolves to the digest pinned beside it is reported too, which is a fact about the registry rather than about the pin: the digest still names the same bytes. Both registries must be reachable.
-
-| `image-assets`
-| Every tracked image decodes as the format its bytes claim.
-
-| `docs`
-| The agent documentation names no xref:#project-scripts[project script] and no file that has gone.
-
-| `skills`
-| The metadata header of every `SKILL.md`.
-
-| [[docker-gate]]`docker`
-| hadolint over every Dockerfile, and `docker compose config`. A https://payloadcms.com[Payload CMS^] project that ships a compose file and no Dockerfile is checked too, since the compose file is what its database comes from.
-
-| [[actions-gate]]`actions`
-| actionlint over every workflow.
-
-| `knip`
-| Dead code, unused files, and unused dependencies.
-
-| [[tests-gate]]`tests`
-| The test suite and its coverage thresholds, under xref:#test-determinism[].
-
-| `tree-verify`
-| The working tree is unchanged since the xref:#tree-snapshot-gate[`tree-snapshot` gate] ran. It runs last in both modes, after the xref:#extended-gates[extended verification gates] as well, because xref:#build-gate[`build`] is the gate most able to rewrite a tracked file.
-|===
-
-[[extended-gates]]
-=== Extended Verification Gates
-
-xref:#extended-verification[] adds the following six gates to xref:#default-verification[].
-
-[cols="2,5"]
-|===
-| Gate | Behavior
-
-| `require-full-history`
-| The clone carries the whole history.
-
-| `commit-history`
-| Every commit message in the history.
-
-| `linear-history`
-| No merge commit anywhere in the history.
-
-| [[build-gate]]`build`
-| The production build.
-
-| `bundle`
-| The gzipped client JavaScript stays under xref:#bundle-budget[the bundle budget].
-
-| [[e2e-gate]]`e2e`
-| The end-to-end suite, which every https://payloadcms.com[Payload CMS^] project has because _ploaness_ ships xref:#accessibility-sweep[the accessibility sweep], xref:#security-headers-sweep[the security-headers sweep], and xref:#access-boundary-sweep[the access-boundary sweep] into it.
-|===
-
-[[payload-cms-usage-rules]]
-=== https://payloadcms.com[Payload CMS^] Usage Rules
-
-. The xref:#payload-rules-gate[`payload-rules` gate] reads the https://payloadcms.com[Payload CMS^] project's TypeScript source files and reports these rules:
-+
-[cols="3,5"]
-|===
-| Rule | Requirement
-
-| `no-unbounded-find`
-| A `payload.find(...)` call declares `depth` or `limit`.
-
-| `no-unbounded-findbyid`
-| A `payload.findByID(...)` call declares `depth`.
-
-| `no-unbounded-findglobal`
-| A `payload.findGlobal(...)` call declares `depth`.
-
-| `no-override-access`
-| `overrideAccess: true` never appears.
-
-| `no-deep-relative-imports`
-| An import uses the `@/` alias rather than a parent-relative `../` path.
-
-| [[require-complete-access-rule]]`require-complete-access`
-| A `CollectionConfig` decides `create`, `read`, `update` and `delete`; a `GlobalConfig` decides `read`
-  and `update`.
-
-| `require-auth-hardening`
-| A collection with `auth` enabled declares `maxLoginAttempts` and `lockTime`.
-
-| `no-anonymous-draft-reads`
-| A config with `versions.drafts` enabled doesn't grant an unconditionally true `read`.
-
-| [[require-upload-restrictions-rule]]`require-upload-restrictions`
-| A collection with `upload` enabled declares `mimeTypes`.
-|===
-. The xref:#require-complete-access-rule[`require-complete-access` rule] guards a security decision rather than a matter of style. https://payloadcms.com[Payload CMS^] fills the operations a config leaves out during sanitisation, and its default grants public read, so a partial `access` block is invisible the moment the application boots. A collection meant to be readable by anyone declares that in writing, one operation at a time.
-. The xref:#require-upload-restrictions-rule[`require-upload-restrictions` rule] is about what a
-collection will accept rather than who may reach it. `mimeTypes` defaults to `undefined`, so an upload
-collection takes whatever a client sends, and an SVG served from the application's own origin is script
-that runs as the site. No size cap is asked for here, because https://payloadcms.com[Payload CMS^] takes
-that at the config root rather than on the collection.
-. `no-anonymous-draft-reads` covers what follows from that. A draft is unpublished content, and `?draft=true` serves it to whoever the read rule admits, so a read that is unconditionally true publishes every draft. Only the inline always-true form is detectable from the source, and the lint pass forbids that form in a config file - so a conforming project writes `read: anyone` and this rule stays silent on it. It reaches a config declared outside the linted directories; what covers the conforming case is xref:#access-boundary-sweep[the access-boundary sweep], which asks the running application what it grants instead of reading the source.
-. The xref:#payload-rules-gate[`payload-rules` gate] reads a call by scanning for its matching bracket and skipping over string literals, so a call spread across several lines or nested inside another one still reads correctly. Only a call on `payload`, `req.payload`, or `this.payload` counts, which is what leaves an unrelated `array.find(...)` alone.
-
-[[test-determinism]]
-=== Test Determinism
-
-. A test produces the same verdict on every run, and two rules of the governing standard decide whether it can. _ploaness_ enforces both from the xref:#tests-gate[`tests`] gate rather than describing them, because both are reliably checkable and a rule an inspection has to catch is a rule that gets through.
-. [[network-guard,the network guard]]The _network guard_ is installed by a setup file _ploaness_ loads ahead of any setup file the https://payloadcms.com[Payload CMS^] project wrote. A socket, a DNS lookup, or a `fetch` that leaves the machine fails the test that made it, naming the destination and quoting the rule it broke. The lint pass rejects raw datagrams, child or cluster processes, and workers, because each runs outside that installed guard.
-+
-[cols="2,5"]
-|===
-| Reach | Verdict
-
-| Loopback, in any spelling
-| Allowed. `127.0.0.0/8`, `::1`, an IPv4-mapped loopback, the unspecified address, `localhost` and any name beneath it. A database on `127.0.0.1` is what this case exists for.
-
-| An address the machine itself carries
-| Allowed. A test that connects to the machine's own routable address is still on the machine it runs on.
-
-| A unix socket path
-| Allowed. A path is not a network: both ends are the same machine by construction.
-
-| Any other host
-| Refused, including a private address of another machine, a container gateway, and a bare service name. A name that is not loopback is refused on its face rather than resolved, because the resolution is itself the thing being refused.
-
-| Any resolver query
-| Refused whatever host it names, `localhost` included. The resolver family sends a packet to a nameserver instead of reading a hosts file, so a `mongodb+srv://` connection string can't be used from a test.
-|===
-. No setting widens the xref:#network-guard[], because widening it is what the rule forbids. A service that exists only outside the machine is exercised through a local component that implements its protocol.
-. The suite runs shuffled - the files, and the tests within each file - under a seed _ploaness_ owns. A test that passed only in the order its file happened to be written in now fails, which is the coupling the shuffle exists to find. The seed is fixed rather than drawn, because a xref:#gates[gate] whose verdict changes between two runs of an unchanged repository is not a check.
-. `it.concurrent`, `it.sequential`, and `vi.setConfig` are rejected by the lint pass. Each buys a green run by reintroducing the coupling the shuffle reports.
-
-[[managed-files]]
-== Managed Files
-
-. Git, editors, and coding agents read their configuration and instructions from the working tree rather than from `node_modules`. _ploaness_ manages the files that carry those inputs, and the xref:#sync-command[] writes them:
-+
-[cols="2,3,5"]
-|===
-| Policy | Files | Behavior
-
-| [[managed-section,managed section]]Managed section
 | `AGENTS.md`
-| _ploaness_ owns the xref:#managed-section[managed section] at the top. The https://payloadcms.com[Payload CMS^] project owns the text below it.
-
-| [[pinned-file,pinned file]]Pinned file
-| `README-guideline-software-project.adoc`, `.ploaness/agent-guide.md`, `CLAUDE.md`, `.editorconfig`, `.gitattributes`, `.nvmrc`, `.npmrc`, `.dockerignore`, `tests/e2e/a11y.e2e.spec.ts`, `tests/e2e/security-headers.e2e.spec.ts`, `tests/e2e/access-boundary.e2e.spec.ts`
-| The xref:#pinned-file[pinned file] exists and matches what the active _ploaness_ version ships, character for character.
-
-| [[seed-file,seed file]]Seed file
-| `.gitignore`
-| The xref:#sync-command[] creates the xref:#seed-file[seed file] once when it's absent. The https://payloadcms.com[Payload CMS^] project owns the seed file afterwards.
-
-| [[forbidden-file,forbidden file]]Forbidden file
-| `.stylelintrc.json`, `.dependency-cruiser.json`, `knip.json`, `.gitleaks.toml`, `plugins`
-| _ploaness_ supplies the analyzer settings for each xref:#forbidden-file[forbidden file]. A forbidden file must not exist, because a copy in the working tree could only shadow or weaken those settings.
-
-| [[reference-file,reference file]]Reference file
-| `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `.clinerules`, `.github/copilot-instructions.md`
-| The entry-point file a coding agent other than Claude reads. A xref:#reference-file[reference file] need not exist, and the xref:#sync-command[] never writes one, because which agents a https://payloadcms.com[Payload CMS^] project uses is the project's own decision. One that does exist carries nothing but a pointer at `AGENTS.md`: the rules live in the root instruction file, so no two agents are held to two contracts. The form of the pointer is the tool's own, so the check reads for the name rather than demanding one spelling.
+| A managed block naming `.ploaness/agent-guide.md` and `README-guideline-software-project.adoc`, in the order an agent reads those two documents, followed by whatever the project wants to add.
 |===
-. Each managed path also states WHERE it lives, which a repository holding more than one package has to
-say rather than assume. The instruction files and the dotfiles are _repository_ paths: git, an editor and
-a coding agent read them from the tree root, and one contract per repository is the whole point of them.
-The three executable sweeps are _member_ paths, because each interrogates one running application and two
-applications are two sets of answers rather than one shared file - the access-boundary sweep narrower
-still, to the members that serve an `/api/access` to ask. A xref:#forbidden-file[] must not exist in
-either half, because a copy shadows what _ploaness_ supplies wherever it sits.
-. `README-guideline-software-project.adoc` states the rules the https://payloadcms.com[Payload CMS^] project is held to, in a form that names no tool. `.ploaness/agent-guide.md` maps those rules onto _ploaness_. Both are xref:#pinned-file[pinned], so raising the _ploaness_ version updates them in every https://payloadcms.com[Payload CMS^] project at once.
-. `.dockerignore` bounds what a Docker build sends to the daemon, which is decided before the first
-instruction runs. Without it a https://payloadcms.com[Payload CMS^] project sends well over a gigabyte,
-nearly all of it dependencies and build output the image rebuilds anyway. The entry that matters is
-`.env`: the stock Payload Dockerfile does `COPY . .` in its builder stage, so an env file in the context
-is copied into that layer and kept in the build cache. It's xref:#pinned-file[pinned] rather than
-xref:#seed-file[seeded] for that reason - a project that quietly drops that line puts secrets in a
-layer, and no xref:#gates[gate] downstream would report it.
-. [[accessibility-sweep,the accessibility sweep]]`tests/e2e/a11y.e2e.spec.ts` is one of the three xref:#pinned-file[pinned files] that run rather than being read. It crawls every public route reachable from the home page and runs https://github.com/dequelabs/axe-core[axe^] on each one, in its default state and with every interactive control driven into `:hover` and `:focus`. A static rule can't reach a contrast defect that appears only in one of those states, and a hand-maintained list of pages to scan is a list somebody eventually forgets to extend, so a page linked anywhere on the site is checked from the moment it exists. It's xref:#pinned-file[pinned] for the reason every other rule belongs to _ploaness_: a check the https://payloadcms.com[Payload CMS^] project can edit isn't a rule.
-. [[security-headers-sweep,the security-headers sweep]]`tests/e2e/security-headers.e2e.spec.ts` asks the running application what it answers with. A https://nextjs.org[Next.js^] application sends no security header unless the project configures one, and nothing static can see that it didn't: the page renders, the build passes, and every gate stays green. The baseline is `X-Content-Type-Options: nosniff`, a `Referrer-Policy`, a decision about who may frame the page, and a `Content-Security-Policy` that constrains script without readmitting `'unsafe-inline'` - which in practice means a per-request nonce, because the suite drives `next dev` and its inline scripts would otherwise need blanket permission. `Strict-Transport-Security` is deliberately not asserted: it's a transport directive a browser ignores over a plain-HTTP origin, and it's commonly applied at the edge rather than by the application.
-. [[access-boundary-sweep,the access-boundary sweep]]`tests/e2e/access-boundary.e2e.spec.ts` asks https://payloadcms.com[Payload CMS^] itself, through `/api/access` with no credential, what an unauthenticated caller may do to every collection and global. The xref:#payload-cms-usage-rules[source rules] see that each operation was decided, and see an inline always-true rule; they can't see what `read: anyone` decides, nor what Payload made of the config after sanitisation. So a project can satisfy every one of them and still serve every document to every stranger, and until this sweep nothing read that. The admin panel must refuse an unauthenticated caller, and every permission the application grants anonymously must be one the project recorded under xref:#public-access[`publicAccess`]. It reads Payload's own verdict rather than the source, which is what makes it the complement of the source rules rather than a second copy of them.
-. The xref:#accessibility-sweep[] carries one scoped lint exemption that its crawl needs. The xref:#suppressions-gate[`suppressions` gate] counts neither that exemption nor the lines around it, because a https://payloadcms.com[Payload CMS^] project can't remove a suppression inside a file it doesn't own, and a xref:#suppression-ceiling[ceiling] earned by code the project didn't write would be an allowance rather than a measure.
-. The xref:#managed-section[] in `AGENTS.md` is enclosed by `BEGIN PLOANESS MANAGED INSTRUCTIONS` and `END PLOANESS MANAGED INSTRUCTIONS`. It leads the file and appears exactly once. A managed section that an agent reaches only after the https://payloadcms.com[Payload CMS^] project's own text no longer governs what comes before it, and a second copy would let one managed section go stale while the xref:#assets-gate[`assets` gate] still reported the other as current.
-. The xref:#sync-command[] creates `AGENTS.md` or refreshes its xref:#managed-section[], carrying the text below the managed section through unchanged. It refuses a file whose markers are duplicated, incomplete, or no longer leading, because every edit it could make there would either duplicate the managed section or swallow text the https://payloadcms.com[Payload CMS^] project owns. The xref:#assets-gate[`assets` gate] names such a file on its own and asks for a repair by hand.
-. To let the https://payloadcms.com[Payload CMS^] project own a xref:#pinned-file[], a xref:#seed-file[], or a xref:#forbidden-file[], list its path under xref:#unmanaged-assets[`unmanagedAssets`] together with the reason. _ploaness_ then leaves that path alone. An entry without a reason is dropped, so _ploaness_ continues to apply the file's policy.
-
-[[runtime-helpers]]
-== Runtime Helpers
-
-. Almost everything _ploaness_ ships is read by a tool or run as a xref:#gates[gate]. `ploaness/runtime`
-is the exception: code a https://payloadcms.com[Payload CMS^] project's own application calls.
-. It holds `safeHref`, which neutralises an untrusted URL before it reaches an `href`. React escapes
-text content, so an editor can't inject markup through a CMS field - but an `href` is an attribute, and
-a stored `javascript:alert(1)` executes as the site the moment a visitor clicks it. Nothing in the
-framework, the type system, or the lint pass reports that: the value is a string, and it's rendered as a
-string. A relative URL and the `http`, `https`, `mailto`, and `tel` schemes pass through unchanged;
-anything else becomes `#`. Whitespace and control characters are removed before the scheme is read,
-because a browser removes them too, so a tab or a null byte inside the scheme can't smuggle one past.
-. Every project mapping a CMS field into markup has this problem, so _ploaness_ owns the answer rather
-than leaving each project to rediscover the scheme rules. What no xref:#gates[gate] can see is whether
-the helper was *called*, so `.ploaness/agent-guide.md` states that as a rule an inspection decides.
-
-[[configuration]]
-== Configuration
-
-. _ploaness_ configuration lives under the `ploaness` key of `package.json`. Every key is optional, and a https://payloadcms.com[Payload CMS^] project that declares none still receives the whole contract:
-+
-[source,json]
-----
-{
-  "ploaness": {
-    "sourceRoots": ["src"],
-    "unmanagedAssets": [{ "path": ".gitignore", "reason": "carries deployment-specific entries" }],
-    "typographyExclusions": [
-      { "pattern": "^src/generated/", "reason": "generated by the framework, not authored here" }
-    ],
-    "javascriptAllowlist": [
-      { "pattern": "^scripts/legacy\\.js$", "reason": "loaded as JavaScript by a tool that reads it" }
-    ],
-    "coverageExclude": [
-      { "pattern": "src/migrations/**", "reason": "generated migrations, with no hand-written logic" }
-    ],
-    "bundleBudgetBytes": 921600,
-    "maxSuppressions": 12,
-    "vulnerabilitySeverity": "low",
-    "vulnerabilityAllowlist": [
-      { "advisory": "GHSA-93q8-gq69-wqmw", "reason": "reachable only through the dev server", "addedOn": "2026-08-23" }
-    ],
-    "secretAllowlist": [
-      { "path": "tests/fixtures/stripe-webhook.json", "reason": "fake test key the checkout fixture asserts on" }
-    ],
-    "publicAccess": [
-      { "entity": "media", "operation": "read", "reason": "uploaded images are served to every visitor" }
-    ],
-    "serverUrl": "http://localhost:3000",
-    "auxiliaryServers": [
-      { "command": "storybook dev -p 6006 --no-open --quiet", "url": "http://localhost:6006" }
-    ],
-    "pretest": ["pnpm", "run", "db:ensure"],
-    "testWrapper": ["pnpm", "run", "db:scratch", "--"],
-    "analysisEnv": { "STRIPE_KEY": "placeholder" }
-  }
-}
-----
-. Every list-valued _ploaness_ configuration key adds to the shipped default rather than replacing it:
-+
-[cols="3,3,5"]
-|===
-| Key | Default | Use
-
-| `frameworkGlue`
-| the generated Payload mount
-| Paths holding framework-generated scaffolding, which the lint pass relaxes rather than judges. Additive,
-  so a Payload project that declares none is held to exactly what it always was. A
-  https://nextjs.org[Next.js^] application that is not a Payload one declares its own, because its route
-  handlers and layouts have the same property and no path _ploaness_ could guess.
-
-| `pureLogicRoots`
-| `src/access`, `src/lib`
-| The directories forming the pure-logic floor, which may depend on nothing else under a source root.
-  Additive. The layer map is the one genuinely project-shaped part of an architecture contract, and a
-  governed project may not own the analyzer's configuration file to state it.
-
-| `sourceRoots`
-| `src`, `tests`, `scripts`
-| The directories that hold the https://payloadcms.com[Payload CMS^] project's own source files, read by the xref:#gates[gates] that select files and measure coverage.
-
-| [[unmanaged-assets,unmanagedAssets]]`unmanagedAssets`
-| empty
-| xref:#managed-files[Managed files] the https://payloadcms.com[Payload CMS^] project takes over.
-
-| [[declared-exclusion,a declared exclusion]]`typographyExclusions`
-| the generated https://payloadcms.com[Payload CMS^] files
-| Patterns the ban on typographic characters skips. Each entry is a `pattern` and the `reason` it's
-  excluded.
-
-| `javascriptAllowlist`
-| `eslint.config.mjs`, `importMap.js`
-| Patterns the ban on hand-written JavaScript skips, in the same shape.
-
-| `coverageExclude`
-| the framework glue, the generated files, and the `.tsx` components
-| Patterns left out of coverage measurement, in the same shape.
-
-| [[bundle-budget,the bundle budget]]`bundleBudgetBytes`
-| `921600`
-| The ceiling on total gzipped client JavaScript, in bytes. Only a smaller value is honoured.
-
-| [[max-suppressions]]`maxSuppressions`
-| unset
-| A xref:#suppression-ceiling[suppression ceiling] stricter than the earned one. `0` states that no
-  suppression is permitted. A value looser than the earned ceiling is ignored.
-
-| `vulnerabilitySeverity`
-| `moderate`
-| The severity at which the xref:#vulnerabilities-gate[`vulnerabilities` gate] fails. Only a stricter
-  value is honoured.
-
-| `vulnerabilityAllowlist`
-| empty
-| Advisories the https://payloadcms.com[Payload CMS^] project can't reach. Each entry records the
-  `advisory`, the `reason`, and the `addedOn` date. An entry missing any of the three is dropped, and an
-  entry that suppresses nothing fails the gate. An advisory carried by _ploaness_'s own dependencies
-  doesn't belong here: _ploaness_ records those itself, at the same bar, because a project can't repair
-  a manifest it doesn't own and every project would otherwise carry the same entry. When one of those
-  goes stale the xref:#vulnerabilities-gate[gate] says to upgrade the harness rather than to edit
-  `package.json`.
-
-| `secretAllowlist`
-| empty
-| Fake credentials committed as test fixtures. Each entry records the `path` and the `reason`. _ploaness_
-  renders the scanner's configuration from these entries outside the working tree, so an entry can only
-  add a named exception and never replaces the scanner's own rules. An entry without a reason is dropped.
-
-| [[pretest]]`pretest`
-| empty
-| A command run once before the xref:#tests-gate[`tests`], xref:#build-gate[`build`], and xref:#e2e-gate[`e2e`] gates, given as an argument list.
-
-| [[test-wrapper]]`testWrapper`
-| empty
-| An argument list wrapping the process run by the xref:#tests-gate[`tests`], xref:#build-gate[`build`], and xref:#e2e-gate[`e2e`] gates, for a https://payloadcms.com[Payload CMS^] project that uses a scratch database.
-
-| [[analysis-env]]`analysisEnv`
-| `PAYLOAD_SECRET`, `DATABASE_URL`
-| Placeholder environment variables for the xref:#gates[gates] that import the https://payloadcms.com[Payload CMS^] project to read it.
-
-| [[public-access,publicAccess]]`publicAccess`
-| empty
-| The anonymous permissions the https://payloadcms.com[Payload CMS^] project grants on purpose, which
-  xref:#access-boundary-sweep[the access-boundary sweep] then passes rather than reports. Each entry
-  records the `entity`, the `operation`, and the `reason`. An entry missing any of the three is dropped,
-  which restores the finding rather than excusing it. It narrows nothing: every other anonymous
-  permission the running application grants is still reported, and a project that declares none is
-  judged most strictly.
-
-| [[server-url]]`serverUrl`
-| `http://localhost:3000`
-| The origin the xref:#e2e-gate[`e2e`] gate drives, for a https://payloadcms.com[Payload CMS^] project that serves on another port.
-
-| [[auxiliary-servers]]`auxiliaryServers`
-| empty
-| Servers the xref:#e2e-gate[`e2e`] gate starts beside the application, for a https://payloadcms.com[Payload CMS^] project whose own specs drive one. Each entry states the `command` and the `url`. An entry missing either is dropped.
-
-| [[skip-routes]]`accessibilitySkipRoutes`
-| `/admin`, `/api`
-| Route prefixes xref:#accessibility-sweep[the accessibility sweep] doesn't follow. Each entry states the `pattern` and the `reason`, as any other xref:#declared-exclusion[] does.
-|===
-. xref:#pretest[`pretest`] and xref:#test-wrapper[`testWrapper`] exist because a https://payloadcms.com[Payload CMS^] project can need a database before a xref:#gates[gate] can run. How the https://payloadcms.com[Payload CMS^] project reaches that database is a fact _ploaness_ can't know. Declaring either key changes only the route to the database, never a gate or a threshold.
-. xref:#pretest[`pretest`] and xref:#test-wrapper[`testWrapper`] are the two keys no check verifies. Both are arbitrary argument lists, and a wrapper that swallows the exit code of the process it wraps is indistinguishable from one that passes it through until it runs. So the rule is stated in `.ploaness/agent-guide.md` instead: the wrapper passes the child's exit code through unchanged, doesn't retry, doesn't filter output, and doesn't decide what runs, and the xref:#pretest[] command provisions rather than editing the tree under verification. Either key used to turn a failing run into a passing one is a bypass, and no xref:#finding[] reports it.
-. xref:#server-url[`serverUrl`] and xref:#skip-routes[`accessibilitySkipRoutes`] are the whole of what a https://payloadcms.com[Payload CMS^] project declares about xref:#accessibility-sweep[the accessibility sweep], because the sweep itself is xref:#pinned-file[pinned]. Neither weakens it: the port is a fact _ploaness_ can't know, and the route prefixes add to the two that a https://payloadcms.com[Payload CMS^] project always carries rather than replacing them. The admin panel and the REST API are skipped by default because neither is a public page, and https://payloadcms.com[Payload CMS^] renders the markup behind both.
-. xref:#auxiliary-servers[`auxiliaryServers`] adds a server to the end-to-end run rather than replacing the one under test. The application is still started first and still answers at xref:#server-url[], so xref:#accessibility-sweep[the accessibility sweep] crawls the same origin whatever a https://payloadcms.com[Payload CMS^] project declares here, and no threshold, ban, or xref:#pinned-file[pinned] spec changes. It exists because `playwright.config.ts` is a bare re-export that a https://payloadcms.com[Payload CMS^] project can't extend, so a project whose own specs drive a component workshop or a second service had no way to say so at all.
-. xref:#analysis-env[`analysisEnv`] exists because a https://payloadcms.com[Payload CMS^] configuration module reads `process.env` as soon as the module loads, which a reader that only inspects the source files can't satisfy in a bare shell. The values are placeholders, and a xref:#gates[gate] that runs the application, such as xref:#build-gate[`build`], xref:#tests-gate[`tests`], or xref:#e2e-gate[`e2e`], uses the real environment instead. The xref:#e2e-gate[`e2e`] gate reaches that environment through the Playwright configuration, which reads `.env.local` and then `.env` into its own process before it collects a spec, because a helper that seeds through `getPayload` loads the https://payloadcms.com[Payload CMS^] configuration at import time and the re-exported config leaves a project nowhere to read them itself. Neither file replaces a variable that is already set, so a value exported by CI or by a service container still outranks both. The xref:#tests-gate[`tests`] gate reads the same two files, from the setup file ploaness loads ahead of the project's own.
-. [[suppression-ceiling,the suppression ceiling]]The _suppression ceiling_ is `2` plus one for every
-`500` non-blank lines of the https://payloadcms.com[Payload CMS^] project's own source. It is a density
-rather than a bare count, so it neither strangles a small project nor loosens as a large one grows.
-_ploaness_ owns the formula; xref:#max-suppressions[`maxSuppressions`] can only lower the result. The
-xref:#suppressions-gate[`suppressions` gate] reports the count and the distance left on every run,
-whether it passes or fails, so the trend is readable before the ceiling is reached.
-. An xref:#declared-exclusion[] narrows a xref:#gates[gate], which _ploaness_ permits only by file role. So each entry states the role it claims, and the xref:#wiring-gate[`wiring` gate] rejects one that states none, or that names a single file that exists rather than a shape. An entry without a reason is dropped, which makes the gate stricter rather than looser.
-. `sourceRoots` adds to the shipped roots rather than replacing them, and no key raises a threshold: a stricter `bundleBudgetBytes`, `maxSuppressions`, or `vulnerabilitySeverity` is honoured, and a looser one is ignored.
-. No key turns a xref:#gates[gate] off. A failing gate produces a xref:#finding[finding] to repair.
 
 == About the Guide
 
@@ -666,7 +151,7 @@ The source text of this guide is written in the https://asciidoc.org[AsciiDoc^] 
 
 === Writing Guideline
 
-The source text of this guide should follow the link:README-guideline-writing.adoc[Writing Guideline], stored beside it in the repository.
+The source text of this guide should follow the link:README-guideline-writing.adoc[Writing Guideline], stored beside the source text in the repository.
 
 [#prerequisites]
 === Prerequisites
