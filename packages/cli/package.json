@@ -34,7 +34,7 @@
     "build": "tsc --build"
   },
   "dependencies": {
-    "@biomejs/biome": "2.5.10",
+    "@biomejs/biome": "2.5.11",
     "@ploaness/assets": "1.0.0",
     "@ploaness/config": "1.0.0",
     "@ploaness/governance": "1.0.0",
