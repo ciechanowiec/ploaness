@@ -1,8 +1,11 @@
 #!/usr/bin/env sh
-# Pack every ploaness package into dist-tarballs/, so a consumer can install the harness before it is
-# published. Five unpublished packages cannot be installed by name; the consumer points a pnpm override
-# at each tarball instead. That block is removed once the packages are on npm, and it is the only thing
-# that differs between this verification and a real install.
+# Pack every ploaness package into dist-tarballs/, so `it/` installs the harness the way a consumer
+# does. The fixture points a pnpm override at each tarball rather than naming the five, and that is
+# permanent rather than a stand-in for publication: what is verified is the artefacts THIS run
+# produced, and a registry range resolves to whatever is already published - the previous release,
+# never the change under test. The override costs exactly one link of the chain, the specifier: a
+# `file:` URL instead of a range. What it resolves to - the packed bytes, the `exports` map, the
+# bin shim, the transitive install - is what a consumer receives.
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
