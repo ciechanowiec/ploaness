@@ -157,7 +157,12 @@ jobs:
           set -eu
           order='ploaness-governance ploaness-assets ploaness-config ploaness-cli ploaness'
           for package in $order; do
-            tarball="dist-tarballs/$package-$RELEASE_VERSION.tgz"
+            # The leading `./` is load-bearing. npm classifies an argument by shape before it
+            # touches the filesystem, and a bare `a/b` is a GitHub shorthand rather than a path,
+            # so `npm publish dist-tarballs/x.tgz` resolves github.com/dist-tarballs/x.tgz and
+            # hangs on SSH retries. It fails slowly and reads as a network fault, which is why
+            # the first hand-run release lost several minutes to it.
+            tarball="./dist-tarballs/$package-$RELEASE_VERSION.tgz"
             if [ ! -f "$tarball" ]; then
               echo "The verification produced no $tarball." >&2
               exit 1
