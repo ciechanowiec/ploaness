@@ -91,3 +91,43 @@ export const DETERMINISTIC_SEQUENCE: DeterministicSequence = Object.freeze({
   // setup runs. Vitest's default here loads setup files in parallel, which would make that a race.
   setupFiles: 'list',
 })
+
+/**
+ * One entry of a reporter list, spelled as the literals Vitest's own option type accepts.
+ *
+ * That type takes a reporter NAME or a `[name, options]` tuple, both as literal types - a widened
+ * `string` satisfies neither, so a list inferred from an array literal would not be assignable at
+ * either call site. Naming the shape once is what lets both configs read the same value.
+ */
+export type ReporterEntry = 'default' | ['github-actions', { jobSummary: { enabled: false } }]
+
+/**
+ * The reporters a run inside GitHub Actions declares.
+ *
+ * Vitest appends its own `github-actions` reporter whenever `GITHUB_ACTIONS` is set AND no reporter is
+ * declared, and that reporter writes a "Vitest Test Report" scoreboard into the workflow's job summary.
+ * A verification is a sequence of suites, several of which are MEANT to fail - `it/` drives a fixture
+ * whose network guard has to block a remote connection, and asserts that it did - so the summary
+ * reported failures at the top of a green run, with nothing beside them to say they were the expected
+ * ones. The verdict is the run's exit status; a second scoreboard that contradicts it teaches a reader
+ * to trust neither.
+ *
+ * Only the summary goes. `displayAnnotations` is left at its default, which marks a failing test on the
+ * line that failed rather than on the run's front page - and is the half of this reporter that says
+ * something the exit status does not.
+ */
+export const GITHUB_ACTIONS_REPORTERS: readonly ReporterEntry[] = [
+  'default',
+  ['github-actions', { jobSummary: { enabled: false } }],
+]
+
+/**
+ * The reporters both Vitest configs declare.
+ *
+ * The branch mirrors the condition Vitest itself applies rather than declaring the reporter
+ * unconditionally: outside a workflow there is no job summary and no annotation surface, so the
+ * `::error` lines would land in a local terminal as noise nothing reads.
+ * @returns the list, for a Vitest `reporters` entry.
+ */
+export const testReporters = (): readonly ReporterEntry[] =>
+  process.env['GITHUB_ACTIONS'] === 'true' ? GITHUB_ACTIONS_REPORTERS : ['default']

@@ -1,4 +1,8 @@
-import { DETERMINISTIC_SEQUENCE, harnessSetupFile } from '@ploaness/config/vitest-core'
+import {
+  DETERMINISTIC_SEQUENCE,
+  harnessSetupFile,
+  testReporters,
+} from '@ploaness/config/vitest-core'
 import { defineConfig } from 'vitest/config'
 
 // ploaness governs itself. The governance layer is pure, so it is measured on line and branch coverage
@@ -11,6 +15,7 @@ export default defineConfig({
     // layout rather than restated for it.
     setupFiles: [harnessSetupFile(), './vitest.setup.ts'],
     sequence: DETERMINISTIC_SEQUENCE,
+    reporters: [...testReporters()],
     coverage: {
       provider: 'v8',
       reporter: ['text'],

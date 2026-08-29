@@ -17,6 +17,7 @@ import {
   DETERMINISTIC_SEQUENCE,
   harnessSetupFile,
   projectSetupFiles,
+  testReporters,
 } from './vitest-core.js'
 
 /** One collected suite: which specs it holds, and the realm they need. */
@@ -102,6 +103,8 @@ const suiteProject = (suite: Suite): Record<string, unknown> => ({
 const declared: ReturnType<typeof defineConfig> = defineConfig({
   test: {
     projects: SUITES.map((suite: Suite): Record<string, unknown> => suiteProject(suite)),
+    // Root-only, like coverage below: a reporter reports on the run rather than on one suite.
+    reporters: [...testReporters()],
     // Coverage stays at the root because Vitest forbids it anywhere else: it is one measurement over
     // the whole verification rather than a property of any one suite.
     coverage: {

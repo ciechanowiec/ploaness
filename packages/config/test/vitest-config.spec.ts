@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest'
 // would compare two structurally identical objects and fail - and `harnessSetupFile()` resolves against
 // its OWN `import.meta.url`, which from `src` names a `vitest-setup.js` that exists only in `dist`.
 // Reading the artefact keeps both halves of each assertion on the module a consumer actually loads.
-import { DETERMINISTIC_SEQUENCE, harnessSetupFile } from '../dist/vitest-core.js'
+import { DETERMINISTIC_SEQUENCE, harnessSetupFile, testReporters } from '../dist/vitest-core.js'
 
 /** The part of one collected suite these assertions read. */
 interface Suite {
@@ -30,7 +30,10 @@ interface Suite {
 
 /** The part of a Vitest config these assertions read. */
 interface VitestConfig {
-  readonly test?: Suite & { readonly projects?: readonly { readonly test?: Suite }[] }
+  readonly test?: Suite & {
+    readonly projects?: readonly { readonly test?: Suite }[]
+    readonly reporters?: readonly unknown[]
+  }
 }
 
 const specDirectory: string = path.dirname(fileURLToPath(import.meta.url))
@@ -171,5 +174,23 @@ describe('the environment a suite runs in', () => {
     for (const suite of suites) {
       expect(suite.fileParallelism).toBe(false)
     }
+  })
+})
+
+// Vitest appends its own `github-actions` reporter whenever `GITHUB_ACTIONS` is set and the reporter list
+// is EMPTY, and that reporter writes a scoreboard into the workflow's job summary. A verification runs
+// suites that are MEANT to fail, so the scoreboard reported failures at the top of a green run. What
+// suppresses the append is declaring the list at all - which makes an ABSENT list, rather than a wrong
+// one, the thing to guard: the entries themselves are literal types the compiler already refuses to
+// widen, so a summary re-enabled by hand does not compile.
+describe('the reporter list', () => {
+  it('is declared by the shipped config, so the runner appends no reporter of its own', async () => {
+    const config: VitestConfig = await shipped()
+    expect(config.test?.reporters).toEqual(testReporters())
+  })
+
+  it('is declared by this repository too, from the same source, so the two cannot drift', async () => {
+    const config: VitestConfig = await workspace()
+    expect(config.test?.reporters).toEqual(testReporters())
   })
 })
