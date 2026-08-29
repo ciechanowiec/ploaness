@@ -321,7 +321,7 @@ rewrite a tracked file.
 | `biome` | package | Formatting and the fast lint pass. |
 | `biome-schema` | repository | The `$schema` in `biome.json` names the installed Biome version. |
 | `eslint` | package | The type-aware lint pass. |
-| `conventions` | repository | The typography ban and the hand-written JavaScript ban, over every tracked text file. |
+| `conventions` | repository | The typography ban and the hand-written JavaScript ban, over every tracked text file, and documenting comments left above another comment rather than above what they document. |
 | `editorconfig` | repository | Every tracked text file matches the pinned `.editorconfig`, and no code line passes 120 characters. |
 | `suppressions` | package | The suppression count against the earned ceiling, over the project's own files. |
 | `css` | package | Stylelint over every style sheet under the source roots, with Tailwind v4 accepted as written. |

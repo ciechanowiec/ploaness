@@ -4,6 +4,9 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import {
+  DOCUMENTED_EXTENSIONS,
+  type DocBlock,
+  findOrphanedDocBlocks,
   findTypographyViolations,
   hasExtension,
   isBinary,
@@ -65,6 +68,30 @@ const javascriptFindings = (context: Context, tracked: readonly string[]): reado
         `${file} hand-written JavaScript is banned; write TypeScript instead`,
     )
 
+// A documenting comment stranded above another one documents nothing, and the symbol it was written
+// for is left with no doc at all. It is scanned here rather than by the lint pass because
+// eslint-plugin-jsdoc structurally cannot see it: every rule that plugin ships visits the block
+// ATTACHED to a syntax node, and the parser hands a declaration only the LAST block before it.
+//
+// The role exclusions are the ones `isGovernedCode` already reads, which is how the suppressions gate
+// scopes the same question: a generated file carries comments its generator wrote, and a project
+// cannot be asked to repair them.
+const orphanedDocFindings = (context: Context, tracked: readonly string[]): readonly string[] =>
+  tracked
+    .filter(
+      (file: string): boolean =>
+        hasExtension(file, DOCUMENTED_EXTENSIONS) &&
+        !matchesRole(file, context.settings.typographyExclusions),
+    )
+    .flatMap((file: string): readonly string[] => {
+      const content: string = readFileSync(path.join(context.root, file), 'utf8')
+      return findOrphanedDocBlocks(content).map(
+        (block: DocBlock): string =>
+          `${file}:${String(block.line)} the doc block ending on line ${String(block.endLine)} ` +
+          `is followed by another doc block rather than by what it documents`,
+      )
+    })
+
 // A tracked path is not always a regular file. `git ls-files` reports a symlink and a submodule
 // gitlink too, and reading either throws rather than yielding text.
 const isRegularFile = (root: string, file: string): boolean => {
@@ -72,7 +99,10 @@ const isRegularFile = (root: string, file: string): boolean => {
   return existsSync(full) && statSync(full).isFile()
 }
 
-/** Scan every tracked file for banned typography and stray hand-written JavaScript. */
+/**
+ * Scan every tracked file for banned typography, stray hand-written JavaScript, and documenting
+ * comments left above another comment rather than above what they document.
+ */
 export const conventions = (context: Context): GateResult => {
   const tracked: readonly string[] = trackedFiles(context.root).filter((file: string): boolean =>
     isRegularFile(context.root, file),
@@ -80,6 +110,7 @@ export const conventions = (context: Context): GateResult => {
   const findings: readonly string[] = [
     ...typographyFindings(context, tracked),
     ...javascriptFindings(context, tracked),
+    ...orphanedDocFindings(context, tracked),
   ]
   return findings.length > 0
     ? failed(`${String(findings.length)} convention violation(s)`, findings)

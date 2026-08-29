@@ -565,15 +565,6 @@ const reachesAny = (entry: DeclaredExclusion, candidates: readonly string[]): bo
 const COVERAGE_SETTING: string = 'coverageExclude'
 
 /**
- * The settings whose patterns name a DIRECTORY rather than a file.
- *
- * `pureLogicRoots` names the directories forming the architecture floor. Matched against tracked FILE
- * paths it can never reach anything, so a project declaring a floor that exists was told its declaration
- * excluded nothing - while the only pattern that satisfied that check, `src/config/**`, is spliced into
- * a regex by `pureLogicRule` and produces `^(src/config/**\/)`, which is not a valid regular expression.
- * Between them the two rules left the setting with no legal value at all.
- */
-/**
  * A directory path without its trailing slashes.
  *
  * Written as a recursion rather than as `/\/+$/`, which backtracks super-linearly on a pathological
@@ -588,6 +579,15 @@ export const withoutTrailingSlash = (value: string): string =>
 const layerRoots = (declared: readonly DeclaredExclusion[]): readonly string[] =>
   honoured(declared).map((root: string): string => withoutTrailingSlash(root))
 
+/**
+ * The settings whose patterns name a DIRECTORY rather than a file.
+ *
+ * `pureLogicRoots` names the directories forming the architecture floor. Matched against tracked FILE
+ * paths it can never reach anything, so a project declaring a floor that exists was told its declaration
+ * excluded nothing - while the only pattern that satisfied that check, `src/config/**`, is spliced into
+ * a regex by `pureLogicRule` and produces `^(src/config/**\/)`, which is not a valid regular expression.
+ * Between them the two rules left the setting with no legal value at all.
+ */
 const DIRECTORY_SETTINGS: ReadonlySet<string> = new Set<string>(['pureLogicRoots'])
 
 /**

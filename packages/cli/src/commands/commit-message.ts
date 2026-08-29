@@ -7,10 +7,6 @@ import { commitHistory, commitMessageProblems } from '../checks/history.js'
 import type { Context } from '../context.js'
 import type { GateResult } from '../exec.js'
 
-/**
- * The commit-message entry point, in three modes: a message file, a revision range, or the whole
- * history.
- */
 /** Report a run of findings under a closing line, and return the failing exit code. */
 const reportProblems = (findings: readonly string[], summary: string): number => {
   for (const finding of findings) {

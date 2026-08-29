@@ -30,12 +30,6 @@ export interface DeterministicSequence {
 const PROJECT_SETUP_FILE: string = `./${PROJECT_SETUP_FILE_NAME}`
 
 /**
- * The fixed fast-check seed the property specs are written against.
- *
- * It carries no meaning. What matters is that it never changes, so a failing property is reproducible by
- * rerunning rather than by guessing which inputs the last run happened to draw.
- */
-/**
  * The per-file coverage floor every governed member is held to.
  *
  * Declared here because two runner configurations now read it, and a floor written twice is a floor
@@ -43,6 +37,12 @@ const PROJECT_SETUP_FILE: string = `./${PROJECT_SETUP_FILE_NAME}`
  */
 export const COVERAGE_THRESHOLD: number = 80
 
+/**
+ * The fixed fast-check seed the property specs are written against.
+ *
+ * It carries no meaning. What matters is that it never changes, so a failing property is reproducible by
+ * rerunning rather than by guessing which inputs the last run happened to draw.
+ */
 export const PROPERTY_TEST_SEED: number = 1_734_000_000
 
 // The order a shuffled suite runs in. It is fixed for the same reason the seed above is: a check has one

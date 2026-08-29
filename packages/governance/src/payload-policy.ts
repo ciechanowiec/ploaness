@@ -142,12 +142,6 @@ const findDeepRelativeImports = (source: string): readonly PayloadViolation[] =>
   )
 
 /**
- * Return every Payload usage defect in one source file: an unbounded Local API read, a bypassed access
- * check, a parent-relative import, or a collection that leaves access control to Payload's defaults.
- * @param source the file contents.
- * @returns one violation per defect, grouped by rule.
- */
-/**
  * The rules that are about the language rather than about Payload.
  *
  * Reaching for a parent-relative import instead of the path alias is a defect in any package. Held
