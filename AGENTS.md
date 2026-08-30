@@ -341,6 +341,20 @@ the case that forced it - `NEXT_PUBLIC_CMS_URL` is the environment variable's ac
 project could not type `process.env` at all without a suppression, which is a strange thing for a
 harness that ships an `analysisEnv` setting to demand.
 
+The underscore carve-out answered the leading-underscore half of the same problem and left the other
+half open. Payload's query language is snake_case throughout - `less_than`, `greater_than_equal`,
+`not_in`, `not_equals` - and a `where` clause is the shape the database layer reads, not a name the
+project chose, exactly as `_status` beside it is not. So `objectLiteralProperty` accepts `snake_case`
+too. Every Payload project that filters on a date range writes one of these operators, so the finding
+was not rare, and the way around it was not obvious either: hoisting the operator into a constant to use
+as a computed key runs head on into `typedef` against `prefer-as-const`, a standoff `eslint-core.ts`
+resolves separately by turning the latter off. Two rules were reporting one framework's spelling as two
+different defects.
+
+`typeProperty` is deliberately NOT widened with it. The `_*(.+)` capture already covers the interface
+case that forced it, and no interface a project writes has to spell an operator: the query object is a
+literal. A selector is widened when a case demands it, and this one does not yet.
+
 ### Tailwind is a dialect in both CSS gates, not one
 
 `packages/config/stylelint.json` lists the full Tailwind v4 at-rule set deliberately, arguing Tailwind is

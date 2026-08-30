@@ -62,7 +62,7 @@
                   "kind": "objectLiteralProperty"
                 },
                 "match": "_*(.+)",
-                "formats": ["camelCase", "CONSTANT_CASE", "PascalCase"]
+                "formats": ["camelCase", "CONSTANT_CASE", "PascalCase", "snake_case"]
               },
               {
                 "selector": {
