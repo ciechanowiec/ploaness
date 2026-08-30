@@ -12,6 +12,7 @@ interface BannedCharacter {
 }
 
 const STRAIGHT_DOUBLE_QUOTE: string = 'a straight double quote'
+const STRAIGHT_SINGLE_QUOTE: string = 'a straight single quote "\'"'
 const PLAIN_HYPHEN: string = 'a hyphen "-"'
 
 // The code points are named rather than written at each use, because a bare number in the table below
@@ -23,6 +24,16 @@ const ELLIPSIS: number = 0x20_26
 const LEFT_DOUBLE_QUOTE: number = 0x20_1c
 const RIGHT_DOUBLE_QUOTE: number = 0x20_1d
 const LOW_DOUBLE_QUOTE: number = 0x20_1e
+// The three single forms, absent for long enough to be worth naming rather than merely adding. The
+// standard bans "typographic quotation marks" without qualifying which, and the shipped guide says
+// "curly quotation mark"; both phrases cover these, and the scanner covered only their double
+// counterparts. U+2019 is the expensive half of that gap: it is the apostrophe in "it's" and "don't",
+// which makes it the banned character a model emits most often and the one a reader is least likely to
+// notice. The other two are here because a set admitting U+201E while refusing U+201A is not a rule
+// anybody can hold in their head.
+const LEFT_SINGLE_QUOTE: number = 0x20_18
+const RIGHT_SINGLE_QUOTE: number = 0x20_19
+const LOW_SINGLE_QUOTE: number = 0x20_1a
 
 const BANNED_CHARACTERS: readonly BannedCharacter[] = [
   { char: String.fromCodePoint(EM_DASH), label: 'em dash (U+2014)', replacement: PLAIN_HYPHEN },
@@ -46,6 +57,21 @@ const BANNED_CHARACTERS: readonly BannedCharacter[] = [
     char: String.fromCodePoint(LOW_DOUBLE_QUOTE),
     label: 'low double quote (U+201E)',
     replacement: STRAIGHT_DOUBLE_QUOTE,
+  },
+  {
+    char: String.fromCodePoint(LEFT_SINGLE_QUOTE),
+    label: 'left single quote (U+2018)',
+    replacement: STRAIGHT_SINGLE_QUOTE,
+  },
+  {
+    char: String.fromCodePoint(RIGHT_SINGLE_QUOTE),
+    label: 'right single quote (U+2019)',
+    replacement: STRAIGHT_SINGLE_QUOTE,
+  },
+  {
+    char: String.fromCodePoint(LOW_SINGLE_QUOTE),
+    label: 'low single quote (U+201A)',
+    replacement: STRAIGHT_SINGLE_QUOTE,
   },
 ]
 

@@ -250,7 +250,7 @@ commit_case pass 'feat(fixture): add the ploaness integration consumer' "$CONFOR
 # reasoning applies symmetrically: a rule that only ever failed proves as little as one that only ever
 # passed - neither tells you the gate is wired to the scaffold at all.
 for gate in preflight wiring assets conventions editorconfig suppressions generated-denial \
-            payload-rules config-refs install-scripts require-full-history commit-history \
+            payload-rules config-refs install-scripts arch require-full-history commit-history \
             linear-history; do
     expect pass "$gate" PASS
 done
@@ -366,6 +366,40 @@ printf '/* an em %s dash in a stylesheet */\n' "$(printf '\342\200\224')" \
     > "$scratch/fail-typography-css/src/app.css"
 commit_case fail-typography-css 'feat(fixture): add a stylesheet with banned typography' "$CONFORMING_BODY"
 expect fail-typography-css conventions FAIL 'em dash'
+
+# The same rule, over a file that has been WRITTEN but not staged. Every check used to enumerate the
+# git index, so a new file was invisible to all twelve of them: a session could write ten source files,
+# see twelve gates pass, commit, and have the commit rejected by a rule that had never been shown them.
+# The probe is created after the commit precisely because `commit_case` stages everything - staging it
+# would test the case that already worked.
+new_case fail-typography-untracked
+commit_case fail-typography-untracked 'feat(fixture): prepare the untracked scan case' "$CONFORMING_BODY"
+printf '/* an em %s dash nobody staged */\n' "$(printf '\342\200\224')" \
+    > "$scratch/fail-typography-untracked/src/unstaged.css"
+expect fail-typography-untracked conventions FAIL 'em dash'
+
+# The other half of the same rule: what a project IGNORES stays out, so a build output or a coverage
+# report cannot arrive as new source. Without this the case above would pass for the wrong reason - a
+# gate that reads every file on disk rather than every file the project owns.
+new_case pass-typography-ignored
+printf 'ignored-output/\n' >> "$scratch/pass-typography-ignored/.gitignore"
+commit_case pass-typography-ignored 'feat(fixture): ignore a build output directory' "$CONFORMING_BODY"
+mkdir -p "$scratch/pass-typography-ignored/ignored-output"
+printf '/* an em %s dash in ignored output */\n' "$(printf '\342\200\224')" \
+    > "$scratch/pass-typography-ignored/ignored-output/build.css"
+expect pass-typography-ignored conventions PASS
+
+# `arch` forbids `src/**` from importing a devDependency, because a devDependency is absent from a
+# production install. That rule and the guide's instruction to call `safeHref` used to contradict each
+# other: the helper shipped inside `ploaness`, which every project declares as a devDependency, so the
+# one module a consumer's application was told to call was the one it could not import. The pass case
+# above proves the repair - `@ploaness/runtime` in `dependencies`, imported by value from src/lib/links.ts
+# - and this case proves the rule it was repaired WITHOUT weakening.
+new_case fail-arch-dev-dep
+printf "import { safeHref } from 'ploaness/runtime'\n\nexport const viaHarness = (href: string): string => safeHref(href)\n" \
+    > "$scratch/fail-arch-dev-dep/src/lib/links.ts"
+commit_case fail-arch-dev-dep 'feat(fixture): import the runtime helper through the devDependency' "$CONFORMING_BODY"
+expect fail-arch-dev-dep arch FAIL not-to-dev-dep
 
 # A project may declare a stricter ceiling and never a looser one. Zero states that no suppression is
 # permitted, which is the cheapest way to prove the gate binds.
@@ -531,6 +565,15 @@ new_case fail-missing-pin
 node "$lib/delete-dependency.ts" "$scratch/fail-missing-pin/package.json" '@types/node'
 commit_case fail-missing-pin 'feat(fixture): drop a package ploaness pins' "$CONFORMING_BODY"
 expect fail-missing-pin wiring FAIL 'missing'
+
+# `@ploaness/runtime` is required rather than merely pinned, because the guide's Layer 6 rule tells an
+# application to call `safeHref` and no gate can verify that it did. A rule that names an import the
+# project cannot resolve is the contradiction this package exists to end, so the declaration is not
+# left to the session that first needs it.
+new_case fail-missing-runtime
+node "$lib/delete-dependency.ts" "$scratch/fail-missing-runtime/package.json" '@ploaness/runtime'
+commit_case fail-missing-runtime 'feat(fixture): drop the ploaness runtime package' "$CONFORMING_BODY"
+expect fail-missing-runtime wiring FAIL '@ploaness/runtime'
 
 # Changing the version is not the only way to change what a version installs. A patch keeps the version
 # and swaps the code, which is the quietest of the three and invisible in the dependency block.

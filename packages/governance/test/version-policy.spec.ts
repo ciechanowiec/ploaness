@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { findVersionViolations, type VersionInputs } from '../src/version-policy.js'
+import type { WiringViolation } from '../src/wiring-violation.js'
 
 // This module had no spec of its own. It cleared the per-file coverage floor through `wiring-policy`'s
 // tests, which exercise it as a side effect of asking a different question - so no test named any of
@@ -222,5 +223,61 @@ describe('an override of the harness itself', () => {
     expect(locationsOf(packageJson, { workspaceFile })).toContain(
       'pnpm-workspace.yaml overrides.ploaness',
     )
+  })
+})
+
+// The harness packages are released together, and a project can now declare two of them: `ploaness` as
+// a devDependency, and `@ploaness/runtime` in `dependencies` because `src/**` imports it.
+describe('the harness family', () => {
+  it('reports a ploaness package declared at a different version from ploaness itself', () => {
+    const findings: readonly WiringViolation[] = findVersionViolations(
+      wired({
+        dependencies: { '@ploaness/runtime': '2.0.0' },
+        devDependencies: { vitest: '4.1.11', ploaness: '1.0.0' },
+      }),
+      inputs(),
+    )
+    expect(findings.map((finding: WiringViolation): string => finding.location)).toContain(
+      'package.json dependencies.@ploaness/runtime',
+    )
+    expect(findings.map((finding: WiringViolation): string => finding.reason).join('\n')).toContain(
+      'two versions of one release is two implementations',
+    )
+  })
+
+  it('accepts a ploaness package declared at the same version as ploaness', () => {
+    const findings: readonly WiringViolation[] = findVersionViolations(
+      wired({
+        dependencies: { '@ploaness/runtime': '1.0.0' },
+        devDependencies: { vitest: '4.1.11', ploaness: '1.0.0' },
+      }),
+      inputs(),
+    )
+    expect(
+      findings.filter((finding: WiringViolation): boolean =>
+        finding.location.includes('@ploaness/runtime'),
+      ),
+    ).toEqual([])
+  })
+
+  // A pre-publication consumer points ploaness at a packed tarball, and a path carries no version to
+  // agree with. A real project running this build was the first thing to say so: the rule reported a
+  // disagreement between "1.0.0" and a file: specifier, which is not a disagreement about anything.
+  it('says nothing when ploaness resolves from a local artefact', () => {
+    const findings: readonly WiringViolation[] = findVersionViolations(
+      wired({
+        dependencies: { '@ploaness/runtime': '1.0.0' },
+        devDependencies: {
+          vitest: '4.1.11',
+          ploaness: 'file:../ploaness/dist-tarballs/ploaness-1.0.0.tgz',
+        },
+      }),
+      inputs(),
+    )
+    expect(
+      findings.filter((finding: WiringViolation): boolean =>
+        finding.location.includes('@ploaness/runtime'),
+      ),
+    ).toEqual([])
   })
 })

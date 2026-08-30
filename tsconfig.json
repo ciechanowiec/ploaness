@@ -9,6 +9,7 @@
 {
   "files": [],
   "references": [
+    { "path": "./packages/runtime" },
     { "path": "./packages/governance" },
     { "path": "./packages/config/tsconfig.build.json" },
     { "path": "./packages/cli" },

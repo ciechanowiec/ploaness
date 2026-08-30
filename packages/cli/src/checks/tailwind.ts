@@ -1,5 +1,5 @@
 // The token-bound gate. The rule is pure and lives in @ploaness/governance; this file supplies the
-// I/O: which tracked files carry Tailwind classes, and what a finding reads like.
+// I/O: which files carry Tailwind classes, and what a finding reads like.
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
@@ -8,7 +8,7 @@ import {
   hasExtension,
   matchesRole,
 } from '@ploaness/governance'
-import { type Context, trackedFiles } from '../context.js'
+import { type Context, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 // Scoped by role rather than by a list of folders. A Tailwind class is written in JSX, so `.tsx` is
@@ -25,8 +25,8 @@ const isScanned = (context: Context, file: string): boolean =>
 
 /** Verify every visual value comes from the Tailwind theme rather than an arbitrary literal. */
 export const tailwindTokens = (context: Context): GateResult => {
-  const scanned: readonly string[] = trackedFiles(context.root).filter((file: string): boolean =>
-    isScanned(context, file),
+  const scanned: readonly string[] = workingTreeFiles(context.root).filter(
+    (file: string): boolean => isScanned(context, file),
   )
   const findings: readonly string[] = scanned.flatMap((file: string): readonly string[] => {
     const content: string = readFileSync(path.join(context.root, file), 'utf8')

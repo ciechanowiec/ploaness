@@ -5,18 +5,18 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { type Context, trackedFiles } from '../context.js'
+import { type Context, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 const fingerprint = (context: Context): string => {
   const hash: ReturnType<typeof createHash> = createHash('sha256')
-  for (const file of trackedFiles(context.root)) {
+  for (const file of workingTreeFiles(context.root)) {
     const full: string = path.join(context.root, file)
     hash.update(file)
     try {
       hash.update(statSync(full).isFile() ? readFileSync(full) : Buffer.alloc(0))
     } catch {
-      // A tracked-but-deleted path contributes its name only, so deleting one still changes the digest.
+      // An indexed-but-deleted path contributes its name only, so deleting one still changes the digest.
       hash.update('<absent>')
     }
   }
@@ -39,7 +39,7 @@ export const treeSnapshot = (context: Context): GateResult => {
   return passed(`tree fingerprint recorded (${snapshot.slice(0, FINGERPRINT_PREVIEW)})`)
 }
 
-/** Verify no gate modified a tracked file during verification. */
+/** Verify no gate modified, or created, a file in the working tree during verification. */
 export const treeVerify = (context: Context): GateResult => {
   if (snapshot === undefined) {
     return passed('no tree snapshot was taken, so there is nothing to compare')
@@ -47,7 +47,7 @@ export const treeVerify = (context: Context): GateResult => {
   const current: string = fingerprint(context)
   return current === snapshot
     ? passed('the working tree is unchanged since verification began')
-    : failed('a gate modified a tracked file during verification', [
+    : failed('a gate changed the working tree during verification', [
         'run `ploaness format`, review the result, and commit it before verifying',
         `expected ${snapshot.slice(0, FINGERPRINT_PREVIEW)} but found ${current.slice(0, FINGERPRINT_PREVIEW)}`,
         'git status will show which files changed',

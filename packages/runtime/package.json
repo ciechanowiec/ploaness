@@ -1,0 +1,41 @@
+{
+  "name": "@ploaness/runtime",
+  "version": "1.0.0",
+  "description": "The ploaness helpers a governed application calls at runtime. Pure, zero-dependency, and safe to install into production.",
+  "license": "MIT",
+  "author": "Herman Ciechanowiec <herman@ciechanowiec.eu>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ciechanowiec/ploaness.git",
+    "directory": "packages/runtime"
+  },
+  "homepage": "https://github.com/ciechanowiec/ploaness#readme",
+  "bugs": {
+    "url": "https://github.com/ciechanowiec/ploaness/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "engines": {
+    "node": ">=26"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.0",
+    "typescript": "6.0.3"
+  }
+}

@@ -3,11 +3,14 @@
 // here. The split is what makes the rules cheap to test exhaustively: a pure function over strings
 // needs no fixture repository to exercise its edge cases.
 
+export * from './a11y-hit-target.js'
+export * from './a11y-incomplete.js'
 export * from './access-boundary.js'
 export * from './agent-references.js'
 export * from './architecture-layers.js'
 export * from './asset-policy.js'
 export * from './banned-typography.js'
+export * from './build-diagnosis.js'
 export * from './bundle-budget.js'
 export * from './commit-message.js'
 export * from './config-references.js'
@@ -44,7 +47,6 @@ export * from './suppression-ceiling.js'
 export * from './tailwind-tokens.js'
 export * from './text-escapes.js'
 export * from './toolchain-pins.js'
-export * from './url-safety.js'
 export * from './version-policy.js'
 export * from './vulnerability-policy.js'
 export * from './wiring-policy.js'

@@ -237,9 +237,30 @@ export const shippedDirectory = (packageName: string): string =>
 export const cliDirectory = (): string =>
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-/** List the repository's tracked files, NUL-delimited so paths with spaces survive intact. */
-export const trackedFiles = (root: string): readonly string[] =>
-  execFileSync('git', ['ls-files', '-z'], {
+/**
+ * List the repository's files as they exist on disk, NUL-delimited so paths with spaces survive intact.
+ *
+ * `--cached --others --exclude-standard` rather than the bare `git ls-files` this used to run, and the
+ * difference is the whole guarantee. The bare form lists the INDEX, so a file that had been written but
+ * not staged was invisible to every check built on this - the typography ban, the line-length check,
+ * the suppression ceiling, the Payload usage rules, the tree fingerprint, and the discovery of which
+ * directories are governed members at all. An agent's loop is write, verify, commit; nothing in that
+ * loop stages anything, so a session could run twelve checks over its own new code, see them all pass,
+ * and have the commit rejected by a rule that had simply never been shown the file. A green run is
+ * documented as a verdict, and against the index it was not one.
+ *
+ * `--exclude-standard` is what keeps that honest in the other direction: everything a project ignores
+ * stays out, so a build directory or a coverage report does not arrive as new source.
+ *
+ * Deliberately not memoised, though it is called once per consuming check and twice more for the
+ * fingerprint. Measured at about a millisecond over the bare form on a few hundred files, which buys
+ * nothing worth a cache - and a cached list is exactly the defect above, one layer in: the second
+ * fingerprint MUST see a file a gate created since the first, and a memo is a promise that it will not.
+ * @param root the directory to enumerate, which for a member is that member's own directory.
+ * @returns every file git can see there that the project does not ignore.
+ */
+export const workingTreeFiles = (root: string): readonly string[] =>
+  execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: MAX_OUTPUT_BYTES,
@@ -285,17 +306,22 @@ const ancestorsOf = (directory: string): readonly string[] => {
 const hasEntry = (directory: string, entry: string): boolean =>
   existsSync(path.join(directory, entry))
 
-// Candidate project directories come from the tracked tree rather than from a filesystem walk, so a
-// directory git does not know about - a build output, an ignored scratch copy, an uninstalled example -
-// can never become a governed member.
-// Candidate project directories come from the tracked tree rather than a filesystem walk, so a
-// directory git does not know about - a build output, an ignored scratch copy - can never become a
-// governed member. A directory that is not a repository at all has exactly one project, itself: the
-// integration fixtures install into such a directory before any commit exists, and asking git there
-// fails rather than answering.
+// Candidate project directories come from the working tree rather than from a filesystem walk, so a
+// directory git IGNORES - a build output, a scratch copy, an uninstalled example - can never become a
+// governed member, while one that merely has not been staged yet does.
+//
+// That second half used to be false, and it was the most expensive half of reading the index instead of
+// the tree. A check reading the index scans one file too few; discovery reading the index loses a whole
+// PACKAGE - it is absent from the run plan, so its gates are not skipped, they are never planned, and
+// the report says nothing at all about it. A member that appears only once somebody remembers to stage
+// it is not governance.
+//
+// A directory that is not a repository at all has exactly one project, itself: the integration fixtures
+// install into such a directory before any commit exists, and asking git there fails rather than
+// answering.
 const manifestDirectories = (root: string): readonly string[] => {
   try {
-    return trackedManifestDirectories(root)
+    return workingTreeManifestDirectories(root)
   } catch {
     // Not a repository yet. `ploaness init` is run on exactly such a tree - a fresh checkout, or a
     // workspace being adopted before its first commit - and answering "one project, the root" there
@@ -332,8 +358,8 @@ const walkManifestDirectories = (
   return [...here, ...children]
 }
 
-const trackedManifestDirectories = (root: string): readonly string[] =>
-  trackedFiles(root)
+const workingTreeManifestDirectories = (root: string): readonly string[] =>
+  workingTreeFiles(root)
     .filter((file: string): boolean => path.basename(file) === MANIFEST)
     .map((file: string): string => {
       const directory: string = path.dirname(file)
@@ -429,7 +455,7 @@ export const createRepository = (cwd: string, isEnforced: boolean): Repository =
   }
 }
 
-// The gates that walk the tracked tree run once, at the root, while a member declares its exclusions
+// The gates that walk the working tree run once, at the root, while a member declares its exclusions
 // relative to itself. Without this a generated directory a member correctly excused starts failing
 // them, because the pattern it wrote is anchored one directory above where the gate is looking.
 const withMemberExclusions = (base: Settings, members: readonly Member[]): Settings => {

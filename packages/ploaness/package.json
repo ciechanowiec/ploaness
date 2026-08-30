@@ -80,7 +80,8 @@
     "@ploaness/assets": "1.0.0",
     "@ploaness/cli": "1.0.0",
     "@ploaness/config": "1.0.0",
-    "@ploaness/governance": "1.0.0"
+    "@ploaness/governance": "1.0.0",
+    "@ploaness/runtime": "1.0.0"
   },
   "engines": {
     "node": ">=26"

@@ -3,13 +3,18 @@
 // module registry and fail to match its own matchers.
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import { CODE_EXTENSIONS, carriesSourceCode, hasExtension } from '@ploaness/governance'
+import {
+  CODE_EXTENSIONS,
+  carriesSourceCode,
+  diagnoseBuildFailure,
+  hasExtension,
+} from '@ploaness/governance'
 import {
   type Context,
   hasOwnRuntime,
   type Member,
   resolveProjectTool,
-  trackedFiles,
+  workingTreeFiles,
 } from '../context.js'
 import {
   asFindings,
@@ -75,8 +80,10 @@ const resolveProjectToolOrUndefined = (
 // empty include - reporting a package with nothing to test as one that failed to test it. A member
 // holding code and no suite is untouched by this and still fails.
 const hasSourceToTest = (context: Member): boolean =>
-  carriesSourceCode(trackedFiles(context.root), context.settings.sourceRoots, (filePath: string) =>
-    hasExtension(filePath, CODE_EXTENSIONS),
+  carriesSourceCode(
+    workingTreeFiles(context.root),
+    context.settings.sourceRoots,
+    (filePath: string) => hasExtension(filePath, CODE_EXTENSIONS),
   )
 
 export const tests = (context: Member): GateResult =>
@@ -157,16 +164,24 @@ export const build = (context: Context): GateResult => {
       ])
     }
     const invocation: Invocation = wrapped(context, [next, 'build'])
-    return fromRun(
-      run(invocation.command, invocation.commandArguments, {
-        cwd: context.root,
-        env: {
-          NEXT_TELEMETRY_DISABLED: '1',
-          NODE_OPTIONS: '--no-deprecation --max-old-space-size=8000',
-        },
-      }),
+    const result: RunResult = run(invocation.command, invocation.commandArguments, {
+      cwd: context.root,
+      env: {
+        NEXT_TELEMETRY_DISABLED: '1',
+        NODE_OPTIONS: '--no-deprecation --max-old-space-size=8000',
+      },
+    })
+    const outcome: GateResult = fromRun(
+      result,
       'the production build succeeds',
       'the production build failed',
     )
+    // Appended rather than substituted. The build's own output is what a reader needs first; the
+    // diagnosis explains a message that names the wrong layer, and says nothing about output it does
+    // not recognise.
+    const diagnosis: readonly string[] = outcome.ok ? [] : diagnoseBuildFailure(result.output)
+    return diagnosis.length === 0
+      ? outcome
+      : { ...outcome, findings: [...outcome.findings, ...diagnosis] }
   })
 }

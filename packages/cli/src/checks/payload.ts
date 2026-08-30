@@ -13,7 +13,7 @@ import {
   type Member,
   resolveProjectTool,
   runEnvironment,
-  trackedFiles,
+  workingTreeFiles,
 } from '../context.js'
 import { asFindings, failed, type GateResult, passed, type RunResult, runNode } from '../exec.js'
 
@@ -51,21 +51,33 @@ export const payloadGenerated = (context: Context): GateResult => {
   // regenerated, but never diffed. The gate then reported that the artefacts matched a configuration it
   // had not compared them against, and the drift it had just written surfaced two gates later as an
   // unexplained working-tree change.
-  const drifted: readonly string[] = context.settings.generatedArtefacts.filter(
-    (target: string): boolean => {
+  const drifted: readonly string[] = context.settings.generatedArtefacts.flatMap(
+    (target: string): readonly string[] => {
       if (!existsSync(path.join(context.root, target))) {
-        return false
+        return []
       }
       try {
+        // Two questions, because `git diff` answers only one of them. It compares what git already
+        // knows about, so an artefact that has never been committed produces no diff and reads as
+        // agreement - which is the loudest possible silence: the file regenerating from a
+        // configuration nobody can review, in a repository that does not contain it. Asked first,
+        // because "it drifted" would be a strange thing to say about a file git has never seen.
+        if (git(context, ['ls-files', '--', target]).length === 0) {
+          return [
+            `${target} is not tracked by git, so no committed version exists to compare against`,
+          ]
+        }
         return git(context, ['diff', '--name-only', '--', target]).length > 0
+          ? [`${target} changed when regenerated`]
+          : []
       } catch {
-        return false
+        return []
       }
     },
   )
   return drifted.length > 0
     ? failed('generated Payload artefacts drifted from the configuration', [
-        ...drifted.map((target: string): string => `${target} changed when regenerated`),
+        ...drifted,
         'commit the regenerated files',
       ])
     : passed('the generated Payload artefacts match the configuration')
@@ -82,10 +94,10 @@ const violationsIn = (source: string, isPayload: boolean): readonly PayloadViola
   ...(isPayload ? findPayloadViolations(source) : []),
 ]
 
-/** Apply the source rules to every tracked TypeScript file under the declared source roots. */
+/** Apply the source rules to every TypeScript file under the declared source roots. */
 export const payloadRules = (context: Member): GateResult => {
   const roots: readonly string[] = context.settings.sourceRoots
-  const candidates: readonly string[] = trackedFiles(context.root).filter(
+  const candidates: readonly string[] = workingTreeFiles(context.root).filter(
     (file: string): boolean =>
       SOURCE_EXTENSIONS.some((extension: string): boolean => file.endsWith(extension)) &&
       roots.some((root: string): boolean => file.startsWith(`${root}/`)) &&

@@ -11,11 +11,15 @@ Both layers are binding. The project-owned instructions may strengthen but never
 
 ## Project Structure & Module Organization
 
-ploaness is a pnpm workspace publishing five packages that together form an external quality harness for
+ploaness is a pnpm workspace publishing six packages that together form an external quality harness for
 Payload CMS projects. It requires Node 26+ and pnpm 11+.
 
 - `packages/governance` (`@ploaness/governance`) - every rule, as pure functions with **zero I/O**. This is
   where a rule belongs unless it physically cannot live here.
+- `packages/runtime` (`@ploaness/runtime`) - the pure helpers a governed APPLICATION calls, as opposed
+  to the rules ploaness applies to it. Zero dependencies, because a consumer declares it in
+  `dependencies` and it therefore ships to production. See "A helper an application calls needs a
+  package an application can declare" below.
 - `packages/config` (`@ploaness/config`) - the analyzer configurations, plus the
   dependencies on every tool ploaness invokes.
 - `packages/assets` (`@ploaness/assets`) - `manifest.tsv` and the bodies of the managed files.
@@ -154,16 +158,92 @@ Those two workflows are also what finally gave `gate actions` something to read:
 repository shipped no workflow at all, that gate passed without opening a file, which is the same
 shape of silence `arch` sat in.
 
-### The five packages carry one version
+### The packages carry one version
 
-The five pin each other at an EXACT version, because `workspace:*` does not resolve when a package is
+They pin each other at an EXACT version, because `workspace:*` does not resolve when a package is
 installed from a tarball outside its workspace - which is how `it/` verifies the harness. Nothing
 derives those numbers from a single value, so the version is written down in every manifest, in the
 tarball filenames the fixture installs by path, and in the `:ploaness-version:` the user guide renders
-its install snippet from. `scripts/lib/check-release-version.ts` measures every one of those sites
+its install snippet from.
+
+A consumer can now declare a second ploaness coordinate of its own - `@ploaness/runtime` - so the same
+requirement reaches outward: `version-policy.ts` holds every `@ploaness/*` a project declares to the
+version it declares `ploaness` at. Two versions of one release is two implementations, and the meta
+package re-exports the runtime helper for `tests/**`, so the drift would put the suite on one copy and
+production on the other. `scripts/lib/check-release-version.ts` measures every one of those sites
 against what `packages/ploaness` declares, and `pnpm run verify` runs it as the `release-version` step
 before anything expensive - a bump that misses the fixture used to fail at install time with a missing
 file, which names the symptom and not the cause.
+
+### A helper an application calls needs a package an application can declare
+
+`safeHref` used to live in `@ploaness/governance` on the argument that a package for one function is a
+versioning surface bought for nothing. That priced the wrong thing. A project declares the harness as a
+devDependency, which is correct, and `arch`'s `not-to-dev-dep` forbids `src/**` from importing a
+devDependency because one is absent from a production install. So the guide MANDATED a value import
+that the gate rejected: the single module in that package an application was told to call was the one
+it could not reach. A consuming project found it and had to write the scheme check itself.
+
+`@ploaness/runtime` is the repair, and the shape of it matters. Not a `pathNot` carve-out in
+`not-to-dev-dep`, which would make a real production-install hazard unreportable; not `ploaness` in
+`dependencies`, which ships ESLint, Playwright, Vitest and jsdom to production through
+`@ploaness/config`'s 25 dependencies. A separate zero-dependency package makes the contract satisfiable
+without touching the rule, which is the difference between fixing a contradiction and hiding one.
+
+It is NOT in `pins.json`, and that is deliberate rather than an omission: that file says in its own
+first line that it holds what ploaness cannot pin by declaring a dependency, and this is a package
+ploaness declares. Adding it there would have made the file contradict itself to gain what the version
+rule above already gives.
+
+Every application DECLARES it, rather than only the ones that turn out to need it, and it sits beside
+`BROWSER_LIBRARIES` in `wiring.ts` because that is the same decision: ploaness ships something that is
+not optional, so resolving what it names is not optional either. There the artefact is the managed
+accessibility sweep; here it is the Layer 6 rule that a CMS-supplied URL passes through `safeHref` - a
+rule the guide says binds with the same force as one a gate enforces, and one no gate CAN enforce.
+Leaving it optional would have put an install step between a developer and an XSS fix, at the moment
+friction is most expensive, in service of the rule least able to survive it.
+
+The reason `pins.json` forces nothing does not reach here. Forcing a declaration normally manufactures
+a dependency the dead-code gate reports as unused; the shipped `knip.json` already ignores
+`@ploaness/.+`, because ploaness packages are reached through configs knip cannot trace, so this
+creates no finding. What it does cost is honest and small: an application that never renders an
+editor-supplied link carries one manifest line and a few hundred bytes it does not use. That is the
+trade `@axe-core/playwright` already makes as a required package, and the scope is the same - `library`
+members are excluded, because `hasRuntime` decides it.
+
+The expected version is the running CLI's own `version` rather than a literal: the packages are
+published together at one version, `check-release-version.ts` is what makes that true, and the meta
+package cannot be read from here because `ploaness` depends on the CLI rather than the reverse.
+
+`it/project` is what proves the repair: it declares `@ploaness/runtime` in `dependencies` and imports
+`safeHref` by value from `it/project/src/lib/links.ts`, and `it/verify.sh` runs `arch` over it. The paired failure
+case imports the same function through `ploaness/runtime` instead and must fail `not-to-dev-dep`, which
+is what shows the rule was satisfied rather than weakened.
+
+### A gate reads the working tree, not the index
+
+`git ls-files` lists the INDEX. Every check built on it therefore judged what had been staged, and a
+file that had been written and not staged was invisible to all twelve of them - the typography ban, the
+line-length check, the suppression ceiling, the Payload usage rules, the tree fingerprint, and the
+discovery of which directories are governed members at all. An agent's loop is write, verify, commit,
+and nothing in it stages anything, so a session could write ten source files, watch every gate pass,
+commit, and have the commit rejected by a rule that had never been shown them. A consuming project
+reported exactly that, with a gate reporting the same file count through an entire session.
+
+`workingTreeFiles` in `packages/cli/src/context.ts` runs `--cached --others --exclude-standard`
+instead. The middle flag is the repair and the last one is what keeps it honest: everything the project
+ignores stays out, so a build directory does not arrive as new source.
+
+Two consequences worth naming. Member DISCOVERY moved with it, which was the most expensive half: a
+check reading the index scans one file too few, while discovery reading the index loses a whole
+package - absent from the run plan, so its gates are not skipped, they are never planned, and the
+report says nothing about it at all. And the tree fingerprint now covers created files, so a gate that
+writes a non-ignored file is reported rather than passing unseen.
+
+The enumerator is deliberately NOT memoised, though it is called once per consuming check and twice
+more for the fingerprint. Measured at about a millisecond over the bare form across a few hundred
+files, and a cached list would be the original defect one layer in: the second fingerprint MUST see a
+file a gate created since the first, and a memo is a promise that it will not.
 
 ### TypeScript is held at 6 by the lint pass, not by inertia
 
@@ -328,6 +408,26 @@ running application knows, which is the whole reason it runs rather than reads.
   `/api/access`, with no credential, what it grants a stranger. The source rules read the access block a
   project wrote; they cannot read what `read: anyone` decides, nor what Payload made of the config after
   sanitisation, so a project can satisfy all of them and still serve every document to everyone.
+
+A pinned spec that gets a rule wrong is wrong in every consumer at once, and two of the accessibility
+sweep's were. Both were found by a consuming project, and both are why the DECISIONS a shipped spec
+makes now live in `governance` rather than in the spec.
+
+axe answers in three buckets and the sweep read one. An exactly equal foreground and background is
+filed under `incomplete` rather than `violations`, because axe reads two identical colours as text
+hidden on purpose and defers to a human - so the worst contrast defect there is passed the gate built
+to catch contrast defects, and a project's mutation test confirmed it. `a11y-incomplete.ts` picks out
+the entries that need no human, and the list is one key long: `bgImage`, `bgGradient` and `fgAlpha` are
+the cases where axe is genuinely right to defer, and a blanket "incomplete must be empty" in a file no
+project can edit would be unfixable from the consumer's side.
+
+The sweep also hovered every control in the chrome, and a skip link hidden with `clip-path: inset(50%)`
+has no hit target, because a clip removes an element from hit testing as well as from painting. The
+hover retried until the test timed out and blamed `<header>` for intercepting pointer events, which
+reads as an instruction to weaken a correct skip link. `a11y-hit-target.ts` tells that apart from a
+control that PAINTS and is covered anyway: the first skips the hover pass, records why, and still runs
+the focus pass, because hover contrast measures painted pixels and there are none; the second is a real
+page defect and is now reported as one in seconds instead of as a timeout naming the wrong element.
 
 Three consequences follow, and each is handled where it arises rather than waived.
 

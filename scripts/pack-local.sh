@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Pack every ploaness package into dist-tarballs/, so `it/` installs the harness the way a consumer
-# does. The fixture points a pnpm override at each tarball rather than naming the five, and that is
+# does. The fixture points a pnpm override at each tarball rather than naming them, and that is
 # permanent rather than a stand-in for publication: what is verified is the artefacts THIS run
 # produced, and a registry range resolves to whatever is already published - the previous release,
 # never the change under test. The override costs exactly one link of the chain, the specifier: a

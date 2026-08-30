@@ -1,5 +1,6 @@
 // Source conventions: the AI-typography ban and the preference for TypeScript over hand-written
-// JavaScript. Both are scanned across every tracked file rather than a chosen subtree, because the
+// JavaScript. Both are scanned across every file in the working tree rather than a chosen subtree,
+// because the
 // characters a model emits appear in documentation and configuration as readily as in code.
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
@@ -13,11 +14,11 @@ import {
   matchesRole,
   type TypographyViolation,
 } from '@ploaness/governance'
-import { type Context, trackedFiles } from '../context.js'
+import { type Context, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 // The typography ban used to carry an allowlist of ten extensions here, which is the wrong shape for a
-// rule that reaches "every tracked file the repository does not exclude by file role": `.css`, `.adoc`,
+// rule that reaches "every file the repository does not exclude by file role": `.css`, `.adoc`,
 // a shell script, and a Dockerfile all went unscanned, and every new text format arrived unscanned
 // until someone remembered this list. The role predicate is default-safe in the other direction - a
 // binary asset is recognised from its own bytes, and everything else is text that gets scanned.
@@ -92,7 +93,7 @@ const orphanedDocFindings = (context: Context, tracked: readonly string[]): read
       )
     })
 
-// A tracked path is not always a regular file. `git ls-files` reports a symlink and a submodule
+// An enumerated path is not always a regular file. `git ls-files` reports a symlink and a submodule
 // gitlink too, and reading either throws rather than yielding text.
 const isRegularFile = (root: string, file: string): boolean => {
   const full: string = path.join(root, file)
@@ -100,12 +101,13 @@ const isRegularFile = (root: string, file: string): boolean => {
 }
 
 /**
- * Scan every tracked file for banned typography, stray hand-written JavaScript, and documenting
+ * Scan every file in the working tree for banned typography, stray hand-written JavaScript, and
+ * documenting
  * comments left above another comment rather than above what they document.
  */
 export const conventions = (context: Context): GateResult => {
-  const tracked: readonly string[] = trackedFiles(context.root).filter((file: string): boolean =>
-    isRegularFile(context.root, file),
+  const tracked: readonly string[] = workingTreeFiles(context.root).filter(
+    (file: string): boolean => isRegularFile(context.root, file),
   )
   const findings: readonly string[] = [
     ...typographyFindings(context, tracked),
@@ -114,5 +116,5 @@ export const conventions = (context: Context): GateResult => {
   ]
   return findings.length > 0
     ? failed(`${String(findings.length)} convention violation(s)`, findings)
-    : passed(`${String(tracked.length)} tracked file(s) follow the source conventions`)
+    : passed(`${String(tracked.length)} working-tree file(s) follow the source conventions`)
 }

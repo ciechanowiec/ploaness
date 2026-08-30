@@ -1,10 +1,12 @@
 // One version, and every place this repository writes it down.
 //
-// The five packages are published together and pin each other at an EXACT version, because
+// The packages are published together and pin each other at an EXACT version, because
 // `workspace:*` does not resolve when a package is installed from a tarball outside its workspace -
 // which is how `it/` verifies the harness before it is published. That exactness is what makes a
 // release safe and what makes a bump dangerous: nothing derives those five numbers from a single value,
-// so the version is written down eleven times, and a release that publishes with two of them disagreeing
+// so the version is written down once per manifest, once per cross-reference, twice in the fixture
+// and once in the guide - a count deliberately not stated as a number here, because a sixth package
+// changed it and no check reads this comment. A release that publishes with two of them disagreeing
 // produces packages that install and then fail to resolve.
 //
 // So the joint is checked rather than the value. `packages/ploaness` is the version a consumer installs,

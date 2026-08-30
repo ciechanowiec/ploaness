@@ -105,6 +105,18 @@ const asStringArray = (value: unknown): readonly string[] =>
 
 const VERSION_SOURCES: readonly string[] = ['@ploaness/config', '@ploaness/cli']
 
+// The release version, read from the running harness rather than written down again. `@ploaness/runtime`
+// is a sibling of this CLI and the six are published together at one version, which
+// `scripts/lib/check-release-version.ts` is what makes true - so the CLI's own `version` IS the version
+// a project must declare the runtime package at, and a bump moves it with no edit here. It cannot be
+// read from the meta package's dependencies, the way a pinned analyzer is: `ploaness` depends on this
+// package rather than the reverse, so under pnpm's strict layout the CLI cannot resolve it.
+const harnessRuntimeVersion = (): Readonly<Record<string, string>> => {
+  const manifest: unknown = readJson(shippedFile('@ploaness/cli', 'package.json'))
+  const version: string | undefined = asOptionalText(readKey(manifest, 'version'))
+  return version === undefined ? {} : { [HARNESS_RUNTIME]: version }
+}
+
 const declaredBy = (packageName: string): Record<string, unknown> => {
   const manifest: unknown = readJson(shippedFile(packageName, 'package.json'))
   return asRecord(readKey(manifest, 'dependencies'))
@@ -142,8 +154,30 @@ const expectedTestLibraries = (): Readonly<Record<string, string>> => {
       TEST_LIBRARY_NAMES.map((name: string): readonly [string, unknown] => [name, declared[name]]),
     ),
   )
-  return { ...fromDependencies, ...ownedVersions() }
+  return { ...fromDependencies, ...ownedVersions(), ...harnessRuntimeVersion() }
 }
+
+/**
+ * The runtime helpers a governed application calls, which every application therefore declares.
+ *
+ * Required rather than merely pinned, on the same reasoning that makes the browser packages required:
+ * ploaness ships something that is not optional, so resolving what it names is not optional either.
+ * There the artefact is the managed accessibility sweep; here it is the Layer 6 rule that a URL from a
+ * CMS field passes through `safeHref` before it reaches an `href` - a rule the guide states binds with
+ * the same force as one a gate enforces, and one no gate CAN enforce.
+ *
+ * The alternative was to leave it optional and have the guide say "add this dependency first". That
+ * puts an install step between a developer and an XSS fix, at the one moment friction is most
+ * expensive, in service of a rule nothing verifies. An unused declaration costs a governed project a
+ * line in a manifest and a few hundred bytes in a production install: the package is pure and declares
+ * no dependencies of its own.
+ *
+ * The usual objection does not apply. Forcing a declaration normally manufactures a dependency the
+ * dead-code gate reports as unused - which is why `pins.json` forces nothing - but the shipped
+ * `knip.json` already ignores `@ploaness/.+`, because ploaness packages are reached through configs
+ * knip cannot trace. So this creates no finding anywhere.
+ */
+const HARNESS_RUNTIME: string = '@ploaness/runtime'
 
 // A member's own required set. Only a member that serves an application needs the browser packages: a
 // library has no page to sweep, and requiring them would manufacture dependencies the dead-code gate
@@ -152,6 +186,7 @@ const BROWSER_LIBRARIES: ReadonlySet<string> = new Set<string>([
   '@playwright/test',
   '@axe-core/playwright',
   'tsx',
+  HARNESS_RUNTIME,
 ])
 
 // The specs of every governed package import these, so pnpm's strict layout means every package must

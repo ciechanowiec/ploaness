@@ -34,7 +34,7 @@ import {
   type ReleaseAge,
   type VulnerabilityReport,
 } from '@ploaness/governance'
-import { type Context, manifestPathFrom, readJson, trackedFiles } from '../context.js'
+import { type Context, manifestPathFrom, readJson, workingTreeFiles } from '../context.js'
 import {
   failed,
   type GateResult,
@@ -99,8 +99,8 @@ const MANIFEST_NAME: string = 'package.json'
 
 // Every manifest the repository tracks, not only the root one. A workspace declares its toolchain across
 // several of them, and reading the root alone left every analyzer ploaness itself runs on unmeasured.
-const trackedManifests = (context: Context): readonly ManifestSource[] =>
-  trackedFiles(context.root)
+const repositoryManifests = (context: Context): readonly ManifestSource[] =>
+  workingTreeFiles(context.root)
     .filter((file: string): boolean => file === MANIFEST_NAME || file.endsWith(`/${MANIFEST_NAME}`))
     .map(
       (file: string): ManifestSource => ({
@@ -112,7 +112,7 @@ const trackedManifests = (context: Context): readonly ManifestSource[] =>
 
 // A path as the filesystem finally names it, so the same manifest reached two ways compares equal.
 // Under pnpm every installed package is a symlink into the store, and in a workspace it is a symlink
-// back into the tree - which is how an inherited manifest can turn out to be a tracked one.
+// back into the tree - which is how an inherited manifest can turn out to be one of the repository's own.
 const realPathOrSelf = (file: string): string => {
   try {
     return realpathSync(file)
@@ -135,14 +135,14 @@ const declaredName = (packageJson: unknown, fallback: string): string =>
 // The manifests a project INHERITS: `ploaness` as the project itself resolves it, and every ploaness
 // package that one pulls in. The standard counts these as declared coordinates, and they are the
 // manifests that decide which analyzer versions the project's gates actually run - none of which the
-// project tracks, so a reader of tracked files alone could never see them. That is why a consumer's
+// project's own tree holds, so a reader of the working tree alone could never see them. That is why a consumer's
 // update report was silent about a harness pin going stale while ploaness's own report was not.
 const inheritedManifests = (
   context: Context,
-  tracked: readonly ManifestSource[],
+  own: readonly ManifestSource[],
 ): readonly ManifestSource[] => {
   const alreadyRead: ReadonlySet<string> = new Set<string>(
-    tracked.map((manifest: ManifestSource): string =>
+    own.map((manifest: ManifestSource): string =>
       realPathOrSelf(path.join(context.root, manifest.path)),
     ),
   )
@@ -163,8 +163,8 @@ const inheritedManifests = (
 }
 
 const manifestSources = (context: Context): readonly ManifestSource[] => {
-  const tracked: readonly ManifestSource[] = trackedManifests(context)
-  return [...tracked, ...inheritedManifests(context, tracked)]
+  const own: readonly ManifestSource[] = repositoryManifests(context)
+  return [...own, ...inheritedManifests(context, own)]
 }
 
 // The registry exposes two documents per package: the packument root and, per version, a version
@@ -318,13 +318,27 @@ const HARNESS_REPAIR: string =
   ' - declared by ploaness rather than by the project, so upgrade ploaness, or report it if no ' +
   'release carries the newer pin'
 
+// A shorter marker than HARNESS_REPAIR, because it appears on every inherited update rather than on
+// the rare overdue one, and it answers a different question: `stale` has to say what to DO, while an
+// ordinary update only has to say whose declaration it is. A consuming project reported these rows as
+// noise, and it was reading correctly - they named a manifest under `@ploaness/` and nothing said that
+// naming meant "not yours to change".
+const HARNESS_OWNED: string = ' - ploaness declares this, not the project'
+
+// Read from `isInherited` rather than from the verdict. Only an inherited coordinate can reach these
+// lines with a `fail`, because a project's own failure stops the build instead - so the two were
+// equivalent, and stating the one that is actually meant is what keeps them equivalent.
+const ownerNote = (finding: FreshnessFinding, note: string): string =>
+  finding.isInherited ? note : ''
+
 // `stale`, not `update`, for a coordinate past the bound that does not stop this build. Printed as an
 // ordinary update it would bury the one line saying the harness itself is overdue among a dozen saying
 // a patch release exists.
 const describeReported = (finding: FreshnessFinding): string =>
   finding.verdict === 'fail'
-    ? `stale ${describeFinding(finding)}; past the freshness bound${HARNESS_REPAIR}`
-    : `update ${describeFinding(finding)}`
+    ? `stale ${describeFinding(finding)}; past the freshness bound` +
+      ownerNote(finding, HARNESS_REPAIR)
+    : `update ${describeFinding(finding)}${ownerNote(finding, HARNESS_OWNED)}`
 
 // `held`, not `update`, for a release pnpm will refuse for being too young. Naming it as an ordinary
 // update sends the reader to an install that fails, and the way past that failure is an exclusion from
@@ -342,12 +356,20 @@ const describeHeld = (finding: FreshnessFinding, hours: number | undefined): str
 const isHeldCandidate = (finding: FreshnessFinding): boolean =>
   finding.verdict === 'update' && !finding.isInherited
 
+// The project's own rows first, then the harness's. Interleaved, a reader scanning for what they can
+// act on had to check the owner of every line; grouped, the actionable half is the top of the list.
+// Stable within each half, so the order a run reports twice is the same order.
+const projectRowsFirst = (reported: readonly FreshnessFinding[]): readonly FreshnessFinding[] => [
+  ...reported.filter((finding: FreshnessFinding): boolean => !finding.isInherited),
+  ...reported.filter((finding: FreshnessFinding): boolean => finding.isInherited),
+]
+
 const describeUpdates = async (
   reported: readonly FreshnessFinding[],
   now: number,
 ): Promise<readonly string[]> =>
   await mapWithConcurrency(
-    reported,
+    projectRowsFirst(reported),
     REGISTRY_CONCURRENCY,
     async (finding: FreshnessFinding): Promise<string> => {
       if (!isHeldCandidate(finding)) {

@@ -71,8 +71,9 @@ step lint       pnpm run lint
 step lint:eslint pnpm run lint:eslint
 step lint:assets sh "$root/scripts/lib/check-asset-bodies.sh"
 
-# The five packages are one release, pinned to each other at an exact version, and nothing derives
-# that version from one place. It is written down eleven times, and `pack` names five of those in
+# The packages are one release, pinned to each other at an exact version, and nothing derives that
+# version from one place. It is written down in every manifest, in every cross-reference between
+# them, in the fixture's overrides and in the user guide, and `pack` names several of those in
 # the tarball filenames the fixture installs by path - so a bump that misses one halts here rather than
 # in an install error that reports a missing file.
 step release-version node "$root/scripts/lib/check-release-version.ts"
@@ -166,7 +167,7 @@ gate secrets
 
 step test pnpm run test
 
-# A package harness is not proven by its workspace layout alone. Pack the five published packages and
+# A package harness is not proven by its workspace layout alone. Pack the published packages and
 # install them into the isolated fixture, so the verification command covers the same resolution path a
 # consumer receives. `pnpm run it` remains a declared subset for iterating on this leg by itself.
 step pack pnpm run pack:local

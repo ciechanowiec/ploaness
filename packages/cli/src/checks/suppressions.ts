@@ -15,7 +15,7 @@ import {
   type SuppressionReport,
   type SuppressionSite,
 } from '@ploaness/governance'
-import { type Context, trackedFiles } from '../context.js'
+import { type Context, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 import { managedPaths } from './assets.js'
 
@@ -34,17 +34,19 @@ export const suppressions = (context: Context): GateResult => {
   // inside it nor be asked to justify one. Its lines are left out of the denominator for the same
   // reason: a ceiling earned by code the project did not write would be an allowance, not a measure.
   const managed: ReadonlySet<string> = managedPaths(context)
-  // A tracked path is not always a regular file: a symlink and a submodule gitlink both appear here.
-  const files: readonly string[] = trackedFiles(context.root).filter((file: string): boolean => {
-    const full: string = path.join(context.root, file)
-    return (
-      isUnderSourceRoots(file, context.settings.sourceRoots) &&
-      !managed.has(file) &&
-      isGovernedCode(file, excluded) &&
-      existsSync(full) &&
-      statSync(full).isFile()
-    )
-  })
+  // An enumerated path is not always a regular file: a symlink and a submodule gitlink both appear here.
+  const files: readonly string[] = workingTreeFiles(context.root).filter(
+    (file: string): boolean => {
+      const full: string = path.join(context.root, file)
+      return (
+        isUnderSourceRoots(file, context.settings.sourceRoots) &&
+        !managed.has(file) &&
+        isGovernedCode(file, excluded) &&
+        existsSync(full) &&
+        statSync(full).isFile()
+      )
+    },
+  )
 
   // Read once, then derive both figures from the same contents rather than accumulating as we go.
   const contents: readonly ScannedFile[] = files.map(

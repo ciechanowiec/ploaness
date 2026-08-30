@@ -301,6 +301,43 @@ const checkPayloadFamily = (
     )
 }
 
+// The harness packages a project declares itself must agree with the harness it declares. Only one
+// of them is normally written down - `ploaness` - but `@ploaness/runtime` exists to be declared in
+// `dependencies`, because `arch` forbids `src/**` from importing a devDependency, and the moment a
+// second ploaness coordinate appears in a manifest the two can drift apart. That drift is not merely
+// untidy: the meta package re-exports the runtime helper for `tests/**`, so a suite would exercise one
+// implementation while production shipped another, and the suite is what a reader trusts.
+//
+// Derived from the declared `ploaness` rather than pinned in pins.json, for the reason that file's own
+// comment gives: it holds what ploaness cannot pin by declaring, and these are packages ploaness
+// declares. The version a project is entitled to choose is the release; what it may not do is choose
+// two.
+const checkHarnessFamily = (packageJson: Record<string, unknown>): readonly WiringViolation[] => {
+  const declared: Record<string, string> = declaredDependencies(packageJson)
+  const harness: string | undefined = declared[HARNESS_PACKAGE]
+  // A specifier that is not a registry version carries no version to agree WITH. A pre-publication
+  // consumer points `ploaness` straight at a packed tarball, and the version is then whatever the
+  // tarball contains - so comparing a sibling's `1.0.0` against `file:../ploaness-1.0.0.tgz` reports a
+  // disagreement between a version and a path. The same permission `isHarnessTarball` already grants
+  // the override reader, for the same reason and in the same arrangement.
+  if (harness === undefined || NON_REGISTRY.test(harness)) {
+    return []
+  }
+  return Object.entries(declared)
+    .filter(
+      ([name, version]: readonly [string, string]): boolean =>
+        name.startsWith(HARNESS_SCOPE) && !NON_REGISTRY.test(version) && version !== harness,
+    )
+    .map(
+      ([name, version]: readonly [string, string]): WiringViolation => ({
+        location: `package.json ${blockOf(packageJson, name) ?? ''}.${name}`,
+        reason:
+          `is "${version}" but ploaness is declared at "${harness}"; the harness packages are ` +
+          'released together, and two versions of one release is two implementations',
+      }),
+    )
+}
+
 // Two obligations, not one. A project must DECLARE the few packages every project uses, because under
 // the strict pnpm layout its own specs could not resolve them otherwise. Every other pinned package
 // must MATCH when the project declares it, but is not forced on a project that has no use for it -
@@ -404,6 +441,7 @@ export const findPackageVersionViolations = (
   ...checkTestLibraries(packageJson, inputs.expected, inputs.required),
   ...checkExactVersions(packageJson),
   ...checkPayloadFamily(packageJson, inputs.payloadVersion),
+  ...checkHarnessFamily(packageJson),
   ...checkVersionEscapes(packageJson, inputs.expected),
 ]
 

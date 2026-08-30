@@ -9,11 +9,11 @@ onlyBuiltDependencies:
   - esbuild
   - unrs-resolver
 
-# The fixture resolves the five from the packed tarballs rather than by name, so what it verifies is
+# The fixture resolves the six from the packed tarballs rather than by name, so what it verifies is
 # the artefacts this run produced rather than whatever the registry already serves. That does not
 # change once they are published: a range would resolve to the previous release, which is the one
 # thing a pre-publication check may not be blind to. An override applies at every depth, which is
-# what makes the four internal packages resolve as well as the meta package. They belong here
+# what makes the five internal packages resolve as well as the meta package. They belong here
 # rather than in package.json: pnpm no longer reads a `pnpm` block from it.
 overrides:
   ploaness: "file:__TARBALLS__/ploaness-1.0.0.tgz"
@@ -21,3 +21,4 @@ overrides:
   "@ploaness/config": "file:__TARBALLS__/ploaness-config-1.0.0.tgz"
   "@ploaness/assets": "file:__TARBALLS__/ploaness-assets-1.0.0.tgz"
   "@ploaness/governance": "file:__TARBALLS__/ploaness-governance-1.0.0.tgz"
+  "@ploaness/runtime": "file:__TARBALLS__/ploaness-runtime-1.0.0.tgz"

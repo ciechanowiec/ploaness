@@ -12,7 +12,14 @@
 // behaviour assertions still belong in the project's own feature specs.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, type Locator, type Page, type Response, test } from '@playwright/test'
-import { MAX_SWEEP_ROUTES, SKIPPED_ROUTE_PREFIXES } from 'ploaness/a11y'
+import {
+  classifyHitTarget,
+  findDefiniteIncomplete,
+  type HitTargetClassification,
+  type HitTargetProbe,
+  MAX_SWEEP_ROUTES,
+  SKIPPED_ROUTE_PREFIXES,
+} from 'ploaness/a11y'
 
 // Taken from the public surface of the builder this spec already imports, rather than from `axe-core`,
 // which is a transitive package no project declares.
@@ -161,10 +168,23 @@ const discoverRoutes = async (page: Page, origin: string): Promise<RouteDiscover
 }
 /* eslint-enable functional/immutable-data -- the crawl above is the only place this spec mutates */
 
+// axe answers in three buckets and this sweep used to read one. `incomplete` means "the check ran and
+// could not decide", and an EXACTLY equal foreground and background is filed there rather than as a
+// violation, because axe reads two identical colours as text hidden on purpose and defers to a human.
+// So the worst contrast defect that can exist passed the gate built to catch contrast defects, and a
+// mutation confirmed it: removing the colour fix from a page left this assertion green.
+//
+// `findDefiniteIncomplete` picks out only the entries that need no human - see its own module for why
+// the list is one key long and why a blanket "incomplete must be empty" would be wrong here.
+const expectNoContrastDefect = (scan: AxeResults, label: string): void => {
+  expect(scan.violations, label).toEqual([])
+  expect(findDefiniteIncomplete(scan.incomplete), `${label} (undecidable-but-definite)`).toEqual([])
+}
+
 const expectNoContrastViolation = async (page: Page, label: string): Promise<void> => {
   const builder: AxeBuilder = await scopedAxe(page)
   const scan: AxeResults = await builder.withRules(['color-contrast']).analyze()
-  expect(scan.violations, label).toEqual([])
+  expectNoContrastDefect(scan, label)
 }
 
 // The site chrome renders from one global stylesheet identically on every page, so its hover and focus
@@ -175,6 +195,39 @@ const expectNoContrastViolation = async (page: Page, label: string): Promise<voi
 const CHROME_CONTROLS: string = 'header a, header button, footer a, footer button'
 const MAIN_CONTROLS: string = 'main a, main button'
 
+// What the browser has to say before a control can be classified. `elementFromPoint` is asked the same
+// question Playwright's actionability check asks, which is what lets a clipped control and a covered
+// one be told apart instead of both ending as the same timeout.
+const probeHitTarget = async (control: Locator): Promise<HitTargetProbe> =>
+  await control.evaluate((element: Element): HitTargetProbe => {
+    const box: DOMRect = element.getBoundingClientRect()
+    const style: CSSStyleDeclaration = globalThis.getComputedStyle(element)
+    const atCentre: Element | null = element.ownerDocument.elementFromPoint(
+      box.left + box.width / 2,
+      box.top + box.height / 2,
+    )
+    return {
+      width: box.width,
+      height: box.height,
+      clipPath: style.clipPath,
+      // Read through `getPropertyValue` because the `clip` PROPERTY is deprecated and the shipped lint
+      // config rightly says so. The CSS property is not gone: the legacy visually-hidden rule pairs a
+      // 1px box with `clip: rect(0 0 0 0)`, and a sweep that could not see it would misclassify every
+      // element still using it.
+      clip: style.getPropertyValue('clip'),
+      ownsCentrePoint: atCentre !== null && element.contains(atCentre),
+    }
+  })
+
+// A visually hidden control - a skip link behind `clip-path: inset(50%)`, which is the standard
+// accessible pattern - has no hit target, because a clip removes an element from hit testing as well as
+// from painting. Hovering it never succeeds, and the message Playwright eventually prints blames the
+// ancestor that answered instead, which reads as an instruction to weaken a correct skip link.
+//
+// Skipping the hover pass there loses no coverage: hover contrast measures painted pixels and this
+// element paints none. The focus pass, which is the state that actually matters for a skip link, still
+// runs. A control that DOES paint and is covered anyway is a defect in the page, and is reported as one
+// rather than skipped - the sweep's own rule, applied where it belongs.
 const scanInteractiveStates = async (
   page: Page,
   label: string,
@@ -182,8 +235,23 @@ const scanInteractiveStates = async (
 ): Promise<void> => {
   const controls: readonly Locator[] = await page.locator(selector).all()
   for (const control of controls) {
-    await control.hover()
-    await expectNoContrastViolation(page, `hover contrast on ${label}`)
+    const reach: HitTargetClassification = classifyHitTarget(await probeHitTarget(control))
+    expect(
+      reach.verdict,
+      `${label}: a control cannot be reached by a pointer - ${reach.reason}`,
+    ).not.toBe('obscured')
+    if (reach.verdict === 'hoverable') {
+      await control.hover()
+      await expectNoContrastViolation(page, `hover contrast on ${label}`)
+    } else {
+      // `attach` rather than pushing onto `test.info().annotations`: the annotation array is mutable
+      // and the shipped config bans mutating one, and a skip nobody can see in the report is a skip
+      // that becomes permanent.
+      await test.info().attach('hover-skipped', {
+        body: `${label}: ${reach.reason}`,
+        contentType: 'text/plain',
+      })
+    }
     await control.focus()
     await expectNoContrastViolation(page, `focus contrast on ${label}`)
   }
@@ -193,7 +261,7 @@ const scanRoute = async (page: Page, origin: string, route: string): Promise<voi
   await page.goto(`${origin}${route}`)
   const builder: AxeBuilder = await scopedAxe(page)
   const defaultScan: AxeResults = await builder.analyze()
-  expect(defaultScan.violations, `default-state a11y on ${route}`).toEqual([])
+  expectNoContrastDefect(defaultScan, `default-state a11y on ${route}`)
   await scanInteractiveStates(page, route, MAIN_CONTROLS)
 }
 

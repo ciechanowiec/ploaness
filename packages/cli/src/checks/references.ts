@@ -23,7 +23,7 @@ import {
   type Member,
   type Repository as Repo,
   shippedDirectory,
-  trackedFiles,
+  workingTreeFiles,
 } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
@@ -115,13 +115,16 @@ const mandatedReferences = (context: Context): ReadonlySet<string> =>
 
 // A declared exclusion is judged against the paths the gate it narrows would otherwise have read: a
 // coverage exclusion against what the coverage report measures, a typography or JavaScript exclusion
-// against the tracked tree the conventions gate walks. Judging either against the other's set would
+// against the working tree the conventions gate walks. Judging either against the other's set would
 // report a finding about the wrong thing.
 // Which file set an exclusion has to reach is decided by the SETTING it came from, not by how its
 // pattern is written - the partition itself lives in `governance`, where it is spec'd against file lists
 // no repository has to be built to produce. What is left here is the one read it needs.
 const deadExclusions = (context: Context): readonly string[] =>
-  findUnreachedExclusionsBySetting(context.settings.declaredExclusions, trackedFiles(context.root))
+  findUnreachedExclusionsBySetting(
+    context.settings.declaredExclusions,
+    workingTreeFiles(context.root),
+  )
 
 /**
  * A concrete source file carved out of a tool config must still exist on disk, and a declared exclusion

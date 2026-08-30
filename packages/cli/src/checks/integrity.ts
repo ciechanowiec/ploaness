@@ -11,12 +11,12 @@ import {
   isSupportedImagePath,
   validateImageBytes,
 } from '@ploaness/governance'
-import { type Context, hasOwnRuntime, trackedFiles } from '../context.js'
+import { type Context, hasOwnRuntime, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
-/** Decode every tracked image and fail on any that is corrupt or truncated. */
+/** Decode every image in the working tree and fail on any that is corrupt or truncated. */
 export const imageAssets = (context: Context): GateResult => {
-  const images: readonly string[] = trackedFiles(context.root)
+  const images: readonly string[] = workingTreeFiles(context.root)
     .filter(isSupportedImagePath)
     .filter((file: string): boolean => existsSync(path.join(context.root, file)))
   const findings: readonly string[] = images.flatMap((file: string): readonly string[] => {
@@ -28,7 +28,7 @@ export const imageAssets = (context: Context): GateResult => {
   })
   return findings.length > 0
     ? failed(`${String(findings.length)} corrupt or truncated image asset(s)`, findings)
-    : passed(`all ${String(images.length)} tracked image asset(s) decode`)
+    : passed(`all ${String(images.length)} image asset(s) decode`)
 }
 
 const collectJavaScript = (directory: string): readonly string[] =>

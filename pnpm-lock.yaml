@@ -208,6 +208,18 @@ importers:
       '@ploaness/governance':
         specifier: 1.0.0
         version: link:../governance
+      '@ploaness/runtime':
+        specifier: 1.0.0
+        version: link:../runtime
+    devDependencies:
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  packages/runtime:
     devDependencies:
       '@types/node':
         specifier: 26.4.0

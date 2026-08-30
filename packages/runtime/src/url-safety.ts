@@ -1,15 +1,23 @@
-// The first inhabitant of this package that a consumer's application calls rather than a rule the
-// harness applies, and the placement is deliberate rather than convenient. It is a pure function over a
-// string, which is what this package holds and what its coverage floor measures; a package of its own
-// for one function would be a versioning surface bought for nothing. A reader who expects only rules
-// here should take this comment as the reason rather than as an accident.
+// Why this helper has a package to itself, against the reasoning it used to carry.
 //
-// It exists because React does not cover this and every content-managed site needs it. React escapes
-// text content, so an editor cannot inject markup through a field - but an href is an attribute, and
-// `javascript:alert(1)` in a link field executes as the site the moment a visitor clicks it. Nothing in
-// the framework, the type system, or a linter reports that: the value is a string and it is rendered as
-// a string. Every project mapping a CMS field into an anchor has this problem, so the harness owns the
-// answer rather than leaving each project to rediscover it.
+// It lived in `@ploaness/governance` on the argument that a package for one function is a versioning
+// surface bought for nothing. That argument priced the wrong thing. A governed project declares the
+// harness as a devDependency, which is the correct place for it, and the `arch` gate forbids `src/**`
+// from importing a devDependency because those are absent from a production install. So the guide
+// mandated a value import that the gate rejected, and the contract could not be satisfied: the one
+// module here that an APPLICATION calls was reachable only from code that never ships.
+//
+// A package is what fixes that without weakening `not-to-dev-dep`, which exists to report a real
+// production-install hazard. This one is zero-dependency and holds nothing but pure functions, so a
+// project declares it in `dependencies` and ships a few hundred bytes rather than the analyzer
+// toolchain that `ploaness` pulls in.
+//
+// It exists at all because React does not cover this and every content-managed site needs it. React
+// escapes text content, so an editor cannot inject markup through a field - but an href is an
+// attribute, and `javascript:alert(1)` in a link field executes as the site the moment a visitor
+// clicks it. Nothing in the framework, the type system, or a linter reports that: the value is a
+// string and it is rendered as a string. Every project mapping a CMS field into an anchor has this
+// problem, so the harness owns the answer rather than leaving each project to rediscover it.
 
 /** The schemes safe to render into an anchor. A URL carrying no scheme at all is relative, and safe. */
 const SAFE_SCHEMES: ReadonlySet<string> = new Set<string>(['http', 'https', 'mailto', 'tel'])

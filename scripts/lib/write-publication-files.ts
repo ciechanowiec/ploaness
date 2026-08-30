@@ -6,7 +6,7 @@
 // without a match gets the literal string "ERROR: No README data found!" on its registry page, and the
 // version is immutable by the time anyone sees it.
 //
-// So the five pages are DERIVED rather than authored. Every sentence on them already exists in a
+// So the pages are DERIVED rather than authored. Every sentence on them already exists in a
 // package.json field that npm reads anyway - `description` is the registry's own search text, `homepage`
 // and `license` are rendered beside it - which means a page cannot drift from the package it describes,
 // and adding a sixth package cannot forget one. Five hand-written files were five documents to keep

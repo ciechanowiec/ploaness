@@ -9,5 +9,9 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../governance" }, { "path": "../config/tsconfig.build.json" }]
+  "references": [
+    { "path": "../runtime" },
+    { "path": "../governance" },
+    { "path": "../config/tsconfig.build.json" }
+  ]
 }

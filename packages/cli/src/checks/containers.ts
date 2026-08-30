@@ -15,7 +15,7 @@ import {
   dockerfilesIn,
   renderGitleaksConfig,
 } from '@ploaness/governance'
-import { type Context, trackedFiles } from '../context.js'
+import { type Context, workingTreeFiles } from '../context.js'
 import {
   asFindings,
   failed,
@@ -136,14 +136,14 @@ export const secrets = (context: Context): GateResult =>
     )
   })
 
-// Both kinds are discovered from the tracked tree, by the rules in `governance`. The compose half used to
+// Both kinds are discovered from the working tree, by the rules in `governance`. The compose half used to
 // look at the repository root alone, so a project keeping its application - and its compose file - in a
 // member directory had that file validated by nothing, while the Dockerfile beside it was linted.
 const dockerfiles = (context: Context): readonly string[] =>
-  dockerfilesIn(trackedFiles(context.root))
+  dockerfilesIn(workingTreeFiles(context.root))
 
 const composeProjects = (context: Context): readonly ComposeProject[] =>
-  composeProjectsIn(trackedFiles(context.root))
+  composeProjectsIn(workingTreeFiles(context.root))
 
 // Compose ships both as a `docker` subcommand and as a standalone binary, and which one a machine has is
 // not a property of the project. Try the modern form first and accept the legacy one, failing only when
