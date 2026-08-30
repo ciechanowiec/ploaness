@@ -151,6 +151,12 @@ describe('what no-unthreaded-req leaves alone', () => {
     ])
   })
 
+  it('does not mistake a req value for the top-level req property', () => {
+    expect(rulesOf("await req.payload.create({ collection: 'a', request: req })")).toEqual([
+      'no-unthreaded-req',
+    ])
+  })
+
   it('stays silent when the options are spread or unreadable', () => {
     expect(rulesOf('await req.payload.create(options)')).toEqual([])
     expect(rulesOf("await req.payload.create({ ...base, collection: 'a' })")).toEqual([])
@@ -161,6 +167,22 @@ describe('what no-unthreaded-req leaves alone', () => {
       'no-unbounded-find',
       'no-unthreaded-req',
     ])
+  })
+})
+
+describe('no-unthreaded-req operation coverage', () => {
+  it.each([
+    'findDistinct',
+    'findGlobalVersionByID',
+    'findGlobalVersions',
+    'findVersionByID',
+    'findVersions',
+    'restoreGlobalVersion',
+    'restoreVersion',
+  ])('covers the documented %s operation', (operation: string) => {
+    expect(rulesOf(`await req.payload.${operation}({ collection: 'a' })`)).toContain(
+      'no-unthreaded-req',
+    )
   })
 })
 

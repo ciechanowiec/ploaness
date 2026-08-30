@@ -289,6 +289,12 @@ drop_text "$scratch/fail-unbounded-find/src/lib/reads.ts" ', depth: 0, limit: 10
 commit_case fail-unbounded-find 'feat(fixture): drop the bounds from a local read' "$CONFORMING_BODY"
 expect fail-unbounded-find payload-rules FAIL no-unbounded-find
 
+new_case fail-user-access-control
+drop_text "$scratch/fail-user-access-control/src/lib/reads.ts" ', overrideAccess: false'
+commit_case fail-user-access-control 'feat(fixture): bypass access for the supplied user' \
+    "$CONFORMING_BODY"
+expect fail-user-access-control payload-rules FAIL require-user-access-control
+
 new_case fail-collection-access
 drop_text "$scratch/fail-collection-access/src/collections/Posts.ts" "  access: {
     read: anyone,

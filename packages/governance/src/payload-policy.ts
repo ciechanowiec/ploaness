@@ -64,12 +64,31 @@ const BOUNDED_CALLS: readonly BoundedCallRule[] = [
 const PAYLOAD_RECEIVER: RegExp = /(?:^|[^\w$.])(?:payload|(?:[\w$]+\.)*req\.payload|this\.payload)$/
 
 const declaresKey = (topLevel: string, key: string): boolean =>
-  new RegExp(String.raw`(^|[\s,])${key}\s*:`).test(topLevel)
+  new RegExp(String.raw`(?:^|,)\s*${key}\s*:`).test(topLevel)
 
-// The depth-one keys of a call's options literal, or undefined when the call is not one to judge. An
-// unterminated call, an options variable rather than a literal, or an object spread all make the answer
-// impossible to decide statically. Staying silent there keeps the gate free of false positives; the
-// reviewer still sees the call.
+// A shorthand property has no colon, so `declaresKey` cannot see it. The property boundary must be the
+// start of the literal or a comma: admitting arbitrary whitespace made the `req` VALUE in
+// `request: req` look like a `req` PROPERTY and vouched for a transaction the call never received.
+const declaresProperty = (topLevel: string, key: string): boolean =>
+  new RegExp(String.raw`(?:^|,)\s*${key}\s*(?::|,|$)`).test(topLevel)
+
+// The depth-one text of a call's options literal, or undefined when the call is not one to judge.
+const topLevelOptionsAt = (
+  source: string,
+  call: string,
+  found: number,
+  receiver: RegExp,
+): string | undefined => {
+  if (!receiver.test(source.slice(0, found))) {
+    return undefined
+  }
+  const argumentText: string | undefined = balancedArguments(source, found + call.length - 1)
+  return argumentText?.includes('{') === true ? topLevelSlice(argumentText) : undefined
+}
+
+// A top-level spread makes an absent key unknowable, so the rules that ask only whether a key exists
+// stay silent. A spread nested inside `data` is elided by `topLevelSlice` and changes none of the
+// options these rules judge.
 //
 // Shared by the two rules that read an options object. They ask different questions - is the read
 // bounded, is the request threaded - of the same three facts, and a second copy of the three guards is a
@@ -80,13 +99,8 @@ const optionKeysAt = (
   found: number,
   receiver: RegExp,
 ): string | undefined => {
-  if (!receiver.test(source.slice(0, found))) {
-    return undefined
-  }
-  const argumentText: string | undefined = balancedArguments(source, found + call.length - 1)
-  return argumentText === undefined || !argumentText.includes('{') || argumentText.includes('...')
-    ? undefined
-    : topLevelSlice(argumentText)
+  const topLevel: string | undefined = topLevelOptionsAt(source, call, found, receiver)
+  return topLevel === undefined || topLevel.includes('...') ? undefined : topLevel
 }
 
 const unboundedCallAt = (
@@ -114,15 +128,24 @@ const findUnboundedCalls = (source: string): readonly PayloadViolation[] =>
       ),
   )
 
-// The Local API operations that join a transaction when they are handed one. Every one of them is
-// something a hook legitimately calls, and every one of them is silently wrong without `req`.
-const TRANSACTED_CALLS: readonly string[] = [
+// The collection, global, and version operations whose options carry both the caller and the request.
+// One catalogue feeds both rules below: adding a Payload operation to one contract and not the other
+// would leave a call either outside its transaction or running as an administrator with a decorative
+// user value.
+const LOCAL_API_CALLS: readonly string[] = [
   '.count(',
   '.create(',
   '.delete(',
   '.find(',
   '.findByID(',
+  '.findDistinct(',
   '.findGlobal(',
+  '.findGlobalVersionByID(',
+  '.findGlobalVersions(',
+  '.findVersionByID(',
+  '.findVersions(',
+  '.restoreGlobalVersion(',
+  '.restoreVersion(',
   '.update(',
   '.updateGlobal(',
 ]
@@ -133,21 +156,13 @@ const TRANSACTED_CALLS: readonly string[] = [
 // the instance THROUGH `req` is the proof that one does, so the omission is never a decision.
 const REQUEST_RECEIVER: RegExp = /(?:^|[^\w$.])(?:[\w$]+\.)*req\.payload$/
 
-// `req` is normally passed as a shorthand property, and `declaresKey` sees only the `key:` form. Reading
-// for the colon alone reported every correctly threaded call in a repository that writes them the
-// ordinary way, which is the shape a rule takes when it is wrong about everything at once.
-//
-// Named for the thing it matches rather than for the question it answers: `unicorn/consistent-boolean-name`
-// reads a leading `declares` as a promise that the value is a boolean, and a RegExp is not one.
-const REQUEST_KEY: RegExp = /(?:^|[\s,])req\s*(?::|,|$)/
-
 const unthreadedCallAt = (
   source: string,
   call: string,
   found: number,
 ): PayloadViolation | undefined => {
   const topLevel: string | undefined = optionKeysAt(source, call, found, REQUEST_RECEIVER)
-  if (topLevel === undefined || REQUEST_KEY.test(topLevel)) {
+  if (topLevel === undefined || declaresProperty(topLevel, 'req')) {
     return undefined
   }
   return {
@@ -166,9 +181,68 @@ const unthreadedCallAt = (
 // hook runs. Payload's own documentation calls threading it critical, and no type checker can require it
 // because the parameter is optional for the callers that genuinely have no request.
 const findUnthreadedRequests = (source: string): readonly PayloadViolation[] =>
-  TRANSACTED_CALLS.flatMap((call: string): readonly PayloadViolation[] =>
+  LOCAL_API_CALLS.flatMap((call: string): readonly PayloadViolation[] =>
     occurrences(source, call)
       .map((found: number): PayloadViolation | undefined => unthreadedCallAt(source, call, found))
+      .filter(
+        (violation: PayloadViolation | undefined): violation is PayloadViolation =>
+          violation !== undefined,
+      ),
+  )
+
+interface OverrideProperty {
+  readonly index: number
+  readonly value: string
+}
+
+const OVERRIDE_PROPERTY: RegExp = /(?:^|,)\s*overrideAccess\s*:\s*([^,]*)/g
+
+const overrideProperties = (topLevel: string): readonly OverrideProperty[] =>
+  [...topLevel.matchAll(OVERRIDE_PROPERTY)].map(
+    (match: RegExpExecArray): OverrideProperty => ({
+      index: match.index,
+      value: (match[1] ?? '').trim(),
+    }),
+  )
+
+// A later spread can replace an earlier false. A false written after the last spread is the only form
+// whose effective value this text reader can prove without resolving another object.
+const hasEffectiveAccessControl = (topLevel: string): boolean => {
+  const last: OverrideProperty | undefined = overrideProperties(topLevel).at(-1)
+  return last?.value === 'false' && last.index > topLevel.lastIndexOf('...')
+}
+
+const userAccessViolationAt = (
+  source: string,
+  call: string,
+  found: number,
+): PayloadViolation | undefined => {
+  const topLevel: string | undefined = topLevelOptionsAt(source, call, found, PAYLOAD_RECEIVER)
+  if (
+    topLevel === undefined ||
+    !declaresProperty(topLevel, 'user') ||
+    hasEffectiveAccessControl(topLevel) ||
+    overrideProperties(topLevel).some(
+      (property: OverrideProperty): boolean => property.value === 'true',
+    )
+  ) {
+    return undefined
+  }
+  return {
+    line: lineOf(source, found),
+    rule: 'require-user-access-control',
+    reason:
+      `set overrideAccess: false on ${call.slice(1, -1)}() when passing user; Payload otherwise ` +
+      'runs the operation as an administrator and ignores that user for access control',
+  }
+}
+
+const findIgnoredUsers = (source: string): readonly PayloadViolation[] =>
+  LOCAL_API_CALLS.flatMap((call: string): readonly PayloadViolation[] =>
+    occurrences(source, call)
+      .map((found: number): PayloadViolation | undefined =>
+        userAccessViolationAt(source, call, found),
+      )
       .filter(
         (violation: PayloadViolation | undefined): violation is PayloadViolation =>
           violation !== undefined,
@@ -242,6 +316,7 @@ export const findPayloadViolations = (source: string): readonly PayloadViolation
   return [
     ...findUnboundedCalls(code),
     ...findUnthreadedRequests(code),
+    ...findIgnoredUsers(code),
     ...findOverrideAccess(code),
     ...findUndeclaredAccess(code),
     ...findUnhardenedAuth(code),

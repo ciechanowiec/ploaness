@@ -66,8 +66,9 @@ ploaness governs all of the following domains:
   and module architecture. A public helper carries a documenting comment block, and that block must
   carry a description: an empty `/** */` used to satisfy the rule while documenting nothing. Test
   code is source code and passes the same checks.
-- **Payload usage:** bounded Local API reads, no access-control override, no parent-relative imports,
-  a Local API call reached through `req.payload` that threads `req` so it joins the caller's
+- **Payload usage:** bounded Local API reads, no access-control override, a call that passes `user` and
+  explicitly sets `overrideAccess: false` so Payload applies that user's permissions, no parent-relative
+  imports, and a Local API call reached through `req.payload` that threads `req` so it joins the caller's
   transaction - without it the operation opens its own, cannot see the in-flight write, and is not
   rolled back with it, which is invisible in every passing test until a hook runs inside a transaction -
   and access control decided rather than inherited: every collection decides create, read, update and
