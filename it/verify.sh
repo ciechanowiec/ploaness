@@ -250,8 +250,8 @@ commit_case pass 'feat(fixture): add the ploaness integration consumer' "$CONFOR
 # reasoning applies symmetrically: a rule that only ever failed proves as little as one that only ever
 # passed - neither tells you the gate is wired to the scaffold at all.
 for gate in preflight wiring assets conventions editorconfig suppressions generated-denial \
-            payload-rules config-refs install-scripts arch require-full-history commit-history \
-            linear-history; do
+            payload-rules config-refs environment install-scripts arch require-full-history \
+            commit-history linear-history; do
     expect pass "$gate" PASS
 done
 
@@ -394,6 +394,32 @@ mkdir -p "$scratch/pass-typography-ignored/ignored-output"
 printf '/* an em %s dash in ignored output */\n' "$(printf '\342\200\224')" \
     > "$scratch/pass-typography-ignored/ignored-output/build.css"
 expect pass-typography-ignored conventions PASS
+
+# The environment gate, whose whole point is that nothing links the places a variable has to reach. The
+# scaffold declares none, so the pass case above proves it passes over an empty set rather than by
+# accident; these two prove it binds. A compose file interpolating a name is a promise the example file
+# has to keep, and - because CI has no `.env` to interpolate from - a promise the verifying workflow has
+# to keep as well.
+# The interpolation is ASSEMBLED rather than written out. shellcheck reads `${NAME}` inside a single-
+# quoted string as an expansion somebody expected and did not get - and the literal text is exactly what
+# a compose file needs - so writing it out would cost a suppression rather than state anything.
+compose_interpolating() {
+    printf 'services:\n  db:\n    image: postgres:18\n    ports:\n      - "%s{%s}:5432"\n' '$' "$1"
+}
+
+new_case fail-environment-undocumented
+compose_interpolating FIXTURE_DB_PORT \
+    > "$scratch/fail-environment-undocumented/docker-compose.yml"
+commit_case fail-environment-undocumented 'feat(fixture): interpolate an undocumented variable' "$CONFORMING_BODY"
+expect fail-environment-undocumented environment FAIL FIXTURE_DB_PORT
+
+# Documented and still missing from the job, which is the half that fails on CI alone: a developer's own
+# `.env` resolves the interpolation locally, so nothing here is visible until the workflow runs.
+new_case fail-environment-workflow
+compose_interpolating FIXTURE_DB_PORT > "$scratch/fail-environment-workflow/docker-compose.yml"
+printf 'FIXTURE_DB_PORT=5432\n' > "$scratch/fail-environment-workflow/.env.example"
+commit_case fail-environment-workflow 'feat(fixture): document a variable the workflow omits' "$CONFORMING_BODY"
+expect fail-environment-workflow environment FAIL 'verify.yml'
 
 # `arch` forbids `src/**` from importing a devDependency, because a devDependency is absent from a
 # production install. That rule and the guide's instruction to call `safeHref` used to contradict each

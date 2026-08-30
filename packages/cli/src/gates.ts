@@ -20,6 +20,7 @@ import { actions, containers, secrets } from './checks/containers.js'
 import { conventions } from './checks/conventions.js'
 import { dependencyFreshness, licenses, vulnerabilities } from './checks/dependencies.js'
 import { editorconfig } from './checks/editorconfig.js'
+import { environment } from './checks/environment.js'
 import { generatedDenial } from './checks/generated.js'
 import { commitHistory, linearHistory, requireFullHistory } from './checks/history.js'
 import { installScripts } from './checks/install.js'
@@ -240,6 +241,15 @@ const DEFAULT_GATES: readonly Gate[] = [
     title: 'image integrity',
     isExtended: false,
     run: imageAssets,
+  },
+  {
+    // After `config-refs` and before `docs`, with the other rot gates: the same kind of finding, which
+    // is a declaration in one file that another file was supposed to follow and did not.
+    id: 'environment',
+    scope: 'repository',
+    title: 'environment variable coherence',
+    isExtended: false,
+    run: environment,
   },
   {
     id: 'docs',

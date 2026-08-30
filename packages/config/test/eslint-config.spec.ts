@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ENVIRONMENT_READ_EXEMPTIONS, VALIDATED_ENVIRONMENT_MODULE } from '@ploaness/governance'
 import { Linter } from 'eslint'
 import { describe, expect, it } from 'vitest'
 
@@ -71,10 +72,22 @@ describe('no-inline-config-logic gate', () => {
 //
 // The list is pinned rather than counted so a THIRD entry has to be argued for here, in a spec somebody
 // reads, rather than appearing in a config nobody diffs.
+//
+// The list now lives in `@ploaness/governance`, because the `environment` gate reads variable names out
+// of the very module this rule exempts: written twice, one copy would drift and the gate would read a
+// file no rule protects. So the config is asserted to CONSUME the shared list and the list itself is
+// pinned here, which keeps the argument where it was - a third entry still has to be made in this spec.
 describe('process.env access gate', () => {
   it('exempts the environment module and the Next proxy, and nothing else', () => {
     const config: string = shippedConfig()
     expect(config).toContain("property: 'env'")
-    expect(config).toContain("ignores: ['src/lib/environment.ts', 'src/proxy.ts']")
+    expect(config).toContain('ignores: [...ENVIRONMENT_READ_EXEMPTIONS]')
+    expect(ENVIRONMENT_READ_EXEMPTIONS).toEqual(['src/lib/environment.ts', 'src/proxy.ts'])
+  })
+
+  // The other half of the same joint: the gate reads only the validated module, so the name it reads
+  // has to be the name the lint rule exempts rather than a second spelling of it.
+  it('reads variable names out of a module the lint rule exempts', () => {
+    expect(ENVIRONMENT_READ_EXEMPTIONS).toContain(VALIDATED_ENVIRONMENT_MODULE)
   })
 })

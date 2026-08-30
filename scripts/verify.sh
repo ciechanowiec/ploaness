@@ -151,6 +151,7 @@ gate tailwind-tokens
 gate editorconfig
 gate suppressions
 gate config-refs
+gate environment
 gate docs
 gate skills
 gate image-assets

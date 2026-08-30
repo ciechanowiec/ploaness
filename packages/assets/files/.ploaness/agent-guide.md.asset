@@ -230,6 +230,11 @@ governing standard nor Payload's own documentation.
 - A collection, global, field, or block config is declarative wiring, so no function is written inline in
   one. Access rules, hooks, and validators live in `src/access` or `src/lib` and are imported by
   reference, because a function inlined into a config carries no seam a unit test can reach.
+- **A new environment variable lands in every place that needs it, in one commit**: the validated
+  module that reads it, the example file that documents it for a clone, and - when a compose file
+  interpolates it - the `env:` block of every workflow that verifies. Nothing links those places, so
+  the omission surfaces somewhere other than where it was made: a clone booting on a default it never
+  chose, or `docker compose config` failing on CI alone. The `environment` gate holds them together.
 - `process.env` is read only in `src/lib/environment.ts`, `payload.config.ts` included. That module
   validates and narrows what it reads and every other module consumes the typed values it returns, so
   the environment surface stays auditable in one place.
@@ -319,7 +324,7 @@ transcripts bury the one finding the report exists to surface.
 
 ### Default Verification Gates
 
-Default verification runs 33 gates, in the order below. A repository-scope gate runs once; a
+Default verification runs 34 gates, in the order below. A repository-scope gate runs once; a
 package-scope gate runs once per member; a Payload-scope gate runs only for the members that declare
 Payload. `tree-verify` is last in both tiers, because the extended gates are the ones most able to
 rewrite a tracked file.
@@ -352,6 +357,7 @@ rewrite a tracked file.
 | `install-scripts` | repository | The allowlist naming which dependencies may run a build or postinstall script. |
 | `deps` | repository | No declared dependency is two or more major versions behind. Pinned images are reported, never failed. |
 | `image-assets` | repository | Every tracked image decodes as the format its bytes claim. |
+| `environment` | repository | Every variable the application reads, and every one a compose file interpolates, is documented in the example file and supplied by each verifying workflow. |
 | `docs` | repository | The agent documentation names no script and no file that has gone. |
 | `skills` | repository | The metadata header of every `SKILL.md`. |
 | `docker` | repository | hadolint over every Dockerfile, and `docker compose config`. |

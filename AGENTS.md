@@ -65,7 +65,7 @@ it found `docker` missing the first time it ran. The ORDER stays this script's o
 ordering this repository's run rather than a Payload project's. `scripts/verify.sh` is that list, and
 `pnpm run verify` runs it:
 `biome-schema`, `conventions`, `tailwind-tokens`, `editorconfig`, `suppressions`, `config-refs`,
-`docs`, `skills`, `image-assets`, `licenses`, `vulnerabilities`, `install-scripts`, `deps`, `actions`,
+`environment`, `docs`, `skills`, `image-assets`, `licenses`, `vulnerabilities`, `install-scripts`, `deps`, `actions`,
 `secrets`, `docker`, `require-full-history`, `commit-history`, and `linear-history`, around the build, the type
 check, the lint, and the unit suite. That order is the script's own - the reads that need nothing but the tree
 first, then the ones that need a registry or a container - and is not the order `gates.ts` runs them in,

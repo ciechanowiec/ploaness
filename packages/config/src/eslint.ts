@@ -11,7 +11,7 @@
 // Philosophy: maximum-explicit. The build should be hard to satisfy by accident, so that code which
 // passes is verbose, explicit and readable by construction.
 
-import { REEXPORT_CONFIG_FILES } from '@ploaness/governance'
+import { ENVIRONMENT_READ_EXEMPTIONS, REEXPORT_CONFIG_FILES } from '@ploaness/governance'
 //
 // The framework-neutral half - the caps, the explicitness rules, the naming ban, the suppression
 // discipline, the mock ban - lives in ./eslint-core.js and is shared with the ploaness repository's own
@@ -217,7 +217,7 @@ export default compose(
   //    `environment.ts` could have validated.
   {
     files: ['src/**/*.ts'],
-    ignores: ['src/lib/environment.ts', 'src/proxy.ts'],
+    ignores: [...ENVIRONMENT_READ_EXEMPTIONS],
     rules: {
       // `NO_MOCK_PROPERTIES` is spread in beside the env rule because this key REPLACES the base
       // setting rather than adding to it - naming only the env restriction here switched the
