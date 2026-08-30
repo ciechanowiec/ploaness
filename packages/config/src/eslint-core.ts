@@ -492,6 +492,13 @@ export const guidelineRules: RuleTable = {
   'jsdoc/require-jsdoc': 'off',
   'jsdoc/require-param': 'off',
   'jsdoc/require-returns': 'off',
+  // And require that a block which exists SAYS something. `require-jsdoc` asks only whether a block is
+  // present, so `/**\n *\n */` satisfied it while documenting nothing - a check nothing could fail,
+  // sitting under a rule whose whole purpose is a documenting comment. A consuming project shipped
+  // exactly that stub on a hook and it survived every gate until the file was rewritten for other
+  // reasons. This visits blocks that already exist rather than demanding new ones, so it closes the
+  // hole without widening the set of symbols that must be documented.
+  'jsdoc/require-description': 'error',
 
   // No mocks - ban the mocking entry points and libraries build-wide.
   'no-restricted-properties': ['error', ...NO_MOCK_PROPERTIES],

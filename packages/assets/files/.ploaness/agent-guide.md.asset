@@ -63,7 +63,8 @@ ploaness governs all of the following domains:
   Writing one to quiet a finding is the reflex this forbids; answer the finding in the source instead.
 - **Source:** formatting, fast lint, type-aware lint, strict type checking, type coverage, typography,
   source conventions, committed whitespace and encoding, style sheets, token-bound Tailwind values,
-  and module architecture. Test
+  and module architecture. A public helper carries a documenting comment block, and that block must
+  carry a description: an empty `/** */` used to satisfy the rule while documenting nothing. Test
   code is source code and passes the same checks.
 - **Payload usage:** bounded Local API reads, no access-control override, no parent-relative imports,
   a Local API call reached through `req.payload` that threads `req` so it joins the caller's
