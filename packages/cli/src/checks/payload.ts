@@ -3,9 +3,11 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
+  findGeneratedDrift,
   findPayloadViolations,
   findSourceViolations,
   type PayloadViolation,
+  type RegeneratedArtefact,
 } from '@ploaness/governance'
 import {
   type Context,
@@ -26,6 +28,22 @@ const resolveProjectToolOrUndefined = (context: Context, tool: string): string |
   }
 }
 
+const readIfPresent = (root: string, target: string): string | undefined => {
+  const full: string = path.join(root, target)
+  return existsSync(full) ? readFileSync(full, 'utf8') : undefined
+}
+
+// A repository is the normal case and git is required, so a failure here is an absent tool rather than
+// an untracked artefact. Reported as tracked, which leaves the drift comparison - which needs no git at
+// all - to answer on its own.
+const isTracked = (context: Context, target: string): boolean => {
+  try {
+    return git(context, ['ls-files', '--', target]).length > 0
+  } catch {
+    return true
+  }
+}
+
 /** Regenerate the Payload types and admin import map, then fail on any drift. */
 export const payloadGenerated = (context: Context): GateResult => {
   const payloadCli: string | undefined = resolveProjectToolOrUndefined(context, 'payload')
@@ -34,6 +52,21 @@ export const payloadGenerated = (context: Context): GateResult => {
       'ploaness governs Payload projects, so "payload" must be installed in the project itself',
     ])
   }
+  // The SETTING rather than the constant behind it. Every other consumer of the artefact list already
+  // read the setting - the write denials, the biome carve-outs, the scaffolder - and this one did not,
+  // so a project that declared where its import map actually lives had that file denied, excluded, and
+  // regenerated, but never diffed. The gate then reported that the artefacts matched a configuration it
+  // had not compared them against, and the drift it had just written surfaced two gates later as an
+  // unexplained working-tree change.
+  const targets: readonly string[] = context.settings.generatedArtefacts
+  // Read before the generators run, because they overwrite in place: this is the only moment the
+  // previous bytes exist.
+  const before: ReadonlyMap<string, string | undefined> = new Map(
+    targets.map((target: string): readonly [string, string | undefined] => [
+      target,
+      readIfPresent(context.root, target),
+    ]),
+  )
   for (const target of ['generate:types', 'generate:importmap']) {
     const result: RunResult = runNode(payloadCli, [target], {
       cwd: context.root,
@@ -45,36 +78,15 @@ export const payloadGenerated = (context: Context): GateResult => {
       return failed(`payload ${target} failed`, asFindings(result.output))
     }
   }
-  // The SETTING rather than the constant behind it. Every other consumer of the artefact list already
-  // read the setting - the write denials, the biome carve-outs, the scaffolder - and this one did not,
-  // so a project that declared where its import map actually lives had that file denied, excluded, and
-  // regenerated, but never diffed. The gate then reported that the artefacts matched a configuration it
-  // had not compared them against, and the drift it had just written surfaced two gates later as an
-  // unexplained working-tree change.
-  const drifted: readonly string[] = context.settings.generatedArtefacts.flatMap(
-    (target: string): readonly string[] => {
-      if (!existsSync(path.join(context.root, target))) {
-        return []
-      }
-      try {
-        // Two questions, because `git diff` answers only one of them. It compares what git already
-        // knows about, so an artefact that has never been committed produces no diff and reads as
-        // agreement - which is the loudest possible silence: the file regenerating from a
-        // configuration nobody can review, in a repository that does not contain it. Asked first,
-        // because "it drifted" would be a strange thing to say about a file git has never seen.
-        if (git(context, ['ls-files', '--', target]).length === 0) {
-          return [
-            `${target} is not tracked by git, so no committed version exists to compare against`,
-          ]
-        }
-        return git(context, ['diff', '--name-only', '--', target]).length > 0
-          ? [`${target} changed when regenerated`]
-          : []
-      } catch {
-        return []
-      }
-    },
+  const regenerated: readonly RegeneratedArtefact[] = targets.map(
+    (target: string): RegeneratedArtefact => ({
+      target,
+      isTracked: isTracked(context, target),
+      before: before.get(target),
+      after: readIfPresent(context.root, target),
+    }),
   )
+  const drifted: readonly string[] = findGeneratedDrift(regenerated)
   return drifted.length > 0
     ? failed('generated Payload artefacts drifted from the configuration', [
         ...drifted,
