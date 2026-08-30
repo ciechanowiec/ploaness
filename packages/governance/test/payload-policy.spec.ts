@@ -50,8 +50,10 @@ describe('no-unbounded-find', () => {
     expect(rulesOf('const found = items.find({ id: 1 })')).toEqual([])
   })
 
+  // The request is threaded so this reports the bound alone. A call that omits both is the subject of
+  // its own case under no-unthreaded-req.
   it('recognises the request-scoped payload instance', () => {
-    expect(rulesOf("await req.payload.find({ collection: 'posts' })")).toEqual([
+    expect(rulesOf("await req.payload.find({ collection: 'posts', req })")).toEqual([
       'no-unbounded-find',
     ])
   })
@@ -62,6 +64,103 @@ describe('no-unbounded-find', () => {
 
   it('stays silent when the argument object is spread', () => {
     expect(rulesOf("await payload.find({ ...base, collection: 'posts' })")).toEqual([])
+  })
+})
+
+// Threading `req` is what keeps a nested operation inside the caller's transaction. The rule fires only
+// on the request-scoped instance, because that is the one call site where the request provably exists.
+describe('no-unthreaded-req', () => {
+  it('flags a read reached through req.payload that does not carry req', () => {
+    expect(rulesOf("await req.payload.findGlobal({ slug: 'settings', depth: 0 })")).toEqual([
+      'no-unthreaded-req',
+    ])
+  })
+
+  it('accepts req passed as the shorthand property it is normally written as', () => {
+    expect(rulesOf("await req.payload.findGlobal({ slug: 'settings', depth: 0, req })")).toEqual([])
+  })
+
+  it('accepts req passed explicitly', () => {
+    expect(
+      rulesOf("await req.payload.findGlobal({ slug: 'settings', depth: 0, req: req })"),
+    ).toEqual([])
+  })
+
+  it('accepts req as the only key, with no comma to anchor on', () => {
+    expect(rulesOf('await req.payload.delete({ req })')).toEqual([])
+  })
+
+  it('reads the shorthand across several lines, which is how a hook writes one', () => {
+    const source: string = [
+      'await req.payload.find({',
+      "  collection: 'bookings',",
+      '  depth: 0,',
+      '  limit: 1,',
+      '  req,',
+      '})',
+    ].join('\n')
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it('flags every operation that joins a transaction, writes included', () => {
+    expect(rulesOf("await req.payload.create({ collection: 'a', data })")).toEqual([
+      'no-unthreaded-req',
+    ])
+    expect(rulesOf("await req.payload.update({ collection: 'a', id, data })")).toEqual([
+      'no-unthreaded-req',
+    ])
+    expect(rulesOf("await req.payload.delete({ collection: 'a', id })")).toEqual([
+      'no-unthreaded-req',
+    ])
+    expect(rulesOf("await req.payload.updateGlobal({ slug: 'a', data })")).toEqual([
+      'no-unthreaded-req',
+    ])
+  })
+})
+
+// The half that keeps the rule from being a nuisance: what it must stay silent about, and what it must
+// not be fooled by. Its own block, because a describe callback counts towards the line ceiling.
+describe('what no-unthreaded-req leaves alone', () => {
+  it('reads the instance through a chain, as a hook that destructures nothing does', () => {
+    expect(rulesOf("await ctx.req.payload.findGlobal({ slug: 'settings', depth: 0 })")).toEqual([
+      'no-unthreaded-req',
+    ])
+  })
+
+  // The half that keeps the rule honest. A script, a seed, or a Server Component holds an instance from
+  // `getPayload()` and has no request to thread, so demanding one would be demanding a value that does
+  // not exist. Only reaching the instance THROUGH req proves a request is in scope.
+  it('says nothing about a bare payload instance, which has no request to thread', () => {
+    expect(rulesOf("await payload.findGlobal({ slug: 'settings', depth: 0 })")).toEqual([])
+    expect(rulesOf("await payload.create({ collection: 'a', data })")).toEqual([])
+  })
+
+  it('says nothing about a property named payload on some unrelated object', () => {
+    expect(rulesOf("await message.payload.create({ collection: 'a', data })")).toEqual([])
+  })
+
+  it('is not fooled by a key that merely begins with req', () => {
+    expect(rulesOf("await req.payload.create({ collection: 'a', requestedBy: user })")).toEqual([
+      'no-unthreaded-req',
+    ])
+  })
+
+  it('does not accept a req nested inside another key', () => {
+    expect(rulesOf("await req.payload.create({ collection: 'a', data: { req: 1 } })")).toEqual([
+      'no-unthreaded-req',
+    ])
+  })
+
+  it('stays silent when the options are spread or unreadable', () => {
+    expect(rulesOf('await req.payload.create(options)')).toEqual([])
+    expect(rulesOf("await req.payload.create({ ...base, collection: 'a' })")).toEqual([])
+  })
+
+  it('reports the bound and the transaction separately when a call breaks both', () => {
+    expect(rulesOf("await req.payload.find({ collection: 'posts' })")).toEqual([
+      'no-unbounded-find',
+      'no-unthreaded-req',
+    ])
   })
 })
 

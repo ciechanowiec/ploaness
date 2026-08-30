@@ -66,23 +66,39 @@ const PAYLOAD_RECEIVER: RegExp = /(?:^|[^\w$.])(?:payload|(?:[\w$]+\.)*req\.payl
 const declaresKey = (topLevel: string, key: string): boolean =>
   new RegExp(String.raw`(^|[\s,])${key}\s*:`).test(topLevel)
 
-// An unterminated call, an options variable rather than a literal, or an object spread all make the
-// bound impossible to decide statically. Staying silent there keeps the gate free of false positives;
-// the reviewer still sees the call.
+// The depth-one keys of a call's options literal, or undefined when the call is not one to judge. An
+// unterminated call, an options variable rather than a literal, or an object spread all make the answer
+// impossible to decide statically. Staying silent there keeps the gate free of false positives; the
+// reviewer still sees the call.
+//
+// Shared by the two rules that read an options object. They ask different questions - is the read
+// bounded, is the request threaded - of the same three facts, and a second copy of the three guards is a
+// second place for the receiver pattern to fall out of step with this one.
+const optionKeysAt = (
+  source: string,
+  call: string,
+  found: number,
+  receiver: RegExp,
+): string | undefined => {
+  if (!receiver.test(source.slice(0, found))) {
+    return undefined
+  }
+  const argumentText: string | undefined = balancedArguments(source, found + call.length - 1)
+  return argumentText === undefined || !argumentText.includes('{') || argumentText.includes('...')
+    ? undefined
+    : topLevelSlice(argumentText)
+}
+
 const unboundedCallAt = (
   source: string,
   rule: BoundedCallRule,
   found: number,
 ): PayloadViolation | undefined => {
-  if (!PAYLOAD_RECEIVER.test(source.slice(0, found))) {
-    return undefined
-  }
-  const argumentText: string | undefined = balancedArguments(source, found + rule.call.length - 1)
-  if (argumentText === undefined || !argumentText.includes('{') || argumentText.includes('...')) {
-    return undefined
-  }
-  const topLevel: string = topLevelSlice(argumentText)
-  if (rule.required.some((key: string): boolean => declaresKey(topLevel, key))) {
+  const topLevel: string | undefined = optionKeysAt(source, rule.call, found, PAYLOAD_RECEIVER)
+  if (
+    topLevel === undefined ||
+    rule.required.some((key: string): boolean => declaresKey(topLevel, key))
+  ) {
     return undefined
   }
   return { line: lineOf(source, found), rule: rule.rule, reason: rule.reason }
@@ -92,6 +108,67 @@ const findUnboundedCalls = (source: string): readonly PayloadViolation[] =>
   BOUNDED_CALLS.flatMap((rule: BoundedCallRule): readonly PayloadViolation[] =>
     occurrences(source, rule.call)
       .map((found: number): PayloadViolation | undefined => unboundedCallAt(source, rule, found))
+      .filter(
+        (violation: PayloadViolation | undefined): violation is PayloadViolation =>
+          violation !== undefined,
+      ),
+  )
+
+// The Local API operations that join a transaction when they are handed one. Every one of them is
+// something a hook legitimately calls, and every one of them is silently wrong without `req`.
+const TRANSACTED_CALLS: readonly string[] = [
+  '.count(',
+  '.create(',
+  '.delete(',
+  '.find(',
+  '.findByID(',
+  '.findGlobal(',
+  '.update(',
+  '.updateGlobal(',
+]
+
+// Only the request-scoped instance is judged, which is the whole reason the rule can be trusted. A bare
+// `payload` from `getPayload()` - a script, a seed, a Server Component that opened its own instance -
+// has no request to thread, and demanding one would be asking for a value that does not exist. Reaching
+// the instance THROUGH `req` is the proof that one does, so the omission is never a decision.
+const REQUEST_RECEIVER: RegExp = /(?:^|[^\w$.])(?:[\w$]+\.)*req\.payload$/
+
+// `req` is normally passed as a shorthand property, and `declaresKey` sees only the `key:` form. Reading
+// for the colon alone reported every correctly threaded call in a repository that writes them the
+// ordinary way, which is the shape a rule takes when it is wrong about everything at once.
+//
+// Named for the thing it matches rather than for the question it answers: `unicorn/consistent-boolean-name`
+// reads a leading `declares` as a promise that the value is a boolean, and a RegExp is not one.
+const REQUEST_KEY: RegExp = /(?:^|[\s,])req\s*(?::|,|$)/
+
+const unthreadedCallAt = (
+  source: string,
+  call: string,
+  found: number,
+): PayloadViolation | undefined => {
+  const topLevel: string | undefined = optionKeysAt(source, call, found, REQUEST_RECEIVER)
+  if (topLevel === undefined || REQUEST_KEY.test(topLevel)) {
+    return undefined
+  }
+  return {
+    line: lineOf(source, found),
+    rule: 'no-unthreaded-req',
+    reason:
+      `pass req to ${call.slice(1, -1)}() so it joins the caller's transaction; reached through ` +
+      'req.payload without it, the operation opens its own - it cannot see the in-flight write, and ' +
+      'it is not rolled back with it',
+  }
+}
+
+// The defect this catches is invisible in a passing test suite and in a code review. A hook that reads
+// or writes through `req.payload` without `req` looks identical to one that threads it, runs correctly
+// whenever no transaction is open, and corrupts a document only when one is - which is precisely when a
+// hook runs. Payload's own documentation calls threading it critical, and no type checker can require it
+// because the parameter is optional for the callers that genuinely have no request.
+const findUnthreadedRequests = (source: string): readonly PayloadViolation[] =>
+  TRANSACTED_CALLS.flatMap((call: string): readonly PayloadViolation[] =>
+    occurrences(source, call)
+      .map((found: number): PayloadViolation | undefined => unthreadedCallAt(source, call, found))
       .filter(
         (violation: PayloadViolation | undefined): violation is PayloadViolation =>
           violation !== undefined,
@@ -164,6 +241,7 @@ export const findPayloadViolations = (source: string): readonly PayloadViolation
   const code: string = stripComments(source)
   return [
     ...findUnboundedCalls(code),
+    ...findUnthreadedRequests(code),
     ...findOverrideAccess(code),
     ...findUndeclaredAccess(code),
     ...findUnhardenedAuth(code),
