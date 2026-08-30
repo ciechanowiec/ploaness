@@ -200,6 +200,17 @@ const MAIN_CONTROLS: string = 'main a, main button'
 // one be told apart instead of both ending as the same timeout.
 const probeHitTarget = async (control: Locator): Promise<HitTargetProbe> =>
   await control.evaluate((element: Element): HitTargetProbe => {
+    // Scroll first, because `elementFromPoint` takes VIEWPORT coordinates and answers null for a point
+    // outside it. Every control below the fold - which is every site's footer - therefore reported that
+    // it did not own its centre point, and was classified as obscured: a page defect, on a link with
+    // nothing whatsoever on top of it. `hover()` scrolls before it hits, so the question this asks is
+    // only the question hover will ask once the control is where hover would put it.
+    //
+    // Done inside this evaluate rather than through `scrollIntoViewIfNeeded()` so that reading the box
+    // and hit-testing it cannot straddle a scroll, and so that a control the sweep must still classify
+    // - one that is `display: none`, and has no box to scroll to - cannot turn this into an
+    // actionability timeout, which is the failure mode this whole module exists to remove.
+    element.scrollIntoView({ block: 'center', inline: 'center' })
     const box: DOMRect = element.getBoundingClientRect()
     const style: CSSStyleDeclaration = globalThis.getComputedStyle(element)
     const atCentre: Element | null = element.ownerDocument.elementFromPoint(
