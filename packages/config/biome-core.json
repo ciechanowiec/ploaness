@@ -93,7 +93,8 @@
       },
       "performance": {
         "noBarrelFile": "off",
-        "noJsxPropsBind": "off"
+        "noJsxPropsBind": "off",
+        "noAccumulatingSpread": "off"
       },
       "suspicious": {
         "noDoubleEquals": "error",

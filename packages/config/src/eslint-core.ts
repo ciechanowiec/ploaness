@@ -454,6 +454,30 @@ export const guidelineRules: RuleTable = {
   // avoid the constant. Biome decides, for the reason it already decides formatting: the two must
   // never disagree about the same character, so one of them owns style and the other defers.
   'unicorn/prefer-global-number-constants': 'off',
+  // The sibling contradiction, resolved the OTHER way, and the difference is worth the paragraph.
+  //
+  // Building a list by a sequential scan - each entry deciding what it becomes from what the previous
+  // ones did - has four spellings, and this harness rejected all of them but one. `[...accumulator,
+  // one]` inside a `reduce` is Biome's `noAccumulatingSpread`. `accumulator.concat([one])` is
+  // `unicorn/prefer-spread`, which does not merely permit the spread form but MANDATES it over
+  // `concat`. `collected.push(one)` is `functional/immutable-data`, and the mutable binding a loop
+  // needs is `functional/no-let`. What survived was recursion, which is a poor thing to be steered
+  // into: it trades the copying `noAccumulatingSpread` objects to for a hard stack-depth limit, so the
+  // rule set was answering a performance question with a correctness cliff.
+  //
+  // The rule above says Biome decides when the two disagree. That rule is about STYLE - which spelling
+  // of a constant, where both spellings do the same thing and the only cost of choosing wrongly is
+  // inconsistency. This is not that. `noAccumulatingSpread` is a claim about algorithmic cost, and
+  // this harness has already answered that question everywhere else: `functional/no-let` and
+  // `functional/immutable-data` price immutability above copying, in every module, by design. A rule
+  // penalising the immutable form is arguing with a decision the rule set already made - and
+  // `unicorn/no-array-reduce` is off a few lines above precisely because `reduce` is the idiom that
+  // decision leaves. So `noAccumulatingSpread` is gone from `biome-core.json` and `prefer-spread`
+  // stays, which is also the narrower cut: `prefer-spread` catches `Array.from`, `apply`, and the
+  // `for...of` push loop, none of which this is about.
+  //
+  // The lists a governed project accumulates this way are a day's diary entries or a quote's line
+  // items. The copying is real and is measured in microseconds; the stack limit is not.
   // New in unicorn 73. It would expand every concise one-line `/** ... */` export doc into a
   // three-line block, and would also rewrite the `GENERATED AUTOMATICALLY BY PAYLOAD` /
   // `DO NOT MODIFY` headers that Payload writes into the `src/app/(payload)` scaffolding.
