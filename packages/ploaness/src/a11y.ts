@@ -10,4 +10,5 @@ export {
   findDefiniteIncomplete,
   MAX_SWEEP_ROUTES,
   SKIPPED_ROUTE_PREFIXES,
+  settleForScan,
 } from '@ploaness/config/a11y'

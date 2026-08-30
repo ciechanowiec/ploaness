@@ -19,6 +19,7 @@ import {
   type HitTargetProbe,
   MAX_SWEEP_ROUTES,
   SKIPPED_ROUTE_PREFIXES,
+  settleForScan,
 } from 'ploaness/a11y'
 
 // Taken from the public surface of the builder this spec already imports, rather than from `axe-core`,
@@ -182,6 +183,10 @@ const expectNoContrastDefect = (scan: AxeResults, label: string): void => {
 }
 
 const expectNoContrastViolation = async (page: Page, label: string): Promise<void> => {
+  // Settled here rather than beside each `hover()` and `focus()`, so that one call covers both states
+  // and covers a control whose colour arrives through a CSS transition: measured on the frame the
+  // pointer lands, that control reports the colour it is moving away from.
+  await settleForScan(page)
   const builder: AxeBuilder = await scopedAxe(page)
   const scan: AxeResults = await builder.withRules(['color-contrast']).analyze()
   expectNoContrastDefect(scan, label)
@@ -270,6 +275,7 @@ const scanInteractiveStates = async (
 
 const scanRoute = async (page: Page, origin: string, route: string): Promise<void> => {
   await page.goto(`${origin}${route}`)
+  await settleForScan(page)
   const builder: AxeBuilder = await scopedAxe(page)
   const defaultScan: AxeResults = await builder.analyze()
   expectNoContrastDefect(defaultScan, `default-state a11y on ${route}`)
@@ -311,6 +317,7 @@ test.describe('Accessibility sweep', () => {
     test.setTimeout(Math.min(routes.length * MILLISECONDS_PER_ROUTE, MAX_SWEEP_MILLISECONDS))
     // The chrome is identical site-wide, so sweep its interactive states once, on the first route.
     await page.goto(`${origin}${first}`)
+    await settleForScan(page)
     await scanInteractiveStates(page, 'site chrome', CHROME_CONTROLS)
     for (const route of routes) {
       await scanRoute(page, origin, route)

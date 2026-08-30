@@ -443,6 +443,27 @@ control that PAINTS and is covered anyway: the first skips the hover pass, recor
 the focus pass, because hover contrast measures painted pixels and there are none; the second is a real
 page defect and is now reported as one in seconds instead of as a timeout naming the wrong element.
 
+The third thing the sweep got wrong was WHEN it measured, not what. It scanned immediately after
+`page.goto`, which resolves at the `load` event - and a React application hydrates after that, while
+its web fonts may still be arriving. So axe read a tree still being assembled, and a consuming project
+saw the result: a heading whose level had not resolved yet was filed under `incomplete` on one run in
+three, on a page with nothing wrong with it. Contrast has the same exposure for a different reason,
+because it is measured on rendered pixels and a fallback face is not the face being judged.
+`settleForScan` in `packages/config/src/a11y.ts` is the repair, and the sweep now calls it after every
+navigation and at the top of `expectNoContrastViolation` - which also covers a control whose colour
+arrives through a transition, measured until now on the frame the pointer landed.
+
+Three decisions inside it are worth keeping. It waits for the font set and then for the element count
+to hold steady across two animation frames, rather than for a fixed number of frames: a fixed count
+settles the pages that were never the problem and gives up on a heavy panel, which is exactly where the
+defect was. Its ceiling is a timer rather than a frame count, because `requestAnimationFrame` does not
+fire in a backgrounded page and a throttled timer still does. And it declares the three browser
+identifiers it touches rather than adding `"DOM"` to this package's `lib`: `tsconfig.lint.json`
+compiles every package as one program, so that would put `document` in scope for `@ploaness/governance`
+too, and it would pair lib.dom's `fetch` and `WebSocket` against the same names from `@types/node`.
+`networkidle` is not used and cannot be: the sweep runs against `next dev`, whose every page holds a
+hot-reload socket open, so no page it visits ever goes idle.
+
 Three consequences follow, and each is handled where it arises rather than waived.
 
 A consumer cannot remove a suppression inside a file it does not own, so the suppressions gate leaves
