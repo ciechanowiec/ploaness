@@ -56,6 +56,35 @@ describe('findDocumentReferenceViolations - scripts', () => {
   it('ignores backticked prose that is not a script token', () => {
     expect(run('The `req` object and `Where` filter.')).toEqual([])
   })
+
+  // The whitelist recognises FAMILIES rather than particular scripts. It once named `ensure:db` and
+  // `with:test-db` as literals, so a project that renamed either had every backticked mention of the
+  // new name silently stop being checked - a gate passing because it had dropped the reference, not
+  // because it had resolved it.
+  it('checks any member of a script family rather than two names it was taught', () => {
+    const violations: readonly DocumentViolation[] = findDocumentReferenceViolations({
+      markdown: 'Run `ensure:services`, then `with:test-db`, then `seed:demo`.',
+      scriptNames: new Set<string>(['with:test-db']),
+      isExistingFile: existenceCheckOver([]),
+      reservedWords: new Set<string>(),
+      packageNames: new Set<string>(),
+    })
+    expect(violations.map((violation: DocumentViolation): string => violation.reference)).toEqual([
+      'ensure:services',
+      'seed:demo',
+    ])
+  })
+
+  it('still accepts a member of a family that does exist', () => {
+    const violations: readonly DocumentViolation[] = findDocumentReferenceViolations({
+      markdown: 'Run `ensure:services` first.',
+      scriptNames: new Set<string>(['ensure:services']),
+      isExistingFile: existenceCheckOver([]),
+      reservedWords: new Set<string>(),
+      packageNames: new Set<string>(),
+    })
+    expect(violations).toEqual([])
+  })
 })
 
 describe('findDocumentReferenceViolations - paths', () => {

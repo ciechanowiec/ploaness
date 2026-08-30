@@ -37,8 +37,14 @@ interface DocumentReferenceInputs {
 
 const BACKTICK_TOKEN: RegExp = /`[^`\n]+`/g
 const PNPM_RUN: RegExp = /pnpm run [a-z][a-z0-9:_-]*/g
+// The FAMILIES a backticked token has to belong to before it is read as a script reference. This named
+// `ensure:db` and `with:test-db` as literals, so the whitelist recognised two particular scripts rather
+// than the shape of one: a project that renamed `ensure:db` to `ensure:services` had every backticked
+// mention of the new name quietly stop being checked, and the gate then passed having dropped the
+// reference rather than resolved it. A family is what a whitelist here is for; a specific script name
+// is what it must never be.
 const SCRIPT_TOKEN: RegExp =
-  /^(?:verify(?::full)?|format|knip|(?:lint|test|generate):[a-z][a-z:-]*|ensure:db|with:test-db)$/
+  /^(?:verify(?::full)?|format|knip|(?:lint|test|generate|ensure|with|seed):[a-z][a-z:-]*)$/
 const PATH_EXTENSION: RegExp = /\.(?:tsx?|mts|cts|mjs|cjs|js|jsonc?|ya?ml|md|css|scss|grit)$/
 const PNPM_RUN_PREFIX: string = 'pnpm run '
 
