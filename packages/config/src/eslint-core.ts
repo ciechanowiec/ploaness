@@ -264,6 +264,13 @@ export const guidelineRules: RuleTable = {
   // Conflicts with the explicit philosophy: typedef requires annotations, this rule would strip
   // the "trivially inferable" ones (e.g. `const x: string = '...'`). We want them written.
   '@typescript-eslint/no-inferrable-types': 'off',
+  // The same conflict, one type narrower, and unsatisfiable rather than merely contrary. For a
+  // constant that must carry a string LITERAL type - a discriminant, or a key a typed API indexes by -
+  // all three spellings are rejected: `const X: 'a' = 'a'` by this rule, `const X = 'a' as const` and
+  // `const X = 'a'` by typedef. There is no legal declaration left, so this one gives way. It arrives
+  // from the typescript-eslint preset rather than from this table, which is why it outlived the audit
+  // that turned off the rule above.
+  '@typescript-eslint/prefer-as-const': 'off',
   '@typescript-eslint/no-non-null-assertion': 'error',
   '@typescript-eslint/strict-boolean-expressions': 'error',
   '@typescript-eslint/switch-exhaustiveness-check': 'error',
