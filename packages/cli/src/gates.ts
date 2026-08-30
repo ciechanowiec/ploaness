@@ -24,7 +24,7 @@ import { generatedDenial } from './checks/generated.js'
 import { commitHistory, linearHistory, requireFullHistory } from './checks/history.js'
 import { installScripts } from './checks/install.js'
 import { bundle, imageAssets } from './checks/integrity.js'
-import { payloadGenerated, payloadRules } from './checks/payload.js'
+import { adminViews, payloadGenerated, payloadRules } from './checks/payload.js'
 import { preflight } from './checks/preflight.js'
 import { configReferences, documentation, skills } from './checks/references.js'
 import { suppressions } from './checks/suppressions.js'
@@ -188,6 +188,15 @@ const DEFAULT_GATES: readonly Gate[] = [
     title: 'source usage rules',
     isExtended: false,
     run: payloadRules,
+  },
+  {
+    // Payload scope: a custom admin view is a thing only Payload has, and the exemption it hides
+    // behind is one ploaness itself writes into the accessibility sweep.
+    id: 'admin-views',
+    scope: 'payload',
+    title: 'custom admin views scanned',
+    isExtended: false,
+    run: adminViews,
   },
   {
     id: 'config-refs',

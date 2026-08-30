@@ -3,11 +3,15 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
+  type DeclaredAdminView,
+  findDeclaredAdminViews,
   findGeneratedDrift,
   findPayloadViolations,
   findSourceViolations,
+  findUnscannedAdminViews,
   type PayloadViolation,
   type RegeneratedArtefact,
+  type SpecSource,
 } from '@ploaness/governance'
 import {
   type Context,
@@ -106,16 +110,20 @@ const violationsIn = (source: string, isPayload: boolean): readonly PayloadViola
   ...(isPayload ? findPayloadViolations(source) : []),
 ]
 
-/** Apply the source rules to every TypeScript file under the declared source roots. */
-export const payloadRules = (context: Member): GateResult => {
+const sourceCandidates = (context: Member): readonly string[] => {
   const roots: readonly string[] = context.settings.sourceRoots
-  const candidates: readonly string[] = workingTreeFiles(context.root).filter(
+  return workingTreeFiles(context.root).filter(
     (file: string): boolean =>
       SOURCE_EXTENSIONS.some((extension: string): boolean => file.endsWith(extension)) &&
       roots.some((root: string): boolean => file.startsWith(`${root}/`)) &&
       !file.endsWith('payload-types.ts') &&
       existsSync(path.join(context.root, file)),
   )
+}
+
+/** Apply the source rules to every TypeScript file under the declared source roots. */
+export const payloadRules = (context: Member): GateResult => {
+  const candidates: readonly string[] = sourceCandidates(context)
   const findings: readonly string[] = candidates.flatMap((file: string): readonly string[] =>
     violationsIn(readFileSync(path.join(context.root, file), 'utf8'), context.isPayload).map(
       (violation: PayloadViolation): string =>
@@ -125,4 +133,55 @@ export const payloadRules = (context: Member): GateResult => {
   return findings.length > 0
     ? failed(`${String(findings.length)} source usage violation(s)`, findings)
     : passed(`${String(candidates.length)} source file(s) follow the usage rules`)
+}
+
+// Where a project's specifications live. `tests/` is a ploaness convention rather than a project
+// setting - the suite collects from `tests/unit`, `tests/int` and `tests/e2e`, and the sweeps ploaness
+// pins are written to `tests/e2e` - so a scan written anywhere else would not run either.
+const SPEC_ROOT: string = 'tests/'
+
+/**
+ * Every custom admin view is scanned for accessibility by a specification of the project's own.
+ *
+ * The pinned sweep skips the admin panel unconditionally, because the panel is Payload's markup and
+ * the crawl carries no credential. A custom view is the project's markup behind that exemption, and
+ * nothing else in the harness will ever look at it. ploaness cannot scan it - it cannot sign in, and
+ * it does not know which container is the project's rather than the framework's - so it requires the
+ * project to have scanned it instead.
+ */
+export const adminViews = (context: Member): GateResult => {
+  const files: readonly SpecSource[] = sourceCandidates(context).map(
+    (file: string): SpecSource => ({
+      path: file,
+      source: readFileSync(path.join(context.root, file), 'utf8'),
+    }),
+  )
+  const specs: readonly SpecSource[] = files.filter((file: SpecSource): boolean =>
+    file.path.startsWith(SPEC_ROOT),
+  )
+  // A configuration is looked for outside `tests/` alone, so that a fixture config written inside a
+  // specification is not read as a view this project serves.
+  const declared: readonly (readonly [SpecSource, readonly DeclaredAdminView[]])[] = files
+    .filter((file: SpecSource): boolean => !file.path.startsWith(SPEC_ROOT))
+    .map((file: SpecSource) => [file, findDeclaredAdminViews(file.source)] as const)
+  const findings: readonly string[] = declared.flatMap(
+    ([file, views]: readonly [SpecSource, readonly DeclaredAdminView[]]): readonly string[] =>
+      findUnscannedAdminViews(views, specs, files).map(
+        (violation: PayloadViolation): string =>
+          `${file.path}:${String(violation.line)} [${violation.rule}] ${violation.reason}`,
+      ),
+  )
+  if (findings.length > 0) {
+    return failed(`${String(findings.length)} custom admin view(s) are not scanned`, findings)
+  }
+  const total: number = declared.reduce(
+    (count: number, [, views]: readonly [SpecSource, readonly DeclaredAdminView[]]): number =>
+      count + views.length,
+    0,
+  )
+  return passed(
+    total === 0
+      ? 'this project declares no custom admin view'
+      : `${String(total)} custom admin view(s) are scanned for accessibility`,
+  )
 }

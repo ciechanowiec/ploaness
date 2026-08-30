@@ -6,6 +6,7 @@
 export * from './a11y-hit-target.js'
 export * from './a11y-incomplete.js'
 export * from './access-boundary.js'
+export * from './admin-view-coverage.js'
 export * from './agent-references.js'
 export * from './architecture-layers.js'
 export * from './asset-policy.js'

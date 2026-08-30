@@ -122,6 +122,14 @@ ploaness governs all of the following domains:
   narrowing the crawl to fit means excusing real public pages from accessibility checking so that the
   accessibility check passes. A finding is a defect in the page, never in the sweep:
   repair the markup or the contrast rather than narrowing what is scanned.
+  The sweep skips `/admin` and `/api` and always will: the panel is Payload's markup, not the
+  project's, and the crawl carries no credential to sign in with. A CUSTOM admin view is the one thing
+  inside that exemption the project wrote itself, so the `admin-views` gate requires the project to
+  have scanned it: a configuration declaring a view under `admin.components.views` must be matched by a
+  spec under `tests/` that drives that route and reaches axe, directly or through a helper it imports.
+  ploaness cannot run that scan - it cannot sign in, and it does not know which container belongs to
+  the project rather than to the framework - so scope the scan to the view's own container, because a
+  scan of the whole panel reports defects in components nobody in the project can repair.
 - **Security headers:** a sweep ploaness pins into `tests/e2e/security-headers.e2e.spec.ts` asks the
   running application what it answers with. A Next.js application sends no security header unless the
   project configures one, and no static check can see that it did not: the page renders and the build
@@ -306,7 +314,7 @@ transcripts bury the one finding the report exists to surface.
 
 ### Default Verification Gates
 
-Default verification runs 32 gates, in the order below. A repository-scope gate runs once; a
+Default verification runs 33 gates, in the order below. A repository-scope gate runs once; a
 package-scope gate runs once per member; a Payload-scope gate runs only for the members that declare
 Payload. `tree-verify` is last in both tiers, because the extended gates are the ones most able to
 rewrite a tracked file.
@@ -331,6 +339,7 @@ rewrite a tracked file.
 | `payload-generated` | payload | The generated Payload types and admin import map are current. |
 | `generated-denial` | repository | The agent runtime is denied write access to every generated artefact. |
 | `payload-rules` | package | The Payload usage rules, including access control and drafts. |
+| `admin-views` | payload | Every custom admin view is scanned for accessibility by a spec of the project's own. |
 | `config-refs` | package | No analyzer setting carves out a path that no longer exists or matches nothing. |
 | `secrets` | repository | gitleaks over the git history, plus the declared `secretAllowlist`. |
 | `licenses` | repository | The license of every dependency sits inside the allowlist. |

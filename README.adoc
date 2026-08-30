@@ -55,7 +55,7 @@ endif::[]
 [[gates]]
 === Gates
 
-. A [[gate,gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding,finding]]_finding_ is one problem a gate reports. Default verification runs 32 gates. Extended verification adds six more, covering the history, the production build, the client bundle, and the browser suite.
+. A [[gate,gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding,finding]]_finding_ is one problem a gate reports. Default verification runs 33 gates. Extended verification adds six more, covering the history, the production build, the client bundle, and the browser suite.
 . A run stops at the first failing gate and names how many gates the run didn't reach. Stopping there is deliberate: a gate is free to leave the tree in a shape the next gate misreads, and a column of passes beneath a failure would describe a state nobody established.
 
 [[managed-files]]
