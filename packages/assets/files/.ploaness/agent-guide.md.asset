@@ -150,6 +150,12 @@ ploaness governs all of the following domains:
   stranger. The admin panel must refuse an unauthenticated caller, and every permission the application
   grants anonymously must be one the project recorded under `ploaness.publicAccess` with the reason it
   is intended. Close the access rule, or record the grant; a grant nobody wrote is the finding.
+  Payload answers per FIELD as well as per operation, and both halves are judged. A collection open to
+  `create` with every field writable lets a stranger compose the whole document, ownership included,
+  which is a forgery rather than a creation; a collection open to `read` with every field readable
+  serves the credential column beside the public one. A field is judged only for an operation the
+  entity itself grants, because Payload reports a field's own verdict even where the operation
+  carrying it is closed, and a permission nobody holds is not a finding a project could answer.
 - **Test determinism:** two rules of the governing standard that used to be prose and are now checks.
   The suite runs under a network guard the shipped setup file installs before any setup of yours: a
   socket, a DNS lookup, or a fetch that leaves this machine fails the test that made it, naming the
@@ -445,7 +451,7 @@ default, so a typo can never widen a rule.
 | `secretAllowlist` | empty | Fake credentials committed as fixtures. `path` and `reason`. |
 | `serverUrl` | `http://localhost:3000` | The origin the end-to-end suite drives. |
 | `auxiliaryServers` | empty | Servers the end-to-end run starts beside the application. `command` and `url`. An entry missing either is dropped. The application is still started first and still answers at `serverUrl`. |
-| `publicAccess` | empty | Anonymous permissions the project grants on purpose. `entity`, `operation`, and `reason`. An entry missing one is dropped, which restores the finding rather than excusing it. |
+| `publicAccess` | empty | Anonymous permissions the project grants on purpose. `entity`, `operation`, and `reason`, plus an optional `fields` naming the fields that operation reaches, each by the path that reaches it (`sessions.id`) and `*` for a map Payload collapsed because every field was open. An entry missing one of the three is dropped, which restores the finding rather than excusing it; a field absent from `fields` stays undeclared, so a new column on a public collection reopens the finding. |
 | `accessibilitySkipRoutes` | `/admin`, `/api` | Route prefixes the sweep skips, added to those two. A route is a URL, so the reach rule above does not judge it. |
 | `accessibilityRouteBudget` | `250` | How many routes the sweep may discover before it stops and fails. Only a smaller value is honoured. |
 | `analysisEnv` | `PAYLOAD_SECRET`, `DATABASE_URL` | Placeholder environment for the gates that import the project. |

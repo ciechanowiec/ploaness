@@ -47,6 +47,16 @@ export interface PublicAccess {
   /** The operation granted: create, read, update, or delete. */
   readonly operation: string
   readonly reason: string
+  /**
+   * The fields of that entity a stranger reaches through this operation, each named by the path that
+   * reaches it (`sessions.id`), and `*` for the map Payload collapsed because every field was open.
+   *
+   * One entry carries the whole list rather than one entry per field, because a public collection has
+   * as many readable fields as it has columns and a list of twelve declarations sharing one reason is
+   * a list nobody rereads. A field absent from the list is undeclared, so adding a column to a public
+   * collection reopens the finding, which is the moment worth stopping at.
+   */
+  readonly fields?: readonly string[]
 }
 
 /** A managed path a project has taken over from the catalogue, with the reason it did so. */
@@ -358,8 +368,12 @@ const asPublicAccess = (raw: unknown): readonly PublicAccess[] =>
         const entity: string = asText(record['entity']).trim()
         const operation: string = asText(record['operation']).trim()
         const reason: string = asText(record['reason']).trim()
+        // `fields` is optional, so a malformed one falls back to declaring no field rather than
+        // dropping the entry: the entity-level grant it also carries was stated correctly, and
+        // discarding that would report a finding the project did answer.
+        const fields: readonly string[] = asStringArray(record['fields'], [])
         return entity.length > 0 && operation.length > 0 && reason.length > 0
-          ? [{ entity, operation, reason }]
+          ? [{ entity, operation, reason, fields }]
           : []
       })
     : []

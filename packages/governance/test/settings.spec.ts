@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { BUNDLE_BUDGET_BYTES } from '../src/bundle-budget.js'
 import { matchesRole } from '../src/file-roles.js'
-import { readSettings, type Settings } from '../src/settings.js'
+import { type PublicAccess, readSettings, type Settings } from '../src/settings.js'
 
 describe('readSettings', () => {
   it('returns the strict defaults for a project that declares nothing', () => {
@@ -232,6 +232,69 @@ describe('secretAllowlist', () => {
 
 // Harness Integrity: a setting may make the harness stricter, never looser. Both of these used to be
 // one-line escapes - one narrowed five gates' scope, the other made the bundle budget unreachable.
+// The access-boundary sweep passes exactly what these entries declare, so a defect here is a grant
+// waved through rather than a rule misread. Nothing covered this until the sweep learned to judge the
+// field map beneath an operation, which is what gave the entries a second dimension to get wrong.
+const declaredBy = (raw: unknown): readonly PublicAccess[] =>
+  readSettings({ ploaness: { publicAccess: raw } }).publicAccess
+
+describe('publicAccess', () => {
+  it('declares nothing for a project that says nothing', () => {
+    expect(readSettings({}).publicAccess).toEqual([])
+  })
+
+  it('reads an entry naming the entity, the operation and the reason', () => {
+    expect(
+      declaredBy([{ entity: 'media', operation: 'read', reason: 'the site own images' }]),
+    ).toEqual([{ entity: 'media', operation: 'read', reason: 'the site own images', fields: [] }])
+  })
+
+  // Dropped rather than half-honoured, in the direction that restores the finding: a typo must
+  // re-expose the grant rather than quietly excuse a permission nobody chose.
+  it.each(['entity', 'operation', 'reason'])('drops an entry missing its %s', (missing: string) => {
+    const entry: Record<string, string> = {
+      entity: 'media',
+      operation: 'read',
+      reason: 'the site own images',
+    }
+    const { [missing]: _absent, ...rest } = entry
+    expect(declaredBy([rest])).toEqual([])
+  })
+
+  it('drops an entry whose reason is blank rather than absent', () => {
+    expect(declaredBy([{ entity: 'media', operation: 'read', reason: ' '.repeat(3) }])).toEqual([])
+  })
+
+  it('reads the fields an entry lists beside its entity grant', () => {
+    const declared: readonly PublicAccess[] = declaredBy([
+      { entity: 'media', operation: 'read', reason: 'the site own images', fields: ['alt', 'url'] },
+    ])
+    expect(declared[0]?.fields).toEqual(['alt', 'url'])
+  })
+
+  // The entity grant was still stated correctly, and discarding it over a malformed list would report
+  // a finding the project did answer. The fields it failed to state stay undeclared, which is the
+  // half that should fail.
+  it('keeps the entry but declares no field when the list is not one', () => {
+    const declared: readonly PublicAccess[] = declaredBy([
+      { entity: 'media', operation: 'read', reason: 'the site own images', fields: 'alt' },
+    ])
+    expect(declared).toHaveLength(1)
+    expect(declared[0]?.fields).toEqual([])
+  })
+
+  it('declares no field when one entry of the list is not a string', () => {
+    const declared: readonly PublicAccess[] = declaredBy([
+      { entity: 'media', operation: 'read', reason: 'the site own images', fields: ['alt', 7] },
+    ])
+    expect(declared[0]?.fields).toEqual([])
+  })
+
+  it('declares nothing when the setting is not a list', () => {
+    expect(declaredBy({ entity: 'media', operation: 'read', reason: 'x' })).toEqual([])
+  })
+})
+
 describe('settings that cannot loosen the harness', () => {
   it('adds a declared source root to the shipped ones rather than replacing them', () => {
     const roots: readonly string[] = readSettings({
