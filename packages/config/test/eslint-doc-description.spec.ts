@@ -102,3 +102,22 @@ describe('the rule is wired into the configs a consumer receives', () => {
     expect(resolvedSetting(LIBRARY_BLOCKS, RULE)).toBe('error')
   })
 })
+
+// Vitest's second argument to `expect` is the message it prints when the assertion fails, and the
+// plugin's default cap of one argument rejected the identifier form of it - the form a table-driven
+// case needs, since a literal cannot name the input that broke. Pinned in both shipped configs
+// because the option is the whole of the fix: dropping it restores the rejection with no other sign.
+describe('the assertion message is allowed through in both shipped configs', () => {
+  it.each([
+    ['payload', PAYLOAD_BLOCKS],
+    ['library', LIBRARY_BLOCKS],
+  ])(
+    'allows expect a failure message in the %s config',
+    (name: string, blocks: readonly FlatBlock[]) => {
+      expect(
+        resolvedSetting(blocks, 'vitest/valid-expect'),
+        `vitest/valid-expect in ${name}`,
+      ).toEqual(['error', { maxArgs: 2 }])
+    },
+  )
+})

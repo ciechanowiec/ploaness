@@ -276,6 +276,15 @@ describe('the determinism selectors reach the block that lints the suite', CONFI
     },
   )
 
+  it.each(['NO_LITERAL_ASSERTIONS'])(
+    'carries %s into the shipped config',
+    async (exportName: string) => {
+      const selectors: readonly string[] = await sharedSelectors(exportName)
+      expect(selectors.length).toBeGreaterThan(0)
+      expect(carriedSomewhere(SHIPPED_CONFIG, selectors)).toEqual([])
+    },
+  )
+
   it.each([
     ['a raw datagram import', "import dgram from 'node:dgram'"],
     ['a dynamic child-process import', "const child = await import('node:child_process')"],
@@ -288,5 +297,41 @@ describe('the determinism selectors reach the block that lints the suite', CONFI
   ])('rejects %s', async (_what: string, code: string) => {
     const selectors: readonly string[] = await sharedSelectors('NO_NETWORK_GUARD_ESCAPE')
     expect(lintRestrictedSyntax(code, selectors)).toHaveLength(1)
+  })
+})
+
+// The rule bans an assertion whose OPERAND is a literal, because no change to the code under test can
+// make it fail. `expect` takes a second argument that is not an operand at all - the message Vitest
+// prints when the assertion fails - and a selector anchored on the call rather than on the argument
+// rejected that too, with a message describing a defect the line did not have.
+const literalSelectors = (): Promise<readonly string[]> => sharedSelectors('NO_LITERAL_ASSERTIONS')
+
+describe('the literal-assertion ban judges the operand and not the message', CONFIG_LOAD, () => {
+  it.each([
+    ['a number literal', 'expect(1).toBe(1)'],
+    ['a string literal', "expect('ok').toBe('ok')"],
+    ['a template literal carrying no substitution', 'expect(`ok`).toBe(value)'],
+    ['a negated number literal', 'expect(-1).toBe(value)'],
+  ])('rejects an assertion over %s', async (_what: string, code: string) => {
+    expect(lintRestrictedSyntax(code, await literalSelectors())).toHaveLength(1)
+  })
+
+  it.each([
+    ['a string literal', "expect(parsed, 'the value that got through').toBeNull()"],
+    ['a template literal', `expect(parsed, \`failed for \${input}\`).toBeNull()`],
+    ['an identifier', 'expect(parsed, label).toBeNull()'],
+  ])('accepts a failure message written as %s', async (_what: string, code: string) => {
+    expect(lintRestrictedSyntax(code, await literalSelectors())).toEqual([])
+  })
+
+  it('accepts an assertion over a value with no message at all', async () => {
+    expect(lintRestrictedSyntax('expect(parsed).toBeNull()', await literalSelectors())).toEqual([])
+  })
+
+  // A literal is still a literal in the operand position when a message follows it, so the message
+  // must not become a way to smuggle one past the ban.
+  it('still rejects a literal operand when a message follows it', async () => {
+    const code: string = "expect(1, 'why').toBe(1)"
+    expect(lintRestrictedSyntax(code, await literalSelectors())).toHaveLength(1)
   })
 })

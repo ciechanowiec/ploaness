@@ -147,19 +147,31 @@ const NO_INHERITANCE: RestrictedSyntaxSetting = [
 // An assertion whose operands are literals alone cannot fail when the code under test changes, so it
 // reports as passing while judging nothing. This catches the exact form the standard names; the general
 // rule is not statically decidable and is stated in the agent guide instead.
+//
+// Anchored on the FIRST argument, which is the operand. Written as a child combinator over the whole
+// call - `CallExpression[callee.name='expect'] > Literal` - it matched a literal in ANY argument
+// position, and `expect` takes a second one: the message Vitest prints when the assertion fails. So the
+// rule rejected `expect(parsed, 'the value that got through')`, which is not an assertion over a
+// literal at all, and rejected it with a message describing a defect the line does not have. What
+// survived was the one spelling neither this rule nor `vitest/valid-expect` happened to catch, a
+// template literal carrying a substitution - and every shipped spec in `packages/assets` uses it,
+// which is why nothing here ever reported the hole.
 const LITERAL_ASSERTION_MESSAGE: string =
   'An assertion over a literal cannot fail when the code under test changes. Assert an observable outcome.'
+const EXPECT_CALL: string = "CallExpression[callee.name='expect']"
 const NO_LITERAL_ASSERTIONS: readonly RestrictedSyntax[] = [
   {
-    selector: "CallExpression[callee.name='expect'] > Literal",
+    selector: `${EXPECT_CALL}[arguments.0.type='Literal']`,
     message: LITERAL_ASSERTION_MESSAGE,
   },
   {
-    selector: "CallExpression[callee.name='expect'] > TemplateLiteral[expressions.length=0]",
+    selector: `${EXPECT_CALL}[arguments.0.type='TemplateLiteral'][arguments.0.expressions.length=0]`,
     message: LITERAL_ASSERTION_MESSAGE,
   },
   {
-    selector: "CallExpression[callee.name='expect'] > UnaryExpression[operator='-'] > Literal",
+    selector:
+      `${EXPECT_CALL}[arguments.0.type='UnaryExpression'][arguments.0.operator='-']` +
+      "[arguments.0.argument.type='Literal']",
     message: LITERAL_ASSERTION_MESSAGE,
   },
 ]
@@ -569,7 +581,12 @@ export const testIntegrityRules: RuleTable = {
   // sonarjs/assertions-in-tests is a less-configurable duplicate that does not, so it defers in
   // this scope.
   'sonarjs/assertions-in-tests': 'off',
-  'vitest/valid-expect': 'error', // `expect` is called correctly (awaited, matcher present).
+  // `expect` is called correctly (awaited, matcher present). `maxArgs: 2` because Vitest's second
+  // argument is the message it prints when the assertion fails, and in a loop or a table-driven case
+  // that message is the difference between knowing a case failed and knowing WHICH input broke it. The
+  // plugin's default of 1 already waves through a string or template literal there, so what it
+  // actually rejected was the identifier form - the one a table-driven case needs.
+  'vitest/valid-expect': ['error', { maxArgs: 2 }],
   'vitest/no-standalone-expect': 'error', // assertions must live inside a test.
   'vitest/no-conditional-expect': 'error', // an assertion behind an `if` may never execute.
   'vitest/no-conditional-tests': 'error', // tests must not be defined conditionally.
