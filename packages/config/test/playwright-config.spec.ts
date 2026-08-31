@@ -4,7 +4,7 @@
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-// The build output, for the reason vitest-config.spec.ts records: the config loaded below reads the
+// The build output, for the reason vitest-CONFIG.spec.ts records: the config loaded below reads the
 // settings module out of `dist`, and a spec comparing against a second instance proves less than it looks.
 import { projectSettings } from '../dist/project-settings.js'
 
@@ -30,10 +30,16 @@ const loadConfig = async (): Promise<PlaywrightConfig> => {
   return (loaded as { readonly default: PlaywrightConfig }).default
 }
 
+// Loaded at MODULE scope, deliberately. Importing a built config pulls in every plugin it declares and
+// costs about a second cold - and a test body is measured against `testTimeout`, so awaiting it there
+// made the verdict depend on how busy the machine was. One run of `pnpm run verify` failed on that
+// clock rather than on the rule, having passed moments earlier in isolation. Module evaluation carries
+// no such clock, and a spec that measures a rule should not also be measuring an import.
+const CONFIG: PlaywrightConfig = await loadConfig()
+
 describe('focused Playwright tests', () => {
-  it('refuses test.only in a local run as well as in CI', async () => {
-    const config: PlaywrightConfig = await loadConfig()
-    expect(config.forbidOnly).toBe(true)
+  it('refuses test.only in a local run as well as in CI', () => {
+    expect(CONFIG.forbidOnly).toBe(true)
   })
 })
 
@@ -43,9 +49,8 @@ describe('focused Playwright tests', () => {
 // while that server sat unstarted behind it. The declared servers must also arrive whole, because the
 // re-exported config leaves a project no other way to start one.
 describe('the servers the end-to-end run starts', () => {
-  it('starts exactly the auxiliary servers the project declared, in order, before the application', async () => {
-    const config: PlaywrightConfig = await loadConfig()
-    expect(config.webServer?.slice(0, projectSettings.auxiliaryServers.length)).toEqual(
+  it('starts exactly the auxiliary servers the project declared, in order, before the application', () => {
+    expect(CONFIG.webServer?.slice(0, projectSettings.auxiliaryServers.length)).toEqual(
       projectSettings.auxiliaryServers.map(
         (server: WebServer): WebServer => ({
           command: server.command,
@@ -55,8 +60,7 @@ describe('the servers the end-to-end run starts', () => {
     )
   })
 
-  it('drives the application the project declares an origin for, last', async () => {
-    const config: PlaywrightConfig = await loadConfig()
-    expect(config.webServer?.at(-1)?.url).toBe(projectSettings.serverUrl)
+  it('drives the application the project declares an origin for, last', () => {
+    expect(CONFIG.webServer?.at(-1)?.url).toBe(projectSettings.serverUrl)
   })
 })

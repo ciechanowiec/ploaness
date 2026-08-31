@@ -55,6 +55,14 @@ const loadBlocks = async (entryPoint: string): Promise<readonly FlatBlock[]> => 
   return exported as readonly FlatBlock[]
 }
 
+// Loaded at MODULE scope, deliberately. Importing a built config pulls in every plugin it declares and
+// costs about a second cold - and a test body is measured against `testTimeout`, so awaiting it there
+// made the verdict depend on how busy the machine was. One run of `pnpm run verify` failed on that
+// clock rather than on the rule, having passed moments earlier in isolation. Module evaluation carries
+// no such clock, and a spec that measures a rule should not also be measuring an import.
+const PAYLOAD_BLOCKS: readonly FlatBlock[] = await loadBlocks('eslint.js')
+const LIBRARY_BLOCKS: readonly FlatBlock[] = await loadBlocks('eslint-library.js')
+
 // Last block wins, which is how ESLint resolves the array.
 const resolvedSetting = (blocks: readonly FlatBlock[], ruleId: string): unknown =>
   blocks.reduce((carried: unknown, block: FlatBlock): unknown => {
@@ -86,13 +94,11 @@ describe('a documenting comment must say something', () => {
 })
 
 describe('the rule is wired into the configs a consumer receives', () => {
-  it('is an error in the Payload config', async () => {
-    const blocks: readonly FlatBlock[] = await loadBlocks('eslint.js')
-    expect(resolvedSetting(blocks, RULE)).toBe('error')
+  it('is an error in the Payload config', () => {
+    expect(resolvedSetting(PAYLOAD_BLOCKS, RULE)).toBe('error')
   })
 
-  it('is an error in the library config, because a doc block is not a framework question', async () => {
-    const blocks: readonly FlatBlock[] = await loadBlocks('eslint-library.js')
-    expect(resolvedSetting(blocks, RULE)).toBe('error')
+  it('is an error in the library config, because a doc block is not a framework question', () => {
+    expect(resolvedSetting(LIBRARY_BLOCKS, RULE)).toBe('error')
   })
 })

@@ -133,11 +133,15 @@ const mockBanStatus = async (blocks: readonly FlatBlock[]): Promise<BanStatus> =
   }
 }
 
-const shippedConfig = (): Promise<readonly FlatBlock[]> =>
-  loadBlocks(path.join(configPackage, 'eslint.js'))
-
-const workspaceConfig = (): Promise<readonly FlatBlock[]> =>
-  loadBlocks(path.join(workspaceRoot, 'eslint.config.mjs'))
+// Loaded at MODULE scope, deliberately. Importing a built config pulls in every plugin it declares and
+// costs about a second cold - and a test body is measured against `testTimeout`, so awaiting it there
+// made the verdict depend on how busy the machine was. One run of `pnpm run verify` failed on that
+// clock rather than on the rule, having passed moments earlier in isolation. Module evaluation carries
+// no such clock, and a spec that measures a rule should not also be measuring an import.
+const SHIPPED_CONFIG: readonly FlatBlock[] = await loadBlocks(path.join(configPackage, 'eslint.js'))
+const WORKSPACE_CONFIG: readonly FlatBlock[] = await loadBlocks(
+  path.join(workspaceRoot, 'eslint.config.mjs'),
+)
 
 // `NO_INHERITANCE` already carries its own leading severity, which is why every caller spreads it as
 // the whole setting rather than prefixing one. Reading the exported constant rather than restating its
@@ -214,24 +218,24 @@ const banStatus = async (blocks: readonly FlatBlock[]): Promise<BanStatus> => {
 const CONFIG_LOAD: { readonly timeout: number } = { timeout: 30_000 }
 
 describe('flat config severity', CONFIG_LOAD, () => {
-  it('leaves no rule of the shipped config at warning severity', async () => {
-    expect(warningRules(await shippedConfig())).toEqual([])
+  it('leaves no rule of the shipped config at warning severity', () => {
+    expect(warningRules(SHIPPED_CONFIG)).toEqual([])
   })
 
-  it('leaves no rule of the workspace config at warning severity', async () => {
-    expect(warningRules(await workspaceConfig())).toEqual([])
+  it('leaves no rule of the workspace config at warning severity', () => {
+    expect(warningRules(WORKSPACE_CONFIG)).toEqual([])
   })
 })
 
 describe('inheritance ban survives every no-restricted-syntax block', CONFIG_LOAD, () => {
   it('keeps the ban in every such block of the shipped config', async () => {
-    const status: BanStatus = await banStatus(await shippedConfig())
+    const status: BanStatus = await banStatus(SHIPPED_CONFIG)
     expect(status.blocks).toBeGreaterThan(0)
     expect(status.missing).toEqual([])
   })
 
   it('keeps the ban in every such block of the workspace config', async () => {
-    const status: BanStatus = await banStatus(await workspaceConfig())
+    const status: BanStatus = await banStatus(WORKSPACE_CONFIG)
     expect(status.blocks).toBeGreaterThan(0)
     expect(status.missing).toEqual([])
   })
@@ -242,13 +246,13 @@ describe('inheritance ban survives every no-restricted-syntax block', CONFIG_LOA
 // replaced the build-wide mock ban across a project's entire source tree.
 describe('mock ban survives every no-restricted-properties block', CONFIG_LOAD, () => {
   it('keeps the ban in every such block of the shipped config', async () => {
-    const status: BanStatus = await mockBanStatus(await shippedConfig())
+    const status: BanStatus = await mockBanStatus(SHIPPED_CONFIG)
     expect(status.blocks).toBeGreaterThan(0)
     expect(status.missing).toEqual([])
   })
 
   it('keeps the ban in every such block of the workspace config', async () => {
-    const status: BanStatus = await mockBanStatus(await workspaceConfig())
+    const status: BanStatus = await mockBanStatus(WORKSPACE_CONFIG)
     expect(status.missing).toEqual([])
   })
 })
@@ -259,7 +263,7 @@ describe('the determinism selectors reach the block that lints the suite', CONFI
     async (exportName: string) => {
       const selectors: readonly string[] = await sharedSelectors(exportName)
       expect(selectors.length).toBeGreaterThan(0)
-      expect(carriedSomewhere(await shippedConfig(), selectors)).toEqual([])
+      expect(carriedSomewhere(SHIPPED_CONFIG, selectors)).toEqual([])
     },
   )
 
@@ -268,7 +272,7 @@ describe('the determinism selectors reach the block that lints the suite', CONFI
     async (exportName: string) => {
       const selectors: readonly string[] = await sharedSelectors(exportName)
       expect(selectors.length).toBeGreaterThan(0)
-      expect(carriedSomewhere(await workspaceConfig(), selectors)).toEqual([])
+      expect(carriedSomewhere(WORKSPACE_CONFIG, selectors)).toEqual([])
     },
   )
 

@@ -56,10 +56,13 @@ const loadConfig = async (modulePath: string): Promise<VitestConfig> => {
   return exported
 }
 
-const shipped = (): Promise<VitestConfig> => loadConfig(path.join(configBuild, 'vitest.js'))
-
-const workspace = (): Promise<VitestConfig> =>
-  loadConfig(path.join(workspaceRoot, 'vitest.config.mts'))
+// Loaded at MODULE scope, deliberately. Importing a built config pulls in every plugin it declares and
+// costs about a second cold - and a test body is measured against `testTimeout`, so awaiting it there
+// made the verdict depend on how busy the machine was. One run of `pnpm run verify` failed on that
+// clock rather than on the rule, having passed moments earlier in isolation. Module evaluation carries
+// no such clock, and a spec that measures a rule should not also be measuring an import.
+const SHIPPED: VitestConfig = await loadConfig(path.join(configBuild, 'vitest.js'))
+const WORKSPACE: VitestConfig = await loadConfig(path.join(workspaceRoot, 'vitest.config.mts'))
 
 // A config declaring projects runs those and never its own root globs, so the root block is the suite
 // only when there are no projects. Throwing on neither keeps a renamed key from emptying the list.
@@ -79,7 +82,7 @@ const suitesOf = (config: VitestConfig): readonly Suite[] => {
   return [config.test]
 }
 
-const shippedSuites = async (): Promise<readonly Suite[]> => suitesOf(await shipped())
+const shippedSuites = (): readonly Suite[] => suitesOf(SHIPPED)
 
 const coversDirectory = (suite: Suite, fragment: string): boolean =>
   (suite.include ?? []).some((glob: string): boolean => glob.includes(fragment))
@@ -89,31 +92,31 @@ describe('the harness setup file', () => {
     expect(existsSync(harnessSetupFile())).toBe(true)
   })
 
-  it('leads the setup files of every shipped suite, before any the project wrote', async () => {
-    const suites: readonly Suite[] = await shippedSuites()
+  it('leads the setup files of every shipped suite, before any the project wrote', () => {
+    const suites: readonly Suite[] = shippedSuites()
     expect(suites.length).toBeGreaterThan(0)
     for (const suite of suites) {
       expect(suite.setupFiles?.[0]).toBe(harnessSetupFile())
     }
   })
 
-  it('leads the setup files of this repository, which runs what it publishes', async () => {
-    const config: VitestConfig = await workspace()
+  it('leads the setup files of this repository, which runs what it publishes', () => {
+    const config: VitestConfig = WORKSPACE
     expect(config.test?.setupFiles?.[0]).toBe(harnessSetupFile())
   })
 })
 
 describe('the sequence block', () => {
-  it('is the shared one in every shipped suite, not a second statement of it', async () => {
-    const suites: readonly Suite[] = await shippedSuites()
+  it('is the shared one in every shipped suite, not a second statement of it', () => {
+    const suites: readonly Suite[] = shippedSuites()
     expect(suites.length).toBeGreaterThan(0)
     for (const suite of suites) {
       expect(suite.sequence).toBe(DETERMINISTIC_SEQUENCE)
     }
   })
 
-  it('is the shared one in this repository too, so the two cannot drift apart', async () => {
-    const config: VitestConfig = await workspace()
+  it('is the shared one in this repository too, so the two cannot drift apart', () => {
+    const config: VitestConfig = WORKSPACE
     expect(config.test?.sequence).toBe(DETERMINISTIC_SEQUENCE)
   })
 
@@ -140,8 +143,8 @@ describe('the environment a suite runs in', () => {
   // does, through `file-type`, and reports the TypeError as the project's own upload allowlist
   // rejecting a valid image - so this held every consumer's integration suite hostage to a realm it had
   // no reason to be in.
-  it('is node wherever integration specs are collected, which boot a server and not a browser', async () => {
-    const suites: readonly Suite[] = await shippedSuites()
+  it('is node wherever integration specs are collected, which boot a server and not a browser', () => {
+    const suites: readonly Suite[] = shippedSuites()
     const integration: readonly Suite[] = suites.filter((suite: Suite): boolean =>
       coversDirectory(suite, INTEGRATION_GLOB),
     )
@@ -154,8 +157,8 @@ describe('the environment a suite runs in', () => {
   // The other half of the same split: ploaness pins and ships React Testing Library, jest-dom and
   // user-event, which need a DOM. Moving the integration specs out must not take the realm away from
   // the specs that were the reason for shipping it.
-  it('is jsdom wherever component specs are collected, which is what that stack is for', async () => {
-    const suites: readonly Suite[] = await shippedSuites()
+  it('is jsdom wherever component specs are collected, which is what that stack is for', () => {
+    const suites: readonly Suite[] = shippedSuites()
     const component: readonly Suite[] = suites.filter((suite: Suite): boolean =>
       coversDirectory(suite, 'tests/component/'),
     )
@@ -168,8 +171,8 @@ describe('the environment a suite runs in', () => {
   // Vitest collapses the suites into one serial group only when every one of them asks for a single
   // worker. A suite that omitted this would run alongside the others, and the Payload boots inside it
   // would race the others for the single ephemeral database the test command created.
-  it('runs its files one at a time, in every shipped suite', async () => {
-    const suites: readonly Suite[] = await shippedSuites()
+  it('runs its files one at a time, in every shipped suite', () => {
+    const suites: readonly Suite[] = shippedSuites()
     expect(suites.length).toBeGreaterThan(0)
     for (const suite of suites) {
       expect(suite.fileParallelism).toBe(false)
@@ -184,13 +187,13 @@ describe('the environment a suite runs in', () => {
 // one, the thing to guard: the entries themselves are literal types the compiler already refuses to
 // widen, so a summary re-enabled by hand does not compile.
 describe('the reporter list', () => {
-  it('is declared by the shipped config, so the runner appends no reporter of its own', async () => {
-    const config: VitestConfig = await shipped()
+  it('is declared by the shipped config, so the runner appends no reporter of its own', () => {
+    const config: VitestConfig = SHIPPED
     expect(config.test?.reporters).toEqual(testReporters())
   })
 
-  it('is declared by this repository too, from the same source, so the two cannot drift', async () => {
-    const config: VitestConfig = await workspace()
+  it('is declared by this repository too, from the same source, so the two cannot drift', () => {
+    const config: VitestConfig = WORKSPACE
     expect(config.test?.reporters).toEqual(testReporters())
   })
 })
