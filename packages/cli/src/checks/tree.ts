@@ -39,7 +39,14 @@ export const treeSnapshot = (context: Context): GateResult => {
   return passed(`tree fingerprint recorded (${snapshot.slice(0, FINGERPRINT_PREVIEW)})`)
 }
 
-/** Verify no gate modified, or created, a file in the working tree during verification. */
+/**
+ * Verify the working tree is byte-for-byte what it was when the snapshot was taken.
+ *
+ * It compares two fingerprints, so it establishes THAT the tree changed and never WHO changed it. A gate
+ * rewriting a file is the reason the gate exists, but an editor saving a file while verification runs
+ * produces the same digest mismatch, and naming the first as the cause would be asserting something two
+ * hashes cannot show. The report offers both readings and leaves the choice to the reader.
+ */
 export const treeVerify = (context: Context): GateResult => {
   if (snapshot === undefined) {
     return passed('no tree snapshot was taken, so there is nothing to compare')
@@ -47,8 +54,9 @@ export const treeVerify = (context: Context): GateResult => {
   const current: string = fingerprint(context)
   return current === snapshot
     ? passed('the working tree is unchanged since verification began')
-    : failed('a gate changed the working tree during verification', [
-        'run `ploaness format`, review the result, and commit it before verifying',
+    : failed('the working tree changed during verification', [
+        'a gate may have rewritten a file: run `ploaness format`, review the result, and commit it',
+        'or a file was edited while verification was running, in which case re-run against a settled tree',
         `expected ${snapshot.slice(0, FINGERPRINT_PREVIEW)} but found ${current.slice(0, FINGERPRINT_PREVIEW)}`,
         'git status will show which files changed',
       ])
