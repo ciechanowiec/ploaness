@@ -36,13 +36,41 @@ export const MAX_SWEEP_ROUTES: number = projectSettings.accessibilityRouteBudget
 // level has not resolved lands in `incomplete`, which a consuming project saw on one run in three -
 // and reads contrast against text the final font has not laid out yet.
 //
-// WHAT IT WAITS FOR. The document's font set has answered, and the element count has then held steady
-// across two consecutive animation frames. Fonts first, because contrast is measured on rendered
-// pixels and a face that arrives late reflows the text being judged. Two frames rather than one,
-// because React yields between hydration segments and a yield that happens to straddle a frame
-// boundary is indistinguishable from a finished render if only one frame is asked. A fixed count of
-// frames was the first draft and was wrong in the direction that matters: it settles the pages that
-// were never the problem and gives up on a heavy panel exactly where the defect lives.
+// WHAT IT WAITS FOR, in this order: the document's font set has answered; the element count has held
+// steady across two consecutive animation frames; every animation that will ever end has ended; and
+// the count has held steady once more. Fonts first, because contrast is measured on rendered pixels
+// and a face that arrives late reflows the text being judged. The count before the animations rather
+// than after, for the reason written beside it - an animation cannot be waited for until something has
+// created it, and on a hydrating page the mount is what creates it. Two frames rather than one,
+// because React yields between hydration segments and a
+// yield that happens to straddle a frame boundary is indistinguishable from a finished render if only
+// one frame is asked. A fixed count of frames was the first draft and was wrong in the direction that
+// matters: it settles the pages that were never the problem and gives up on a heavy panel exactly
+// where the defect lives.
+//
+// WHY ANIMATIONS ARE PART OF IT. An element count cannot see an opacity. A page that fades its content
+// in changes no element while it does so, so the count was steady two frames after hydration and a
+// scan then measured a half-transparent paragraph - and axe blends a partial opacity toward the
+// background exactly as an eye does, so it reported a contrast this page never actually renders at
+// rest. That is the harmless direction. The other one is why this is a correctness fix rather than a
+// convenience: text animating TOWARDS a colour too pale to read was measured at its opening frame and
+// PASSED, so the sweep built to catch contrast defects returned green on a page whose resting state is
+// a defect. Waiting for the animations to end measures the state a reader is left looking at.
+//
+// An animation that never ends is excluded rather than waited on, and the distinction is the whole
+// reason this does not simply cost the budget. A spinner has no resting state to wait for, so awaiting
+// it would spend the ceiling below on every settle of every control of every route, in exchange for
+// nothing. `finished` never resolves for one, which is a hang the ceiling would absorb silently. The
+// test for it is `iterations`, which a spinner reports as `Infinity`; a paused or already-finished
+// animation is excluded too, because it is showing the frame a reader is looking at right now.
+//
+// A cancelled animation REJECTS `finished` rather than resolving, and that rejection is swallowed. A
+// cancellation is a state change like any other and the element-count check notices it; ending the
+// whole settle over one cancelled transition would report nothing useful about the page.
+//
+// The two callbacks below are written inline rather than named, which is not a style preference: a
+// named helper closing over nothing is one the shipped rules ask to be hoisted to the outer scope, and
+// the outer scope is the one place this function may not reach.
 //
 // WHY NOT `networkidle`. Playwright's own documentation discourages it; it throws on expiry rather
 // than resolving; and it answers a different question. A page can be network-idle and mid-hydration.
@@ -63,8 +91,15 @@ const SETTLE_BUDGET_MS: number = 1000
 // `Response` and `WebSocket` against the same names from `@types/node`. Three identifiers do not buy
 // that. They resolve in the PAGE at run time, where they are real. Same move, same reason, as the
 // declaration `ambient.d.ts` makes for a plugin that ships no types.
+interface PageAnimation {
+  readonly playState: string
+  readonly finished: Promise<unknown>
+  readonly effect: { readonly getComputedTiming: () => { readonly iterations: number } } | null
+}
+
 declare const document: {
   readonly fonts: { readonly ready: Promise<unknown> } | undefined
+  readonly getAnimations: (() => readonly PageAnimation[]) | undefined
   readonly querySelectorAll: (selectors: string) => { readonly length: number }
 }
 declare const requestAnimationFrame: (callback: () => void) => number
@@ -73,21 +108,19 @@ declare const setTimeout: (callback: () => void, delayMs: number) => unknown
 // Everything this function needs is inside it. Playwright ships a page function to the browser as its
 // own source text, so a reference to anything at module scope here would be a ReferenceError in the
 // page rather than a compile error in this file - the one mistake this shape cannot be checked for.
+// It is also why the animation wait below is written inline rather than as a helper of its own.
 const settleInPage = async (budgetMs: number): Promise<void> => {
   const quietFrames: number = 2
-  const nextFrame = async (): Promise<void> => {
+  // Recursive rather than a loop over a counter, because there is no mutable binding to count with:
+  // this repository bans `let` and in-place mutation in its own source as well as in a consumer's. Each
+  // step awaits a frame, so what grows is frames rather than stack - an awaited recursion returns to
+  // the microtask queue every time. The frame is awaited inline because this is its only caller.
+  const stable = async (previous: number, remaining: number): Promise<void> => {
     await new Promise<void>((resolve: () => void): void => {
       requestAnimationFrame((): void => {
         resolve()
       })
     })
-  }
-  // Recursive rather than a loop over a counter, because there is no mutable binding to count with:
-  // this repository bans `let` and in-place mutation in its own source as well as in a consumer's. Each
-  // step awaits a frame, so what grows is frames rather than stack - an awaited recursion returns to
-  // the microtask queue every time.
-  const stable = async (previous: number, remaining: number): Promise<void> => {
-    await nextFrame()
     const current: number = document.querySelectorAll('*').length
     if (current !== previous) {
       await stable(current, quietFrames)
@@ -98,12 +131,34 @@ const settleInPage = async (budgetMs: number): Promise<void> => {
     }
   }
   const settled = async (): Promise<void> => {
-    // The union covers a document carrying no font set at all, which must skip the wait rather than
-    // fail the settle.
-    const fonts: { readonly ready: Promise<unknown> } | undefined = document.fonts
-    if (fonts !== undefined) {
-      await fonts.ready
-    }
+    // The optional call covers a document carrying no font set at all, which must skip the wait
+    // rather than fail the settle.
+    await document.fonts?.ready
+    // The element count FIRST, and this order is the whole of it. An animation does not exist until
+    // something creates it, and on a hydrating page that something is the mount: measured before the
+    // framework has mounted, `getAnimations` answers an honest empty list, and a settle that believed
+    // it would scan the very frame the animation is about to start from. Waiting for the tree to stop
+    // changing is waiting for the mount, which is what puts the animations on the page to be found.
+    await stable(document.querySelectorAll('*').length, quietFrames)
+    await Promise.all(
+      (document.getAnimations?.() ?? [])
+        .filter(
+          (animation: PageAnimation): boolean =>
+            animation.playState === 'running' &&
+            animation.effect !== null &&
+            Number.isFinite(animation.effect.getComputedTiming().iterations),
+        )
+        .map(async (animation: PageAnimation): Promise<void> => {
+          try {
+            await animation.finished
+          } catch {
+            // A cancelled animation rejects rather than resolving. The cancellation is a state change
+            // like any other and the count below is what notices it.
+          }
+        }),
+    )
+    // And again afterwards, because an animation that ends by revealing a panel adds elements as it
+    // finishes. This pass costs two frames on a page where nothing moved.
     await stable(document.querySelectorAll('*').length, quietFrames)
   }
   const deadline = async (): Promise<void> => {
@@ -120,8 +175,9 @@ const settleInPage = async (budgetMs: number): Promise<void> => {
  * Wait for a page to finish rendering, before anything measures it.
  *
  * Call it after a navigation, and after a state change a scan is about to judge. A still document
- * costs two animation frames; a document that never stops changing costs the budget and no more, so a
- * page nobody can settle slows the sweep rather than hanging it.
+ * costs two animation frames; one that is animating costs however long its animations have left; a
+ * document that never stops changing costs the budget and no more, so a page nobody can settle slows
+ * the sweep rather than hanging it.
  * @param page the page about to be scanned, left on whatever route it holds.
  * @returns nothing. It resolves whether the page settled or the budget ran out.
  */
