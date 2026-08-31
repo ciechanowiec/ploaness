@@ -472,12 +472,42 @@ export const guidelineRules: RuleTable = {
   // `functional/immutable-data` price immutability above copying, in every module, by design. A rule
   // penalising the immutable form is arguing with a decision the rule set already made - and
   // `unicorn/no-array-reduce` is off a few lines above precisely because `reduce` is the idiom that
-  // decision leaves. So `noAccumulatingSpread` is gone from `biome-core.json` and `prefer-spread`
-  // stays, which is also the narrower cut: `prefer-spread` catches `Array.from`, `apply`, and the
-  // `for...of` push loop, none of which this is about.
+  // decision leaves. So `noAccumulatingSpread` is gone from `biome-core.json`.
   //
   // The lists a governed project accumulates this way are a day's diary entries or a quote's line
   // items. The copying is real and is measured in microseconds; the stack limit is not.
+  //
+  // `prefer-spread` used to stay as the narrower cut, and it no longer does, for a reason that is not
+  // about accumulation at all. See the entry that follows.
+  // A THIRD contradiction, and the first one where the fixer is the thing that breaks the code.
+  //
+  // `unicorn/prefer-spread` mandates `[...value]` over `Array.from(value)` and over `value.split('')`,
+  // and it is not type-aware, so it says that about a string too. `@typescript-eslint/no-misused-spread`
+  // - from `strictTypeChecked`, and type-aware - bans spreading a string, because `...` iterates code
+  // points and decomposes an emoji into its parts. Neither rule can see the other's case, and the
+  // unicorn rule has no option to exclude a string.
+  //
+  // What makes this different from a disagreement is that they meet inside a single `eslint --fix`.
+  // The fixer rewrites `Array.from(label)` to `[...label]`, and the same run then reports the text it
+  // just wrote. `ploaness format` therefore hands a developer a file it authored and rejects, on a
+  // line they did not write, with a message whose suggested repair is a suppression. A contradiction
+  // a person can walk around by choosing a different spelling is one thing; one the harness walks
+  // INTO on their behalf is another, and it is why this could not be left as guidance.
+  //
+  // `prefer-spread` yields, and the direction follows the accumulation paragraph above rather than the
+  // `Number.NaN` rule before it. That one was about style, where the two spellings do the same thing
+  // and only consistency is at stake. This is not: one rule is making a correctness claim about text a
+  // CMS stores - a name, a title, an editor's paragraph - out of type information the other one does
+  // not have. The uninformed rule does not get to overrule the informed one, and it certainly does not
+  // get to do so through a fixer.
+  //
+  // WHAT THIS COSTS, stated plainly because it reopens a door another spec was built to hold shut.
+  // `accumulator.concat([one])` is legal again, so the fold `immutable-accumulation.spec.ts` leaves
+  // open is now one good spelling of a sequential scan rather than the only one. The other three doors
+  // that spec names are unaffected: `functional/immutable-data` still rejects `push`,
+  // `functional/no-let` still rejects the loop binding, and Biome still does not re-ban the fold. The
+  // trade is a style guarantee for a correctness one, taken deliberately and in that direction.
+  'unicorn/prefer-spread': 'off',
   // New in unicorn 73. It would expand every concise one-line `/** ... */` export doc into a
   // three-line block, and would also rewrite the `GENERATED AUTOMATICALLY BY PAYLOAD` /
   // `DO NOT MODIFY` headers that Payload writes into the `src/app/(payload)` scaffolding.
