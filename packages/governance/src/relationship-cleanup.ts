@@ -19,7 +19,7 @@
 // This is the one Payload rule that cannot be decided from a single file: `relationTo: 'users'` names a
 // collection some other module declares. It therefore reads every candidate at once, the way
 // `admin-view-coverage.ts` does, rather than joining the single-source finders in `payload-policy.ts`.
-import type { SpecSource } from './admin-view-coverage.js'
+import type { SpecSource } from './axe-coverage.js'
 import {
   configBody,
   depthOneBlockKeys,

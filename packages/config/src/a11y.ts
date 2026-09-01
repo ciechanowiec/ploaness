@@ -23,7 +23,16 @@ export type {
 } from '@ploaness/governance'
 export { classifyHitTarget, findDefiniteIncomplete } from '@ploaness/governance'
 
+import { type Dirent, existsSync, readdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import type { Page } from '@playwright/test'
+import {
+  appRootOf,
+  declaredRoutesOf,
+  findUnsweptRoutes,
+  type SpecSource,
+  type UnsweptRoute,
+} from '@ploaness/governance'
 
 import { projectSettings } from './project-settings.js'
 
@@ -191,4 +200,89 @@ export const settleForScan = async (page: Page): Promise<void> => {
     // site did before this function existed. A page that is genuinely broken still fails at `analyze`,
     // with an axe result to read rather than a protocol error naming no route.
   }
+}
+
+// What the sweep cannot work out from inside the browser: which pages this project declares.
+//
+// The crawl knows what it reached. Only the file tree knows what exists, so the completeness check
+// needs both, and reading the tree is I/O - which is why the walk is here and every DECISION it feeds
+// is in `@ploaness/governance`, where a coverage floor measures it. What follows is a directory walk
+// and two file reads; which file is a route file, and what address it answers at, are not decided
+// here.
+//
+// This is a function rather than the module-scope constants above it, and that is load-bearing.
+// `ploaness/a11y` is imported by a project's own specs too - that is why `settleForScan` lives here -
+// and a recursive walk evaluated at import time would run once per spec module, in every worker.
+
+// Where a project's own code can be. Walking from the member root would descend into `node_modules`
+// and `.next`, which are large, and into `dist`, which holds a compiled copy of the same routes.
+const WALKED_ROOTS: readonly string[] = ['src', 'app', 'tests']
+
+// The extensions a route file or a specification can have. Filtering here rather than in the rule
+// keeps the corpus small; the rule still decides what a `page.tsx` means.
+const READ_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.jsx', '.js', '.mdx']
+
+/** Where a project's specifications live, which is a ploaness convention rather than a setting. */
+const SPEC_ROOT: string = 'tests/'
+
+const filesUnder = (root: string, relative: string): readonly string[] => {
+  const entries: readonly Dirent[] = readdirSync(path.join(root, relative), {
+    withFileTypes: true,
+  })
+  return entries.flatMap((entry: Dirent): readonly string[] => {
+    // Forward slashes throughout, because the rules receive these paths as addresses-in-waiting and a
+    // backslash from a Windows walk would split into segments nothing matches.
+    const child: string = relative === '' ? entry.name : `${relative}/${entry.name}`
+    if (entry.isDirectory()) {
+      return filesUnder(root, child)
+    }
+    return READ_EXTENSIONS.some((extension: string): boolean => child.endsWith(extension))
+      ? [child]
+      : []
+  })
+}
+
+const projectFiles = (root: string): readonly string[] =>
+  WALKED_ROOTS.flatMap((walked: string): readonly string[] =>
+    existsSync(path.join(root, walked)) ? filesUnder(root, walked) : [],
+  )
+
+const readSpecs = (root: string, paths: readonly string[]): readonly SpecSource[] =>
+  paths
+    .filter((file: string): boolean => file.startsWith(SPEC_ROOT))
+    .map(
+      (file: string): SpecSource => ({
+        path: file,
+        source: readFileSync(path.join(root, file), 'utf8'),
+      }),
+    )
+
+/**
+ * The pages this project declares that the sweep did not cover, each with what to do about it.
+ *
+ * Answers with nothing when the member declares no application routes at all, which is the honest
+ * result for a package that has no app directory rather than a claim that its pages are covered.
+ * @param visitedRoutes the addresses the crawl reached and scanned.
+ * @param answeredRoutes the addresses that answered, forwarding ones included.
+ * @returns one sentence per uncovered page, ready to be shown as a failure.
+ */
+export const unsweptRoutes = (
+  visitedRoutes: readonly string[],
+  answeredRoutes: readonly string[],
+): readonly string[] => {
+  const root: string = process.cwd()
+  const paths: readonly string[] = projectFiles(root)
+  const appRoot: string | undefined = appRootOf(paths)
+  if (appRoot === undefined) {
+    return []
+  }
+  const specs: readonly SpecSource[] = readSpecs(root, paths)
+  return findUnsweptRoutes({
+    declaredRoutes: declaredRoutesOf(paths, appRoot),
+    visitedRoutes,
+    answeredRoutes,
+    skippedPrefixes: SKIPPED_ROUTE_PREFIXES,
+    specs,
+    everyFile: specs,
+  }).map((unswept: UnsweptRoute): string => `${unswept.file} [${unswept.rule}] ${unswept.reason}`)
 }

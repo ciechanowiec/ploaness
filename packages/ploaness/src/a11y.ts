@@ -11,4 +11,5 @@ export {
   MAX_SWEEP_ROUTES,
   SKIPPED_ROUTE_PREFIXES,
   settleForScan,
+  unsweptRoutes,
 } from '@ploaness/config/a11y'

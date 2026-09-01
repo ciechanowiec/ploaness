@@ -3,8 +3,8 @@ import {
   type DeclaredAdminView,
   findDeclaredAdminViews,
   findUnscannedAdminViews,
-  type SpecSource,
 } from '../src/admin-view-coverage.js'
+import type { SpecSource } from '../src/axe-coverage.js'
 
 const CONFIG: string = `
 export default buildConfig({

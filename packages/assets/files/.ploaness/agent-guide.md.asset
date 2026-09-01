@@ -127,6 +127,18 @@ ploaness governs all of the following domains:
   narrowing the crawl to fit means excusing real public pages from accessibility checking so that the
   accessibility check passes. A finding is a defect in the page, never in the sweep:
   repair the markup or the contrast rather than narrowing what is scanned.
+  What the crawl reached is only half of what it reports. The other half is what it MISSED: the sweep
+  reads the project's own route files, and a page it never reached is a page nothing has scanned. Three
+  shapes of page fall outside a link crawl and all three are ordinary - one linked from nowhere, one
+  whose link renders only for a signed-in visitor, and one whose address does not exist until a record
+  is created - so a sweep that reported only what it found described half a site as though it were the
+  whole of one. There are three honest answers and the finding names all three: link the page from one
+  the crawl reaches, scan it in a spec of the project's own that reaches axe, or declare it in
+  `accessibilitySkipRoutes` with the reason it is out of scope. A dynamic route is covered when the
+  crawl scanned any address it produces, so `posts/[slug]` needs nothing extra on a site that links its
+  posts; a spec answers for one by BUILDING an address beneath it, because visiting the parent of a
+  family scans none of its members. This check is in the end-to-end tier rather than beside the
+  default-tier `admin-views` gate, and unavoidably: only a crawl that has run knows what it reached.
   The sweep skips `/admin` and `/api` and always will: the panel is Payload's markup, not the
   project's, and the crawl carries no credential to sign in with. A CUSTOM admin view is the one thing
   inside that exemption the project wrote itself, so the `admin-views` gate requires the project to
@@ -480,6 +492,15 @@ enforces. These are decided by reading the code against the wording below, not b
 
 - A test fails when the behavior its name states is removed from the code under test. A test that keeps
   passing after its subject is deleted is measuring nothing, however green the suite is.
+- The accessibility sweep maps a route file to the address it answers at by reading the file tree, and
+  a Next.js configuration can move that address after the fact. `basePath`, `trailingSlash`,
+  `rewrites`, `redirects`, `middleware` and a custom `pageExtensions` all do, and none can be read
+  without importing the application - so a project using one is responsible for the pages the sweep
+  then names or fails to name, and answers for them through `accessibilitySkipRoutes` and its own
+  scans. A route named to a spec only inside a regular expression IS found, because that is how
+  Playwright waits for one; a route named inside a comment is not, except where the comment spells it
+  as a regular expression, which is a hole nobody falls into by accident and one worth leaving open to
+  keep the ordinary idiom working.
 - A test verifies one behavior and states that behavior in its name.
 - An assertion whose verdict does not depend on the code under test is banned. The gate catches the
   literal form, such as an assertion that a constant is true. It cannot catch the same mistake made

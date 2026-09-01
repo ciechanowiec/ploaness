@@ -15,6 +15,7 @@
 //
 // This is the same shape as the anonymous-grant rule: the framework will happily leave a decision
 // unmade, so the project is required to have made it somewhere a check can see.
+import { containsRoute, reachesAxe, type SpecSource } from './axe-coverage.js'
 import type { PayloadViolation } from './payload-source.js'
 import { balancedArguments, lineOf, stripComments } from './source-text.js'
 
@@ -23,72 +24,6 @@ export interface DeclaredAdminView {
   readonly path: string
   readonly line: number
 }
-
-/** A file the coverage question is answered from: its repository path and its text. */
-export interface SpecSource {
-  readonly path: string
-  readonly source: string
-}
-
-// What proves a file reaches axe. The builder's class name covers the Playwright and WebdriverIO
-// packages alike, the scoped package name covers a bare import, and `axe.run` covers the browser
-// script form. A project driving axe some fourth way is asked to say so rather than assumed to have
-// nothing.
-const AXE_MARKERS: readonly string[] = ['AxeBuilder', '@axe-core', 'axe.run']
-
-const REGEX_METACHARACTERS: RegExp = /[$()*+.?[\\\]^{|}]/gu
-
-const escaped = (text: string): string => text.replaceAll(REGEX_METACHARACTERS, String.raw`\$&`)
-
-// An import specifier is a path too, and `@/lib/calendar/interval` contains `/calendar`. Read as a
-// route, that made every unit spec of a `calendar` module look like a test driving the view - and a
-// spec that also imported the shared axe helper would then have answered for a view nothing scans,
-// which is a false PASS and the one failure a gate must never have. Specifiers and comments are
-// removed before the search; `importedSources` reads the specifiers from the original text, where
-// they still are.
-const MODULE_SPECIFIER: RegExp = /\b(?:from|import)\s*(?:\(\s*)?['"][^'"]*['"]/gu
-
-const routeText = (source: string): string => stripComments(source).replaceAll(MODULE_SPECIFIER, '')
-
-// A view path is a route prefix, so a bare `includes` would let a spec for `/calendar-archive` answer
-// for `/calendar`. The character after the match has to end the route.
-const containsRoute = (source: string, route: string): boolean =>
-  new RegExp(String.raw`${escaped(route)}(?![\w-])`, 'u').test(routeText(source))
-
-const carriesAxe = (source: string): boolean =>
-  AXE_MARKERS.some((marker: string): boolean => source.includes(marker))
-
-const RELATIVE_IMPORT: RegExp = /\bfrom\s*['"](\.[^'"]*)['"]/gu
-
-// Resolved by the tail of the specifier rather than by walking the filesystem, because this module
-// takes plain values and owns no path resolver. `../helpers/accessibility` matches
-// `tests/helpers/accessibility.ts`, which is the shape every project writes; a specifier that resolves
-// somewhere genuinely different would have to end in the same segments to be confused with it.
-const matchesFile = (specifier: string, filePath: string): boolean => {
-  const tail: string = specifier.replace(/^(?:\.\.?\/)+/u, '')
-  return ['.ts', '.tsx', '/index.ts', '/index.tsx'].some((suffix: string): boolean =>
-    filePath.endsWith(`${tail}${suffix}`),
-  )
-}
-
-const importedSources = (
-  spec: SpecSource,
-  everyFile: readonly SpecSource[],
-): readonly SpecSource[] =>
-  [...spec.source.matchAll(RELATIVE_IMPORT)].flatMap((match: RegExpExecArray): SpecSource[] =>
-    everyFile.filter((candidate: SpecSource): boolean =>
-      matchesFile(match[1] ?? '', candidate.path),
-    ),
-  )
-
-// One hop, deliberately. A spec that scans through a helper is the ordinary arrangement and has to be
-// recognised; a chain deeper than that is a project hiding its own scan from itself, and following it
-// would trade a rule anyone can predict for one nobody can.
-const reachesAxe = (spec: SpecSource, everyFile: readonly SpecSource[]): boolean =>
-  carriesAxe(spec.source) ||
-  importedSources(spec, everyFile).some((imported: SpecSource): boolean =>
-    carriesAxe(imported.source),
-  )
 
 // `components` then `views`, each read as the block it opens rather than as text found anywhere in the
 // file. Nesting the two is what tells Payload's own vocabulary apart from a project's: a `views` key

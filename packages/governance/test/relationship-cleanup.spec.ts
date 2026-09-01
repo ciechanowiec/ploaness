@@ -5,7 +5,7 @@
 // way the rule could fire on a configuration that is correct, and a rule that cried wolf on
 // `hasMany: true` would be worse than no rule, because a project would learn to ignore it.
 import { describe, expect, it } from 'vitest'
-import type { SpecSource } from '../src/admin-view-coverage.js'
+import type { SpecSource } from '../src/axe-coverage.js'
 import { findUnguardedRelationships, type LocatedViolation } from '../src/relationship-cleanup.js'
 
 const GUARDED_TARGET: SpecSource = {

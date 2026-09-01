@@ -20,6 +20,7 @@ import {
   MAX_SWEEP_ROUTES,
   SKIPPED_ROUTE_PREFIXES,
   settleForScan,
+  unsweptRoutes,
 } from 'ploaness/a11y'
 
 // Taken from the public surface of the builder this spec already imports, rather than from `axe-core`,
@@ -121,6 +122,9 @@ const enqueueRoutes = (hrefs: readonly string[], origin: string, state: CrawlSta
 
 interface RouteDiscovery {
   readonly routes: readonly string[]
+  // Every route that answered, forwarding ones included. A page whose only job is to redirect is not
+  // a page to scan, and only this set tells it apart from a page nothing ever linked.
+  readonly answered: readonly string[]
   readonly isCapped: boolean
   readonly hasSeedAnswered: boolean
 }
@@ -163,6 +167,7 @@ const discoverRoutes = async (page: Page, origin: string): Promise<RouteDiscover
   }
   return {
     routes: reachable,
+    answered: [...state.answered],
     isCapped: state.dropped.size > 0,
     hasSeedAnswered: state.answered.has(SEED_ROUTE),
   }
@@ -289,6 +294,10 @@ test.describe('Accessibility sweep', () => {
   }) => {
     const origin: string = baseURL ?? ''
     expect(origin, 'the ploaness Playwright config must declare a server URL').not.toEqual('')
+    // Armed before the crawl rather than after it. Until the budget below is set this test runs under
+    // the shipped default, and a site approaching the route cap cannot be crawled inside it - which
+    // failed as a bare timeout naming no route, from a sweep whose whole job is to name routes.
+    test.setTimeout(MAX_SWEEP_MILLISECONDS)
     const discovery: RouteDiscovery = await discoverRoutes(page, origin)
     const routes: readonly string[] = discovery.routes
     // What this guards is that the crawl RAN, not that the site has pages to sweep. Those are two
@@ -307,6 +316,19 @@ test.describe('Accessibility sweep', () => {
       `a11y sweep reached the ${String(MAX_SWEEP_ROUTES)}-route cap; raise the harness limit only after ` +
         'measuring the resulting run time',
     ).toBe(false)
+    // What the crawl reached is only half the question. The other half is what it MISSED, and this is
+    // the only place both halves exist: the file tree says which pages this project declares, and the
+    // crawl has just said which of them it could get to. A page reached by neither is a page nothing
+    // has ever scanned, and before this check nothing said so.
+    //
+    // Asserted here rather than after the per-route loop, and deliberately. It costs milliseconds
+    // while the sweep costs up to an hour, the shipped Playwright config retries a failing test twice
+    // in CI, and this whole sweep is ONE test - so a completeness failure asserted at the end would be
+    // paid for three times over before anything was reported.
+    expect(
+      unsweptRoutes(routes, discovery.answered),
+      'pages this project declares that nothing scans for accessibility',
+    ).toEqual([])
     const [first] = routes
     if (first === undefined) {
       // The seed answered and forwarded out of the public surface, so there is no page to judge.
@@ -314,6 +336,7 @@ test.describe('Accessibility sweep', () => {
       // a zero timeout as no timeout at all, so an empty sweep would have disarmed it.
       return
     }
+    // Narrowed from the ceiling armed above, now that the route count is known.
     test.setTimeout(Math.min(routes.length * MILLISECONDS_PER_ROUTE, MAX_SWEEP_MILLISECONDS))
     // The chrome is identical site-wide, so sweep its interactive states once, on the first route.
     await page.goto(`${origin}${first}`)
