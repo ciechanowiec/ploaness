@@ -117,13 +117,20 @@ describe('what the shipped configs make of a spec file', () => {
 
   // Without this, both halves above are satisfied by turning the rule off for everything, which is the
   // cheapest way to make two configs agree and the one way that must not count as agreement.
-  it('still holds the code that spec tests to the ban the spec is exempt from', async () => {
+  it('still holds the code that spec tests to the bans the spec is exempt from', async () => {
+    // Named rather than derived from the exemption table: what is asserted is that these particular
+    // relaxations are a spec's, and a rule added to the table later should have to say so here too.
+    const heldOnProduction: readonly string[] = [
+      '@typescript-eslint/no-magic-numbers',
+      'max-lines-per-function',
+    ]
     for (const [name, config] of Object.entries(shippedConfigs)) {
       const rules: Readonly<Record<string, unknown>> = await resolveRules(config, PRODUCTION_FILE)
-      expect(
-        severityOf(rules, '@typescript-eslint/no-magic-numbers'),
-        `the bare-number ban on production code in the ${name} config`,
-      ).toBe('error')
+      for (const rule of heldOnProduction) {
+        expect(severityOf(rules, rule), `${rule} on production code in the ${name} config`).toBe(
+          'error',
+        )
+      }
     }
   })
 })

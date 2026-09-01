@@ -8,7 +8,9 @@ import {
   findGeneratedDrift,
   findPayloadViolations,
   findSourceViolations,
+  findUnguardedRelationships,
   findUnscannedAdminViews,
+  type LocatedViolation,
   type PayloadViolation,
   type RegeneratedArtefact,
   type SpecSource,
@@ -121,15 +123,37 @@ const sourceCandidates = (context: Member): readonly string[] => {
   )
 }
 
+const reported = (file: string, violation: PayloadViolation): string =>
+  `${file}:${String(violation.line)} [${violation.rule}] ${violation.reason}`
+
+// One rule cannot be decided from a single file: a required relationship names its target by slug, and
+// the collection carrying that slug is declared somewhere else. It therefore reads the whole candidate
+// set rather than one text, and it reports the file that declares the relationship rather than the file
+// it happens to be judged from.
+const crossFileFindings = (context: Member, files: readonly SpecSource[]): readonly string[] =>
+  context.isPayload
+    ? findUnguardedRelationships(files).map((located: LocatedViolation): string =>
+        reported(located.path, located.violation),
+      )
+    : []
+
 /** Apply the source rules to every TypeScript file under the declared source roots. */
 export const payloadRules = (context: Member): GateResult => {
   const candidates: readonly string[] = sourceCandidates(context)
-  const findings: readonly string[] = candidates.flatMap((file: string): readonly string[] =>
-    violationsIn(readFileSync(path.join(context.root, file), 'utf8'), context.isPayload).map(
-      (violation: PayloadViolation): string =>
-        `${file}:${String(violation.line)} [${violation.rule}] ${violation.reason}`,
-    ),
+  const files: readonly SpecSource[] = candidates.map(
+    (file: string): SpecSource => ({
+      path: file,
+      source: readFileSync(path.join(context.root, file), 'utf8'),
+    }),
   )
+  const findings: readonly string[] = [
+    ...files.flatMap((file: SpecSource): readonly string[] =>
+      violationsIn(file.source, context.isPayload).map((violation: PayloadViolation): string =>
+        reported(file.path, violation),
+      ),
+    ),
+    ...crossFileFindings(context, files),
+  ]
   return findings.length > 0
     ? failed(`${String(findings.length)} source usage violation(s)`, findings)
     : passed(`${String(candidates.length)} source file(s) follow the usage rules`)

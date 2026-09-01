@@ -11,5 +11,10 @@ export const Posts: CollectionConfig = {
     update: nobody,
     delete: nobody,
   },
-  fields: [{ name: 'title', type: 'text', required: true }],
+  fields: [
+    { name: 'title', type: 'text', required: true },
+    // A single-value required relationship: the shape that puts a NOT NULL column against a foreign
+    // key declared ON DELETE SET NULL, which is what require-relationship-cleanup judges.
+    { name: 'author', type: 'relationship', relationTo: 'users', required: true },
+  ],
 }

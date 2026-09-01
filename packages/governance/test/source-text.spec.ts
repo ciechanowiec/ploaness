@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   balancedArguments,
+  enclosingLiteral,
   lineOf,
   maskLiterals,
   occurrences,
@@ -189,5 +190,50 @@ describe('maskLiterals', () => {
   it('leaves newlines intact so a masked offset still names its line', () => {
     const source: string = 'const a = "one\ntwo"\nconst b = 1'
     expect(maskLiterals(source).split('\n')).toHaveLength(source.split('\n').length)
+  })
+})
+
+// The reader that starts from something found INSIDE a literal and recovers the object it belongs to.
+// A rule uses it to take a marker key back to its own field, so the cases that matter are the ones where
+// "the nearest brace" and "the enclosing brace" are different answers.
+describe('enclosingLiteral', () => {
+  it('recovers the object literal an offset sits in', () => {
+    const source: string = "{ fields: [{ name: 'a', type: 'relationship' }] }"
+    const at: number = source.indexOf("'relationship'")
+    expect(enclosingLiteral(source, at)).toBe("{ name: 'a', type: 'relationship' }")
+  })
+
+  it('recovers the innermost one when literals are nested', () => {
+    const source: string = '{ outer: true, inner: { deep: { mark: 1 } } }'
+    const at: number = source.indexOf('mark')
+    expect(enclosingLiteral(source, at)).toBe('{ mark: 1 }')
+  })
+
+  it('picks the literal the offset is in rather than the one before it', () => {
+    const source: string = "[{ name: 'first' }, { name: 'second' }]"
+    const at: number = source.indexOf("'second'")
+    expect(enclosingLiteral(source, at)).toBe("{ name: 'second' }")
+  })
+
+  // Walking backwards from the offset would be the obvious implementation, and a brace inside a quoted
+  // value would close a literal that was never open.
+  it('is not fooled by a brace inside a string literal', () => {
+    const source: string = "{ pattern: '}{', mark: 1 }"
+    const at: number = source.indexOf('mark')
+    expect(enclosingLiteral(source, at)).toBe(source)
+  })
+
+  it('reports nothing for an offset inside no literal at all', () => {
+    expect(enclosingLiteral('const value = 1', 6)).toBeUndefined()
+  })
+
+  // The walk jumps a string literal whole, so an offset pointing at one is never visited. This is the
+  // case every caller actually has - a marker is found by searching for its quoted value - and an
+  // equality test on the offset reported nothing for all of them.
+  it('recovers the literal from an offset pointing at a quoted value', () => {
+    const source: string = "{ fields: [{ name: 'a', type: 'relationship' }] }"
+    expect(enclosingLiteral(source, source.indexOf("'relationship'"))).toBe(
+      "{ name: 'a', type: 'relationship' }",
+    )
   })
 })

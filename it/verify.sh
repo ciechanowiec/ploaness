@@ -511,6 +511,36 @@ drop_text "$scratch/fail-global-access/src/globals/Header.ts" "    update: nobod
 commit_case fail-global-access 'feat(fixture): leave a global update undeclared' "$CONFORMING_BODY"
 expect fail-global-access payload-rules FAIL require-complete-access
 
+# A required relationship gives one table a NOT NULL column against a foreign key Payload declares
+# ON DELETE SET NULL. The two contradict, so deleting the row being pointed AT aborts on a constraint
+# belonging to a table the caller never mentioned - unless that collection takes its dependants down
+# first. The template declares the hook; this removes it.
+new_case fail-relationship-cleanup
+drop_text "$scratch/fail-relationship-cleanup/src/collections/Users.ts" "    beforeDelete: [removeAuthoredPosts],
+"
+commit_case fail-relationship-cleanup 'feat(fixture): stop taking dependants down with an account' \
+    "$CONFORMING_BODY"
+expect fail-relationship-cleanup payload-rules FAIL require-relationship-cleanup
+
+# `format` applies Biome, then ESLint's fixers. A fixer emits what its rule considers correct rather
+# than what the formatter would have printed, so for as long as nothing ran after ESLint the command
+# could leave a tree the `biome` gate rejects - on a change format itself had made. ONE run has to
+# settle it; running format twice always did.
+new_case format-converges
+cat > "$scratch/format-converges/src/lib/trim.ts" <<'FIXTURE'
+/**
+ * Drop the last value. Written the way a person writes it, which `unicorn/prefer-negative-index`
+ * rewrites and only Biome then formats.
+ * @param values - the values to trim.
+ * @returns every value but the last.
+ */
+export const dropLast = (values: readonly number[]): readonly number[] =>
+  values.slice(0, values.length - 1)
+FIXTURE
+commit_case format-converges 'feat(fixture): add a value a fixer rewrites' "$CONFORMING_BODY"
+(cd "$scratch/format-converges" && ./node_modules/.bin/ploaness format >/dev/null 2>&1)
+expect format-converges biome PASS
+
 # A range on a package a gate depends on lets an upstream release change a verdict while the project
 # stays unchanged, which is what pinning the toolchain exists to prevent.
 new_case fail-ranged-toolchain

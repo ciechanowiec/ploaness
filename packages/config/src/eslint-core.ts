@@ -113,6 +113,21 @@ const MOCKING_PACKAGES: readonly string[] = [
   'msw',
 ]
 
+// No simulated web layer. A test-only imitation of a framework's request handling answers a request
+// without the server, the serialization and the error handling a real one passes through, so a test
+// written against it proves the handler ran rather than that the endpoint works.
+//
+// What is NOT listed here matters as much as what is. The framework's OWN request pipeline - the code a
+// live request actually runs, reached in process - is a real component under the substitute criterion,
+// and driving an endpoint through it is the intended way to assert on a real response. `supertest` is
+// absent for the same kind of reason: it binds a real ephemeral port, which is exactly what the rule
+// asks for. And like the mock ban above, this names the cases it knows; a hand-rolled imitation is
+// still a violation that an inspection decides.
+const WEB_SIMULATION_MESSAGE: string =
+  'No simulated web layer. Drive the endpoint through the real request pipeline, or a real server ' +
+  'on a local port, instead (see AGENTS.md).'
+const WEB_SIMULATION_PACKAGES: readonly string[] = ['node-mocks-http', 'light-my-request']
+
 // Collection/global/field/block configs are declarative wiring: importing one already satisfies its
 // coverage, so a function inlined there has no unit-test seam and can sit untested. This rule bans
 // inline functions in those files, forcing extraction into the unit-tested src/access and src/lib
@@ -544,9 +559,16 @@ export const guidelineRules: RuleTable = {
 
   // No mocks - ban the mocking entry points and libraries build-wide.
   'no-restricted-properties': ['error', ...NO_MOCK_PROPERTIES],
+  // One setting carries both bans, because this key REPLACES rather than merges: a second
+  // `no-restricted-imports` anywhere would drop whichever list it did not restate.
   'no-restricted-imports': [
     'error',
-    { paths: MOCKING_PACKAGES.map((name) => ({ name, message: NO_MOCKS_MESSAGE })) },
+    {
+      paths: [
+        ...MOCKING_PACKAGES.map((name) => ({ name, message: NO_MOCKS_MESSAGE })),
+        ...WEB_SIMULATION_PACKAGES.map((name) => ({ name, message: WEB_SIMULATION_MESSAGE })),
+      ],
+    },
   ],
 }
 
@@ -600,11 +622,15 @@ export const testIntegrityRules: RuleTable = {
 /**
  * The framework idiom a spec is written in, which the production rules were never aimed at.
  *
- * Only idiom is relaxed. Every rule that carries a rule of the governing standard - the size caps, the
- * explicitness rules, the ban on a non-null assertion, the unsafe-any family - stays ON, because the
- * standard says test code passes the same static-analysis checks as production code. A relaxation that
- * made a test easier to write by making it less checked would exempt the suite from the contract it
- * exists to enforce.
+ * Only idiom is relaxed. Every rule that carries a rule of the governing standard - the explicitness
+ * rules, the ban on a non-null assertion, the unsafe-any family, and every size cap but one - stays ON,
+ * because the standard says test code passes the same static-analysis checks as production code. A
+ * relaxation that made a test easier to write by making it less checked would exempt the suite from the
+ * contract it exists to enforce.
+ *
+ * The one exception is `max-lines-per-function`, and it is a role distinction rather than a relaxation:
+ * the cap bounds a unit of logic, and a `describe` body is a list of independent declarations. The file
+ * cap still applies. See the entry itself for the argument.
  *
  * Shared by every shipped config rather than stated in each, because what earns the exemption is being a
  * SPEC rather than being a Payload application's spec. Stated twice it drifted: a library consumer's
@@ -621,6 +647,12 @@ export const testIdiomRules: RuleTable = {
   'unicorn/no-top-level-assignment-in-function': 'off', // the standard vitest beforeAll pattern.
   'unicorn/max-nested-calls': 'off', // expect(fn(arg(value))) assertions are idiomatic.
   'unicorn/numeric-separators-style': 'off', // fixtures use code points (0x2026); ungrouped reads better.
+  // A `describe` body is a list of independent declarations rather than a unit of logic: nothing flows
+  // between its tests, so reading the twelfth needs none of the first eleven, and the cognitive load the
+  // cap bounds does not accumulate. Splitting one to satisfy the cap invents a group name that marks a
+  // linter boundary rather than a real one. A spec file that genuinely IS too long is still caught, by
+  // `max-lines`, which stays on.
+  'max-lines-per-function': 'off',
 }
 
 // Property tests must stay deterministic: one seed decides the whole suite, and a per-call override

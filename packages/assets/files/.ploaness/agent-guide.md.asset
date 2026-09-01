@@ -487,7 +487,15 @@ enforces. These are decided by reading the code against the wording below, not b
 - A component's name decides nothing about whether it is real. An in-memory library component that
   implements a protocol is real; a class inside the test tree whose answers a test sets is a
   substitute, whatever it is called. The bans on the known mocking libraries cover the named cases, not
-  a hand-rolled fake.
+  a hand-rolled fake. The same reading decides a web layer: a framework's OWN request pipeline, driven
+  in the process under test, is real - it runs the routing, the authentication, the transaction and the
+  serialization a live request runs - while a test-only imitation of it is a substitute. What the
+  in-process pipeline does not reach is the socket and whatever the server wraps around it, so a suite
+  that drives it still starts the real application somewhere.
+- A test that authenticates by cookie sends an `Origin` header, or it is testing the anonymous path
+  under another name. Payload refuses a session token when a request carries neither `Origin` nor
+  `Sec-Fetch-Site` and the config declares a CSRF allowlist, so the request is not rejected - it is
+  served as an anonymous one. The test passes, against the wrong code path, and nothing reports it.
 - Every wait a test performs is bounded by a timeout sized so that its expiry signals a defect of the
   code rather than the speed of the machine. The reach beyond this machine is a check now; how long a
   test is willing to wait is still a reading.

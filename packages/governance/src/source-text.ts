@@ -390,3 +390,57 @@ export const topLevelKeys = (source: string, index: number): readonly string[] =
     (match: RegExpExecArray): string => match[1] ?? '',
   )
 }
+
+// The open braces still standing at a given point of the walk, and the innermost one at the offset
+// asked about. A stack rather than a count, because the answer is WHERE the literal opens rather than
+// how deep the offset sits.
+interface Enclosure {
+  readonly opens: readonly number[]
+  readonly innermost: number
+}
+
+// At or past the target rather than exactly on it. The walk jumps a string literal whole, so an offset
+// pointing INTO one - which is what the offset of a `type: 'relationship'` value is - is never visited,
+// and an equality test would walk to the end reporting nothing. The first position reaching the target
+// stands inside the same literal, because a string cannot span the brace that closes one.
+const enclose = (state: Enclosure, step: ScanStep, target: number): Folded<Enclosure> => {
+  if (step.index >= target) {
+    return {
+      state: { ...state, innermost: state.opens.at(LAST_CHARACTER) ?? NOT_FOUND },
+      stop: true,
+    }
+  }
+  if (step.character === '{') {
+    return { state: { ...state, opens: [...state.opens, step.index] }, stop: false }
+  }
+  return step.character === '}'
+    ? { state: { ...state, opens: state.opens.slice(0, LAST_CHARACTER) }, stop: false }
+    : { state, stop: false }
+}
+
+/**
+ * The innermost brace-delimited literal containing an offset.
+ *
+ * The counterpart to `topLevelKeys`, which reads a literal a caller has already located. This one
+ * starts from something found INSIDE a literal - a marker key such as `type: 'relationship'` - and
+ * recovers the object it belongs to, which is how a rule reads the rest of that object's keys. Walking
+ * backwards from the offset would be the obvious implementation and the wrong one: it would need a
+ * second scanner that skips string literals in reverse, and a brace inside a quoted value would close
+ * a literal that was never open.
+ * @param source the text to walk.
+ * @param index the offset known to sit inside the literal.
+ * @returns the literal wrapped in its own braces, or undefined when the offset sits inside none.
+ */
+export const enclosingLiteral = (source: string, index: number): string | undefined => {
+  const found: Enclosure = scanDelimited<Enclosure>(
+    source,
+    0,
+    (state: Enclosure, step: ScanStep): Folded<Enclosure> => enclose(state, step, index),
+    { opens: [], innermost: NOT_FOUND },
+  )
+  if (found.innermost === NOT_FOUND) {
+    return undefined
+  }
+  const body: string | undefined = balancedArguments(source, found.innermost)
+  return body === undefined ? undefined : `{${body}}`
+}

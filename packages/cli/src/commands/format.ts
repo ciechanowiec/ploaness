@@ -24,12 +24,26 @@ const formatMember = (member: Member, isSolo: boolean): number => {
   if (eslint.output.length > 0) {
     console.info(eslint.output)
   }
+  // Biome runs again because ESLint's fixers wrote last and Biome is the formatter. A fixer emits
+  // whatever its rule considers correct, not whatever the formatter would have printed, so the pass
+  // above can leave text that the `biome` gate then fails on - and it did:
+  // `unicorn/prefer-negative-index` rewrote `values.slice(0, values.length - 1)` to
+  // `values.slice(0, - 1)`, which is a formatting defect the gate reports on a change format itself
+  // made. Running format twice repaired it, which is the tell: the command was one pass short of a
+  // fixed point rather than wrong about any single fix. Biome's writer is deterministic and converges,
+  // so this pass costs one process and changes nothing when there was nothing to settle.
+  const settled: RunResult = biomeWrite(member)
+  console.info(settled.output)
   // ESLint exits non-zero for findings it cannot fix. Those are for `ploaness verify` to report, so
-  // formatting succeeds as long as Biome could write.
-  return biome.code === 0 ? 0 : 1
+  // formatting succeeds as long as Biome could write - and the second run is the one that describes
+  // the tree the caller is actually left with.
+  return biome.code === 0 && settled.code === 0 ? 0 : 1
 }
 
-/** Apply Biome's formatting and safe fixes, then ESLint's fixable rules, in every member. */
+/**
+ * Apply Biome's formatting and safe fixes, then ESLint's fixable rules, then Biome once more, in
+ * every member. The closing pass is what makes the command leave a tree the `biome` gate accepts.
+ */
 export const format = (repository: Repository): number => {
   const isSolo: boolean = repository.members.length <= 1
   const codes: readonly number[] = repository.members.map((member: Member): number =>
