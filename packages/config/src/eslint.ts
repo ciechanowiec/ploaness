@@ -146,6 +146,16 @@ export default compose(
   //    This is pure static analysis, so it is deterministic (never flaky) and the baseline every site
   //    needs. What it CANNOT see (it does not render): color contrast, focus order, real keyboard
   //    navigation - those need a browser and are covered by axe-in-e2e (see AGENTS.md testing policy).
+  //
+  //    This block also settles one rule for the whole application configuration. Biome ships a port of
+  //    `no-noninteractive-element-to-interactive-role`, and it is `off` in `biome.json` because it
+  //    contradicts Biome's own `useSemanticElements`: that rule requires `role="grid"` to sit on a
+  //    `<table>`, which is what the ARIA pattern documents, and the port then refuses the table carrying
+  //    it. No markup satisfies both, the port accepts no options, and the cost fell on any consumer
+  //    building an accessible grid, treegrid, listbox or tab-strip on the correct native element - a
+  //    suppression each, spent on a disagreement between two rules rather than on a hard case. The
+  //    recommended options mounted here are the same check with the allowances the port lacks: they
+  //    name `table: ['grid']`, `td: ['gridcell']` and `li: ['row']` explicitly, so nothing is lost.
   {
     files: ['**/*.tsx'],
     plugins: { 'jsx-a11y': jsxA11y },
@@ -267,10 +277,22 @@ export default compose(
   //    test must contain a real assertion. The testing-library rules keep component tests user-facing
   //    (query by role/text); assertions use the @testing-library/jest-dom matchers, which a project
   //    registers in a `vitest.setup.ts` of its own if it writes component tests.
-  //    Scoped to the Vitest suite (`tests/int` + `tests/unit`); Playwright e2e specs use a different
-  //    runner (and its own unconditional `forbidOnly`), so these Vitest/RTL rules do not apply there.
+  //    Scoped to every directory `vitest.ts` collects - `tests/int`, `tests/unit` and `tests/component`
+  //    - because a suite the runner runs and the linter does not reach is a suite held to no standard.
+  //    The component directory was missed for exactly that reason, and the rules that name it in the
+  //    sentence above were the ones it escaped: a consumer's component specs ran under a jsdom suite
+  //    this harness mandates while every `testing-library/*` rule, `no-disabled-tests`,
+  //    `no-commented-out-tests` and the literal-assertion ban passed over them. Playwright e2e specs
+  //    use a different runner, with its own unconditional `forbidOnly`, so these rules stay out of it.
   {
-    files: ['tests/int/**/*.ts', 'tests/int/**/*.tsx', 'tests/unit/**/*.ts', 'tests/unit/**/*.tsx'],
+    files: [
+      'tests/int/**/*.ts',
+      'tests/int/**/*.tsx',
+      'tests/unit/**/*.ts',
+      'tests/unit/**/*.tsx',
+      'tests/component/**/*.ts',
+      'tests/component/**/*.tsx',
+    ],
     plugins: { vitest: vitestPlugin, 'testing-library': testingLibrary },
     rules: {
       // A test must actually run and actually assert. The rules live in eslint-core.js, because the

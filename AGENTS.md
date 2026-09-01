@@ -367,6 +367,37 @@ formatting for the whole run. One stylesheet, passing `css` and unparseable to `
 teaches the parser a dialect and turns no rule off, which is why it is not a relaxation - the same
 reasoning that admitted the at-rules to stylelint, applied where it was missing.
 
+### One linter decides an interactive role, because two of them cannot
+
+Biome carries two a11y rules that contradict each other over one shape. `useSemanticElements` requires
+`role="grid"` to sit on a `<table>`, which is what the ARIA pattern documents; then
+`noNoninteractiveElementToInteractiveRole` refuses the table carrying it. No markup satisfies both, and
+the second rule accepts no options, so the allowance cannot be configured in. The cost fell on the
+consumer: a project building an accessible grid, treegrid, listbox or tab-strip on the correct native
+element spent a suppression on a disagreement between two rules rather than on a hard case.
+
+`noNoninteractiveElementToInteractiveRole` is therefore `off` in `packages/config/biome.json` - the
+application half, and only that half. The ESLint port of the same rule is mounted for `**/*.tsx` in
+`packages/config/src/eslint.ts` and gets the case right: its recommended options name `table: ['grid']`,
+`td: ['gridcell']` and `li: ['row']` explicitly. A library extends `biome-core.json` and receives no
+jsx-a11y at all, so turning the rule off there would remove the check rather than move it, and the core
+half is deliberately untouched. `packages/config/test/a11y-role-authority.spec.ts` asserts both halves,
+because either alone is a hazard.
+
+### Every suite the runner collects is a suite the linter judges
+
+`vitest.ts` collects `tests/int`, `tests/unit` and `tests/component`, and `eslint-core.ts` states that
+jsdom is mandated for the third. The test-integrity block in `eslint.ts` reached only the first two, so a
+directory this harness runs, mandates an environment for, and ships React Testing Library, jest-dom and
+user-event for was held to no standard: every `testing-library/*` rule, `no-disabled-tests`,
+`no-commented-out-tests` and the literal-assertion ban passed over it. Measured on one consumer's file
+linted under both paths, twelve findings became four.
+
+Two configs decided that scope separately and nothing compared them, which is why the drift was silent.
+`packages/config/test/eslint-suite-agreement.spec.ts` compares them now: it reduces every include glob
+the shipped Vitest configs declare to one concrete path and asks the cascade what that path resolves to,
+so a suite added to the runner fails until the lint block reaches it.
+
 ### The suite runs under the guard it ships
 
 `packages/config/src/vitest-setup.ts` is loaded ahead of every other setup file, here and in a consumer. It
