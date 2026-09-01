@@ -155,7 +155,7 @@ This section describes the state of the source code: its size, its types, its na
 [[size-and-complexity-caps]]
 === Size and Complexity Caps
 
-. Code respects the caps listed below, and each cap binds as an error in a static analyzer. A [[callable,a callable]]_callable_ is a source-code construct that can be invoked, such as a function, method, or constructor.
+. Code respects the caps listed below, and each cap binds as an error in a static analyzer. A [[callable,a callable]]_callable_ is a source-code construct that can be invoked, such as a function, method, constructor, or a template fragment invoked by name.
 +
 [cols="<3,>1",options="header"]
 |===
@@ -167,6 +167,7 @@ This section describes the state of the source code: its size, its types, its na
 |Control-structure nesting depth |3 levels
 |Line length |120 characters
 |===
+. The parameter cap doesn't bind on a xref:#callable[callable] that overrides another, because it doesn't choose its own parameter list. Every other cap binds.
 . Where no tool for the programming language or platform measures a cap, a script of the xref:#governed-repository[governed repository] measures that cap, and the script is a xref:#check[check].
 . Code that grows past a cap is refactored until every measured value meets the cap. A cap is never raised. A xref:#governed-repository[governed repository] may set caps stricter than the table and never sets looser ones.
 
@@ -186,7 +187,7 @@ This section describes the state of the source code: its size, its types, its na
 [[immutability-and-composition]]
 === Immutability and Composition
 
-. Data is immutable. A field is assigned once, when its object is created, and a local variable is assigned once. Changed state is expressed as a new value, not as an overwrite of the old one. The only way to mutate is through a xref:#suppressions[suppression].
+. Data is immutable. A field is assigned once, when its object is created, and a local variable is assigned once. Changed state is expressed as a new value, not as an overwrite of the old one. A field stays writable only where a dependency must populate it after construction at run time, and the code itself never writes such a field. Anywhere else the only way to mutate is through a xref:#suppressions[suppression].
 . A concrete type is closed to inheritance where the programming language can express the closure. A type stays open only where a dependency must subclass it at run time.
 . New behavior is added by composing objects, not by inheriting. A type inherits only from a base that the programming language or a dependency requires - for example, the base error type.
 
@@ -272,6 +273,7 @@ This section describes the state of the test suite and what it proves.
 . A test uses no xref:#substitute[substitutes]. It runs against xref:#real-component[real components]: a real database, a real server on a local port, or a real temporary file.
 . A service that exists only outside the machine is exercised through a local component that implements its protocol. The local component supplies the protocol's behavior on the machine that runs the test.
 . A xref:#check[check] fails on the construction of a xref:#substitute[substitute] in test code. The check names the libraries and framework declarations of the programming language or platform that install a substitute in place of a xref:#real-component[real component]. The check binds xref:#substitute-criterion[] and not a name, so a local component stays available however its library is named.
+. A framework's simulated web layer is a xref:#substitute[substitute] under xref:#substitute-criterion[]. It answers a request without the server, the serialization, the filter ordering, and the error handling a real request passes through, so a test written against it proves the handler ran rather than that the endpoint works. A xref:#check[check] fails on it, and an endpoint is tested through a real server on a local port instead. The trade is deliberate: the suite loses the fast test of a single endpoint and grows with the number of contexts it starts, and in return it can't pass an application that doesn't start.
 . Test code passes the same xref:#check[static-analysis checks] as production code.
 
 [[coverage]]
