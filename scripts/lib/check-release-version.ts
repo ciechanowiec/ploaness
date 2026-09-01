@@ -3,14 +3,21 @@
 // The packages are published together and pin each other at an EXACT version, because
 // `workspace:*` does not resolve when a package is installed from a tarball outside its workspace -
 // which is how `it/` verifies the harness before it is published. That exactness is what makes a
-// release safe and what makes a bump dangerous: nothing derives those five numbers from a single value,
+// release safe and what makes a bump dangerous: nothing derives those numbers from a single value,
 // so the version is written down once per manifest, once per cross-reference, twice in the fixture
-// and once in the guide - a count deliberately not stated as a number here, because a sixth package
-// changed it and no check reads this comment. A release that publishes with two of them disagreeing
-// produces packages that install and then fail to resolve.
+// and once in the guide. A release that publishes with two of them disagreeing produces packages that
+// install and then fail to resolve.
 //
 // So the joint is checked rather than the value. `packages/ploaness` is the version a consumer installs,
 // so it is the site every other one is measured against.
+//
+// This file also checks WHICH packages, not only which version, and it does so because the comment
+// that used to sit here gave up on exactly that: it declined to state a count "because a sixth package
+// changed it and no check reads this comment". The sixth package had by then been missed twice. The
+// release workflow published five of six, so a release would have shipped every package that pins
+// `@ploaness/runtime` and never runtime itself; and knip's workspace list omitted it, so that package
+// was never analysed at all. Both lists are hand-written, both were correct when written, and nothing
+// compared either against the tree. A roster is checked here for the same reason a version is.
 import { type Dirent, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -108,6 +115,65 @@ const guideFindings = (release: string): readonly string[] => {
     : [`${file} sets :ploaness-version: to "${String(declared)}", not "${release}"`]
 }
 
+// What `npm pack` names a package's tarball, which is the form the publish list is written in: the
+// scope becomes a prefix. Derived rather than listed, so a seventh package needs no edit here.
+const tarballName = (packageName: string): string =>
+  packageName.startsWith(HARNESS_SCOPE)
+    ? `ploaness-${packageName.slice(HARNESS_SCOPE.length)}`
+    : packageName
+
+// One roster, and what it is missing. Reported in both directions: a package the list has forgotten is
+// the defect this was written for, and a name no package answers to is a list left behind by a rename,
+// which would fail the release at the tarball that does not exist.
+const rosterFindings = (
+  file: string,
+  listed: readonly string[],
+  expected: readonly string[],
+  subject: string,
+): readonly string[] => [
+  ...expected
+    .filter((name: string): boolean => !listed.includes(name))
+    .map((name: string): string => `${file} does not ${subject} ${name}`),
+  ...listed
+    .filter((name: string): boolean => !expected.includes(name))
+    .map((name: string): string => `${file} names ${name}, which is no package of this workspace`),
+]
+
+// The publish order, as the workflow writes it. Matched on the assignment rather than parsed as YAML,
+// because the value is a shell string inside a `run:` block and a YAML reader would hand back the whole
+// script. A workflow that no longer carries the assignment is a finding rather than a silent pass.
+// Indented with spaces and tabs rather than `\s`, which matches a newline: under the multiline flag
+// that lets the leading run cross lines and backtrack, which is the same hazard `TARBALL` above is
+// anchored to avoid.
+const PUBLISH_ORDER: RegExp = /^[ \t]*order='([^']*)'/m
+
+const workflowFindings = (manifests: readonly Manifest[]): readonly string[] => {
+  const file: string = '.github/workflows/release.yaml'
+  const order: string | undefined = PUBLISH_ORDER.exec(readText(file))?.[1]
+  if (order === undefined) {
+    return [`${file} carries no publish order to check`]
+  }
+  return rosterFindings(
+    file,
+    order.split(/\s+/).filter((name: string): boolean => name.length > 0),
+    manifests.map((manifest: Manifest): string => tarballName(manifest.name)),
+    'publish',
+  )
+}
+
+// knip is run against this repository with that configuration, so a package absent from its workspaces
+// is a package no dead-code analysis has ever read.
+const knipFindings = (manifests: readonly Manifest[]): readonly string[] => {
+  const file: string = 'packages/config/knip-repo.json'
+  const workspaces: Record<string, unknown> = asRecord(readJson(file)['workspaces'])
+  return rosterFindings(
+    file,
+    Object.keys(workspaces).filter((name: string): boolean => name.startsWith('packages/')),
+    manifests.map((manifest: Manifest): string => path.posix.dirname(manifest.file)),
+    'analyse',
+  )
+}
+
 const manifests: readonly Manifest[] = readManifests()
 const meta: Manifest | undefined = manifests.find(
   (manifest: Manifest): boolean => manifest.name === META_PACKAGE,
@@ -117,20 +183,34 @@ if (meta === undefined) {
 }
 
 const release: string = meta.version
-const findings: readonly string[] = [
+const versionFindings: readonly string[] = [
   ...manifestFindings(manifests, release),
   ...fixtureFindings(release),
   ...guideFindings(release),
 ]
 
-if (findings.length > 0) {
+if (versionFindings.length > 0) {
   throw new Error(
-    `the release version is written inconsistently:\n  ${findings.join('\n  ')}\n` +
+    `the release version is written inconsistently:\n  ${versionFindings.join('\n  ')}\n` +
       `every site above must read "${release}", which is what packages/ploaness declares`,
   )
 }
 
+// Reported after the versions rather than beside them, because the two answer different questions and a
+// reader repairing one is not repairing the other.
+const rosterViolations: readonly string[] = [
+  ...workflowFindings(manifests),
+  ...knipFindings(manifests),
+]
+
+if (rosterViolations.length > 0) {
+  throw new Error(
+    `a package roster disagrees with the packages that exist:\n  ${rosterViolations.join('\n  ')}\n` +
+      'every package under packages/ is published and analysed, or it is neither',
+  )
+}
+
 console.info(
-  `release version: ${String(manifests.length)} packages, the it/ fixture and the user guide ` +
-    `all agree on "${release}"`,
+  `release: ${String(manifests.length)} packages agree on "${release}", and each is named by the ` +
+    'publish order and the knip workspaces',
 )

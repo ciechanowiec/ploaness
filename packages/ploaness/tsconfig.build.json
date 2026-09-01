@@ -1,5 +1,5 @@
 // The build of this package, kept apart from `tsconfig.json` for the reason `packages/config` is: that
-// name belongs to the configuration ploaness ships, which `build.mjs` generates by inlining the shared
+// name belongs to the configuration ploaness ships, which `build.ts` generates by inlining the shared
 // one. Two files cannot share it, and the shipped one is the file a consumer's `extends` names.
 {
   "extends": "../../tsconfig.base.json",

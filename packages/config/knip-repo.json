@@ -38,6 +38,10 @@
       "ignoreDependencies": ["@ploaness/assets"],
       "ignoreUnresolved": ["next"]
     },
+    "packages/runtime": {
+      "entry": ["test/**/*.spec.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
     "packages/assets": {
       "entry": ["test/**/*.spec.ts"],
       "project": ["test/**/*.ts"]

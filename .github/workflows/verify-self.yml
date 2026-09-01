@@ -58,7 +58,7 @@ jobs:
       # `packages/governance/src/toolchain-pins.ts`. Nothing is installed for them here: an image
       # this workflow acquired by any other route would be an image no digest vouched for.
       #
-      # `pnpm run verify` also packs the five packages and installs them into the `it/` fixture, so
+      # `pnpm run verify` also packs every package and installs them into the `it/` fixture, so
       # this single command covers the packaging and the consumer-resolution path as well.
       - name: 'Verify'
         run: pnpm run verify

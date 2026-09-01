@@ -18,7 +18,11 @@
       "Edit(packages/ploaness/biome.json)",
       "Write(packages/ploaness/biome.json)",
       "Edit(packages/ploaness/tsconfig.json)",
-      "Write(packages/ploaness/tsconfig.json)"
+      "Write(packages/ploaness/tsconfig.json)",
+      "Edit(packages/ploaness/biome-core.json)",
+      "Write(packages/ploaness/biome-core.json)",
+      "Edit(packages/ploaness/tsconfig-core.json)",
+      "Write(packages/ploaness/tsconfig-core.json)"
     ]
   }
 }

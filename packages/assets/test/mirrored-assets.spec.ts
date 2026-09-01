@@ -1,4 +1,4 @@
-// Binds the generator in `build.mjs` to the tree it generates from. `findPairedAssetDrift` decides;
+// Binds the generator in `build.ts` to the tree it generates from. `findPairedAssetDrift` decides;
 // this spec supplies the two sides by reading them, so a stale body is a named test failure rather
 // than a defect a consumer discovers as a wrong contract.
 import { existsSync, readFileSync } from 'node:fs'

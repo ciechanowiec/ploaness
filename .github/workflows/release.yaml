@@ -1,8 +1,14 @@
 name: 'Publish npm release'
 
-# The five packages are one release. They pin each other at an exact version, so a run that
-# publishes four of them leaves `ploaness` installable and unresolvable - which is why the order
-# below is the dependency order, and why nothing is published before the whole verification passes.
+# The six packages are one release. They pin each other at an exact version, so a run that publishes
+# some of them leaves `ploaness` installable and unresolvable - which is why the order below is the
+# dependency order, and why nothing is published before the whole verification passes.
+#
+# The count is stated here and checked elsewhere. This list was written when there were five packages
+# and stayed at five when `@ploaness/runtime` arrived, so a release would have published every package
+# that pins runtime and never runtime itself - the precise failure the paragraph above describes, left
+# open by the paragraph above. `scripts/lib/check-release-version.ts` now reads this list against the
+# packages that actually exist, because a comment is not a check.
 #
 # Authentication is npm trusted publishing (OIDC), not a token. npm revoked classic tokens in
 # December 2025 and caps a write-enabled granular token at ninety days, so a stored credential is a
@@ -69,7 +75,7 @@ jobs:
           fi
           # npm mints a provenance attestation only for a package published from a PUBLIC
           # repository, and the publish step below asks for one. Asked here, the failure names its
-          # reason; asked by npm, it arrives at the fourth tarball of five, after three of them have
+          # reason; asked by npm, it arrives partway down the list, after the tarballs before it have
           # been published and can never be replaced.
           if [ "$IS_PRIVATE" != 'false' ]; then
             echo 'Provenance needs a public repository. Make it public, or drop --provenance.' >&2
@@ -155,7 +161,7 @@ jobs:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           set -eu
-          order='ploaness-governance ploaness-assets ploaness-config ploaness-cli ploaness'
+          order='ploaness-runtime ploaness-governance ploaness-assets ploaness-config ploaness-cli ploaness'
           for package in $order; do
             # The leading `./` is load-bearing. npm classifies an argument by shape before it
             # touches the filesystem, and a bare `a/b` is a GitHub shorthand rather than a path,
@@ -196,7 +202,7 @@ jobs:
           git push origin "refs/tags/$tag"
 
       # npm serves a published version from its own CDN as soon as the publish returns, so there is
-      # no sync to wait for. What is worth proving is that all five resolve TOGETHER, which is the
+      # no sync to wait for. What is worth proving is that they all resolve TOGETHER, which is the
       # failure the publication order exists to prevent and the one a per-package probe would miss.
       - name: 'Smoke-test the published release'
         if: steps.publish.outcome == 'success'
