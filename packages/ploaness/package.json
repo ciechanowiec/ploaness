@@ -1,6 +1,6 @@
 {
   "name": "ploaness",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "An external, versioned quality harness for Payload CMS projects. Declare one dependency and inherit the whole contract.",
   "keywords": [
     "payload",
@@ -77,11 +77,11 @@
     "build": "node build.ts && tsc --build tsconfig.build.json"
   },
   "dependencies": {
-    "@ploaness/assets": "1.0.0",
-    "@ploaness/cli": "1.0.0",
-    "@ploaness/config": "1.0.0",
-    "@ploaness/governance": "1.0.0",
-    "@ploaness/runtime": "1.0.0"
+    "@ploaness/assets": "1.1.0",
+    "@ploaness/cli": "1.1.0",
+    "@ploaness/config": "1.1.0",
+    "@ploaness/governance": "1.1.0",
+    "@ploaness/runtime": "1.1.0"
   },
   "engines": {
     "node": ">=26"

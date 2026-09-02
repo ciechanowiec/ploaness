@@ -1,6 +1,6 @@
 {
   "name": "@ploaness/runtime",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "The ploaness helpers a governed application calls at runtime. Pure, zero-dependency, and safe to install into production.",
   "license": "MIT",
   "author": "Herman Ciechanowiec <herman@ciechanowiec.eu>",

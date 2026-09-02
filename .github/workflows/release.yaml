@@ -21,7 +21,7 @@ on:
       release_version:
         description: 'Version already declared in packages/ploaness/package.json'
         required: true
-        default: '1.0.0'
+        default: '1.1.0'
         type: string
       publish:
         description: 'Publish permanently after verification'

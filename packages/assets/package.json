@@ -1,6 +1,6 @@
 {
   "name": "@ploaness/assets",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Files ploaness materialises into a consumer working tree, because tools ploaness does not run read them from there.",
   "license": "MIT",
   "author": "Herman Ciechanowiec <herman@ciechanowiec.eu>",
@@ -33,6 +33,6 @@
     "access": "public"
   },
   "devDependencies": {
-    "@ploaness/governance": "1.0.0"
+    "@ploaness/governance": "1.1.0"
   }
 }

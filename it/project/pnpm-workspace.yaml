@@ -16,9 +16,9 @@ onlyBuiltDependencies:
 # what makes the five internal packages resolve as well as the meta package. They belong here
 # rather than in package.json: pnpm no longer reads a `pnpm` block from it.
 overrides:
-  ploaness: "file:__TARBALLS__/ploaness-1.0.0.tgz"
-  "@ploaness/cli": "file:__TARBALLS__/ploaness-cli-1.0.0.tgz"
-  "@ploaness/config": "file:__TARBALLS__/ploaness-config-1.0.0.tgz"
-  "@ploaness/assets": "file:__TARBALLS__/ploaness-assets-1.0.0.tgz"
-  "@ploaness/governance": "file:__TARBALLS__/ploaness-governance-1.0.0.tgz"
-  "@ploaness/runtime": "file:__TARBALLS__/ploaness-runtime-1.0.0.tgz"
+  ploaness: "file:__TARBALLS__/ploaness-1.1.0.tgz"
+  "@ploaness/cli": "file:__TARBALLS__/ploaness-cli-1.1.0.tgz"
+  "@ploaness/config": "file:__TARBALLS__/ploaness-config-1.1.0.tgz"
+  "@ploaness/assets": "file:__TARBALLS__/ploaness-assets-1.1.0.tgz"
+  "@ploaness/governance": "file:__TARBALLS__/ploaness-governance-1.1.0.tgz"
+  "@ploaness/runtime": "file:__TARBALLS__/ploaness-runtime-1.1.0.tgz"
