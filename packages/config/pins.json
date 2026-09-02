@@ -22,7 +22,7 @@
       "requiredFor": ["payload", "application"],
       "why": "What any Next application renders with, whether or not Payload is mounted inside it. A public frontend has the same build, the same client bundle and the same React version to agree about.",
       "versions": {
-        "next": "16.3.3",
+        "next": "16.3.4",
         "react": "19.2.8",
         "react-dom": "19.2.8",
         "@types/react": "19.2.18",

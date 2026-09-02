@@ -36,15 +36,15 @@ const NAMED_ESCAPES: ReadonlyMap<string, string> = new Map([
   ['\t', String.raw`\t`],
 ])
 
-// `Number(...)` rather than a fallback: `codePointAt` is typed as possibly undefined, an empty string
-// yields NaN, and `NaN < FIRST_PRINTABLE` is false - so the character passes through as itself without
-// a branch no input can reach.
+// `?? Number.NaN` rather than an `undefined` branch: `codePointAt` is typed as possibly undefined, but
+// the caller spreads a string into code points so no character here is empty. NaN keeps the comparison
+// below false, so the character passes through as itself without a branch no input can reach.
 const escapeCharacter = (character: string): string => {
   const named: string | undefined = NAMED_ESCAPES.get(character)
   if (named !== undefined) {
     return named
   }
-  const codePoint: number = Number(character.codePointAt(0))
+  const codePoint: number = character.codePointAt(0) ?? Number.NaN
   return codePoint < FIRST_PRINTABLE ? String.raw`\u${asHex(codePoint)}` : character
 }
 
