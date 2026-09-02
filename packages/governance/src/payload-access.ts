@@ -5,81 +5,26 @@
 // question the others do not ask - "which object literal IS this config" - and because together the two
 // halves passed the file size cap. Every one of them is a security decision that Payload will silently
 // make on the project's behalf if the project does not make it first.
+
+import {
+  type FoundPayloadConfig,
+  type PayloadConfigKind,
+  payloadConfigsIn,
+} from './payload-configs.js'
 import {
   configBody,
   depthOneBlockKeys,
   depthOneValue,
   type PayloadViolation,
 } from './payload-source.js'
-import { lineOf, NOT_FOUND, topLevelKeys } from './source-text.js'
-
-// The three ways a Payload config is declared, all of them idiomatic:
-//
-//   const Users: CollectionConfig = { ... }          the annotation
-//   const Users: CollectionConfig<'users'> = { ... } the annotation, with the slug as a type argument
-//   const Users = { ... } satisfies CollectionConfig the inferred form
-//
-// Only the first was matched for a long time, because the lookahead that stopped `CollectionConfigs`
-// from matching also excluded `<`, and nothing looked for `satisfies` at all. A collection written
-// either of the other two ways passed every rule below without one of them ever reading it - which is
-// the worst failure a gate can have, because it is indistinguishable from a pass.
-const declarationPattern = (typeName: string): RegExp =>
-  new RegExp(String.raw`(:|satisfies)\s*${typeName}(?=[<=,)\s]|$)`, 'g')
-
-/** The operations a collection must decide for itself rather than inherit. */
-const COLLECTION_OPERATIONS: readonly string[] = ['create', 'read', 'update', 'delete']
-
-/** A global has no create or delete: it exists from the moment it is configured. */
-const GLOBAL_OPERATIONS: readonly string[] = ['read', 'update']
-
-/** One kind of Payload config, and what a complete access block on it looks like. */
-interface ConfigKind {
-  readonly label: string
-  readonly declaration: RegExp
-  readonly operations: readonly string[]
-}
-
-const CONFIG_KINDS: readonly ConfigKind[] = [
-  {
-    label: 'CollectionConfig',
-    declaration: declarationPattern('CollectionConfig'),
-    operations: COLLECTION_OPERATIONS,
-  },
-  {
-    label: 'GlobalConfig',
-    declaration: declarationPattern('GlobalConfig'),
-    operations: GLOBAL_OPERATIONS,
-  },
-]
-
-/** One config found in a file: where it was declared, and the body that belongs to it. */
-interface FoundConfig {
-  readonly marker: number
-  readonly body: string
-}
-
-const SATISFIES: string = 'satisfies'
-
-// EVERY config in the file, not the first. `search` returned one offset, so a module exporting two
-// collections - or a collection beside a global - had its second config judged by nothing at all. The
-// Local API rules already iterated their matches; these did not, and the asymmetry was invisible
-// because a file with one config, which is most of them, behaves identically either way.
-const findConfigs = (source: string, kind: ConfigKind): readonly FoundConfig[] =>
-  [...source.matchAll(kind.declaration)].flatMap(
-    (match: RegExpExecArray): readonly FoundConfig[] => {
-      const body: string | undefined = configBody(source, match.index, match[1] === SATISFIES)
-      return body === undefined ? [] : [{ marker: match.index, body }]
-    },
-  )
+import { NOT_FOUND, topLevelKeys } from './source-text.js'
 
 const eachConfig = (
   source: string,
-  judge: (kind: ConfigKind, found: FoundConfig) => readonly PayloadViolation[],
+  judge: (kind: PayloadConfigKind, found: FoundPayloadConfig) => readonly PayloadViolation[],
 ): readonly PayloadViolation[] =>
-  CONFIG_KINDS.flatMap((kind: ConfigKind): readonly PayloadViolation[] =>
-    findConfigs(source, kind).flatMap((found: FoundConfig): readonly PayloadViolation[] =>
-      judge(kind, found),
-    ),
+  payloadConfigsIn(source).flatMap((found: FoundPayloadConfig): readonly PayloadViolation[] =>
+    judge(found.kind, found),
   )
 
 // Payload fills the missing operations in during sanitisation, so a partial access block is invisible
@@ -87,24 +32,27 @@ const eachConfig = (
 // the word `access` appears somewhere in the file, which is what this rule used to do, accepted a block
 // that declared one operation out of four.
 export const findUndeclaredAccess = (source: string): readonly PayloadViolation[] =>
-  eachConfig(source, (kind: ConfigKind, found: FoundConfig): readonly PayloadViolation[] => {
-    const declared: readonly string[] = depthOneBlockKeys(found.body, 'access')
-    const missing: readonly string[] = kind.operations.filter(
-      (operation: string): boolean => !declared.includes(operation),
-    )
-    return missing.length === 0
-      ? []
-      : [
-          {
-            line: lineOf(source, found.marker),
-            rule: 'require-complete-access',
-            reason:
-              `a ${kind.label} must declare access for ${kind.operations.join(', ')}; ` +
-              `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} left to the Payload ` +
-              'defaults, which allow public read',
-          },
-        ]
-  })
+  eachConfig(
+    source,
+    (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] => {
+      const declared: readonly string[] = depthOneBlockKeys(found.body, 'access')
+      const missing: readonly string[] = kind.operations.filter(
+        (operation: string): boolean => !declared.includes(operation),
+      )
+      return missing.length === 0
+        ? []
+        : [
+            {
+              line: found.line,
+              rule: 'require-complete-access',
+              reason:
+                `a ${kind.label} must declare access for ${kind.operations.join(', ')}; ` +
+                `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} left to the Payload ` +
+                'defaults, which allow public read',
+            },
+          ]
+    },
+  )
 
 // Payload locks nothing by default: without a login-attempt cap and a lock time, an auth collection
 // accepts guesses at whatever rate a client can make them. `auth: true` is the bare enable, so it is
@@ -113,7 +61,14 @@ const AUTH_HARDENING_KEYS: readonly string[] = ['maxLoginAttempts', 'lockTime']
 
 const COLLECTION: string = 'CollectionConfig'
 
-const unhardenedAuthIn = (source: string, found: FoundConfig): readonly PayloadViolation[] => {
+const leadingNumber = (value: string | undefined): number | undefined => {
+  const match: RegExpExecArray | null = /^\s*(-?\d[\d_]*(?:\.\d[\d_]*)?)\s*(?=[,}])/.exec(
+    value ?? '',
+  )
+  return match === null ? undefined : Number((match[1] ?? '').replaceAll('_', ''))
+}
+
+const unhardenedAuthIn = (found: FoundPayloadConfig): readonly PayloadViolation[] => {
   const value: string | undefined = depthOneValue(found.body, 'auth')
   if (value === undefined) {
     return []
@@ -124,24 +79,31 @@ const unhardenedAuthIn = (source: string, found: FoundConfig): readonly PayloadV
   const missing: readonly string[] = AUTH_HARDENING_KEYS.filter(
     (key: string): boolean => !declared.includes(key),
   )
-  return missing.length === 0
+  const disabled: readonly string[] = AUTH_HARDENING_KEYS.filter((key: string): boolean => {
+    const numeric: number | undefined = leadingNumber(depthOneValue(value, key))
+    return numeric !== undefined && numeric <= 0
+  })
+  return missing.length === 0 && disabled.length === 0
     ? []
     : [
         {
-          line: lineOf(source, found.marker),
+          line: found.line,
           rule: 'require-auth-hardening',
           reason:
             `an auth collection must declare ${AUTH_HARDENING_KEYS.join(' and ')}; ` +
-            `${missing.join(' and ')} left to the Payload defaults means a login attempt is never ` +
-            'capped and an account is never locked',
+            (missing.length === 0 ? '' : `${missing.join(' and ')} is missing; `) +
+            (disabled.length === 0 ? '' : `${disabled.join(' and ')} is not positive; `) +
+            'without a positive attempt cap and lock time, login guesses are not bounded',
         },
       ]
 }
 
 /** Report an auth collection that leaves the login-attempt cap and lock time to Payload's defaults. */
 export const findUnhardenedAuth = (source: string): readonly PayloadViolation[] =>
-  eachConfig(source, (kind: ConfigKind, found: FoundConfig): readonly PayloadViolation[] =>
-    kind.label === COLLECTION ? unhardenedAuthIn(source, found) : [],
+  eachConfig(
+    source,
+    (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
+      kind.label === COLLECTION ? unhardenedAuthIn(found) : [],
   )
 
 // A draft is unpublished content. With versions.drafts enabled, `?draft=true` serves it to whoever the
@@ -187,18 +149,20 @@ const isDraftExposed = (body: string): boolean => {
 
 /** Report a config whose drafts are readable by an unauthenticated client. */
 export const findAnonymousDraftReads = (source: string): readonly PayloadViolation[] =>
-  eachConfig(source, (kind: ConfigKind, found: FoundConfig): readonly PayloadViolation[] =>
-    isDraftExposed(found.body)
-      ? [
-          {
-            line: lineOf(source, found.marker),
-            rule: 'no-anonymous-draft-reads',
-            reason:
-              `a ${kind.label} with drafts enabled must not grant an unconditionally true read; ` +
-              'an unauthenticated client would fetch unpublished drafts through ?draft=true',
-          },
-        ]
-      : [],
+  eachConfig(
+    source,
+    (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
+      isDraftExposed(found.body)
+        ? [
+            {
+              line: found.line,
+              rule: 'no-anonymous-draft-reads',
+              reason:
+                `a ${kind.label} with drafts enabled must not grant an unconditionally true read; ` +
+                'an unauthenticated client would fetch unpublished drafts through ?draft=true',
+            },
+          ]
+        : [],
   )
 
 // `mimeTypes` defaults to undefined, so an upload collection takes whatever a client sends until the
@@ -207,7 +171,7 @@ export const findAnonymousDraftReads = (source: string): readonly PayloadViolati
 // here: Payload takes that at the config root rather than on the collection.
 const UPLOAD_RESTRICTION: string = 'mimeTypes'
 
-const unrestrictedUploadIn = (source: string, found: FoundConfig): readonly PayloadViolation[] => {
+const unrestrictedUploadIn = (found: FoundPayloadConfig): readonly PayloadViolation[] => {
   const value: string | undefined = depthOneValue(found.body, 'upload')
   if (value === undefined) {
     return []
@@ -219,7 +183,7 @@ const unrestrictedUploadIn = (source: string, found: FoundConfig): readonly Payl
     ? []
     : [
         {
-          line: lineOf(source, found.marker),
+          line: found.line,
           rule: 'require-upload-restrictions',
           reason:
             `an upload collection must declare ${UPLOAD_RESTRICTION}; left undeclared it accepts ` +
@@ -230,6 +194,8 @@ const unrestrictedUploadIn = (source: string, found: FoundConfig): readonly Payl
 
 /** Report an upload collection that accepts whatever file type Payload's defaults allow. */
 export const findUnrestrictedUploads = (source: string): readonly PayloadViolation[] =>
-  eachConfig(source, (kind: ConfigKind, found: FoundConfig): readonly PayloadViolation[] =>
-    kind.label === COLLECTION ? unrestrictedUploadIn(source, found) : [],
+  eachConfig(
+    source,
+    (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
+      kind.label === COLLECTION ? unrestrictedUploadIn(found) : [],
   )

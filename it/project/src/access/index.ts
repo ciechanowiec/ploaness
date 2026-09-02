@@ -1,4 +1,4 @@
-import type { Access } from 'payload'
+import type { Access, FieldAccess } from 'payload'
 
 // The access rules the fixture's configs reference by name. They live here rather than inline in a
 // collection because the shipped ESLint config bans an inline function in a config file: a rule written
@@ -10,3 +10,6 @@ export const anyone: Access = (): boolean => true
 
 /** Refuses the operation to everyone, so the config decides rather than inheriting a default. */
 export const nobody: Access = (): boolean => false
+
+/** Refuses writes to a field whose value grants account authority. */
+export const nobodyField: FieldAccess = (): boolean => false

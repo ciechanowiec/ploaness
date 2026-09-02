@@ -65,8 +65,8 @@ export const depthOneValue = (wrapped: string, key: string): string | undefined 
  * @returns the block's depth-one keys, or an empty list when the key is absent.
  */
 export const depthOneBlockKeys = (wrapped: string, key: string): readonly string[] => {
-  const at: number = depthOneKeyIndex(wrapped, key)
-  return at === NOT_FOUND ? [] : topLevelKeys(wrapped, at)
+  const value: string | undefined = depthOneValue(wrapped, key)
+  return value?.trimStart().startsWith('{') === true ? topLevelKeys(value, 0) : []
 }
 
 /** A brace-delimited literal: where it opens and where it closes. */

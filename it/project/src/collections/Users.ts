@@ -1,5 +1,5 @@
 import type { CollectionConfig } from 'payload'
-import { nobody } from '@/access'
+import { nobody, nobodyField } from '@/access'
 import { removeAuthoredPosts } from '@/lib/cleanup'
 
 // An auth collection, so the hardening rule and the public-create rule are both exercised rather than
@@ -21,5 +21,15 @@ export const Users: CollectionConfig = {
   hooks: {
     beforeDelete: [removeAuthoredPosts],
   },
-  fields: [{ name: 'name', type: 'text', required: true }],
+  fields: [
+    { name: 'name', type: 'text', required: true },
+    {
+      name: 'isAdmin',
+      type: 'checkbox',
+      access: {
+        create: nobodyField,
+        update: nobodyField,
+      },
+    },
+  ],
 }

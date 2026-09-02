@@ -37,6 +37,7 @@ import {
   typeAwareParsing,
   vitestPlugin,
 } from './eslint-core.js'
+import { SECURITY_RESTRICTIONS } from './eslint-security.js'
 import { projectSettings as settings } from './project-settings.js'
 
 const NO_INLINE_CONFIG_FUNCTIONS_SELECTOR: string = 'ArrowFunctionExpression, FunctionExpression'
@@ -208,6 +209,7 @@ export default compose(
     rules: {
       'no-restricted-syntax': [
         ...NO_INHERITANCE,
+        ...SECURITY_RESTRICTIONS,
         {
           selector: NO_INLINE_CONFIG_FUNCTIONS_SELECTOR,
           message: NO_INLINE_CONFIG_FUNCTIONS_MESSAGE,
@@ -321,7 +323,11 @@ export default compose(
   {
     files: ['tests/e2e/**/*.ts', 'tests/e2e/**/*.tsx'],
     rules: {
-      'no-restricted-syntax': [...NO_INHERITANCE, ...NO_NETWORK_GUARD_ESCAPE],
+      'no-restricted-syntax': [
+        ...NO_INHERITANCE,
+        ...SECURITY_RESTRICTIONS,
+        ...NO_NETWORK_GUARD_ESCAPE,
+      ],
     },
   },
 

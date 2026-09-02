@@ -22,6 +22,7 @@ import sonarjs from 'eslint-plugin-sonarjs'
 import unicorn from 'eslint-plugin-unicorn'
 import globals from 'globals'
 import tseslint from 'typescript-eslint'
+import { type RestrictedSyntax, SECURITY_RESTRICTIONS } from './eslint-security.js'
 
 /**
  * One flat-config block, described by its shape rather than by the plugins' own declarations.
@@ -44,12 +45,6 @@ export type FlatConfigBlock = Readonly<Record<string, unknown>>
  * because an assertion is uncovered by the type coverage measurement this repository holds at 100%.
  */
 export type RuleTable = Partial<Linter.RulesRecord>
-
-/** One `no-restricted-syntax` entry: the shape to reject, and what to say when it appears. */
-export interface RestrictedSyntax {
-  readonly selector: string
-  readonly message: string
-}
 
 /**
  * A whole `no-restricted-syntax` setting: the severity first, then the shapes.
@@ -398,7 +393,7 @@ export const guidelineRules: RuleTable = {
 
   // Composition over inheritance. A type inherits only from a base the language or a dependency
   // requires, and the error base is the one such base that appears in ordinary code.
-  'no-restricted-syntax': [...NO_INHERITANCE],
+  'no-restricted-syntax': [...NO_INHERITANCE, ...SECURITY_RESTRICTIONS],
 
   // Control-flow clarity.
   eqeqeq: ['error', 'always'],
@@ -794,6 +789,7 @@ const NO_TEST_ORDER_ESCAPE: readonly RestrictedSyntax[] = [
 export const testSuiteSyntaxRules: RuleTable = {
   'no-restricted-syntax': [
     ...NO_INHERITANCE,
+    ...SECURITY_RESTRICTIONS,
     ...NO_LITERAL_ASSERTIONS,
     ...NO_FAST_CHECK_SEED,
     ...NO_TEST_ORDER_ESCAPE,
@@ -956,6 +952,7 @@ export const specEnvironmentBlock = (): FlatConfigBlock => ({
   },
 })
 
+export type { RestrictedSyntax } from './eslint-security.js'
 /** The shared selectors, re-exported so a scoped block can spread rather than restate them. */
 export {
   NO_FAST_CHECK_SEED,

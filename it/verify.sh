@@ -243,6 +243,11 @@ drop_text() {
 CONFORMING_BODY='The fixture exercises the packed harness from outside the workspace, which is the
 only arrangement that resolves the way a published install does.'
 
+# Kept in two context-free fragments so the verifier itself does not match the analyzer rule. The
+# fixture cases below assemble the bytes beside an assembled key label only after their commit.
+probe_part_one='dGhpcy1pc19hX3Zlcnlfc2VjcmV0'
+probe_part_two='X2tleV93aXRoX2VudHJvcHk'
+
 # The pass case: the untouched scaffold must satisfy every gate that judges a project's own shape.
 new_case pass
 commit_case pass 'feat(fixture): add the ploaness integration consumer' "$CONFORMING_BODY"
@@ -265,6 +270,11 @@ done
 # entry point never exported, and a callback passed by reference. Each would have failed here.
 expect pass types PASS
 expect pass eslint PASS
+
+# The secret scan has two owners inside one gate: committed history and the governed working tree. The
+# untouched fixture proves both halves accept a clean project before the mutations below ask each
+# boundary to fail or stay out of scope.
+expect pass secrets PASS
 
 # The two history modes are options of `commit-message`, not global CLI flags. A global allowlist once
 # rejected both documented forms before their handler could read them.
@@ -294,6 +304,87 @@ drop_text "$scratch/fail-user-access-control/src/lib/reads.ts" ', overrideAccess
 commit_case fail-user-access-control 'feat(fixture): bypass access for the supplied user' \
     "$CONFORMING_BODY"
 expect fail-user-access-control payload-rules FAIL require-user-access-control
+
+new_case fail-privileged-field-create
+drop_text "$scratch/fail-privileged-field-create/src/collections/Users.ts" "        create: nobodyField,
+"
+commit_case fail-privileged-field-create 'feat(fixture): expose account authority during creation' \
+    "$CONFORMING_BODY"
+expect fail-privileged-field-create payload-rules FAIL require-privileged-field-access
+
+new_case fail-privileged-field-update
+drop_text "$scratch/fail-privileged-field-update/src/collections/Users.ts" "        update: nobodyField,
+"
+commit_case fail-privileged-field-update 'feat(fixture): expose account authority during updates' \
+    "$CONFORMING_BODY"
+expect fail-privileged-field-update payload-rules FAIL require-privileged-field-access
+
+new_case fail-open-secret-guard
+{
+cat <<'FIXTURE'
+/**
+ * Decide whether a supplied cron credential is accepted.
+ * @param cronSecret - the configured credential.
+ * @param supplied - the credential the caller supplied.
+ * @returns whether the caller is admitted.
+ */
+FIXTURE
+printf 'export const acceptsCron = (cronSecret%s string | undefined, supplied%s string)%s boolean => {\n' \
+    ':' ':' ':'
+cat <<'FIXTURE'
+  if (cronSecret && supplied !== cronSecret) {
+    return false
+  }
+  return true
+}
+FIXTURE
+} > "$scratch/fail-open-secret-guard/src/lib/cron-auth.ts"
+commit_case fail-open-secret-guard 'feat(fixture): leave a cron guard open without a secret' \
+    "$CONFORMING_BODY"
+expect fail-open-secret-guard payload-rules FAIL no-fail-open-secret-guard
+
+new_case fail-sensitive-log
+cat > "$scratch/fail-sensitive-log/src/lib/credential-log.ts" <<'FIXTURE'
+type Credential = Readonly<Record<'token', string>>
+
+/** Write the supplied credential to the application log. */
+export const logCredential = (credential: Credential): void => {
+  console.info(credential.token)
+}
+FIXTURE
+commit_case fail-sensitive-log 'feat(fixture): write a credential to the application log' \
+    "$CONFORMING_BODY"
+expect fail-sensitive-log eslint FAIL sensitive-data-logged
+
+new_case fail-error-message-leak
+cat > "$scratch/fail-error-message-leak/src/lib/error-response.ts" <<'FIXTURE'
+/** Return an internal failure directly to the caller. */
+export const errorResponse = (error: Error): Response => Response.json({ error: error.message })
+FIXTURE
+commit_case fail-error-message-leak 'feat(fixture): return an internal failure to a caller' \
+    "$CONFORMING_BODY"
+expect fail-error-message-leak eslint FAIL leaks-error-message
+
+# The credential is assembled at runtime so this verifier does not commit the very secret-shaped value
+# it asks Gitleaks to find. It is written AFTER the case commit: history is clean, so only the new
+# bounded working-tree scan can report it.
+new_case fail-working-tree-secret
+commit_case fail-working-tree-secret 'feat(fixture): prepare the working-tree secret case' \
+    "$CONFORMING_BODY"
+printf '%s_%s = "%s%s"\n' 'api' 'key' "$probe_part_one" "$probe_part_two" \
+    > "$scratch/fail-working-tree-secret/src/untracked-credential.txt"
+expect fail-working-tree-secret secrets FAIL 'governed working tree'
+
+# The mirror is bounded by Git's own enumeration. The identical runtime value under an ignored path
+# must stay outside it, or directory mode has regressed into scanning local state the repository does
+# not own.
+new_case pass-secret-ignored
+printf 'ignored-secrets/\n' >> "$scratch/pass-secret-ignored/.gitignore"
+commit_case pass-secret-ignored 'feat(fixture): ignore local secret material' "$CONFORMING_BODY"
+mkdir -p "$scratch/pass-secret-ignored/ignored-secrets"
+printf '%s_%s = "%s%s"\n' 'api' 'key' "$probe_part_one" "$probe_part_two" \
+    > "$scratch/pass-secret-ignored/ignored-secrets/local.txt"
+expect pass-secret-ignored secrets PASS
 
 new_case fail-collection-access
 drop_text "$scratch/fail-collection-access/src/collections/Posts.ts" "  access: {

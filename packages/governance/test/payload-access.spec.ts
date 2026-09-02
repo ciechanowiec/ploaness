@@ -105,6 +105,30 @@ describe('a key is a key, not a suffix of one', () => {
   })
 })
 
+describe('positive authentication hardening values', () => {
+  it.each([
+    'auth: { maxLoginAttempts: 0, lockTime: 600 }',
+    'auth: { maxLoginAttempts: -1, lockTime: 600 }',
+    'auth: { maxLoginAttempts: 5, lockTime: 0 }',
+    'auth: { maxLoginAttempts: 5, lockTime: -600 }',
+  ])('reports a disabled hardening value in %s', (auth: string) => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} ${auth} }`
+    expect(rulesOf(source)).toEqual(['require-auth-hardening'])
+  })
+
+  it('accepts positive numeric literals carrying separators', () => {
+    const auth: string = 'auth: { maxLoginAttempts: 5, lockTime: 600_000 }'
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} ${auth} }`
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it('retains presence-only handling for values the pure reader cannot resolve', () => {
+    const auth: string = 'auth: { maxLoginAttempts: MAX_ATTEMPTS, lockTime: LOCK_TIME }'
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} ${auth} }`
+    expect(rulesOf(source)).toEqual([])
+  })
+})
+
 describe('require-complete-access', () => {
   it('accepts a block declaring all four operations', () => {
     expect(rulesOf(`const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} }`)).toEqual([])

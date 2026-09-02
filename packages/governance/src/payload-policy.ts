@@ -16,7 +16,9 @@ import {
   findUnhardenedAuth,
   findUnrestrictedUploads,
 } from './payload-access.js'
+import { findUnprotectedPrivilegedFields } from './payload-field-access.js'
 import type { PayloadViolation } from './payload-source.js'
+import { findFailOpenSecretGuards } from './source-security.js'
 import {
   balancedArguments,
   lineOf,
@@ -301,8 +303,10 @@ const findDeepRelativeImports = (source: string): readonly PayloadViolation[] =>
  * @param source the file's text.
  * @returns one violation per offending line.
  */
-export const findSourceViolations = (source: string): readonly PayloadViolation[] =>
-  findDeepRelativeImports(stripComments(source))
+export const findSourceViolations = (source: string): readonly PayloadViolation[] => [
+  ...findDeepRelativeImports(stripComments(source)),
+  ...findFailOpenSecretGuards(source),
+]
 
 /**
  * The rules that are about Payload itself, which only a Payload package can break.
@@ -322,5 +326,6 @@ export const findPayloadViolations = (source: string): readonly PayloadViolation
     ...findUnhardenedAuth(code),
     ...findAnonymousDraftReads(code),
     ...findUnrestrictedUploads(code),
+    ...findUnprotectedPrivilegedFields(code),
   ]
 }

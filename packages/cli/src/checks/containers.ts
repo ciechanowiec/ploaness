@@ -2,7 +2,7 @@
 // so this costs nothing extra and makes the gates behave identically on every machine: no local install
 // of gitleaks, hadolint, or actionlint, and no version skew between developers and CI.
 
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import {
@@ -25,6 +25,7 @@ import {
   type RunResult,
   run,
 } from '../exec.js'
+import { mirrorSecretCandidates } from '../secret-mirror.js'
 
 // Pinned by digest in the governance layer, where a spec rejects a mutable reference. These were three
 // `:latest` literals, which let an upstream release change a verdict without the repository changing.
@@ -79,30 +80,44 @@ const dockerFault = (
 // Rendered under the home directory rather than the system temporary directory: a macOS Docker daemon
 // shares the home directory and need not share /tmp, and an unshared source mounts as an empty
 // directory rather than as an error. `it/verify.sh` records the same constraint for the same reason.
-const withRenderedConfig = <Value>(
+interface SecretWorkspace {
+  readonly configDirectory: string
+  readonly mirrorDirectory: string
+}
+
+const withSecretWorkspace = <Value>(
   context: Context,
-  use: (configDirectory: string) => Value,
+  use: (workspace: SecretWorkspace) => Value,
 ): Value => {
   const directory: string = mkdtempSync(path.join(homedir(), '.ploaness-secrets-'))
+  const configDirectory: string = path.join(directory, 'config')
+  const mirrorDirectory: string = path.join(directory, 'working-tree')
   try {
+    mkdirSync(configDirectory)
+    mkdirSync(mirrorDirectory)
     writeFileSync(
-      path.join(directory, 'gitleaks.toml'),
+      path.join(configDirectory, 'gitleaks.toml'),
       renderGitleaksConfig(context.settings.secretAllowlist),
     )
-    return use(directory)
+    return use({ configDirectory, mirrorDirectory })
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
 }
 
-const scanSecrets = (context: Context, configDirectory: string, target: string): RunResult =>
+const scanSecrets = (
+  context: Context,
+  configDirectory: string,
+  repository: string,
+  target: string,
+): RunResult =>
   run(
     'docker',
     [
       'run',
       '--rm',
       '-v',
-      `${context.root}:/repo`,
+      `${repository}:/repo:ro`,
       '-v',
       `${configDirectory}:/ploaness:ro`,
       GITLEAKS_IMAGE,
@@ -116,23 +131,54 @@ const scanSecrets = (context: Context, configDirectory: string, target: string):
     { cwd: context.root },
   )
 
-/** Scan the commit history for committed secrets. */
+const scanFailure = (
+  context: Context,
+  result: RunResult,
+  clean: string,
+  finding: string,
+): GateResult | undefined =>
+  dockerFault(context, GITLEAKS_IMAGE, 'the secret scan', result) ??
+  (result.code === 0 ? undefined : fromRun(result, clean, finding))
+
+const scanWorkingTree = (context: Context, workspace: SecretWorkspace): GateResult => {
+  const mirrored: readonly string[] = mirrorSecretCandidates(
+    context.root,
+    workspace.mirrorDirectory,
+    workingTreeFiles(context.root),
+  )
+  const result: RunResult = scanSecrets(
+    context,
+    workspace.configDirectory,
+    workspace.mirrorDirectory,
+    'dir',
+  )
+  return (
+    scanFailure(
+      context,
+      result,
+      `no secret found in ${String(mirrored.length)} governed working-tree file(s)`,
+      'the scanner found a secret in the governed working tree',
+    ) ?? passed(`no secret found in ${String(mirrored.length)} governed working-tree file(s)`)
+  )
+}
+
+/** Scan committed history and the bounded governed working tree for secrets. */
 export const secrets = (context: Context): GateResult =>
   acquireImage(context, GITLEAKS_IMAGE, 'the secret scan') ??
-  withRenderedConfig(context, (configDirectory: string): GateResult => {
-    // `git` mode, not `dir`. The standard asks for the tracked content and the commit history, and
-    // history mode covers both: every tracked file's content is in some commit. `dir` mode has no git
-    // awareness at all - it reads `node_modules`, the build output, and a local `.env`, none of which
-    // the repository tracks or owns. On a real Payload project that was 1.09 GB against 2 MB, sixty
-    // times slower, and every finding it added came from a dependency rather than from this project.
-    const history: RunResult = scanSecrets(context, configDirectory, 'git')
+  withSecretWorkspace(context, (workspace: SecretWorkspace): GateResult => {
+    // The HISTORY half stays in `git` mode. Directory mode has no Git awareness and, pointed straight
+    // at the repository, reads `node_modules`, build output, and a local `.env`, none of which the
+    // repository tracks or owns. On a real Payload project that was 1.09 GB against 2 MB, sixty times
+    // slower, and every extra finding came from a dependency. The working-tree half below uses `dir`
+    // only against the bounded mirror Git's own enumeration populated.
+    const history: RunResult = scanSecrets(context, workspace.configDirectory, context.root, 'git')
     return (
-      dockerFault(context, GITLEAKS_IMAGE, 'the secret scan', history) ??
-      fromRun(
+      scanFailure(
+        context,
         history,
         'no secret found in the git history',
         'the scanner found a secret in the git history',
-      )
+      ) ?? scanWorkingTree(context, workspace)
     )
   })
 
