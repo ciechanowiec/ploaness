@@ -365,6 +365,23 @@ commit_case fail-error-message-leak 'feat(fixture): return an internal failure t
     "$CONFORMING_BODY"
 expect fail-error-message-leak eslint FAIL leaks-error-message
 
+# The Core Web Vitals preset is mounted for `src/**`, and this is the only place it is read as the code
+# a consumer writes: the untouched fixture carries no `.tsx` at all, so the pass case above proves
+# nothing about it. A raw `<img>` is the rule's plainest case - `next/image` would size and lazy-load
+# it - and the page sits under `src/app` so the link rule finds the app directory it scans.
+new_case fail-raw-img
+mkdir -p "$scratch/fail-raw-img/src/app/(frontend)"
+cat > "$scratch/fail-raw-img/src/app/(frontend)/page.tsx" <<'FIXTURE'
+import type { ReactElement } from 'react'
+
+const Page = (): ReactElement => <img src="/logo.png" alt="The project logo" />
+
+export default Page
+FIXTURE
+commit_case fail-raw-img 'feat(fixture): render a raw image element on the landing page' \
+    "$CONFORMING_BODY"
+expect fail-raw-img eslint FAIL no-img-element
+
 # The credential is assembled at runtime so this verifier does not commit the very secret-shaped value
 # it asks Gitleaks to find. It is written AFTER the case commit: history is clean, so only the new
 # bounded working-tree scan can report it.

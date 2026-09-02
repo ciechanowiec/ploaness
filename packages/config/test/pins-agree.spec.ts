@@ -114,3 +114,20 @@ describe('the vite version ploaness pins', () => {
     expect(groupVersions('ecosystem')['vite']).toMatch(/^\d+\.\d+\.\d+$/)
   })
 })
+
+// The Next lint plugin is a dependency ploaness declares, so it is NOT in the pins - but its rules
+// describe one Next release, and the Next monorepo publishes the two at the same version on every
+// release. Two versions would have the linter judging a project against a Next the pin does not let it
+// run. A bump to either therefore moves both, and this is the place that says so.
+const configManifest: Record<string, unknown> = readJson(path.join(configPackage, 'package.json'))
+
+const dependenciesOf = (manifest: Record<string, unknown>): Record<string, string> =>
+  (manifest['dependencies'] ?? {}) as Record<string, string>
+
+describe('the Next lint plugin ploaness declares', () => {
+  it('is at the version of the next this file pins for every application', () => {
+    expect(dependenciesOf(configManifest)['@next/eslint-plugin-next']).toBe(
+      groupVersions('web')['next'],
+    )
+  })
+})

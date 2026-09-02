@@ -207,7 +207,7 @@ const banStatus = async (blocks: readonly FlatBlock[]): Promise<BanStatus> => {
 }
 
 // Every test in this file loads a flat config, and loading one resolves the whole toolchain that config
-// declares - typescript-eslint and nine plugins. The cost is paid once per file, by whichever test
+// declares - typescript-eslint and ten plugins. The cost is paid once per file, by whichever test
 // imports first, and the suite is shuffled: which test pays is decided by the seed rather than by what
 // the test does. Under Vitest's five-second default three of them timed out on a busy machine and
 // passed on the next run of the same tree, which is the one thing a check may not do.

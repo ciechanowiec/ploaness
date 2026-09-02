@@ -11,6 +11,7 @@
 // Philosophy: maximum-explicit. The build should be hard to satisfy by accident, so that code which
 // passes is verbose, explicit and readable by construction.
 
+import nextPlugin from '@next/eslint-plugin-next'
 import { ENVIRONMENT_READ_EXEMPTIONS, REEXPORT_CONFIG_FILES } from '@ploaness/governance'
 //
 // The framework-neutral half - the caps, the explicitness rules, the naming ban, the suppression
@@ -36,6 +37,7 @@ import {
   testSuiteSyntaxRules,
   typeAwareParsing,
   vitestPlugin,
+  withoutWarnings,
 } from './eslint-core.js'
 import { SECURITY_RESTRICTIONS } from './eslint-security.js'
 import { projectSettings as settings } from './project-settings.js'
@@ -161,6 +163,29 @@ export default compose(
     files: ['**/*.tsx'],
     plugins: { 'jsx-a11y': jsxA11y },
     rules: jsxA11y.flatConfigs.recommended.rules,
+  },
+
+  // ── Core Web Vitals: the static half of a measurement no gate can take. A vitals score, like a
+  //    Lighthouse score, moves between two runs of an unchanged tree and would measure `next dev`'s
+  //    on-demand compiler rather than the application, which is why neither is a gate. The CAUSES of a
+  //    bad score are static and known - a raw `<img>` where `next/image` would size and lazy-load it, a
+  //    synchronous `<script>`, an `<a>` for an internal route, a Google font with no `display` - and
+  //    Next publishes exactly that list as its core-web-vitals preset. The preset is mounted whole and
+  //    raised through `withoutWarnings`, because it leaves 14 of its 22 rules at `warn` and a warning is
+  //    not a verdict here; nothing is turned off, so this is the preset by name and provenance rather
+  //    than a hand copy of it that would go stale on the next Next.
+  //
+  //    `src/**` only, because the rules judge what the application renders and serves. A component
+  //    test rendering an `<img>` under jsdom serves nothing, for the same reason test code is not held
+  //    to the bundle budget. `.ts` is in beside `.tsx` because three of the rules are not JSX rules at
+  //    all: a module variable assigned, a `document` imported into a page, a relative
+  //    `location.assign`.
+  //
+  //    The version is tied to the `next` pin in pins.json - `pins-agree.spec.ts` holds the joint -
+  //    since the two are published together and the rules describe one release's semantics.
+  {
+    ...withoutWarnings(nextPlugin.configs['core-web-vitals']),
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
   },
 
   // ── Generated Payload mount only: relax type-safety the framework legitimately defeats.

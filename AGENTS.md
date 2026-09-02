@@ -384,6 +384,35 @@ jsx-a11y at all, so turning the rule off there would remove the check rather tha
 half is deliberately untouched. `packages/config/test/a11y-role-authority.spec.ts` asserts both halves,
 because either alone is a hazard.
 
+### The static half of Web Vitals is a lint rule, and the measured half is not a gate
+
+A Lighthouse score or a Web Vitals measurement cannot be a gate here, and `bundle-budget.ts` has said
+so since the bundle gate was written: the standard requires a check to reach the same verdict on every
+run and every machine, a score moves between two runs of an unchanged tree, and the end-to-end gate
+drives `next dev`, so any timing it took would measure the on-demand compiler rather than the
+application. What CAN be held deterministically is the list of causes: a raw `<img>` where `next/image`
+would size and lazy-load it, a synchronous `<script>`, an `<a>` for an internal route, a Google font
+with no `display`. Next publishes exactly that list as the core-web-vitals preset of
+`@next/eslint-plugin-next`, and `packages/config/src/eslint.ts` mounts it for `src/**`.
+
+Three decisions inside that mount are worth keeping. The preset arrives with 14 of its 22 rules at
+`warn`, which is not a verdict in a governed repository, so it passes through `withoutWarnings` - now
+exported from `packages/config/src/eslint-core.ts` rather than copied - and every rule it declares
+lands at `error` with nothing turned off. That keeps it the preset by name and provenance rather than a
+hand list that would go stale on the next Next. It reaches `src/**` and not `tests/**`, because the
+rules judge what the application renders and serves, and a component test rendering an `<img>` under
+jsdom serves nothing; `.ts` is in beside `.tsx` because three of the rules are not JSX rules at all.
+And the plugin is declared at the version of the `next` pin in `packages/config/pins.json`, not at
+whatever is latest, because the Next monorepo publishes the two together and the rules describe one
+release's semantics. `packages/config/test/pins-agree.spec.ts` holds that joint, so a bump to either
+moves both.
+
+`packages/config/test/next-web-vitals.spec.ts` reads the rule list out of the plugin and asks the
+composed config what a page, a plain module, a component test and a library resolve to, which is what
+proves the scope from both sides. What proves the preset is READ rather than declared is `it/`: the
+untouched fixture carries no `.tsx` at all, so its passing `eslint` gate said nothing about this, and
+the `fail-raw-img` case renders one raw `<img>` on a landing page and must fail on `no-img-element`.
+
 ### Every suite the runner collects is a suite the linter judges
 
 `vitest.ts` collects `tests/int`, `tests/unit` and `tests/component`, and `eslint-core.ts` states that

@@ -206,8 +206,9 @@ export const compose: typeof defineConfig = defineConfig
 export const prettierLast: FlatConfigBlock = prettier
 
 // A warning severity does not exist in a governed repository: a check has two verdicts, and a finding
-// that prints and exits 0 is neither. Several presets ship rules at `warn` anyway - 31 of jsdoc's and 6
-// of regexp's, as of this writing - so every finding they report was invisible to the build.
+// that prints and exits 0 is neither. Several presets ship rules at `warn` anyway - 31 of jsdoc's, 6
+// of regexp's, and 14 of the 22 in Next's own core-web-vitals preset, as of this writing - so every
+// finding they report was invisible to the build.
 //
 // The list of which rules those are is NOT written down here. It would be a copy of what the presets
 // declare, and it would go stale on the next upgrade in the one direction that fails open. Each layer's
@@ -229,7 +230,11 @@ const escalate = (setting: unknown): unknown => {
 // arrives as the plugin's own declared interface, and an interface carries no index signature, so
 // naming one here would force an assertion at every call site - which the type coverage measurement
 // counts as uncovered. What this function needs is one property, read the way an unknown shape is read.
-const withoutWarnings = (layer: object): FlatConfigBlock => {
+//
+// Exported because the application config mounts a framework preset of its own that arrives with the
+// same defect, and a second copy of this escalation there would be the drift this file exists to stop.
+/** The same layer with every rule it declares raised to `error`; a rule it turns off stays off. */
+export const withoutWarnings = (layer: object): FlatConfigBlock => {
   const rules: unknown = Reflect.get(layer, 'rules')
   return isRuleTable(rules)
     ? {
