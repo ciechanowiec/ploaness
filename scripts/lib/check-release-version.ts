@@ -145,7 +145,7 @@ const rosterFindings = (
 // Indented with spaces and tabs rather than `\s`, which matches a newline: under the multiline flag
 // that lets the leading run cross lines and backtrack, which is the same hazard `TARBALL` above is
 // anchored to avoid.
-const PUBLISH_ORDER: RegExp = /^[ \t]*order='([^']*)'/m
+const PUBLISH_ORDER: RegExp = /^[ \t]*PUBLISH_ORDER: '([^']*)'/m
 
 const workflowFindings = (manifests: readonly Manifest[]): readonly string[] => {
   const file: string = '.github/workflows/release.yaml'

@@ -41,6 +41,12 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    env:
+      # Dependency order, and the one statement of which packages a release is. The publish step
+      # walks it forward so the registry never holds a package whose siblings it cannot resolve,
+      # and the smoke test walks it again to wait for each one, so the two cannot disagree about
+      # what was released. `scripts/lib/check-release-version.ts` reads this line.
+      PUBLISH_ORDER: 'ploaness-runtime ploaness-governance ploaness-assets ploaness-config ploaness-cli ploaness'
     steps:
       # The full history, because three gates read it: `require-full-history` refuses a shallow
       # clone outright, `commit-history` judges every message, and the secret scan runs gitleaks in
@@ -147,9 +153,8 @@ jobs:
         if: steps.release_state.outputs.registry_published != 'true'
         run: pnpm run verify
 
-      # Dependency order, so the registry never holds a package whose siblings it cannot resolve.
-      # npm does not check that a dependency exists at publish time, so nothing but this order
-      # prevents a window in which `ploaness` installs and then fails.
+      # In PUBLISH_ORDER, because npm does not check that a dependency exists at publish time, so
+      # nothing but that order prevents a window in which `ploaness` installs and then fails.
       #
       # `--provenance` is explicit rather than left to the trusted-publishing default, because the
       # attestation is the point: it states which workflow, at which commit, produced this tarball.
@@ -161,8 +166,7 @@ jobs:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           set -eu
-          order='ploaness-runtime ploaness-governance ploaness-assets ploaness-config ploaness-cli ploaness'
-          for package in $order; do
+          for package in $PUBLISH_ORDER; do
             # The leading `./` is load-bearing. npm classifies an argument by shape before it
             # touches the filesystem, and a bare `a/b` is a GitHub shorthand rather than a path,
             # so `npm publish dist-tarballs/x.tgz` resolves github.com/dist-tarballs/x.tgz and
@@ -201,21 +205,65 @@ jobs:
           git tag --annotate "$tag" --message "Release $RELEASE_VERSION"
           git push origin "refs/tags/$tag"
 
-      # npm serves a published version from its own CDN as soon as the publish returns, so there is
-      # no sync to wait for. What is worth proving is that they all resolve TOGETHER, which is the
-      # failure the publication order exists to prevent and the one a per-package probe would miss.
+      # A publish returns before the version is readable. The 1.1.0 release published all six
+      # packages and, one second later, `npm install` was told no `@ploaness/cli@1.1.0` existed:
+      # the registry acknowledges a write on one path and serves reads from another, and the
+      # lag between them is short, unstated, and not zero. So each package is polled, on the
+      # abbreviated packument npm itself resolves against, until the release version is listed -
+      # bounded, because a version still absent after minutes is a failed publish rather than a
+      # slow one, and that must fail rather than wait.
+      #
+      # The install that follows is still the verdict. A per-package probe proves each exists; it
+      # is the install that proves they resolve TOGETHER, which is the failure the publication
+      # order exists to prevent. It is retried a few times for the same reason the probe exists:
+      # the replica that answered the probe is not promised to be the one npm reads next.
+      #
+      # This runs on the recovery path too. A re-run after a failure of exactly this step used to
+      # skip it - the publish had been skipped, so its outcome was not `success` - and recovered
+      # the tag and the Release while proving nothing about whether the release installs.
       - name: 'Smoke-test the published release'
-        if: steps.publish.outcome == 'success'
+        if: >-
+          steps.release_state.outputs.registry_published == 'true' ||
+          steps.publish.outcome == 'success'
         env:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           set -eu
+          attempts=30
+          pause_seconds=10
+          for package in $PUBLISH_ORDER; do
+            name="${package/#ploaness-/@ploaness/}"
+            packument="https://registry.npmjs.org/${name/\//%2F}"
+            attempt=1
+            until curl --silent --fail --header 'Accept: application/vnd.npm.install-v1+json' "$packument" \
+                | node -e 'let body = ""; process.stdin.on("data", (chunk) => { body += chunk }).on("end", () => { process.exit(process.env.RELEASE_VERSION in (JSON.parse(body).versions ?? {}) ? 0 : 1) })'
+            do
+              if [ "$attempt" -ge "$attempts" ]; then
+                echo "$name@$RELEASE_VERSION is still not readable from the registry after $attempts attempts." >&2
+                exit 1
+              fi
+              echo "Waiting for $name@$RELEASE_VERSION to become readable (attempt $attempt of $attempts)."
+              attempt=$((attempt + 1))
+              sleep "$pause_seconds"
+            done
+            echo "$name@$RELEASE_VERSION is readable."
+          done
           smoke="$RUNNER_TEMP/ploaness-smoke"
           rm -rf "$smoke"
           mkdir -p "$smoke"
           cd "$smoke"
           npm init --yes > /dev/null
-          npm install --no-audit --no-fund "ploaness@$RELEASE_VERSION"
+          install_attempts=3
+          attempt=1
+          until npm install --no-audit --no-fund "ploaness@$RELEASE_VERSION"; do
+            if [ "$attempt" -ge "$install_attempts" ]; then
+              echo "ploaness@$RELEASE_VERSION did not install after $install_attempts attempts." >&2
+              exit 1
+            fi
+            echo "Retrying the install (attempt $attempt of $install_attempts failed)."
+            attempt=$((attempt + 1))
+            sleep "$pause_seconds"
+          done
           installed="$(node -p "require('ploaness/package.json').version")"
           if [ "$installed" != "$RELEASE_VERSION" ]; then
             echo "The registry served ploaness $installed, not $RELEASE_VERSION." >&2
