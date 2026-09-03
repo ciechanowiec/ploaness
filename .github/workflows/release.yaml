@@ -121,6 +121,16 @@ jobs:
       # meta package is compared here. And whether npm already has it: a published version is
       # immutable, so a re-run after a partial failure has to be able to recover the tag and the
       # GitHub Release without attempting a publication that cannot succeed.
+      #
+      # A third answer falls out of the second: WHICH commit the release is. When this run
+      # publishes, it is this one. When npm already holds the version, it is whatever commit the
+      # earlier run published from, and this run is only a later commit that happens to be
+      # recovering - the 1.1.0 re-run was the fix to the smoke test, and it failed because the tag
+      # step compared `v1.1.0` against the fix commit and found it "already identifies another
+      # commit". So on the recovery path the commit is read from the provenance attestation npm
+      # holds for the version, which is the one record of that fact that neither git nor this
+      # workflow can have drifted from. The registry serves no `gitHead` for a package published
+      # from a tarball, so the attestation is not merely the better source but the only one.
       - name: 'Validate declared version and registry state'
         id: release_state
         env:
@@ -135,8 +145,26 @@ jobs:
           version_url="https://registry.npmjs.org/ploaness/$RELEASE_VERSION"
           status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$version_url")"
           if [ "$status" = '200' ]; then
+            attestations_url="https://registry.npmjs.org/-/npm/v1/attestations/ploaness@$RELEASE_VERSION"
+            release_commit="$(curl --silent --fail "$attestations_url" | node -e '
+              let body = ""
+              process.stdin.on("data", (chunk) => { body += chunk }).on("end", () => {
+                const slsa = "https://slsa.dev/provenance/v1"
+                const commits = JSON.parse(body).attestations
+                  .filter((attestation) => attestation.predicateType === slsa)
+                  .map((attestation) => JSON.parse(Buffer.from(attestation.bundle.dsseEnvelope.payload, "base64").toString()))
+                  .flatMap((statement) => statement.predicate.buildDefinition.resolvedDependencies ?? [])
+                  .map((dependency) => dependency.digest?.gitCommit)
+                  .filter((commit) => typeof commit === "string")
+                process.stdout.write(commits[0] ?? "")
+              })')"
+            if [ -z "$release_commit" ]; then
+              echo "npm holds ploaness@$RELEASE_VERSION with no provenance naming its commit, so the tag cannot be recovered." >&2
+              exit 1
+            fi
             echo 'registry_published=true' >> "$GITHUB_OUTPUT"
-            echo "npm already contains ploaness@$RELEASE_VERSION; recovering GitHub metadata."
+            echo "release_commit=$release_commit" >> "$GITHUB_OUTPUT"
+            echo "npm already contains ploaness@$RELEASE_VERSION, published from $release_commit; recovering GitHub metadata."
             exit 0
           fi
           if [ "$status" != '404' ]; then
@@ -144,6 +172,7 @@ jobs:
             exit 1
           fi
           echo 'registry_published=false' >> "$GITHUB_OUTPUT"
+          echo "release_commit=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
       # The whole verification, not a subset: the build, the type check, both lint passes, the unit
       # suite, every repository-scope gate, the packaging checks over the packed tarballs, and the
@@ -187,22 +216,30 @@ jobs:
           steps.release_state.outputs.registry_published == 'true' ||
           steps.publish.outcome == 'success'
         env:
+          RELEASE_COMMIT: ${{ steps.release_state.outputs.release_commit }}
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           set -eu
           tag="v$RELEASE_VERSION"
+          # The tag names the commit npm published, which is this one only when this run did the
+          # publishing. Measured against the running commit, a recovery run from any later commit
+          # would either refuse a correct tag or, worse, create a wrong one.
           if git show-ref --verify --quiet "refs/tags/$tag"; then
             tag_commit="$(git rev-list --max-count=1 "$tag")"
-            if [ "$tag_commit" != "$GITHUB_SHA" ]; then
-              echo "Tag $tag already identifies another commit." >&2
+            if [ "$tag_commit" != "$RELEASE_COMMIT" ]; then
+              echo "Tag $tag identifies $tag_commit, but $RELEASE_VERSION was published from $RELEASE_COMMIT." >&2
               exit 1
             fi
-            echo "Tag $tag already identifies this commit."
+            echo "Tag $tag already identifies the published commit $RELEASE_COMMIT."
             exit 0
+          fi
+          if ! git cat-file -e "$RELEASE_COMMIT^{commit}"; then
+            echo "The published commit $RELEASE_COMMIT is not in this clone, so $tag cannot be created." >&2
+            exit 1
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git tag --annotate "$tag" --message "Release $RELEASE_VERSION"
+          git tag --annotate "$tag" --message "Release $RELEASE_VERSION" "$RELEASE_COMMIT"
           git push origin "refs/tags/$tag"
 
       # A publish returns before the version is readable. The 1.1.0 release published all six
