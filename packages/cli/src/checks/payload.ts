@@ -6,24 +6,40 @@ import {
   type DeclaredAdminView,
   findDeclaredAdminViews,
   findGeneratedDrift,
+  findInheritedAccess,
   findPayloadViolations,
   findSourceViolations,
   findUnguardedRelationships,
   findUnscannedAdminViews,
+  type InheritedAccessReport,
   type LocatedViolation,
   type PayloadViolation,
+  parseInheritedAccessReport,
+  payloadConfigPathOf,
   type RegeneratedArtefact,
   type SpecSource,
 } from '@ploaness/governance'
 import {
   type Context,
+  cliDirectory,
   git,
   type Member,
+  manifestPathFrom,
+  readJson,
   resolveProjectTool,
+  resolveTool,
   runEnvironment,
   workingTreeFiles,
 } from '../context.js'
-import { asFindings, failed, type GateResult, passed, type RunResult, runNode } from '../exec.js'
+import {
+  asFindings,
+  failed,
+  type GateResult,
+  passed,
+  type RunResult,
+  runNode,
+  withOutput,
+} from '../exec.js'
 
 // Resolution failure is an answer rather than an exception the caller must catch.
 const resolveProjectToolOrUndefined = (context: Context, tool: string): string | undefined => {
@@ -99,6 +115,100 @@ export const payloadGenerated = (context: Context): GateResult => {
         'commit the regenerated files',
       ])
     : passed('the generated Payload artefacts match the configuration')
+}
+
+// Where Payload keeps the function it fills an undeclared operation with. Named by path because the
+// package's exports map does not expose it; ploaness pins `payload` exactly, so a layout change arrives
+// with a ploaness release rather than silently, and an absent file fails closed below.
+const DEFAULT_ACCESS_MODULE: readonly string[] = ['dist', 'auth', 'defaultAccess.js']
+const PROBE_FILE: readonly string[] = ['dist', 'probes', 'payload-defaults.probe.js']
+// Building a configuration opens no socket, but a plugin might, and a hung import must end as a verdict.
+const PROBE_TIMEOUT_MS: number = 120_000
+
+const defaultAccessFileOf = (context: Context): string | undefined => {
+  const manifest: string | undefined = manifestPathFrom(
+    'payload',
+    path.join(context.root, 'package.json'),
+  )
+  return manifest === undefined
+    ? undefined
+    : path.join(path.dirname(manifest), ...DEFAULT_ACCESS_MODULE)
+}
+
+// The probe's outcome, once it ran: a report that was not printed, or not readable, is a failure of its
+// own rather than an empty finding list, because nothing else stands between a crashed probe and a pass.
+const judgeProbe = (result: RunResult): GateResult => {
+  if (result.code !== 0) {
+    return failed('the Payload configuration could not be built', asFindings(result.output))
+  }
+  const report: InheritedAccessReport | undefined = parseInheritedAccessReport(result.stdout)
+  if (report === undefined) {
+    return failed('the access probe printed no readable report', asFindings(result.output))
+  }
+  const findings: readonly string[] = findInheritedAccess(report)
+  return findings.length > 0
+    ? failed(
+        `${String(findings.length)} collection(s) or global(s) inherit Payload's default access`,
+        findings,
+      )
+    : passed('every collection and global decides its access, framework-built ones included')
+}
+
+/**
+ * Every collection and global in the BUILT configuration decides its access.
+ *
+ * The static rule reads the access blocks a project wrote; this one imports the configuration Payload
+ * actually boots, so the collections the framework builds for the project - the folder tree, the job
+ * queue, a plugin's own - are judged too. Each of those arrives with Payload's default, which admits
+ * every signed-in user, and the anonymous sweep cannot see that because a signed-in user is not
+ * anonymous. The harness's own tsx loads the configuration against the project's tsconfig, with the
+ * project root as the working directory so `payload` resolves from the project.
+ */
+export const payloadDefaults = (context: Member): GateResult => {
+  const tsconfig: string = path.join(context.root, 'tsconfig.json')
+  const configPath: string = payloadConfigPathOf(readJson(tsconfig))
+  const configFile: string = path.join(context.root, configPath)
+  if (!existsSync(configFile)) {
+    return failed('the Payload configuration could not be found', [
+      `${configPath} does not exist; a Payload member names its configuration under ` +
+        'compilerOptions.paths["@payload-config"] in tsconfig.json, which `ploaness init` writes',
+    ])
+  }
+  const defaultAccessFile: string | undefined = defaultAccessFileOf(context)
+  if (defaultAccessFile === undefined) {
+    return failed('payload could not be resolved from the project', [
+      'ploaness governs Payload projects, so "payload" must be installed in the project itself',
+    ])
+  }
+  if (!existsSync(defaultAccessFile)) {
+    return failed("Payload's default access could not be located", [
+      `${defaultAccessFile} is missing; ploaness knows the layout of the Payload version it pins, ` +
+        'and this installation differs',
+    ])
+  }
+  const result: RunResult = runNode(
+    resolveTool('tsx'),
+    [
+      '--tsconfig',
+      tsconfig,
+      path.join(cliDirectory(), ...PROBE_FILE),
+      configFile,
+      defaultAccessFile,
+    ],
+    {
+      cwd: context.root,
+      // The placeholders every analyzer that imports the project receives, then the project's own
+      // environment, then the one option ploaness owns: the same layering the knip and generated gates
+      // use, so a configuration that validates `process.env` on import survives here as it does there.
+      env: {
+        ...context.settings.analysisEnv,
+        ...runEnvironment(context),
+        NODE_OPTIONS: '--no-deprecation',
+      },
+      timeoutMs: PROBE_TIMEOUT_MS,
+    },
+  )
+  return withOutput(judgeProbe(result), result.output)
 }
 
 const SOURCE_EXTENSIONS: readonly string[] = ['.ts', '.tsx']

@@ -7,7 +7,7 @@
       "ignoreDependencies": ["@arethetypeswrong/cli", "publint"]
     },
     "packages/cli": {
-      "entry": [],
+      "entry": ["src/probes/*.ts"],
       "project": ["src/**/*.ts"],
       "ignoreDependencies": [
         "@biomejs/biome",

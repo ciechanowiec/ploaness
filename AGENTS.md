@@ -112,9 +112,10 @@ tag is, which tags share the pinned tag's scheme, which is newest - are in
 registry would produce on demand; `packages/cli/src/checks/images.ts` holds the HTTP and nothing else.
 
 What remains genuinely inapplicable is `preflight`, `wiring`, and `assets`, which judge a consumer's
-installation of ploaness; `payload-generated`, `payload-rules`, and `generated-denial`, which are about
-Payload - the last of those denies write access to the three artefacts `payload generate` owns, and this
-repository has none of them; `css`, `bundle`, and `e2e`, for which this repository has no stylesheet,
+installation of ploaness; `payload-generated`, `payload-defaults`, `payload-rules`, and
+`generated-denial`, which are about Payload - the last of those denies write access to the three
+artefacts `payload generate` owns, and this repository has none of them; `css`, `bundle`, and `e2e`, for
+which this repository has no stylesheet,
 client bundle, or browser. `docker` runs: with no container definition it passes over an empty set
 without starting one, and the day somebody adds a Dockerfile it is already linted. Everything else is on. A gate that ploaness cannot turn on itself is a gate this repository
 is not held to, so prefer adding one here over asserting that it cannot apply - `arch` was absent on

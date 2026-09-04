@@ -26,7 +26,7 @@ import { generatedDenial } from './checks/generated.js'
 import { commitHistory, linearHistory, requireFullHistory } from './checks/history.js'
 import { installScripts, releaseAge } from './checks/install.js'
 import { bundle, imageAssets } from './checks/integrity.js'
-import { adminViews, payloadGenerated, payloadRules } from './checks/payload.js'
+import { adminViews, payloadDefaults, payloadGenerated, payloadRules } from './checks/payload.js'
 import { preflight } from './checks/preflight.js'
 import { configReferences, documentation, skills } from './checks/references.js'
 import { suppressions } from './checks/suppressions.js'
@@ -174,6 +174,15 @@ const DEFAULT_GATES: readonly Gate[] = [
     title: 'generated Payload artefacts',
     isExtended: false,
     run: payloadGenerated,
+  },
+  {
+    // After `payload-generated`, which has just proven the configuration imports through Payload's own
+    // CLI, so a failure here is about access rather than about the import.
+    id: 'payload-defaults',
+    scope: 'payload',
+    title: 'access decided in the built configuration',
+    isExtended: false,
+    run: payloadDefaults,
   },
   {
     id: 'generated-denial',

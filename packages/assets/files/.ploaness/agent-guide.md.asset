@@ -76,8 +76,12 @@ ploaness governs all of the following domains:
   handler finds the body consumed and answers a generic 500 - and access control decided rather than
   inherited: every collection decides create, read, update and
   delete, every global decides read and update, and an auth collection caps login attempts and locks
-  the account. Payload fills what a config omits during sanitisation, and its default is public read,
-  so a partial access block is invisible once the application boots. An upload collection must declare
+  the account. Payload fills what a config omits during sanitisation, and its default admits every
+  signed-in user to every operation, so a partial access block is invisible once the application
+  boots. The same default reaches the collections Payload builds for the project - the folder tree
+  behind `folders`, the job queue behind `jobs`, a plugin's own - which the `payload-defaults` gate
+  judges in the built configuration; decide those through `folders.collectionOverrides`,
+  `jobs.jobsCollectionOverrides`, or the override the plugin offers. An upload collection must declare
   `mimeTypes`: undeclared, it accepts whatever a client sends, and an SVG served from this origin is
   script that runs as the site. A collection whose `mimeTypes` admit `image/svg+xml` - by name, by
   `image/*`, by an empty list, or by a list the gate cannot read because it is imported, spread, or
@@ -196,7 +200,10 @@ ploaness governs all of the following domains:
   carrying it is closed, and a permission nobody holds is not a finding a project could answer. Name
   each field. For a group whose children are all of one kind - the renditions under an upload
   collection's `sizes` - declare `sizes.**` once, knowing a field added under that group later is
-  covered without a new declaration; a top-level field cannot be declared that way.
+  covered without a new declaration; a top-level field cannot be declared that way. The declaration is
+  judged in the other direction too: an entry, or a field path, that the running application grants to
+  nobody is a finding, because it records a decision with no effect and would cover the field the day
+  it is exposed again. A subtree is borne out while the group or anything beneath it is granted.
 - **Test determinism:** two rules of the governing standard that used to be prose and are now checks.
   The suite runs under a network guard the shipped setup file installs before any setup of yours: a
   socket, a DNS lookup, or a fetch that leaves this machine fails the test that made it, naming the
@@ -380,7 +387,7 @@ transcripts bury the one finding the report exists to surface.
 
 ### Default Verification Gates
 
-Default verification runs 36 gates, in the order below. A repository-scope gate runs once; a
+Default verification runs 37 gates, in the order below. A repository-scope gate runs once; a
 package-scope gate runs once per member; a Payload-scope gate runs only for the members that declare
 Payload. `tree-verify` is last in both tiers, because the extended gates are the ones most able to
 rewrite a tracked file.
@@ -403,6 +410,7 @@ rewrite a tracked file.
 | `arch` | package | dependency-cruiser: layering, cycles, and orphans. |
 | `type-coverage` | package | Type coverage of 100% over hand-written TypeScript. |
 | `payload-generated` | payload | The generated Payload types and admin import map are current. |
+| `payload-defaults` | payload | Every collection and global in the built configuration decides its access, the folder, job, query-preset and plugin collections included, rather than inheriting Payload's default, which admits every signed-in user. |
 | `generated-denial` | repository | The agent runtime is denied write access to every generated artefact. |
 | `payload-rules` | package | The Payload usage rules, including access control and drafts. |
 | `admin-views` | payload | Every custom admin view is scanned for accessibility by a spec of the project's own. |
@@ -503,7 +511,7 @@ default, so a typo can never widen a rule.
 | `secretAllowlist` | empty | Fake credentials committed as fixtures. `path` and `reason`. |
 | `serverUrl` | `http://localhost:3000` | The origin the end-to-end suite drives. |
 | `auxiliaryServers` | empty | Servers the end-to-end run starts beside the application. `command` and `url`. An entry missing either is dropped. The application is still started first and still answers at `serverUrl`. |
-| `publicAccess` | empty | Anonymous permissions the project grants on purpose. `entity`, `operation`, and `reason`, plus an optional `fields` naming the fields that operation reaches, each by the path that reaches it (`sessions.id`) and `*` for a map Payload collapsed because every field was open. A path ending in `.**` (`sizes.**`) declares that group and every field beneath it and is the only pattern honoured; `**` alone or mid-path is a literal name that matches nothing. An entry missing one of the three is dropped, which restores the finding rather than excusing it; a field absent from `fields` stays undeclared, so a new column on a public collection reopens the finding - except beneath a declared subtree, which is the trade that form makes. |
+| `publicAccess` | empty | Anonymous permissions the project grants on purpose. `entity`, `operation`, and `reason`, plus an optional `fields` naming the fields that operation reaches, each by the path that reaches it (`sessions.id`) and `*` for a map Payload collapsed because every field was open. A path ending in `.**` (`sizes.**`) declares that group and every field beneath it and is the only pattern honoured; `**` alone or mid-path is a literal name that matches nothing. An entry missing one of the three is dropped, which restores the finding rather than excusing it; a field absent from `fields` stays undeclared, so a new column on a public collection reopens the finding - except beneath a declared subtree, which is the trade that form makes. An entry or field the application grants to nobody is a finding of its own: correct the path or remove it. |
 | `accessibilitySkipRoutes` | `/admin`, `/api` | Route prefixes the sweep skips, added to those two. A route is a URL, so the reach rule above does not judge it. |
 | `accessibilityRouteBudget` | `250` | How many routes the sweep may discover before it stops and fails. Only a smaller value is honoured. |
 | `analysisEnv` | `PAYLOAD_SECRET`, `DATABASE_URL` | Placeholder environment for the gates that import the project. |
