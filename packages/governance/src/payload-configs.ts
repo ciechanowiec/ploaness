@@ -4,6 +4,8 @@
 // global has declared its operation boundary, and whether a privilege-bearing field has declared its
 // own. The declaration forms must therefore have one owner. A second regex beside the access rule was
 // how generic annotations and `satisfies` configurations previously escaped every Payload check.
+
+import { COLLECTION_OPERATIONS, GLOBAL_OPERATIONS } from './payload-defaults.js'
 import { configBody, depthOneValue } from './payload-source.js'
 import {
   balancedArguments,
@@ -44,13 +46,13 @@ const CONFIG_KINDS: readonly (PayloadConfigKind & { readonly declaration: RegExp
     kind: 'collection',
     label: 'CollectionConfig',
     declaration: declarationPattern('CollectionConfig'),
-    operations: ['create', 'read', 'update', 'delete'],
+    operations: COLLECTION_OPERATIONS,
   },
   {
     kind: 'global',
     label: 'GlobalConfig',
     declaration: declarationPattern('GlobalConfig'),
-    operations: ['read', 'update'],
+    operations: GLOBAL_OPERATIONS,
   },
 ]
 
