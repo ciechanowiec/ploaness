@@ -17,7 +17,14 @@ import {
   depthOneValue,
   type PayloadViolation,
 } from './payload-source.js'
-import { NOT_FOUND, topLevelKeys } from './source-text.js'
+import {
+  balancedArguments,
+  type Folded,
+  NOT_FOUND,
+  type ScanStep,
+  scanDelimited,
+  topLevelKeys,
+} from './source-text.js'
 
 const eachConfig = (
   source: string,
@@ -198,4 +205,144 @@ export const findUnrestrictedUploads = (source: string): readonly PayloadViolati
     source,
     (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
       kind.label === COLLECTION ? unrestrictedUploadIn(found) : [],
+  )
+
+// An upload collection that admits SVG and has not decided how the file is served.
+//
+// Payload adds `Content-Security-Policy: script-src 'none'` to an SVG file response, and refuses an SVG
+// whose text carries a script - but only on the branch where content detection found nothing and fell
+// back to the extension. An SVG that opens with an XML declaration is detected as XML, retyped as SVG,
+// and skips that check entirely. So a collection that admits SVG must decide the headers itself, through
+// `modifyResponseHeaders`, or through a `handlers` entry, which answers before the headers hook runs and
+// is therefore the same decision. Admission is read the way Payload reads it in `validateMimeType`: an
+// entry loses its first `*` and must be a prefix of the file's type, and an empty list admits everything.
+//
+// A list this reader cannot see - an imported constant, a spread, a call, a template with a
+// substitution - is treated as admitting SVG, because a rule whose silence means "safe" cannot be silent
+// where it cannot read. The repair is cheap either way: write the list inline, or declare the headers,
+// which cost an image nothing.
+const SVG_MIME_TYPE: string = 'image/svg+xml'
+const RESPONSE_HEADER_KEYS: readonly string[] = ['modifyResponseHeaders', 'handlers']
+const ARRAY_OPEN: string = '['
+const EMPTY_LIST: string = '[]'
+// A quoted string with nothing that could be a substitution inside it; a MIME type carries no quote.
+const STRING_LITERAL: RegExp = /^(['"`])([^'"`$]*)\1$/
+
+type SvgAdmission =
+  | { readonly verdict: 'admitted'; readonly entry: string }
+  | { readonly verdict: 'excluded' }
+  | { readonly verdict: 'unreadable' }
+
+// The upload block alone, cut where its own braces close. `depthOneValue` runs to the end of the
+// collection literal, so a depth-one key looked for in that slice would also be found in the NEXT
+// block: `admin: { mimeTypes: ... }` would answer for `upload`.
+const uploadBlockOf = (found: FoundPayloadConfig): string | undefined => {
+  const value: string | undefined = depthOneValue(found.body, 'upload')
+  if (value === undefined) {
+    return undefined
+  }
+  const open: number = value.indexOf('{')
+  return value.trimStart().startsWith('{') ? value.slice(open, blockEnd(value, open)) : undefined
+}
+
+const coversSvg = (entry: string): boolean => SVG_MIME_TYPE.startsWith(entry.replace('*', ''))
+
+// The depth-zero elements of an array's inner text. `topLevelSlice` cannot serve here: the scanner
+// jumps a string literal whole, so that slice drops exactly the characters this rule reads.
+const arrayElements = (inner: string): readonly string[] => {
+  const commas: readonly number[] = scanDelimited<readonly number[]>(
+    inner,
+    0,
+    (found: readonly number[], step: ScanStep): Folded<readonly number[]> =>
+      step.character === ',' && step.depth === 0
+        ? { state: [...found, step.index], stop: false }
+        : { state: found, stop: false },
+    [],
+  )
+  const bounds: readonly number[] = [-1, ...commas, inner.length]
+  return bounds
+    .slice(0, -1)
+    .map((start: number, position: number): string =>
+      inner.slice(start + 1, bounds[position + 1] ?? inner.length).trim(),
+    )
+    .filter((element: string): boolean => element.length > 0)
+}
+
+const literalOf = (element: string): string | undefined => STRING_LITERAL.exec(element)?.[2]
+
+// A provable admission outranks an unreadable neighbour, so `[...IMAGE_TYPES, 'image/svg+xml']` is
+// reported for the entry that can be named rather than for the spread that cannot.
+const svgAdmissionOf = (raw: string): SvgAdmission => {
+  if (!raw.trimStart().startsWith(ARRAY_OPEN)) {
+    return { verdict: 'unreadable' }
+  }
+  const inner: string | undefined = balancedArguments(raw, raw.indexOf(ARRAY_OPEN))
+  if (inner === undefined) {
+    return { verdict: 'unreadable' }
+  }
+  const elements: readonly string[] = arrayElements(inner)
+  if (elements.length === 0) {
+    return { verdict: 'admitted', entry: EMPTY_LIST }
+  }
+  const literals: readonly (string | undefined)[] = elements.map(
+    (element: string): string | undefined => literalOf(element),
+  )
+  const admitting: string | undefined = literals.find(
+    (literal: string | undefined): boolean => literal !== undefined && coversSvg(literal),
+  )
+  if (admitting !== undefined) {
+    return { verdict: 'admitted', entry: admitting }
+  }
+  return literals.every((literal: string | undefined): boolean => literal !== undefined)
+    ? { verdict: 'excluded' }
+    : { verdict: 'unreadable' }
+}
+
+const SVG_REPAIR: string =
+  'set Content-Disposition: attachment and Content-Security-Policy: sandbox in modifyResponseHeaders'
+const SVG_HAZARD: string = 'an SVG served from this origin is script that runs as the site'
+
+const svgReason = (admission: Exclude<SvgAdmission, { readonly verdict: 'excluded' }>): string => {
+  const preamble: string = `an upload collection admitting SVG must declare ${RESPONSE_HEADER_KEYS.join(' or ')}; `
+  if (admission.verdict === 'unreadable') {
+    return (
+      `${preamble}mimeTypes here is not an inline list of string literals, so whether it admits ` +
+      `${SVG_MIME_TYPE} cannot be read from this file, and ${SVG_HAZARD}; write the list inline, or ${SVG_REPAIR}`
+    )
+  }
+  const admits: string =
+    admission.entry === EMPTY_LIST
+      ? `the empty mimeTypes list admits every type, ${SVG_MIME_TYPE} included`
+      : `the mimeTypes entry '${admission.entry}' admits ${SVG_MIME_TYPE}`
+  return (
+    `${preamble}${admits}, ${SVG_HAZARD}, and Payload's own scripted-SVG check skips a file that ` +
+    `opens with an XML declaration; ${SVG_REPAIR}, or drop the entry`
+  )
+}
+
+const undecidedSvgHeadersIn = (found: FoundPayloadConfig): readonly PayloadViolation[] => {
+  const block: string | undefined = uploadBlockOf(found)
+  if (block === undefined) {
+    return []
+  }
+  const keys: readonly string[] = topLevelKeys(block, 0)
+  // An absent list is the restriction rule's finding, so one collection never carries both.
+  if (
+    !keys.includes(UPLOAD_RESTRICTION) ||
+    RESPONSE_HEADER_KEYS.some((key: string): boolean => keys.includes(key))
+  ) {
+    return []
+  }
+  const admission: SvgAdmission = svgAdmissionOf(depthOneValue(block, UPLOAD_RESTRICTION) ?? '')
+  return admission.verdict === 'excluded'
+    ? []
+    : [{ line: found.line, rule: 'require-svg-response-headers', reason: svgReason(admission) }]
+}
+
+/** Report an upload collection that admits SVG, or may, without deciding the headers it is served with. */
+export const findUndecidedSvgHeaders = (source: string): readonly PayloadViolation[] =>
+  eachConfig(
+    source,
+    (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
+      kind.label === COLLECTION ? undecidedSvgHeadersIn(found) : [],
   )

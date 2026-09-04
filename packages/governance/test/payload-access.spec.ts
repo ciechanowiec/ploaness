@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   findAnonymousDraftReads,
+  findUndecidedSvgHeaders,
   findUndeclaredAccess,
   findUnhardenedAuth,
   findUnrestrictedUploads,
@@ -15,6 +16,7 @@ const rulesOf = (source: string): readonly string[] =>
     ...findUnhardenedAuth(source),
     ...findAnonymousDraftReads(source),
     ...findUnrestrictedUploads(source),
+    ...findUndecidedSvgHeaders(source),
   ].map((violation) => violation.rule)
 
 // The three declaration forms are the point of this block. Two of them used to be matched by nothing at
@@ -222,5 +224,109 @@ describe('the always-true form a governed project actually writes', () => {
     const closed: string = 'access: { read: (): boolean => false, create: x, update: x, delete: x }'
     const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} ${closed} }`
     expect(rulesOf(source)).toEqual([])
+  })
+})
+
+// Payload adds `script-src 'none'` to an SVG response and refuses a scripted SVG, but only on the branch
+// where content detection found nothing: an SVG opening with an XML declaration is retyped from XML and
+// skips that check. A collection that admits SVG must therefore decide the headers itself. Admission is
+// read as Payload reads it - an entry loses its first `*` and is a prefix - and a list that cannot be
+// read from the file is taken to admit it, because silence here would mean "safe".
+const uploading = (upload: string): string =>
+  `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} upload: { ${upload} } }`
+
+describe('require-svg-response-headers', () => {
+  const svgRule: readonly string[] = ['require-svg-response-headers']
+
+  it('reports an inline list naming image/svg+xml without response headers', () => {
+    expect(rulesOf(uploading("mimeTypes: ['image/png', 'image/svg+xml']"))).toEqual(svgRule)
+  })
+
+  it('reports the image wildcard, which Payload reads as admitting SVG', () => {
+    expect(rulesOf(uploading("mimeTypes: ['image/*']"))).toEqual(svgRule)
+  })
+
+  it.each(['[]', "['*']", "['image/svg']", "['image']", "['']"])(
+    "reads %s by prefix, as Payload's own check does",
+    (list) => {
+      expect(rulesOf(uploading(`mimeTypes: ${list}`))).toEqual(svgRule)
+    },
+  )
+
+  it('accepts an inline list that excludes SVG', () => {
+    expect(rulesOf(uploading("mimeTypes: ['image/png', 'image/jpeg']"))).toEqual([])
+  })
+
+  it('accepts a list written in double quotes across several lines', () => {
+    const upload: string =
+      'mimeTypes: [\n  "image/png",\n  "application/pdf",\n],\n  staticDir: "media"'
+    expect(rulesOf(uploading(upload))).toEqual([])
+  })
+
+  it('accepts the star-slash-star entry Payload itself reads as admitting nothing', () => {
+    expect(rulesOf(uploading("mimeTypes: ['*/*']"))).toEqual([])
+  })
+
+  it('accepts response headers beside an SVG-admitting list', () => {
+    const upload: string = "mimeTypes: ['image/svg+xml'], modifyResponseHeaders: hardenSvg"
+    expect(rulesOf(uploading(upload))).toEqual([])
+  })
+
+  it('accepts handlers, which answer before the headers hook runs', () => {
+    expect(rulesOf(uploading("mimeTypes: ['image/*'], handlers: [serveFromBucket]"))).toEqual([])
+  })
+
+  it.each([
+    ['a list declared elsewhere', 'IMAGE_TYPES'],
+    ['a list spread from another', '[...IMAGE_TYPES]'],
+    ['a list with one computed entry', "['image/png', svgType]"],
+    ['a computed list', 'imageTypes()'],
+    ['a template entry carrying a substitution', `[\`image/\${kind}\`]`],
+  ])('reports %s, which it cannot read', (_shape, list) => {
+    expect(rulesOf(uploading(`mimeTypes: ${list}`))).toEqual(svgRule)
+  })
+
+  it('names the provable entry over an unreadable neighbour', () => {
+    const reason: string | undefined = findUndecidedSvgHeaders(
+      uploading("mimeTypes: [...IMAGE_TYPES, 'image/svg+xml']"),
+    )[0]?.reason
+    expect(reason).toContain("'image/svg+xml' admits")
+  })
+
+  it('says nothing when mimeTypes is absent, which the restriction rule reports', () => {
+    expect(rulesOf(uploading("staticDir: 'media'"))).toEqual(['require-upload-restrictions'])
+  })
+
+  it('says nothing about the bare enable, which the restriction rule reports', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} upload: true }`
+    expect(rulesOf(source)).toEqual(['require-upload-restrictions'])
+  })
+
+  it("does not read a mimeTypes key of the next block as the upload block's own", () => {
+    const source: string =
+      `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} ` +
+      "upload: { staticDir: 'x' }, admin: { mimeTypes: ['image/svg+xml'] } }"
+    expect(rulesOf(source)).toEqual(['require-upload-restrictions'])
+  })
+
+  it('says nothing about a global', () => {
+    const source: string =
+      "const A: GlobalConfig = { slug: 'a', access: { read: isAdmin, update: isAdmin }, " +
+      "upload: { mimeTypes: ['image/svg+xml'] } }"
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it('tells an unreadable list what would make it readable', () => {
+    const reason: string | undefined = findUndecidedSvgHeaders(
+      uploading('mimeTypes: IMAGE_TYPES'),
+    )[0]?.reason
+    expect(reason).toContain('write the list inline')
+    expect(reason).toContain('modifyResponseHeaders')
+  })
+
+  it('names the empty list for what it admits', () => {
+    const reason: string | undefined = findUndecidedSvgHeaders(uploading('mimeTypes: []'))[0]
+      ?.reason
+    expect(reason).toContain('empty mimeTypes list admits every type')
   })
 })

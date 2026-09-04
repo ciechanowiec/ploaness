@@ -12,6 +12,7 @@
 // they are reimplemented here instead. The move also makes them unit-testable, which they were not.
 import {
   findAnonymousDraftReads,
+  findUndecidedSvgHeaders,
   findUndeclaredAccess,
   findUnhardenedAuth,
   findUnrestrictedUploads,
@@ -326,6 +327,7 @@ export const findPayloadViolations = (source: string): readonly PayloadViolation
     ...findUnhardenedAuth(code),
     ...findAnonymousDraftReads(code),
     ...findUnrestrictedUploads(code),
+    ...findUndecidedSvgHeaders(code),
     ...findUnprotectedPrivilegedFields(code),
   ]
 }

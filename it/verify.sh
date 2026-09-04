@@ -239,6 +239,10 @@ drop_text() {
     node "$lib/drop-text.ts" "$@"
 }
 
+replace_text() {
+    node "$lib/replace-text.ts" "$@"
+}
+
 
 CONFORMING_BODY='The fixture exercises the packed harness from outside the workspace, which is the
 only arrangement that resolves the way a published install does.'
@@ -623,6 +627,14 @@ drop_text "$scratch/fail-unrestricted-upload/src/collections/Media.ts" "    mime
 "
 commit_case fail-unrestricted-upload 'feat(fixture): let the upload collection take any file' "$CONFORMING_BODY"
 expect fail-unrestricted-upload payload-rules FAIL require-upload-restrictions
+
+# Payload adds script-src 'none' to an SVG response but skips its own scripted-SVG check for a file that
+# opens with an XML declaration, so a collection admitting SVG must also decide the headers it is served
+# with. The template admits none; this case admits it and decides nothing.
+new_case fail-svg-headers
+replace_text "$scratch/fail-svg-headers/src/collections/Media.ts" "'image/jpeg'" "'image/jpeg', 'image/svg+xml'"
+commit_case fail-svg-headers 'feat(fixture): admit SVG uploads without deciding their headers' "$CONFORMING_BODY"
+expect fail-svg-headers payload-rules FAIL require-svg-response-headers
 
 # `auth: true` is Payload's bare enable, and it caps nothing: without a login-attempt limit and a lock
 # time the collection accepts guesses as fast as a client can make them. Unlike the always-true forms,
