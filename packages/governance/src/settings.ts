@@ -55,6 +55,10 @@ export interface PublicAccess {
    * as many readable fields as it has columns and a list of twelve declarations sharing one reason is
    * a list nobody rereads. A field absent from the list is undeclared, so adding a column to a public
    * collection reopens the finding, which is the moment worth stopping at.
+   *
+   * A path ending in `.**` (`sizes.**`) declares that group and every field beneath it, including one
+   * added there later, which is the trade that form makes; `**` anywhere else is a literal name that
+   * matches nothing.
    */
   readonly fields?: readonly string[]
 }

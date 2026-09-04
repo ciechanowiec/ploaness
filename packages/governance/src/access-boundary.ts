@@ -157,10 +157,27 @@ export const describeGrant = (granted: Granted): string =>
 
 // A field is matched by name and never by a wildcard the project could write for itself. An entry
 // listing `*` covers only the grant Payload itself collapsed to `*`, where every field is open and the
-// declaration is therefore exact rather than blanket. Nothing here lets one declaration stand for a
-// field added later, which is the whole reason the field half is judged at all.
+// declaration is therefore exact rather than blanket.
+//
+// The ONE pattern a project may write is a trailing `.**` on a non-empty, star-free prefix: `sizes.**`
+// names the group and everything beneath it - `sizes`, `sizes.thumbnail.url`, and a `sizes.*` Payload
+// collapsed. An upload collection with eight renditions reports fifty-seven paths under `sizes`, and a
+// list that long is a list nobody rereads, which defeats the declaration it exists to be. The trade is
+// stated rather than hidden: a field added under that group later is covered by the same declaration.
+// Every other spelling - `**` alone, `**` mid-path, `*` under a prefix - is a literal name, and a
+// literal Payload never reports covers nothing, which fails in the safe direction. A top-level field
+// therefore still has to be named one by one.
+const SUBTREE_DECLARATION: RegExp = /^([^*]+)\.\*\*$/
+
+const coversPath = (declared: string, field: string): boolean => {
+  const prefix: string | undefined = SUBTREE_DECLARATION.exec(declared)?.[1]
+  return prefix === undefined
+    ? declared === field
+    : field === prefix || field.startsWith(`${prefix}${PATH_SEPARATOR}`)
+}
+
 const coversField = (entry: PublicAccess, field: string): boolean =>
-  (entry.fields ?? []).includes(field)
+  (entry.fields ?? []).some((declared: string): boolean => coversPath(declared, field))
 
 const isDeclared = (granted: Granted, declared: readonly PublicAccess[]): boolean =>
   declared.some((entry: PublicAccess): boolean => {

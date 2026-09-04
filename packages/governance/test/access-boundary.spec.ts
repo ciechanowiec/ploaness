@@ -237,3 +237,91 @@ describe('undeclaredGrants over the field map', () => {
     expect(undeclaredGrants(report, declared)).toEqual(['media.create.alt'])
   })
 })
+
+// The one pattern a project may write. An upload collection with eight renditions reports fifty-seven
+// paths beneath `sizes`, so a trailing `.**` declares the group and everything under it at once. It is
+// bounded rather than a wildcard: only a trailing `.**` on a star-free prefix is honoured, it stops at
+// the dot boundary, and every other spelling is a literal that matches nothing - the safe direction.
+describe('undeclaredGrants over a declared subtree', () => {
+  const Media: AccessReport = {
+    collections: {
+      media: {
+        read: OPEN,
+        fields: {
+          alt: { read: OPEN },
+          sizes: {
+            read: OPEN,
+            fields: {
+              thumbnail: { read: OPEN, fields: { url: { read: OPEN }, width: { read: OPEN } } },
+            },
+          },
+          sizesLegacy: { read: OPEN, fields: { url: { read: OPEN } } },
+        },
+      },
+    },
+  }
+
+  it('coversEveryFieldBeneathADeclaredSubtree', () => {
+    const declared: readonly PublicAccess[] = declaringFields('media', 'read', [
+      'alt',
+      'sizes.**',
+      'sizesLegacy',
+      'sizesLegacy.url',
+    ])
+    expect(undeclaredGrants(Media, declared)).toEqual([])
+  })
+
+  it('coversTheGroupASubtreeDeclarationNames', () => {
+    const declared: readonly PublicAccess[] = declaringFields('media', 'read', ['sizes.**'])
+    expect(undeclaredGrants(Media, declared)).not.toContain('media.read.sizes')
+  })
+
+  it('coversAMapPayloadCollapsedBeneathADeclaredSubtree', () => {
+    const report: AccessReport = {
+      collections: { media: { read: OPEN, fields: { sizes: { read: OPEN, fields: true } } } },
+    }
+    const declared: readonly PublicAccess[] = declaringFields('media', 'read', ['sizes.**'])
+    expect(undeclaredGrants(report, declared)).toEqual([])
+  })
+
+  it('doesNotLetASubtreeDeclarationReachAFieldBesideTheGroup', () => {
+    const declared: readonly PublicAccess[] = declaringFields('media', 'read', ['sizes.**'])
+    expect(undeclaredGrants(Media, declared)).toContain('media.read.alt')
+  })
+
+  it('doesNotLetASubtreeDeclarationReachASiblingSharingItsPrefix', () => {
+    const declared: readonly PublicAccess[] = declaringFields('media', 'read', ['alt', 'sizes.**'])
+    expect(undeclaredGrants(Media, declared)).toEqual([
+      'media.read.sizesLegacy',
+      'media.read.sizesLegacy.url',
+    ])
+  })
+
+  it('readsABareDoubleStarAsALiteralName', () => {
+    const declared: readonly PublicAccess[] = declaringFields('media', 'read', ['**'])
+    expect(undeclaredGrants(Media, declared)).toEqual(
+      undeclaredGrants(Media, declaring('media', 'read')),
+    )
+  })
+
+  it('readsADoubleStarMidPathAsALiteralName', () => {
+    const declared: readonly PublicAccess[] = declaringFields('media', 'read', ['sizes.**.url'])
+    expect(undeclaredGrants(Media, declared)).toContain('media.read.sizes.thumbnail.url')
+  })
+
+  it('readsADoubleStarOnAStarPrefixAsALiteralName', () => {
+    const report: AccessReport = { collections: { pages: { read: OPEN, fields: true } } }
+    const declared: readonly PublicAccess[] = declaringFields('pages', 'read', ['*.**'])
+    expect(undeclaredGrants(report, declared)).toEqual(['pages.read.*'])
+  })
+
+  it('doesNotLetASingleStarBeneathAPrefixStandForNamedFields', () => {
+    const declared: readonly PublicAccess[] = declaringFields('media', 'read', ['sizes.*'])
+    expect(undeclaredGrants(Media, declared)).toContain('media.read.sizes.thumbnail')
+  })
+
+  it('holdsASubtreeDeclarationToItsOperation', () => {
+    const declared: readonly PublicAccess[] = declaringFields('media', 'create', ['sizes.**'])
+    expect(undeclaredGrants(Media, declared)).toContain('media.read.sizes.thumbnail.url')
+  })
+})
