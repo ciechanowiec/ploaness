@@ -34,7 +34,7 @@
       "requiredFor": ["payload", "application", "library"],
       "why": "The definitions describing the runtime every governed package compiles against. Pinned for the toolchain's reason rather than the framework's: a type package is an input to tsc, so a patch release changes what type-checks while the project stays unchanged.",
       "versions": {
-        "@types/node": "26.4.0"
+        "@types/node": "26.4.1"
       }
     },
     {

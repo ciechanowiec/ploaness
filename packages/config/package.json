@@ -86,7 +86,7 @@
     "@ploaness/governance": "1.1.0",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
-    "@testing-library/user-event": "14.6.6",
+    "@testing-library/user-event": "14.6.7",
     "@vitejs/plugin-react": "6.1.1",
     "@vitest/eslint-plugin": "1.6.27",
     "eslint": "10.9.1",
@@ -112,7 +112,7 @@
     "access": "public"
   },
   "devDependencies": {
-    "@types/node": "26.4.0",
+    "@types/node": "26.4.1",
     "typescript": "6.0.3"
   }
 }
