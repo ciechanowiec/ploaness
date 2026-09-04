@@ -65,7 +65,7 @@ it found `docker` missing the first time it ran. The ORDER stays this script's o
 ordering this repository's run rather than a Payload project's. `scripts/verify.sh` is that list, and
 `pnpm run verify` runs it:
 `biome-schema`, `conventions`, `tailwind-tokens`, `editorconfig`, `suppressions`, `config-refs`,
-`environment`, `docs`, `skills`, `image-assets`, `licenses`, `vulnerabilities`, `install-scripts`, `deps`, `actions`,
+`environment`, `docs`, `skills`, `image-assets`, `licenses`, `vulnerabilities`, `install-scripts`, `release-age`, `deps`, `actions`,
 `secrets`, `docker`, `require-full-history`, `commit-history`, and `linear-history`, around the build, the type
 check, the lint, and the unit suite. That order is the script's own - the reads that need nothing but the tree
 first, then the ones that need a registry or a container - and is not the order `gates.ts` runs them in,
@@ -259,6 +259,66 @@ the move is to raise `typescript` and `typescript-eslint` together, the moment t
 Until then the gap is one major, which the freshness bound reports and does not fail. Worth watching
 rather than filing away - if TypeScript 8 ships first, the gap reaches the bound with still no upgrade
 path, and every consumer fails on a pin none of them can move.
+
+### The update report is sorted by whose repair a line is
+
+`ploaness gate deps` used to print one flat list, every line in the same words: `update <manifest>
+<name>: declared X, latest Y`. A consuming project read it as a to-do and found that two thirds of it
+could not be done. A coordinate in a manifest the project INHERITS is ploaness's outright, which a
+trailing note said on every such row and which the reader had to check per line. Worse, a coordinate
+the project declares at a version ploaness PINS - `next`, `@types/node`, `typescript`, a
+`@payloadcms/*` package - was reported with no note at all, so taking the update as written produced
+a wiring failure on the next run. The report named the project's line and not the project's number.
+
+`packages/governance/src/freshness-repair.ts` sorts each finding by the one question a reader has,
+which is who can act on it: the project, a ploaness release carrying a newer pin, or a ploaness
+release declaring a newer version in a manifest the project never sees. The report prints those three
+groups in that order, each under a heading that states the action once, and the heading over the two
+harness groups says whether a newer ploaness exists to upgrade to or whether the wait is on ploaness -
+a heading that said "upgrade ploaness" to a project already on the latest release would name an
+upgrade that does not exist.
+
+Three decisions inside it are worth keeping. Whose version a name is comes from the SAME map the
+wiring gate holds a project to, `harnessDecidedVersions` in `packages/cli/src/checks/wiring.ts`, plus
+the two family rules `version-policy.ts` already enforces, so the report and the gate that would
+refuse the edit cannot disagree. `ploaness` itself is the one harness name left to the project,
+because the release is the single version a project is entitled to choose and upgrading it is the
+repair every other harness line names. And this repository is recognised as ploaness by tracking the
+manifest of the package called `ploaness`, never by a flag, so here every coordinate is its own to
+change, `pins.json` included - the same reasoning that derives a member's kind from what it declares.
+
+The release-age lookup is asked only for the project's own group. A pin or an inherited version is
+not one the project installs on its own, so whether pnpm would refuse it today changes nothing a
+reader can do.
+
+### The release-age floor is strict, and only the harness may be excluded from it
+
+pnpm refuses a release younger than about a day, so a compromised publish is usually pulled before
+anything installs it. The floor has a soft edge: unless `minimumReleaseAgeStrict` is on, an exact
+version pinned below it installs anyway, and pnpm records an exclusion for it in the workspace file
+to make the install repeatable - written by the tool, for a version nobody decided to exempt, on one
+easily missed line of install output. It happened here, bumping two lint plugins that were hours old:
+the install succeeded, and two `minimumReleaseAgeExclude` entries were sitting in
+`pnpm-workspace.yaml` ready to be committed. The `deps` report had marked neither as `held`, because
+the search index it reads publish dates from lags the registry by minutes, and the run fell inside
+that window.
+
+`release-age` is the gate, and it runs here as well as in every consumer. It requires
+`minimumReleaseAgeStrict: true` at the top level of the workspace file, so the too-young pin fails
+the install instead, and it permits `minimumReleaseAgeExclude` to name only `ploaness` and
+`@ploaness/*`, with or without a version. The harness is the one exclusion a consumer may hold
+because a ploaness release is what a consumer's failing gates wait on - the pins moving is what
+unblocks it - and a day's wait on the tool that decides the verdict is a day of every consumer
+failing on a pin none of them can move. Everything else stays behind the floor, so the exclusion list
+cannot become the way around a `held` line. This repository, being ploaness, excludes nothing.
+
+The rule is in `install-policy.ts` beside the override and allowlist rules, because it is the same
+surface: what a project may install that the harness did not decide. `HARNESS_PACKAGE` and
+`isHarnessPackage` moved out of `version-policy.ts` into `harness-package.ts` to let it say so, since
+`version-policy.ts` already imports the override reader from `install-policy.ts` and the reverse
+import would have been the cycle `arch` exists to refuse. `ploaness init` does not write the
+workspace file, so a consumer adds the setting by hand, as it already does the install-script
+allowlist; the gate's finding names the line.
 
 ### The repository is linted by the config it publishes
 

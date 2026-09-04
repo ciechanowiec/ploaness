@@ -141,7 +141,16 @@ const requiredPackages = (kind: MemberKind): ReadonlySet<string> =>
       .flatMap((group: PinGroup): readonly string[] => Object.keys(group.versions)),
   )
 
-const expectedTestLibraries = (): Readonly<Record<string, string>> => {
+/**
+ * Every version ploaness decides for a project that declares the name: the analyzers read from the
+ * harness's own manifests, the framework pins from `pins.json`, and the runtime package at the release.
+ *
+ * Exported because the `deps` gate sorts its report by whose repair a finding is, and "a version the
+ * project declares but may not change" is precisely this map's key set. Read here rather than rebuilt
+ * there, so the report and the wiring gate cannot disagree about whose version a name is.
+ * @returns the pinned names, each mapped to the exact version the project must declare.
+ */
+export const harnessDecidedVersions = (): Readonly<Record<string, string>> => {
   // Built from one flat list of entries rather than by folding an object into itself: a later source
   // still wins, because `fromEntries` keeps the last entry for a repeated key.
   const declared: Record<string, unknown> = Object.fromEntries(
@@ -222,7 +231,7 @@ const memberViolations = (member: Member): readonly WiringViolation[] => {
     declaredExclusions: member.settings.declaredExclusions,
     biomeConfig: readText(path.join(member.root, 'biome.json')),
     tsconfig: readText(path.join(member.root, 'tsconfig.json')),
-    expectedTestLibraries: expectedTestLibraries(),
+    expectedTestLibraries: harnessDecidedVersions(),
     requiredTestLibraries: requiredFor(kind),
     payloadVersion: ownedVersions()['payload'],
   })
@@ -272,7 +281,7 @@ export const wiring = (repository: Repository): GateResult => {
       packageJson: repository.packageJson,
       workspaceFile: repository.workspaceFile,
       declaredExclusions: repository.settings.declaredExclusions,
-      expectedTestLibraries: expectedTestLibraries(),
+      expectedTestLibraries: harnessDecidedVersions(),
       requiredPackageManager: asOptionalText(readPins()['packageManager']),
       requiredEngines: asStringRecord(readPins()['engines']),
       declaredAcrossMembers: declaredEverywhere(repository),

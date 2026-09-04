@@ -12,7 +12,10 @@ import {
   type DeclaredCoordinate,
   type DependencyStatus,
   type FreshnessFinding,
+  type FreshnessOwnership,
+  type FreshnessRepair,
   type FreshnessReport,
+  type FreshnessSection,
   findFreshnessViolations,
   findLicenseViolations,
   HARNESS_EXCEPTIONS,
@@ -20,6 +23,8 @@ import {
   hoursPublished,
   inheritedManifestPaths,
   isArray,
+  isHarnessRelease,
+  isHarnessRepository,
   isHeldByReleaseAge,
   isRecord,
   judgeVulnerabilities,
@@ -32,6 +37,7 @@ import {
   RELEASE_AGE_FLOOR_HOURS,
   REQUEST_TIMEOUT_MS,
   type ReleaseAge,
+  sectionFreshnessReport,
   type VulnerabilityReport,
 } from '@ploaness/governance'
 import { type Context, manifestPathFrom, readJson, workingTreeFiles } from '../context.js'
@@ -45,6 +51,7 @@ import {
   withOutput,
 } from '../exec.js'
 import { type ImageReport, imageFreshness } from './images.js'
+import { harnessDecidedVersions } from './wiring.js'
 
 interface PnpmLicenseEntry {
   readonly name: string
@@ -309,36 +316,21 @@ const publishedAt = async (name: string, version: string): Promise<number | unde
 const describeFinding = (finding: FreshnessFinding): string =>
   `${finding.owner} ${finding.name}: declared ${finding.current}, latest ${finding.latest}`
 
-// A line names its repair, and for an inherited coordinate that is not the repair every other line
-// names. The project cannot edit a version ploaness declares, so "change the declaration" would be
-// advice it has no file to act on; upgrading the harness is the move, and reporting it is the move when
-// no release carries the newer pin yet. The same answer `HARNESS_EXCEPTIONS` gives for an advisory
-// carried by ploaness's own chain.
-const HARNESS_REPAIR: string =
-  ' - declared by ploaness rather than by the project, so upgrade ploaness, or report it if no ' +
-  'release carries the newer pin'
-
-// A shorter marker than HARNESS_REPAIR, because it appears on every inherited update rather than on
-// the rare overdue one, and it answers a different question: `stale` has to say what to DO, while an
-// ordinary update only has to say whose declaration it is. A consuming project reported these rows as
-// noise, and it was reading correctly - they named a manifest under `@ploaness/` and nothing said that
-// naming meant "not yours to change".
-const HARNESS_OWNED: string = ' - ploaness declares this, not the project'
-
-// Read from `isInherited` rather than from the verdict. Only an inherited coordinate can reach these
-// lines with a `fail`, because a project's own failure stops the build instead - so the two were
-// equivalent, and stating the one that is actually meant is what keeps them equivalent.
-const ownerNote = (finding: FreshnessFinding, note: string): string =>
-  finding.isInherited ? note : ''
+// Said on the harness release's own line, because it is the one update in the project's group whose
+// repair is also the repair of every line in the two groups beneath it.
+const HARNESS_RELEASE_NOTE: string = ' - upgrading it is what moves every version ploaness decides'
 
 // `stale`, not `update`, for a coordinate past the bound that does not stop this build. Printed as an
 // ordinary update it would bury the one line saying the harness itself is overdue among a dozen saying
-// a patch release exists.
+// a patch release exists. What to DO about either is the heading's job, so neither line repeats it: a
+// note on every inherited row was what a consuming project reported as noise.
+const harnessNote = (finding: FreshnessFinding): string =>
+  isHarnessRelease(finding) ? HARNESS_RELEASE_NOTE : ''
+
 const describeReported = (finding: FreshnessFinding): string =>
   finding.verdict === 'fail'
-    ? `stale ${describeFinding(finding)}; past the freshness bound` +
-      ownerNote(finding, HARNESS_REPAIR)
-    : `update ${describeFinding(finding)}${ownerNote(finding, HARNESS_OWNED)}`
+    ? `stale ${describeFinding(finding)}; past the freshness bound`
+    : `update ${describeFinding(finding)}${harnessNote(finding)}`
 
 // `held`, not `update`, for a release pnpm will refuse for being too young. Naming it as an ordinary
 // update sends the reader to an install that fails, and the way past that failure is an exclusion from
@@ -352,38 +344,90 @@ const describeHeld = (finding: FreshnessFinding, hours: number | undefined): str
 }
 
 // A date is asked for only where it can change the line: a coordinate already past the bound is stale
-// whatever its age, and one this project cannot edit is reported to a different address entirely.
-const isHeldCandidate = (finding: FreshnessFinding): boolean =>
-  finding.verdict === 'update' && !finding.isInherited
+// whatever its age, and one the project cannot install on its own - a pin, or a line in an inherited
+// manifest - is not waiting on the registry at all.
+const isHeldCandidate = (finding: FreshnessFinding, repair: FreshnessRepair): boolean =>
+  finding.verdict === 'update' && repair === 'project'
 
-// The project's own rows first, then the harness's. Interleaved, a reader scanning for what they can
-// act on had to check the owner of every line; grouped, the actionable half is the top of the list.
-// Stable within each half, so the order a run reports twice is the same order.
-const projectRowsFirst = (reported: readonly FreshnessFinding[]): readonly FreshnessFinding[] => [
-  ...reported.filter((finding: FreshnessFinding): boolean => !finding.isInherited),
-  ...reported.filter((finding: FreshnessFinding): boolean => finding.isInherited),
-]
+const describeLine = async (
+  finding: FreshnessFinding,
+  repair: FreshnessRepair,
+  now: number,
+): Promise<string> => {
+  if (!isHeldCandidate(finding, repair)) {
+    return describeReported(finding)
+  }
+  const age: ReleaseAge = { publishedAt: await publishedAt(finding.name, finding.latest), now }
+  return isHeldByReleaseAge(age)
+    ? describeHeld(finding, hoursPublished(age))
+    : describeReported(finding)
+}
+
+// The images ploaness pins are declared in the harness, so in a consumer they sit with the manifests
+// it inherits; in ploaness's own repository they are its own to change like everything else there.
+const imageRepair = (ownership: FreshnessOwnership): FreshnessRepair =>
+  ownership.isHarnessItself ? 'project' : 'inherited'
+
+const INDENT: string = '  '
+
+// A group prints only when it has a line to put under its heading, because a heading over nothing is
+// a claim about nothing. The lines are indented beneath it so the heading reads as one.
+const describeSection = async (
+  section: FreshnessSection,
+  images: readonly string[],
+  now: number,
+): Promise<readonly string[]> => {
+  const described: readonly string[] = await mapWithConcurrency(
+    section.findings,
+    REGISTRY_CONCURRENCY,
+    async (finding: FreshnessFinding): Promise<string> =>
+      describeLine(finding, section.repair, now),
+  )
+  const body: readonly string[] = [...described, ...images]
+  return body.length === 0
+    ? []
+    : [section.heading, ...body.map((line: string): string => `${INDENT}${line}`)]
+}
+
+// A blank line between groups and nothing else, so a two-group report is two paragraphs rather than
+// a heading lost in the middle of a list.
+const separated = (groups: readonly (readonly string[])[]): readonly string[] =>
+  groups
+    .filter((group: readonly string[]): boolean => group.length > 0)
+    .flatMap((group: readonly string[], index: number): readonly string[] =>
+      index === 0 ? group : ['', ...group],
+    )
+
+// The groups are described one after another rather than all at once, so the registry sees one
+// group's lookups at a time; only the project's own group asks it anything.
+const ONE_GROUP_AT_A_TIME: number = 1
 
 const describeUpdates = async (
   reported: readonly FreshnessFinding[],
+  ownership: FreshnessOwnership,
+  images: ImageReport,
   now: number,
 ): Promise<readonly string[]> =>
-  await mapWithConcurrency(
-    projectRowsFirst(reported),
-    REGISTRY_CONCURRENCY,
-    async (finding: FreshnessFinding): Promise<string> => {
-      if (!isHeldCandidate(finding)) {
-        return describeReported(finding)
-      }
-      const age: ReleaseAge = {
-        publishedAt: await publishedAt(finding.name, finding.latest),
-        now,
-      }
-      return isHeldByReleaseAge(age)
-        ? describeHeld(finding, hoursPublished(age))
-        : describeReported(finding)
-    },
+  separated(
+    await mapWithConcurrency(
+      sectionFreshnessReport(reported, ownership),
+      ONE_GROUP_AT_A_TIME,
+      async (section: FreshnessSection): Promise<readonly string[]> =>
+        describeSection(
+          section,
+          section.repair === imageRepair(ownership) ? images.lines : [],
+          now,
+        ),
+    ),
   )
+
+// Whose version each name is, read from the same map the wiring gate holds a project to. A name in it
+// is one the project declares and may not change, which is the whole difference between the first two
+// groups of the report.
+const ownershipOf = (manifests: readonly ManifestSource[]): FreshnessOwnership => ({
+  pinnedByHarness: new Set<string>(Object.keys(harnessDecidedVersions())),
+  isHarnessItself: isHarnessRepository(manifests),
+})
 
 // One lookup per distinct name, fanned back out across the coordinates that share it. A workspace
 // declaring the same analyzer in three manifests must not ask the registry three times.
@@ -482,22 +526,23 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
       `note ${name} is not on the public registry, so freshness is not measurable`,
   )
   const report: FreshnessReport = findFreshnessViolations(statuses)
+  const updates: readonly string[] = await describeUpdates(
+    report.reported,
+    ownershipOf(manifests),
+    images,
+    Date.now(),
+  )
   if (report.failures.length > 0) {
     return failed(
       `${String(report.failures.length)} dependency/dependencies are two or more majors behind`,
-      [
-        ...report.failures.map((finding: FreshnessFinding): string => describeFinding(finding)),
-        ...(await describeUpdates(report.reported, Date.now())),
-        ...images.lines,
-        ...notes,
-      ],
+      separated([
+        report.failures.map((finding: FreshnessFinding): string => describeFinding(finding)),
+        updates,
+        notes,
+      ]),
     )
   }
-  return passed(freshnessSummary(statuses, manifests, report, images), [
-    ...(await describeUpdates(report.reported, Date.now())),
-    ...images.lines,
-    ...notes,
-  ])
+  return passed(freshnessSummary(statuses, manifests, report, images), separated([updates, notes]))
 }
 
 // The npm-v6 audit shape `pnpm audit --json` emits: advisories keyed by id, each carrying the module,

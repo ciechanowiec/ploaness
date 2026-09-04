@@ -255,7 +255,7 @@ commit_case pass 'feat(fixture): add the ploaness integration consumer' "$CONFOR
 # reasoning applies symmetrically: a rule that only ever failed proves as little as one that only ever
 # passed - neither tells you the gate is wired to the scaffold at all.
 for gate in preflight wiring assets conventions editorconfig suppressions generated-denial \
-            payload-rules config-refs environment install-scripts arch require-full-history \
+            payload-rules config-refs environment install-scripts release-age arch require-full-history \
             commit-history linear-history; do
     expect pass "$gate" PASS
 done
@@ -587,6 +587,20 @@ node "$lib/drop-install-allowlist.ts" "$scratch/fail-install-scripts/pnpm-worksp
 commit_case fail-install-scripts 'feat(fixture): drop the install-script allowlist' "$CONFORMING_BODY"
 expect fail-install-scripts install-scripts FAIL 'onlyBuiltDependencies'
 
+# Without strict, an exact pin below pnpm's release-age floor installs anyway and pnpm writes an
+# exclusion for it into the workspace file; the gate requires the refusal instead.
+new_case fail-release-age-lenient
+drop_text "$scratch/fail-release-age-lenient/pnpm-workspace.yaml" 'minimumReleaseAgeStrict: true'
+commit_case fail-release-age-lenient 'feat(fixture): let pnpm install below the release-age floor' "$CONFORMING_BODY"
+expect fail-release-age-lenient release-age FAIL 'minimumReleaseAgeStrict'
+
+# The harness is the one permitted exclusion; anything else is the way around a held update.
+new_case fail-release-age-exclusion
+node "$lib/add-list-item.ts" "$scratch/fail-release-age-exclusion/pnpm-workspace.yaml" \
+    minimumReleaseAgeExclude "'@types/react-dom@19.2.5'"
+commit_case fail-release-age-exclusion 'feat(fixture): exclude a framework pin from the release-age floor' "$CONFORMING_BODY"
+expect fail-release-age-exclusion release-age FAIL '@types/react-dom'
+
 # Payload fills the missing operations in during sanitisation, so a partial access block is invisible
 # once the app boots. The rule this replaced accepted one operation out of four.
 # An upload collection that restricts nothing takes whatever a client sends, and an SVG served from
@@ -905,6 +919,8 @@ new_workspace() {
 new_workspace pass-workspace
 expect pass-workspace preflight PASS
 expect pass-workspace install-scripts PASS
+expect pass-workspace release-age PASS
+expect_in pass-workspace apps/web release-age PASS
 expect pass-workspace conventions PASS
 # Both halves of one joint. `apps/web` declares a framework-glue exemption covering its route layer, so
 # its own run passes; the root declares none, and the shipped configurations read their settings from the

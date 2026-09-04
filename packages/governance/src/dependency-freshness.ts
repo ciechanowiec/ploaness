@@ -16,8 +16,8 @@
 // That is a statement about whose repair it is rather than an exemption from the measurement, which is
 // why the verdict survives into the report instead of being softened into an ordinary update.
 
+import { isHarnessPackage } from './harness-package.js'
 import { declaredDependencies } from './json-shapes.js'
-import { isHarnessPackage } from './version-policy.js'
 
 /** The build impact of a dependency's drift from its latest published release. */
 export type FreshnessVerdict = 'ok' | 'update' | 'fail'

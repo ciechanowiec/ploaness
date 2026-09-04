@@ -4,7 +4,14 @@
 // ploaness with; this judges the numbers beside its dependencies. The two were one file until it passed
 // the size cap, which is the cap doing its job: they answer different questions and share only the
 // helpers below.
-import { findOverrides, OVERRIDE_KEYS, type OverrideEntry } from './install-policy.js'
+
+import { HARNESS_PACKAGE, isHarnessPackage } from './harness-package.js'
+import {
+  findOverrides,
+  OVERRIDE_KEYS,
+  type OverrideEntry,
+  packageNameOf,
+} from './install-policy.js'
 import { asOptionalText, asRecord, asStringRecord, declaredDependencies } from './json-shapes.js'
 import { pinnedPnpmVersion } from './toolchain-pins.js'
 import type { WiringViolation } from './wiring-violation.js'
@@ -40,21 +47,6 @@ export const describeFound = (found: string | undefined): string =>
 // finding, which is the right time to say what was actually intended.
 const HARNESS_SCOPE: string = '@ploaness/'
 const LOCAL_ARTEFACT: RegExp = /^(?:file|link|workspace):/
-
-/** The meta package a governed project declares, and the root of everything it inherits from ploaness. */
-export const HARNESS_PACKAGE: string = 'ploaness'
-
-/**
- * Whether a package name is one of ploaness's own.
- *
- * Exported because the `deps` gate asks the same question when it walks the manifests a project
- * inherits, and it had no way to ask it but a second copy of the two literals above - which is the
- * shape of drift this repository refuses everywhere else.
- * @param packageName the declared name.
- * @returns true for `ploaness` and for anything under its scope.
- */
-export const isHarnessPackage = (packageName: string): boolean =>
-  packageName === HARNESS_PACKAGE || packageName.startsWith(HARNESS_SCOPE)
 
 const isHarnessTarball = (entry: OverrideEntry): boolean =>
   isHarnessPackage(entry.packageName) && LOCAL_ARTEFACT.test(entry.specifier)
@@ -169,13 +161,6 @@ const checkEngines = (
 // None is visible in the dependency block a reader checks, which is what makes them worth naming - and
 // the list is imported rather than restated, because two copies of it in one gate will not stay equal.
 
-// A patch is keyed by `name@version`, and a scoped name begins with the same character, so the split is
-// on the last `@` rather than the first.
-const packageNameOf = (key: string): string => {
-  const at: number = key.lastIndexOf('@')
-  return at > 0 ? key.slice(0, at) : key
-}
-
 const escapeEntries = (packageJson: Record<string, unknown>): readonly (readonly string[])[] =>
   OVERRIDE_KEYS.flatMap((key: string): readonly (readonly string[])[] =>
     [packageJson, asRecord(packageJson['pnpm'])].flatMap(
@@ -262,6 +247,19 @@ const checkExactVersions = (packageJson: Record<string, unknown>): readonly Wiri
 const PAYLOAD_SCOPE: string = '@payloadcms/'
 
 /**
+ * Whether a package is one Payload publishes alongside itself, and so must carry the pinned `payload`
+ * version.
+ *
+ * Exported because the freshness report asks the same question from the other side: a `@payloadcms/*`
+ * update is not the project's to take, since this rule holds the declaration to the pin. Two copies of
+ * the scope literal would be two rules that stop agreeing about which packages that is.
+ * @param packageName the declared name.
+ * @returns true for anything under Payload's scope.
+ */
+export const isPayloadFamilyPackage = (packageName: string): boolean =>
+  packageName.startsWith(PAYLOAD_SCOPE)
+
+/**
  * The package whose presence makes a project a Payload application.
  *
  * Exported because `preflight` and `workspace-policy` both ask the question and both wrote the literal
@@ -289,7 +287,7 @@ const checkPayloadFamily = (
   return Object.entries(declaredDependencies(packageJson))
     .filter(
       ([name, version]: readonly [string, string]): boolean =>
-        name.startsWith(PAYLOAD_SCOPE) && version !== payloadVersion,
+        isPayloadFamilyPackage(name) && version !== payloadVersion,
     )
     .map(
       ([name, version]: readonly [string, string]): WiringViolation => ({

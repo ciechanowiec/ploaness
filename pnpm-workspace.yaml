@@ -23,6 +23,14 @@ onlyBuiltDependencies: []
 allowBuilds:
   esbuild: false
 
+# pnpm refuses a release younger than its floor, so a compromised publish is usually pulled before
+# anything installs it. Without this the floor has a soft edge: an exact version pinned below it is
+# installed anyway, and pnpm records an exclusion for it in this file, on one easily missed line of
+# install output. Strict makes it a refusal, which is the answer the floor exists to give. The
+# `release-age` gate requires the same of every consumer, and permits only the ploaness packages in
+# `minimumReleaseAgeExclude`; this repository, being ploaness, excludes nothing.
+minimumReleaseAgeStrict: true
+
 # deepmerge-ts 7 has a stack-exhaustion advisory (GHSA-ggr8-5vv4-36mx) and eslint-plugin-functional,
 # which is on its latest release, still declares `^7.1.5`. The standard resolves a finding by upgrading
 # the package and reaches for an allowlist only when no upgrade exists, so the patched major is forced

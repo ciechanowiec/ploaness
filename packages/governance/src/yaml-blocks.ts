@@ -66,6 +66,27 @@ const withoutTrailingComment = (line: string): string => {
 }
 
 /**
+ * The value of a top-level `key: value` scalar, such as `minimumReleaseAgeStrict: true`.
+ *
+ * Read from the line itself rather than from the block beneath it, which a scalar does not have. A
+ * trailing comment is stripped, because a boolean carries no `#` of its own.
+ * @param file the contents of a YAML file, or an empty string when it is absent.
+ * @param key the top-level key whose scalar to read.
+ * @returns the unquoted value, or undefined when the key is absent or carries no inline value.
+ */
+export const topLevelScalar = (file: string, key: string): string | undefined => {
+  const line: string | undefined = file
+    .split('\n')
+    .find((candidate: string): boolean => isTopLevelKey(candidate, key))
+  if (line === undefined) {
+    return undefined
+  }
+  const inline: string = line.slice(line.indexOf(':') + 1).trim()
+  const value: string = withoutQuotes(withoutTrailingComment(inline))
+  return value.length > 0 ? value : undefined
+}
+
+/**
  * The items of a top-level YAML sequence, such as the `packages:` block of a workspace file.
  * @param file the contents of a YAML file, or an empty string when it is absent.
  * @param key the top-level key whose sequence to read.

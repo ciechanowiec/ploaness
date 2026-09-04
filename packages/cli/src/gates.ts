@@ -23,7 +23,7 @@ import { editorconfig } from './checks/editorconfig.js'
 import { environment } from './checks/environment.js'
 import { generatedDenial } from './checks/generated.js'
 import { commitHistory, linearHistory, requireFullHistory } from './checks/history.js'
-import { installScripts } from './checks/install.js'
+import { installScripts, releaseAge } from './checks/install.js'
 import { bundle, imageAssets } from './checks/integrity.js'
 import { adminViews, payloadGenerated, payloadRules } from './checks/payload.js'
 import { preflight } from './checks/preflight.js'
@@ -227,6 +227,13 @@ const DEFAULT_GATES: readonly Gate[] = [
     title: 'install-script allowlist',
     isExtended: false,
     run: installScripts,
+  },
+  {
+    id: 'release-age',
+    scope: 'repository',
+    title: 'release-age floor',
+    isExtended: false,
+    run: releaseAge,
   },
   {
     id: 'deps',

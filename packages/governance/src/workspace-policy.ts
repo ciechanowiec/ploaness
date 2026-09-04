@@ -7,8 +7,9 @@
 // about a file they had not found. This module is the missing distinction, kept pure so the rules about
 // which directories are governed can be spec'd against directory lists no filesystem has to produce.
 import { matchesGlob } from './file-roles.js'
+import { HARNESS_PACKAGE } from './harness-package.js'
 import { declaredDependencies } from './json-shapes.js'
-import { HARNESS_PACKAGE, NEXT_PACKAGE, PAYLOAD_PACKAGE } from './version-policy.js'
+import { NEXT_PACKAGE, PAYLOAD_PACKAGE } from './version-policy.js'
 import { topLevelListItems } from './yaml-blocks.js'
 
 /** The repo-relative path of the member that sits at the repository root. */

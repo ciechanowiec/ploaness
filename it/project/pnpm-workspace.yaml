@@ -9,6 +9,19 @@ onlyBuiltDependencies:
   - esbuild
   - unrs-resolver
 
+# What the release-age gate requires, and the one exclusion it permits. The harness may be taken the day
+# it ships, because a ploaness release is what a consumer's failing gates wait on; nothing else may be.
+# The fixture resolves the harness from tarballs below, so the exclusion changes nothing here - it is
+# present to prove the permitted shape passes, as the case that appends a foreign entry proves the rest.
+minimumReleaseAgeStrict: true
+minimumReleaseAgeExclude:
+  - 'ploaness'
+  - '@ploaness/cli'
+  - '@ploaness/config'
+  - '@ploaness/assets'
+  - '@ploaness/governance'
+  - '@ploaness/runtime'
+
 # The fixture resolves the six from the packed tarballs rather than by name, so what it verifies is
 # the artefacts this run produced rather than whatever the registry already serves. That does not
 # change once they are published: a range would resolve to the previous release, which is the one
