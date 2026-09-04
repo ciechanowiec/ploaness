@@ -219,9 +219,28 @@ const syncOne = (root: string, asset: ManagedAsset): SyncChange | undefined => {
   if (action === 'splice') {
     return spliceSection(asset.path, target, source)
   }
+  return hasCopiedChange(source, target) ? { path: asset.path, action: 'wrote' } : undefined
+}
+
+/**
+ * Copy a managed body over its target only when the bytes differ.
+ *
+ * A pinned file is always the catalogue's, so the copy is unconditional in effect - but reporting it as
+ * a write on every run told an agent to review and commit edits that did not exist, and left the
+ * "already matches" line unreachable for every pinned path. The comparison is what makes the report
+ * name the runs that changed something.
+ * @param source the catalogue body.
+ * @param target where it is materialised.
+ * @returns whether the target was written.
+ */
+export const hasCopiedChange = (source: string, target: string): boolean => {
+  const body: Buffer = readFileSync(source)
+  if (existsSync(target) && body.equals(readFileSync(target))) {
+    return false
+  }
   mkdirSync(path.dirname(target), { recursive: true })
   cpSync(source, target)
-  return { path: asset.path, action: 'wrote' }
+  return true
 }
 
 /**
