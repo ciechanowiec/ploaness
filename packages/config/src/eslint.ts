@@ -48,8 +48,9 @@ const PAYLOAD_HOOK_FILES: readonly string[] = ['src/hooks/**']
 
 const NO_INLINE_CONFIG_FUNCTIONS_SELECTOR: string = 'ArrowFunctionExpression, FunctionExpression'
 const NO_INLINE_CONFIG_FUNCTIONS_MESSAGE: string =
-  'No inline functions in collection/global/field/block configs. Define behavior (access, hooks, ' +
-  'validate) in src/access or src/lib so it is unit-tested, then import it by reference.'
+  'No inline functions in collection/global/field/block configs. Define access and pure rules in ' +
+  'src/access or src/lib, where the unit suite covers them, and a hook or validator that needs the ' +
+  'request in src/hooks; then import it by reference.'
 
 // `unicorn/prefer-export-from` rewrites `import x from 'y'` + `export default x` into
 // `export { default } from 'y'` - and it AUTOFIXES, so `ploaness format` turned a correctly wired

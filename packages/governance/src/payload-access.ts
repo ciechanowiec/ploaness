@@ -35,9 +35,9 @@ const eachConfig = (
   )
 
 // Payload fills the missing operations in during sanitisation, so a partial access block is invisible
-// the moment the app boots - and its default for a non-auth collection is public read. Checking that
-// the word `access` appears somewhere in the file, which is what this rule used to do, accepted a block
-// that declared one operation out of four.
+// the moment the app boots - and its default admits every signed-in user to every operation. Checking
+// that the word `access` appears somewhere in the file, which is what this rule used to do, accepted a
+// block that declared one operation out of four.
 export const findUndeclaredAccess = (source: string): readonly PayloadViolation[] =>
   eachConfig(
     source,
@@ -54,8 +54,8 @@ export const findUndeclaredAccess = (source: string): readonly PayloadViolation[
               rule: 'require-complete-access',
               reason:
                 `a ${kind.label} must declare access for ${kind.operations.join(', ')}; ` +
-                `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} left to the Payload ` +
-                'defaults, which allow public read',
+                `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} left to Payload's ` +
+                'default, which admits every signed-in user',
             },
           ]
     },

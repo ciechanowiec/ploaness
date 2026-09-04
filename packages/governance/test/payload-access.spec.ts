@@ -141,6 +141,13 @@ describe('require-complete-access', () => {
     expect(findUndeclaredAccess(source)[0]?.reason).toContain('create')
   })
 
+  // The consequence named is the real one: the default is not public read, which the anonymous sweep
+  // would catch, but every signed-in user, which it cannot.
+  it('names the default the missing operations fall to', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', access: { read: isAdmin } }`
+    expect(findUndeclaredAccess(source)[0]?.reason).toContain('admits every signed-in user')
+  })
+
   it('accepts a global that declares only read and update', () => {
     const source: string = `const H: GlobalConfig = { slug: 'h', access: { read: isAdmin, update: isAdmin } }`
     expect(rulesOf(source)).toEqual([])
