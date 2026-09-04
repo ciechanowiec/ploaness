@@ -259,7 +259,8 @@ commit_case pass 'feat(fixture): add the ploaness integration consumer' "$CONFOR
 # reasoning applies symmetrically: a rule that only ever failed proves as little as one that only ever
 # passed - neither tells you the gate is wired to the scaffold at all.
 for gate in preflight wiring assets conventions editorconfig suppressions generated-denial \
-            payload-rules config-refs environment install-scripts release-age blocklist arch require-full-history \
+            payload-rules payload-defaults config-refs environment install-scripts release-age blocklist arch \
+            require-full-history \
             commit-history linear-history; do
     expect pass "$gate" PASS
 done
@@ -657,6 +658,25 @@ drop_text "$scratch/fail-global-access/src/globals/Header.ts" "    update: nobod
 "
 commit_case fail-global-access 'feat(fixture): leave a global update undeclared' "$CONFORMING_BODY"
 expect fail-global-access payload-rules FAIL require-complete-access
+
+# Payload builds the folder collection itself, with an access block no source file carries, so the
+# static rule cannot see it and the anonymous sweep cannot either: its default admits every signed-in
+# user to every operation. The template decides it through an override; this leaves it to the default.
+new_case fail-folders-default-access
+replace_text "$scratch/fail-folders-default-access/src/payload.config.ts" \
+    "folders: { collectionOverrides: [foldersAccess] }," "folders: {},"
+commit_case fail-folders-default-access 'feat(fixture): leave the folder tree to the default access' \
+    "$CONFORMING_BODY"
+expect fail-folders-default-access payload-defaults FAIL payload-folders
+
+# The job queue is the other collection the framework builds, and it declares no access at all.
+new_case fail-jobs-default-access
+replace_text "$scratch/fail-jobs-default-access/src/payload.config.ts" "  globals: [Header]," \
+    "  globals: [Header],
+  jobs: { tasks: [{ slug: 'noop', handler: async () => ({ output: {} }) }] },"
+commit_case fail-jobs-default-access 'feat(fixture): queue a task and leave the queue to the default' \
+    "$CONFORMING_BODY"
+expect fail-jobs-default-access payload-defaults FAIL payload-jobs
 
 # A required relationship gives one table a NOT NULL column against a foreign key Payload declares
 # ON DELETE SET NULL. The two contradict, so deleting the row being pointed AT aborts on a constraint

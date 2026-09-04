@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@payloadcms/db-postgres": "3.88.0",
     "@ploaness/runtime": "1.2.0",
     "graphql": "16.14.2",
     "nanoid": "6.0.1",
