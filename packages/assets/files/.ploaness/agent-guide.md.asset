@@ -71,11 +71,22 @@ ploaness governs all of the following domains:
   imports, and a Local API call reached through `req.payload` that threads `req` so it joins the caller's
   transaction - without it the operation opens its own, cannot see the in-flight write, and is not
   rolled back with it, which is invisible in every passing test until a hook runs inside a transaction -
-  and access control decided rather than inherited: every collection decides create, read, update and
+  a custom endpoint that receives its body unread, because Payload parses JSON and multipart for its own
+  endpoints only, so a handler that wraps another reads a `clone()` of the request or the wrapped
+  handler finds the body consumed and answers a generic 500 - and access control decided rather than
+  inherited: every collection decides create, read, update and
   delete, every global decides read and update, and an auth collection caps login attempts and locks
   the account. Payload fills what a config omits during sanitisation, and its default is public read,
-  so a partial access block is invisible once the application boots. An upload collection must declare `mimeTypes`: undeclared, it accepts
-  whatever a client sends, and an SVG served from this origin is script that runs as the site.
+  so a partial access block is invisible once the application boots. An upload collection must declare
+  `mimeTypes`: undeclared, it accepts whatever a client sends, and an SVG served from this origin is
+  script that runs as the site. A collection whose `mimeTypes` admit `image/svg+xml` - by name, by
+  `image/*`, by an empty list, or by a list the gate cannot read because it is imported, spread, or
+  computed - must also declare `upload.modifyResponseHeaders` (or `upload.handlers`) setting
+  `Content-Disposition: attachment` and `Content-Security-Policy: sandbox`, because Payload's own
+  scripted-SVG check skips a file that opens with an XML declaration. Write the list inline where it
+  excludes SVG, and the headers are not asked for. Hook state is written through `req.context` from
+  `src/hooks`, the one path exempt from the immutability rule for it; `req.file`, a bare `context`, and
+  replacing the bag itself (`req.context = {}`) stay reported everywhere.
 - **Drafts:** a collection or global with `versions.drafts` enabled must not grant a read that admits
   anyone, because `?draft=true` then serves unpublished content to an unauthenticated client. The gate
   catches the inline always-true form; a read delegated to a helper is yours to judge, and the helper
@@ -164,7 +175,11 @@ ploaness governs all of the following domains:
   passes. The baseline is `X-Content-Type-Options: nosniff`, a `Referrer-Policy`, a decision about who
   may frame the page, and a `Content-Security-Policy` that constrains script without readmitting
   `'unsafe-inline'`. In practice that means a per-request nonce from a `middleware.ts`, because the
-  suite drives `next dev` and its inline scripts would otherwise need blanket permission.
+  suite drives `next dev` and its inline scripts would otherwise need blanket permission. A header set
+  there replaces the same-named header a route handler set, so a page policy stamped on every response
+  overwrites the policy Payload's file handler puts on an SVG (a sandbox); the stored-file path,
+  `/api/<collection>/file/*`, must keep the handler's own policy and receive only the static headers.
+  The sweep requests `/` alone and cannot see this.
 - **Access boundary:** a sweep ploaness pins into `tests/e2e/access-boundary.e2e.spec.ts` asks Payload
   itself, through `/api/access` with no credential, what an unauthenticated caller may do to every
   collection and global. The static rules see that each operation was decided and can see an inline
@@ -178,7 +193,10 @@ ploaness governs all of the following domains:
   which is a forgery rather than a creation; a collection open to `read` with every field readable
   serves the credential column beside the public one. A field is judged only for an operation the
   entity itself grants, because Payload reports a field's own verdict even where the operation
-  carrying it is closed, and a permission nobody holds is not a finding a project could answer.
+  carrying it is closed, and a permission nobody holds is not a finding a project could answer. Name
+  each field. For a group whose children are all of one kind - the renditions under an upload
+  collection's `sizes` - declare `sizes.**` once, knowing a field added under that group later is
+  covered without a new declaration; a top-level field cannot be declared that way.
 - **Test determinism:** two rules of the governing standard that used to be prose and are now checks.
   The suite runs under a network guard the shipped setup file installs before any setup of yours: a
   socket, a DNS lookup, or a fetch that leaves this machine fails the test that made it, naming the
@@ -485,7 +503,7 @@ default, so a typo can never widen a rule.
 | `secretAllowlist` | empty | Fake credentials committed as fixtures. `path` and `reason`. |
 | `serverUrl` | `http://localhost:3000` | The origin the end-to-end suite drives. |
 | `auxiliaryServers` | empty | Servers the end-to-end run starts beside the application. `command` and `url`. An entry missing either is dropped. The application is still started first and still answers at `serverUrl`. |
-| `publicAccess` | empty | Anonymous permissions the project grants on purpose. `entity`, `operation`, and `reason`, plus an optional `fields` naming the fields that operation reaches, each by the path that reaches it (`sessions.id`) and `*` for a map Payload collapsed because every field was open. An entry missing one of the three is dropped, which restores the finding rather than excusing it; a field absent from `fields` stays undeclared, so a new column on a public collection reopens the finding. |
+| `publicAccess` | empty | Anonymous permissions the project grants on purpose. `entity`, `operation`, and `reason`, plus an optional `fields` naming the fields that operation reaches, each by the path that reaches it (`sessions.id`) and `*` for a map Payload collapsed because every field was open. A path ending in `.**` (`sizes.**`) declares that group and every field beneath it and is the only pattern honoured; `**` alone or mid-path is a literal name that matches nothing. An entry missing one of the three is dropped, which restores the finding rather than excusing it; a field absent from `fields` stays undeclared, so a new column on a public collection reopens the finding - except beneath a declared subtree, which is the trade that form makes. |
 | `accessibilitySkipRoutes` | `/admin`, `/api` | Route prefixes the sweep skips, added to those two. A route is a URL, so the reach rule above does not judge it. |
 | `accessibilityRouteBudget` | `250` | How many routes the sweep may discover before it stops and fails. Only a smaller value is honoured. |
 | `analysisEnv` | `PAYLOAD_SECRET`, `DATABASE_URL` | Placeholder environment for the gates that import the project. |
