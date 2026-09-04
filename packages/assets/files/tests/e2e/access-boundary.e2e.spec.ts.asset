@@ -17,7 +17,12 @@
 // beside it, and reading only the object shape reported the constrained grants while missing the open
 // ones. No unit test can reach a spec, which is why the decision does not live in one.
 import { type APIResponse, expect, test } from '@playwright/test'
-import { type AccessReport, PUBLIC_ACCESS, undeclaredGrants } from 'ploaness/access'
+import {
+  type AccessReport,
+  PUBLIC_ACCESS,
+  staleDeclarations,
+  undeclaredGrants,
+} from 'ploaness/access'
 
 // Payload's own endpoint for "what may the caller making this request do". Not a project route, so it
 // exists in every Payload application and needs no discovery.
@@ -50,6 +55,15 @@ test.describe('Access boundary', () => {
       'the running application grants these to anyone, and the project has not said it meant to. ' +
         'Close the access rule, or record the grant under ploaness.publicAccess with the reason ' +
         'it is intended',
+    ).toEqual([])
+
+    // The declaration's other half: an entry the application does not bear out records a decision with
+    // no effect and covers the field the day it is exposed again, which is the same silence the
+    // exclusion-reach rule refuses elsewhere.
+    expect(
+      staleDeclarations(report, PUBLIC_ACCESS),
+      'the project declares these under ploaness.publicAccess, and the running application grants ' +
+        'none of them to anyone. Correct the path, or remove the entry',
     ).toEqual([])
   })
 })

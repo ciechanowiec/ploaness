@@ -7,6 +7,7 @@ import {
   isPermitted,
   JUDGED_OPERATIONS,
   type ReportedPermission,
+  staleDeclarations,
   undeclaredGrants,
 } from '../src/access-boundary.js'
 import type { PublicAccess } from '../src/settings.js'
@@ -323,5 +324,91 @@ describe('undeclaredGrants over a declared subtree', () => {
   it('holdsASubtreeDeclarationToItsOperation', () => {
     const declared: readonly PublicAccess[] = declaringFields('media', 'create', ['sizes.**'])
     expect(undeclaredGrants(Media, declared)).toContain('media.read.sizes.thumbnail.url')
+  })
+})
+
+// The mirror of undeclaredGrants. A declaration nothing bears out is the access-boundary twin of an
+// exclusion that excludes nothing: it records a decision with no effect, and it covers the field the
+// day it is exposed again. The one form that may name more than the report shows is the subtree, and
+// only while something beneath it is granted.
+describe('staleDeclarations', () => {
+  const Media: AccessReport = {
+    collections: {
+      media: {
+        read: OPEN,
+        fields: {
+          alt: { read: OPEN },
+          sizes: {
+            read: OPEN,
+            fields: { thumbnail: { read: OPEN, fields: { url: { read: OPEN } } } },
+          },
+        },
+      },
+    },
+  }
+
+  it('acceptsADeclarationTheApplicationBearsOut', () => {
+    expect(staleDeclarations(Media, declaringFields('media', 'read', ['alt']))).toEqual([])
+    expect(staleDeclarations(Media, declaring('media', 'read'))).toEqual([])
+  })
+
+  it('reportsAnEntryForAnOperationNobodyIsGranted', () => {
+    expect(staleDeclarations(Media, declaring('media', 'update'))).toEqual([
+      'publicAccess entry "media.update" covers no grant the application makes; the access rule was ' +
+        'closed or the entity renamed, so remove the entry',
+    ])
+  })
+
+  it('reportsAnEntryForAnEntityTheReportDoesNotName', () => {
+    expect(staleDeclarations(Media, declaring('posts', 'read'))).toHaveLength(1)
+  })
+
+  it('reportsAFieldNoGrantMatches', () => {
+    expect(staleDeclarations(Media, declaringFields('media', 'read', ['alt', 'prefix']))).toEqual([
+      'publicAccess entry "media.read.prefix" covers no grant the application makes; the field was ' +
+        'renamed, hidden or misspelt, so correct or remove it',
+    ])
+  })
+
+  it('reportsAFieldGrantedUnderAnotherOperationOnly', () => {
+    const report: AccessReport = {
+      collections: { media: { read: OPEN, update: OPEN, fields: { alt: { read: OPEN } } } },
+    }
+    expect(staleDeclarations(report, declaringFields('media', 'update', ['alt']))).toHaveLength(1)
+  })
+
+  it('acceptsASubtreeWhileAnythingBeneathItIsGranted', () => {
+    expect(staleDeclarations(Media, declaringFields('media', 'read', ['sizes.**']))).toEqual([])
+  })
+
+  it('reportsASubtreeUnderWhichNothingIsGranted', () => {
+    expect(
+      staleDeclarations(Media, declaringFields('media', 'read', ['sizesLegacy.**'])),
+    ).toHaveLength(1)
+  })
+
+  it('reportsTheSpellingsThatAreLiteralsMatchingNothing', () => {
+    const literals: readonly string[] = ['**', 'sizes.**.url', 'sizes.*']
+    expect(staleDeclarations(Media, declaringFields('media', 'read', literals))).toHaveLength(
+      literals.length,
+    )
+  })
+
+  it('acceptsAStarAgainstAMapPayloadCollapsed', () => {
+    const report: AccessReport = { collections: { media: { read: OPEN, fields: true } } }
+    expect(staleDeclarations(report, declaringFields('media', 'read', ['*']))).toEqual([])
+    expect(staleDeclarations(report, declaringFields('media', 'read', ['alt']))).toHaveLength(1)
+  })
+
+  it('reportsInDeclarationOrder', () => {
+    const declared: readonly PublicAccess[] = [
+      ...declaring('posts', 'read'),
+      ...declaringFields('media', 'read', ['gone']),
+    ]
+    expect(
+      staleDeclarations(Media, declared).map(
+        (finding: string): string => finding.split('"', 2)[1] ?? '',
+      ),
+    ).toEqual(['posts.read', 'media.read.gone'])
   })
 })

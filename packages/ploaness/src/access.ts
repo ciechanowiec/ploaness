@@ -7,5 +7,10 @@
 // carries no type information, and ploaness has no Payload application to compile the spec against. A
 // consumer's `types` gate reported it first.
 
-export { type AccessReport, PUBLIC_ACCESS, undeclaredGrants } from '@ploaness/config/access'
+export {
+  type AccessReport,
+  PUBLIC_ACCESS,
+  staleDeclarations,
+  undeclaredGrants,
+} from '@ploaness/config/access'
 export type { PublicAccess } from '@ploaness/governance'

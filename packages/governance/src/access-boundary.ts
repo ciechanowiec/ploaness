@@ -199,3 +199,62 @@ export const undeclaredGrants = (
   grantedPermissions(report)
     .filter((granted: Granted): boolean => !isDeclared(granted, declared))
     .map((granted: Granted): string => describeGrant(granted))
+
+const isGranted = (entry: PublicAccess, granted: readonly Granted[]): boolean =>
+  granted.some(
+    (grant: Granted): boolean =>
+      grant.entity === entry.entity && grant.operation === entry.operation,
+  )
+
+const isCovering = (entry: PublicAccess, declared: string, granted: readonly Granted[]): boolean =>
+  granted.some(
+    (grant: Granted): boolean =>
+      grant.entity === entry.entity &&
+      grant.operation === entry.operation &&
+      grant.field !== undefined &&
+      coversPath(declared, grant.field),
+  )
+
+const describeDeclaration = (entry: PublicAccess, field?: string): string =>
+  describeGrant({
+    entity: entry.entity,
+    operation: entry.operation,
+    ...(field !== undefined && { field }),
+  })
+
+const NO_MATCHING_GRANT: string = 'covers no grant the application makes'
+
+/**
+ * Every `publicAccess` declaration the running application does not bear out: an entity and operation
+ * it grants nobody, or a field path under a granted operation that no reported field matches.
+ *
+ * The mirror of `undeclaredGrants`, and the access-boundary twin of an exclusion that excludes nothing:
+ * a declaration matching no grant records a decision with no effect, outlives the field it was written
+ * for, and covers that field the day it is exposed again without anyone being asked. A `.**` subtree
+ * counts as borne out while the group or anything beneath it is granted, which keeps the trade that
+ * form makes; a subtree under which nothing is granted is a misspelling like any other.
+ * @param report the body of `/api/access` for an anonymous caller.
+ * @param declared the project's `publicAccess` entries.
+ * @returns one finding per stale entry or field, in declaration order.
+ */
+export const staleDeclarations = (
+  report: AccessReport,
+  declared: readonly PublicAccess[],
+): readonly string[] => {
+  const granted: readonly Granted[] = grantedPermissions(report)
+  return declared.flatMap((entry: PublicAccess): readonly string[] => {
+    if (!isGranted(entry, granted)) {
+      return [
+        `publicAccess entry "${describeDeclaration(entry)}" ${NO_MATCHING_GRANT}; the access rule ` +
+          'was closed or the entity renamed, so remove the entry',
+      ]
+    }
+    return (entry.fields ?? [])
+      .filter((field: string): boolean => !isCovering(entry, field, granted))
+      .map(
+        (field: string): string =>
+          `publicAccess entry "${describeDeclaration(entry, field)}" ${NO_MATCHING_GRANT}; the field ` +
+          'was renamed, hidden or misspelt, so correct or remove it',
+      )
+  })
+}

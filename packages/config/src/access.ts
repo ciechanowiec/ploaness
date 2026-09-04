@@ -12,6 +12,6 @@
 import type { PublicAccess } from '@ploaness/governance'
 import { projectSettings } from './project-settings.js'
 
-export { type AccessReport, undeclaredGrants } from '@ploaness/governance'
+export { type AccessReport, staleDeclarations, undeclaredGrants } from '@ploaness/governance'
 
 export const PUBLIC_ACCESS: readonly PublicAccess[] = projectSettings.publicAccess
