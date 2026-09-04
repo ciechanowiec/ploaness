@@ -47,8 +47,11 @@ const ENVIRONMENT: string = 'process.env.*'
 const RUNTIME_GLOBALS: string = 'globalThis'
 const GLOBAL_ASSIGNMENT_RULE: string = 'unicorn/no-global-object-property-assignment'
 
+const REQUEST_CONTEXT: string = 'req.context.*.**'
+
 const SOURCE_FILE: string = 'src/lib/example.ts'
 const SPEC_FILE: string = 'tests/unit/example.spec.ts'
+const HOOK_FILE: string = 'src/hooks/example.ts'
 
 const shippedConfigs: Readonly<Record<string, readonly Linter.Config[]>> = {
   payload: payloadConfig,
@@ -297,6 +300,69 @@ describe('the test runtime, and the one place it may be completed', () => {
     const findings: Readonly<Record<string, readonly string[]>> = await findingsAt(
       'globalThis.matchMedia = fn',
       PROJECT_SETUP_FILE,
+    )
+    expect(findings).toStrictEqual(everyConfig([RULE]))
+  })
+})
+
+// The fourth role, and the only one that belongs to Payload rather than to the process: a hook's
+// per-request state. Payload hands every hook the same `req.context` and documents writing to it as the
+// way one hook passes a value to the next, so a rule reporting it made every governed hook pay a
+// suppression for the framework's own idiom. The carve-out is the hook directory in the Payload config
+// alone: a library has no request to carry state on, and the pure floor claiming to write it is the
+// defect the rule is aimed at.
+describe("a hook's per-request state, and the one layer that may write it", () => {
+  it('admits writing into req.context in the hook directory of the Payload config alone', async () => {
+    expect(await accessorsAt(HOOK_FILE)).toStrictEqual({
+      payload: sorted([REQUEST_CONTEXT, VERDICT]),
+      library: sorted([VERDICT]),
+    })
+  })
+
+  it('leaves the pure floor held to the full rule', async () => {
+    expect(await accessorsAt(SOURCE_FILE)).toStrictEqual(inEveryConfig([VERDICT]))
+  })
+
+  // Read back out of the shipped config and handed to the linter, so it asserts what a consumer's hook
+  // file is actually told rather than what this package's source happens to spell.
+  it('lets a hook write a value into the context', async () => {
+    const findings: Readonly<Record<string, readonly string[]>> = await findingsAt(
+      'req.context.handled = true',
+      HOOK_FILE,
+    )
+    expect(findings).toStrictEqual({ payload: [], library: [RULE] })
+  })
+
+  it('lets a hook write a nested value into the context', async () => {
+    const findings: Readonly<Record<string, readonly string[]>> = await findingsAt(
+      'req.context.upload.checksum = digest',
+      HOOK_FILE,
+    )
+    expect(findings).toStrictEqual({ payload: [], library: [RULE] })
+  })
+
+  // Why the pattern carries `*.**` rather than `**`, asserted rather than described: the plugin reads
+  // `**` as any depth including none, so the shorter spelling would admit replacing the bag itself.
+  it('leaves replacing the context itself reported', async () => {
+    const findings: Readonly<Record<string, readonly string[]>> = await findingsAt(
+      'req.context = {}',
+      HOOK_FILE,
+    )
+    expect(findings).toStrictEqual(everyConfig([RULE]))
+  })
+
+  it('leaves the rest of the request reported, the upload included', async () => {
+    const findings: Readonly<Record<string, readonly string[]>> = await findingsAt(
+      'req.file = sanitised',
+      HOOK_FILE,
+    )
+    expect(findings).toStrictEqual(everyConfig([RULE]))
+  })
+
+  it('leaves the same write reported outside the hook directory', async () => {
+    const findings: Readonly<Record<string, readonly string[]>> = await findingsAt(
+      'req.context.handled = true',
+      SOURCE_FILE,
     )
     expect(findings).toStrictEqual(everyConfig([RULE]))
   })

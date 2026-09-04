@@ -25,6 +25,7 @@ import {
   compose,
   type FlatConfigBlock,
   guidelineRules,
+  hookContextBlock,
   immutabilityBlock,
   NO_INHERITANCE,
   NO_MOCK_PROPERTIES,
@@ -41,6 +42,9 @@ import {
 } from './eslint-core.js'
 import { SECURITY_RESTRICTIONS } from './eslint-security.js'
 import { projectSettings as settings } from './project-settings.js'
+
+// Where a Payload project writes its hooks, and therefore the one place `req.context` is written.
+const PAYLOAD_HOOK_FILES: readonly string[] = ['src/hooks/**']
 
 const NO_INLINE_CONFIG_FUNCTIONS_SELECTOR: string = 'ArrowFunctionExpression, FunctionExpression'
 const NO_INLINE_CONFIG_FUNCTIONS_MESSAGE: string =
@@ -110,6 +114,10 @@ export default compose(
 
   // And the spec's, which is to vary the environment rather than to fix it. Same ordering constraint.
   specEnvironmentBlock(),
+  // The hook directories, where Payload's per-request state is written. `src/hooks` is the layer the
+  // project layout names for hooks; a hook written into `src/lib` is the pure floor claiming to be pure
+  // and is held to the full rule.
+  hookContextBlock(PAYLOAD_HOOK_FILES),
 
   // ── Documenting comment blocks on hand-written modules. Default-safe: every src/ TypeScript module
   //    is in scope, with only the app/route layer, scripts, and generated files exempted (they carry

@@ -535,6 +535,19 @@ export const guidelineRules: RuleTable = {
   // `functional/no-let` still rejects the loop binding, and Biome still does not re-ban the fold. The
   // trade is a style guarantee for a correctness one, taken deliberately and in that direction.
   'unicorn/prefer-spread': 'off',
+  // The same shape again, one layer down: two fixers that assume the browser's DOM.
+  //
+  // `prefer-dom-node-append` rewrites `parent.appendChild(child)` to `parent.append(child)` and
+  // `prefer-dom-node-remove` rewrites `parent.removeChild(child)` to `child.remove()`. Both are correct
+  // in a browser, where every node has both spellings, and neither rule is type-aware, so they say the
+  // same about any object with a method of that name. A Payload server has one: an XML parser such as
+  // `@xmldom/xmldom`, which a project reaches for to sanitise an uploaded SVG - the very thing the
+  // upload rules ask of it - implements the older methods and not the newer ones. The fixer therefore
+  // wrote `append` and `remove` into a file whose types have neither, and `ploaness format` handed the
+  // project code the `types` gate then rejected. A React component loses nothing: the browser DOM
+  // carries both spellings, and Biome's own rules still hold the markup.
+  'unicorn/prefer-dom-node-append': 'off',
+  'unicorn/prefer-dom-node-remove': 'off',
   // New in unicorn 73. It would expand every concise one-line `/** ... */` export doc into a
   // three-line block, and would also rewrite the `GENERATED AUTOMATICALLY BY PAYLOAD` /
   // `DO NOT MODIFY` headers that Payload writes into the `src/app/(payload)` scaffolding.
@@ -885,6 +898,17 @@ const PROCESS_ENVIRONMENT: string = 'process.env.*'
 // fix, the other banning `defineProperty`. Same shape as the `void` marker, resolved the same way.
 const RUNTIME_GLOBALS: string = 'globalThis'
 
+// A hook's per-request state, exempt where a Payload project writes its hooks.
+//
+// Payload hands every hook the same `req.context` object and documents writing to it as the way one
+// hook passes a value to the next and stops a loop it would otherwise start. That is the framework's
+// contract rather than a data structure the project owns, and a rule that reported it made every
+// governed hook spend a suppression on the framework's own idiom. Written as `req.context.*.**` rather
+// than `req.context.**`, because the plugin reads `**` as ANY depth including none: the shorter pattern
+// would also admit `req.context = {}`, and replacing the bag is not writing into it. `req.file` stays
+// reported, because replacing an upload on the request is rare enough to deserve its stated reason.
+const REQUEST_CONTEXT: string = 'req.context.*.**'
+
 // One constructor rather than an option object written at each site. A block that sets this rule REPLACES
 // its options rather than adding to them, so the setup file's block has to restate the base carve-out to
 // keep it - and restating it by hand is exactly how it would be dropped.
@@ -954,6 +978,22 @@ export const specEnvironmentBlock = (): FlatConfigBlock => ({
   plugins: { functional },
   rules: {
     'functional/immutable-data': immutableData([PROCESS_ENVIRONMENT]),
+  },
+})
+
+/**
+ * The hook directories' role, which is to carry a request's state between Payload hooks.
+ *
+ * Mounted by the Payload configuration alone: a library has no request to carry state on. Built with the
+ * shared constructor, so the base carve-out survives the replacement a block that sets this rule
+ * performs, and with the plugin re-mounted, for the reason `processConfigBlock` states.
+ * @param files the globs the project's hooks live under.
+ */
+export const hookContextBlock = (files: readonly string[]): FlatConfigBlock => ({
+  files: [...files],
+  plugins: { functional },
+  rules: {
+    'functional/immutable-data': immutableData([REQUEST_CONTEXT]),
   },
 })
 
