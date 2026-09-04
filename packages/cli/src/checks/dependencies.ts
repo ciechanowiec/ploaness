@@ -15,6 +15,7 @@ import {
   type FreshnessOwnership,
   type FreshnessRepair,
   type FreshnessReport,
+  type FreshnessScope,
   type FreshnessSection,
   findFreshnessViolations,
   findLicenseViolations,
@@ -36,7 +37,9 @@ import {
   REGISTRY_CONCURRENCY,
   RELEASE_AGE_FLOOR_HOURS,
   REQUEST_TIMEOUT_MS,
+  type RefusedLatest,
   type ReleaseAge,
+  scopeFreshness,
   sectionFreshnessReport,
   type VulnerabilityReport,
 } from '@ploaness/governance'
@@ -191,7 +194,7 @@ const versionDocumentUrl = (name: string): string =>
  * property of it), whereas `unreachable` is the absence of an answer and must never be read as a pass.
  */
 type Lookup =
-  | { readonly kind: 'version'; readonly version: string }
+  | { readonly kind: 'version'; readonly version: string; readonly license: string | undefined }
   | { readonly kind: 'absent' }
   | { readonly kind: 'unreachable' }
 
@@ -230,7 +233,13 @@ const attemptLookup = async (name: string): Promise<Lookup | undefined> => {
   if (response.ok) {
     const body: unknown = await response.json()
     const version: unknown = asRecord(body)['version']
-    return typeof version === 'string' ? { kind: 'version', version } : { kind: 'absent' }
+    // The licence rides along so the blocklist can stop the bound short of a release the licence gate
+    // would refuse. Read only as a string: an old package records it as an object, which says nothing
+    // this rule can judge.
+    const license: unknown = asRecord(body)['license']
+    return typeof version === 'string'
+      ? { kind: 'version', version, license: typeof license === 'string' ? license : undefined }
+      : { kind: 'absent' }
   }
   // A 404 is a real answer, and retrying cannot change it.
   return response.status === NOT_FOUND ? { kind: 'absent' } : undefined
@@ -268,7 +277,13 @@ const sortLookups = (
       if (lookup?.kind !== 'version') {
         return []
       }
-      return [{ ...coordinate, latest: lookup.version }]
+      return [
+        {
+          ...coordinate,
+          latest: lookup.version,
+          ...(lookup.license !== undefined && { latestLicense: lookup.license }),
+        },
+      ]
     },
   )
   return {
@@ -521,11 +536,18 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
       'this gate is fail-closed by design; retry with network access',
     ])
   }
-  const notes: readonly string[] = unpublished.map(
-    (name: string): string =>
-      `note ${name} is not on the public registry, so freshness is not measurable`,
-  )
-  const report: FreshnessReport = findFreshnessViolations(statuses)
+  // A coordinate whose newest release is refused is measured up to the last release it may install,
+  // never past it: failing a project for not upgrading into a release another gate refuses would leave
+  // it no green state at all.
+  const scope: FreshnessScope = scopeFreshness(statuses)
+  const notes: readonly string[] = [
+    ...unpublished.map(
+      (name: string): string =>
+        `note ${name} is not on the public registry, so freshness is not measurable`,
+    ),
+    ...scope.refused.map((entry: RefusedLatest): string => `note ${entry.note}`),
+  ]
+  const report: FreshnessReport = findFreshnessViolations(scope.measurable)
   const updates: readonly string[] = await describeUpdates(
     report.reported,
     ownershipOf(manifests),

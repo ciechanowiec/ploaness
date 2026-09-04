@@ -159,6 +159,7 @@ gate licenses
 gate vulnerabilities
 gate install-scripts
 gate release-age
+gate blocklist
 gate deps
 gate actions
 # Run rather than declared inapplicable, which is what the guide asks for wherever a gate CAN answer:

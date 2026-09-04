@@ -11,13 +11,11 @@ import {
   findEnvironmentViolations,
   VALIDATED_ENVIRONMENT_MODULE,
   type WorkflowFile,
+  workflowsIn,
 } from '@ploaness/governance'
 
 import { type Member, type Repository as Repo, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
-
-const WORKFLOW_DIRECTORY: string = path.join('.github', 'workflows')
-const WORKFLOW_SUFFIXES: readonly string[] = ['.yml', '.yaml']
 
 const readIfPresent = (root: string, relativePath: string): string | undefined => {
   const file: string = path.join(root, relativePath)
@@ -48,22 +46,15 @@ const composeSources = (repository: Repo): readonly string[] =>
     readFileSync(path.join(repository.root, project.file), 'utf8'),
   )
 
-// Discovered from the working tree rather than listed, for the reason `scripts/verify.sh` records about
-// its own shell scripts: an enumeration is correct only at the moment it is written, and a workflow
-// added later would be a workflow nothing reads.
+// Discovered by the same rule the blocklist gate reads workflows by, so the two never disagree about
+// what a workflow is.
 const workflows = (repository: Repo): readonly WorkflowFile[] =>
-  workingTreeFiles(repository.root)
-    .filter(
-      (file: string): boolean =>
-        file.startsWith(`${WORKFLOW_DIRECTORY}${path.sep}`) &&
-        WORKFLOW_SUFFIXES.some((suffix: string): boolean => file.endsWith(suffix)),
-    )
-    .map(
-      (file: string): WorkflowFile => ({
-        file,
-        content: readFileSync(path.join(repository.root, file), 'utf8'),
-      }),
-    )
+  workflowsIn(workingTreeFiles(repository.root)).map(
+    (file: string): WorkflowFile => ({
+      file,
+      content: readFileSync(path.join(repository.root, file), 'utf8'),
+    }),
+  )
 
 const describe = (violation: EnvironmentViolation): string =>
   `${violation.name}: ${violation.reason}`

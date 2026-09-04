@@ -112,7 +112,18 @@ ploaness governs all of the following domains:
   build or postinstall script. An empty allowlist is a valid answer; an undeclared one is not, because
   it lets every package in the resolved set execute code at install time. A vulnerability is resolved by
   upgrading the package. Record an exception only when no upgrade exists, and an exception that
-  suppresses nothing fails.
+  suppresses nothing fails. Some software is refused by name whatever licence its own manifest
+  declares, because the licence that matters belongs to a server it exists to reach or to a binary it
+  downloads: the MongoDB server and its drivers, Redis images from 7.4, the Elastic images and clients,
+  MinIO, LocalStack, the Bitnami catalogue, CockroachDB, the HashiCorp tools under the Business Source
+  License, Redpanda, the Timescale images without an `-oss` tag, self-hosted Sentry, n8n, Directus, the
+  proprietary database servers, the Apollo Router, puppeteer (which downloads Chrome for Testing), and
+  the AGPL services with a permissive equivalent - Garage, Citus, the Grafana stores, Plausible,
+  Metabase, Ghostscript and MuPDF. A refusal names the replacement. Where a project turned
+  non-permissive at a known release the refusal starts there, and the freshness bound never demands an
+  upgrade into a refused release or into one licensed outside the allowlist. An image reference is
+  pinned to a tag: `latest` or no tag lets what is pulled change without the repository changing. There
+  is no setting that widens or narrows the list.
 - **Accessibility:** a sweep ploaness pins into `tests/e2e/a11y.e2e.spec.ts` crawls the public routes
   reachable from the home page and runs axe on each. A route's default state is scanned in full; the
   `:hover` and `:focus` states of its interactive controls are scanned for contrast alone, which is the
@@ -351,7 +362,7 @@ transcripts bury the one finding the report exists to surface.
 
 ### Default Verification Gates
 
-Default verification runs 35 gates, in the order below. A repository-scope gate runs once; a
+Default verification runs 36 gates, in the order below. A repository-scope gate runs once; a
 package-scope gate runs once per member; a Payload-scope gate runs only for the members that declare
 Payload. `tree-verify` is last in both tiers, because the extended gates are the ones most able to
 rewrite a tracked file.
@@ -383,6 +394,7 @@ rewrite a tracked file.
 | `vulnerabilities` | repository | No resolved package carries an advisory at or above the declared severity. |
 | `install-scripts` | repository | The allowlist naming which dependencies may run a build or postinstall script. |
 | `release-age` | repository | pnpm's release-age floor is strict, and only the ploaness packages are excluded from it. |
+| `blocklist` | repository | No container image, Dockerfile system package, or installed npm package is one ploaness refuses by name, and every image reference is pinned to a tag. |
 | `deps` | repository | No declared dependency is two or more major versions behind. Pinned images are reported, never failed. |
 | `image-assets` | repository | Every tracked image decodes as the format its bytes claim. |
 | `environment` | repository | Every variable the application reads, and every one a compose file interpolates, is documented in the example file and supplied by each verifying workflow. |

@@ -10,6 +10,8 @@ import {
   dockerfilesIn,
   isComposeFile,
   isDockerfile,
+  isWorkflowFile,
+  workflowsIn,
 } from '../src/container-files.js'
 
 describe('isDockerfile', (): void => {
@@ -95,5 +97,26 @@ describe('composeProjectsIn', (): void => {
         (project: ComposeProject): string => project.directory,
       ),
     ).toStrictEqual(['', 'cms', 'fe'])
+  })
+})
+
+describe('isWorkflowFile', (): void => {
+  it('acceptsAYamlFileDirectlyUnderTheWorkflowsDirectory', (): void => {
+    expect(isWorkflowFile('.github/workflows/verify.yml')).toBe(true)
+    expect(isWorkflowFile('.github/workflows/release.yaml')).toBe(true)
+  })
+
+  it('rejectsANestedFileAndAWorkflowElsewhere', (): void => {
+    expect(isWorkflowFile('.github/workflows/shared/verify.yml')).toBe(false)
+    expect(isWorkflowFile('cms/.github/workflows/verify.yml')).toBe(false)
+    expect(isWorkflowFile('.github/dependabot.yml')).toBe(false)
+  })
+})
+
+describe('workflowsIn', (): void => {
+  it('ordersTheReportIndependentlyOfTheTreeOrder', (): void => {
+    expect(
+      workflowsIn(['.github/workflows/verify.yml', 'README.md', '.github/workflows/release.yaml']),
+    ).toStrictEqual(['.github/workflows/release.yaml', '.github/workflows/verify.yml'])
   })
 })

@@ -55,6 +55,33 @@ export const isComposeFile = (file: string): boolean => COMPOSE_BASENAMES.includ
 // so the -1 `indexOf` returns for anything else is unreachable rather than meaningful.
 const precedenceOf = (file: string): number => COMPOSE_BASENAMES.indexOf(basenameOf(file))
 
+const WORKFLOW_DIRECTORY: string = '.github/workflows/'
+const WORKFLOW_SUFFIXES: readonly string[] = ['.yml', '.yaml']
+
+/**
+ * Whether a tracked path is a GitHub Actions workflow.
+ * @param file the repo-relative path.
+ * @returns true for a YAML file directly under `.github/workflows`.
+ */
+export const isWorkflowFile = (file: string): boolean =>
+  file.startsWith(WORKFLOW_DIRECTORY) &&
+  !file.slice(WORKFLOW_DIRECTORY.length).includes('/') &&
+  WORKFLOW_SUFFIXES.some((suffix: string): boolean => file.endsWith(suffix))
+
+/**
+ * Every workflow the repository tracks.
+ *
+ * Discovered from the working tree rather than listed, for the reason `scripts/verify.sh` records about
+ * its own shell scripts: an enumeration is correct only at the moment it is written, and a workflow
+ * added later would be a workflow nothing reads.
+ * @param tracked the repo-relative paths of the tracked files.
+ * @returns the workflows, ordered so a report reads the same on every machine.
+ */
+export const workflowsIn = (tracked: readonly string[]): readonly string[] =>
+  tracked
+    .filter((file: string): boolean => isWorkflowFile(file))
+    .toSorted((left: string, right: string): number => left.localeCompare(right))
+
 /**
  * Every Dockerfile the repository tracks.
  * @param tracked the repo-relative paths of the tracked files.

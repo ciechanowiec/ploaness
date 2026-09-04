@@ -255,7 +255,7 @@ commit_case pass 'feat(fixture): add the ploaness integration consumer' "$CONFOR
 # reasoning applies symmetrically: a rule that only ever failed proves as little as one that only ever
 # passed - neither tells you the gate is wired to the scaffold at all.
 for gate in preflight wiring assets conventions editorconfig suppressions generated-denial \
-            payload-rules config-refs environment install-scripts release-age arch require-full-history \
+            payload-rules config-refs environment install-scripts release-age blocklist arch require-full-history \
             commit-history linear-history; do
     expect pass "$gate" PASS
 done
@@ -586,6 +586,19 @@ new_case fail-install-scripts
 node "$lib/drop-install-allowlist.ts" "$scratch/fail-install-scripts/pnpm-workspace.yaml"
 commit_case fail-install-scripts 'feat(fixture): drop the install-script allowlist' "$CONFORMING_BODY"
 expect fail-install-scripts install-scripts FAIL 'onlyBuiltDependencies'
+
+# A Dockerfile pulling MongoDB, whose server is SSPL. The licence gate reads manifests and never sees an
+# image, so this gate is the only thing that refuses it.
+new_case fail-blocklist-image
+printf 'FROM mongo:7.0.14\n' > "$scratch/fail-blocklist-image/Dockerfile"
+commit_case fail-blocklist-image 'feat(fixture): pull the MongoDB image in a Dockerfile' "$CONFORMING_BODY"
+expect fail-blocklist-image blocklist FAIL 'mongo'
+
+# A tag nothing pins: what `latest` pulls changes without the repository changing.
+new_case fail-blocklist-mutable
+printf 'FROM dpage/pgadmin4:latest\n' > "$scratch/fail-blocklist-mutable/Dockerfile"
+commit_case fail-blocklist-mutable 'feat(fixture): pull an image by its latest tag' "$CONFORMING_BODY"
+expect fail-blocklist-mutable blocklist FAIL 'not pinned to a tag'
 
 # Without strict, an exact pin below pnpm's release-age floor installs anyway and pnpm writes an
 # exclusion for it into the workspace file; the gate requires the refusal instead.

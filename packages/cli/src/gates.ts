@@ -16,6 +16,7 @@ import {
   planSteps,
 } from '@ploaness/governance'
 import { assets } from './checks/assets.js'
+import { blocklist } from './checks/blocklist.js'
 import { actions, containers, secrets } from './checks/containers.js'
 import { conventions } from './checks/conventions.js'
 import { dependencyFreshness, licenses, vulnerabilities } from './checks/dependencies.js'
@@ -234,6 +235,15 @@ const DEFAULT_GATES: readonly Gate[] = [
     title: 'release-age floor',
     isExtended: false,
     run: releaseAge,
+  },
+  // Before `deps`, so a refused image or package is named before the freshness report that has to
+  // stop short of it.
+  {
+    id: 'blocklist',
+    scope: 'repository',
+    title: 'refused images and packages',
+    isExtended: false,
+    run: blocklist,
   },
   {
     id: 'deps',

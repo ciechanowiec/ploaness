@@ -131,6 +131,14 @@ export interface DeclaredCoordinate {
 export interface DependencyStatus extends DeclaredCoordinate {
   /** The latest version published to the registry. */
   readonly latest: string
+  /**
+   * The licence the registry records for that latest version, when it records one.
+   *
+   * Carried so the blocklist can keep the bound from demanding an upgrade into a release the licence
+   * gate would refuse: a package that changed licence at its newest major is still measured, but never
+   * past the last release a project may install.
+   */
+  readonly latestLicense?: string
 }
 
 /** One parsed manifest, with the path a finding will name. */
