@@ -15,6 +15,9 @@ export const Users: CollectionConfig = {
     create: nobody,
     update: nobody,
     delete: nobody,
+    // Payload fills this one in with a default that admits every signed-in user, which would let one
+    // account clear the lockout the cap above just set. The fail-unlock-access case drops it.
+    unlock: nobody,
   },
   // Posts point at this collection with a required relationship, so its rows cannot be deleted unless
   // their dependants go first. The fail-relationship-cleanup case removes this line.

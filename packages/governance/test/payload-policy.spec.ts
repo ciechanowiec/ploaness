@@ -377,8 +377,13 @@ describe('stripComments', () => {
   })
 })
 
+// An auth collection owes `unlock` as well, so these fixtures declare it and each case below reports
+// the hardening rule it is named for rather than two rules at once.
+const AUTH_ACCESS: string =
+  'access: { create: admins, read: anyone, update: admins, delete: admins, unlock: admins }'
+
 const withAuth = (auth: string): string =>
-  `export const Users: CollectionConfig = { slug: 'users', ${COMPLETE_ACCESS}, auth: ${auth} }`
+  `export const Users: CollectionConfig = { slug: 'users', ${AUTH_ACCESS}, auth: ${auth} }`
 
 // Payload locks nothing by default, so an auth collection that says only `auth: true` accepts password
 // guesses at whatever rate a client can manage.
@@ -389,6 +394,11 @@ describe('require-auth-hardening', () => {
 
   it('accepts a collection that caps attempts and locks the account', () => {
     expect(rulesOf(withAuth('{ maxLoginAttempts: 5, lockTime: 600 }'))).toEqual([])
+  })
+
+  it('reports the unlock rule through the aggregate, where a collection omits it', () => {
+    const source: string = `export const Users: CollectionConfig = { slug: 'users', ${COMPLETE_ACCESS}, auth: true }`
+    expect(rulesOf(source)).toContain('require-unlock-access')
   })
 
   it('flags an auth block that caps attempts but never locks', () => {
@@ -427,7 +437,8 @@ describe('no-anonymous-draft-reads', () => {
     const source: string = [
       "export const Posts: CollectionConfig = { slug: 'posts',",
       '  versions: { drafts: true },',
-      '  access: { create: admins, read: authenticatedOrPublished, update: admins, delete: admins } }',
+      '  access: { create: admins, read: authenticatedOrPublished, update: admins,',
+      '    delete: admins, readVersions: authenticatedOrPublished } }',
     ].join('\n')
     expect(rulesOf(source)).toEqual([])
   })
@@ -438,6 +449,15 @@ describe('no-anonymous-draft-reads', () => {
       "export const Posts: CollectionConfig = { slug: 'posts', " +
       'access: { create: a, read: () => true, update: a, delete: a } }'
     expect(rulesOf(source)).toEqual([])
+  })
+
+  it('reports the version read alongside it, since a drafting config keeps versions', () => {
+    const source: string = [
+      "export const Posts: CollectionConfig = { slug: 'posts',",
+      '  versions: { drafts: true },',
+      '  access: { create: admins, read: authenticatedOrPublished, update: admins, delete: admins } }',
+    ].join('\n')
+    expect(rulesOf(source)).toEqual(['require-version-read-access'])
   })
 
   it('flags a global with drafts enabled and an unconditional read', () => {

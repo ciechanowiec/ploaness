@@ -12,12 +12,12 @@
 // matters is the one the project installed.
 import { pathToFileURL } from 'node:url'
 import {
-  COLLECTION_OPERATIONS,
-  GLOBAL_OPERATIONS,
+  accessOperationsFor,
   INHERITED_ACCESS_REPORT_MARKER,
   type InheritedAccessEntry,
   type InheritedAccessReport,
   isArray,
+  type PayloadSubjectKind,
   readKey,
 } from '@ploaness/governance'
 
@@ -35,8 +35,14 @@ if (typeof defaultAccess !== 'function') {
 }
 const defaultAccessSource: string = String(defaultAccess)
 
+// Undeclared counts as inherited, and not only as a convenience. `executeAccess` runs the rule it is
+// given and, handed nothing, falls through to `if (req.user) return true` - so a missing rule is not an
+// absent permission but an open one, indistinguishable at runtime from Payload's own default. Payload
+// fills every operation but `readVersions` in during sanitisation, which is the one this reaches.
 const isInherited = (rule: unknown): boolean =>
-  rule === defaultAccess || (typeof rule === 'function' && String(rule) === defaultAccessSource)
+  rule === undefined ||
+  rule === defaultAccess ||
+  (typeof rule === 'function' && String(rule) === defaultAccessSource)
 
 const configModule: unknown = await import(pathToFileURL(configFile).href)
 // Awaited either way: `buildConfig` returns a promise, and a configuration handed over as a plain
@@ -48,8 +54,17 @@ if (!(isArray(collections) && isArray(globals))) {
   throw new Error(`the default export of ${configFile} is not a built Payload configuration`)
 }
 
-const entryOf = (entity: unknown, operations: readonly string[]): InheritedAccessEntry => {
+// Which operations an entity owes depends on what it is, and sanitisation is what makes that legible:
+// `auth` survives as an object on an auth collection and as `false` elsewhere, and `versions` survives
+// as an object where it is enabled and is deleted where it is not. Both reads are therefore about the
+// built object rather than the source the project wrote.
+const entryOf = (entity: unknown, kind: PayloadSubjectKind): InheritedAccessEntry => {
   const access: unknown = readKey(entity, 'access')
+  const operations: readonly string[] = accessOperationsFor({
+    kind,
+    hasAuth: Boolean(readKey(entity, 'auth')),
+    hasVersions: Boolean(readKey(entity, 'versions')),
+  })
   return {
     slug: String(readKey(entity, 'slug')),
     inherited: operations.filter((operation: string): boolean =>
@@ -60,11 +75,9 @@ const entryOf = (entity: unknown, operations: readonly string[]): InheritedAcces
 
 const report: InheritedAccessReport = {
   collections: collections.map(
-    (collection: unknown): InheritedAccessEntry => entryOf(collection, COLLECTION_OPERATIONS),
+    (collection: unknown): InheritedAccessEntry => entryOf(collection, 'collection'),
   ),
-  globals: globals.map(
-    (global: unknown): InheritedAccessEntry => entryOf(global, GLOBAL_OPERATIONS),
-  ),
+  globals: globals.map((global: unknown): InheritedAccessEntry => entryOf(global, 'global')),
 }
 
 process.stdout.write(`${INHERITED_ACCESS_REPORT_MARKER}${JSON.stringify(report)}\n`)

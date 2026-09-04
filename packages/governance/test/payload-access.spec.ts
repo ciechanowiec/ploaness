@@ -3,18 +3,30 @@ import {
   findAnonymousDraftReads,
   findUndecidedSvgHeaders,
   findUndeclaredAccess,
+  findUndeclaredVersionReads,
   findUnhardenedAuth,
+  findUnlockableAuth,
   findUnrestrictedUploads,
 } from '../src/payload-access.js'
 
 const COMPLETE_ACCESS: string =
   'access: { create: isAdmin, read: isAdmin, update: isAdmin, delete: isAdmin },'
 
+// An auth collection owes a fifth operation, and a versioned one owes a sixth. The fixtures below
+// declare them so that a case about hardening or about drafts reports the rule it is named for alone.
+const AUTH_ACCESS: string =
+  'access: { create: isAdmin, read: isAdmin, update: isAdmin, delete: isAdmin, unlock: isAdmin },'
+
+const VERSIONED_ACCESS: string =
+  'access: { create: isAdmin, read: isAdmin, update: isAdmin, delete: isAdmin, readVersions: isAdmin },'
+
 const rulesOf = (source: string): readonly string[] =>
   [
     ...findUndeclaredAccess(source),
     ...findUnhardenedAuth(source),
+    ...findUnlockableAuth(source),
     ...findAnonymousDraftReads(source),
+    ...findUndeclaredVersionReads(source),
     ...findUnrestrictedUploads(source),
     ...findUndecidedSvgHeaders(source),
   ].map((violation) => violation.rule)
@@ -96,13 +108,13 @@ describe('a key is a key, not a suffix of one', () => {
   })
 
   it('still reports auth that is genuinely unhardened', () => {
-    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} auth: true }`
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${AUTH_ACCESS} auth: true }`
     expect(rulesOf(source)).toEqual(['require-auth-hardening'])
   })
 
   it('accepts auth that declares both hardening keys', () => {
     const hardened: string = 'auth: { maxLoginAttempts: 5, lockTime: 600 }'
-    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} ${hardened} }`
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${AUTH_ACCESS} ${hardened} }`
     expect(rulesOf(source)).toEqual([])
   })
 })
@@ -114,20 +126,47 @@ describe('positive authentication hardening values', () => {
     'auth: { maxLoginAttempts: 5, lockTime: 0 }',
     'auth: { maxLoginAttempts: 5, lockTime: -600 }',
   ])('reports a disabled hardening value in %s', (auth: string) => {
-    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} ${auth} }`
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${AUTH_ACCESS} ${auth} }`
     expect(rulesOf(source)).toEqual(['require-auth-hardening'])
   })
 
   it('accepts positive numeric literals carrying separators', () => {
     const auth: string = 'auth: { maxLoginAttempts: 5, lockTime: 600_000 }'
-    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} ${auth} }`
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${AUTH_ACCESS} ${auth} }`
     expect(rulesOf(source)).toEqual([])
   })
 
   it('retains presence-only handling for values the pure reader cannot resolve', () => {
     const auth: string = 'auth: { maxLoginAttempts: MAX_ATTEMPTS, lockTime: LOCK_TIME }'
-    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} ${auth} }`
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${AUTH_ACCESS} ${auth} }`
     expect(rulesOf(source)).toEqual([])
+  })
+})
+
+// Payload fills `unlock` in with the same default as the rest of the access block, so a collection can
+// cap login attempts, lock the account, decide all four ordinary operations, and still let any signed-in
+// user clear the lockout it just set. The cap is then enforced against nobody.
+describe('require-unlock-access', () => {
+  it('reports an auth collection whose access block omits unlock', () => {
+    const auth: string = 'auth: { maxLoginAttempts: 5, lockTime: 600 }'
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} ${auth} }`
+    expect(rulesOf(source)).toEqual(['require-unlock-access'])
+  })
+
+  it('accepts an auth collection that decides who may unlock', () => {
+    const auth: string = 'auth: { maxLoginAttempts: 5, lockTime: 600 }'
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${AUTH_ACCESS} ${auth} }`
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it('says nothing about a collection that does not authenticate', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} }`
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it('names the operation it wants in the reason it gives', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} auth: true }`
+    expect(findUnlockableAuth(source)[0]?.reason).toContain('unlock')
   })
 })
 
@@ -164,7 +203,8 @@ describe('no-anonymous-draft-reads', () => {
   const drafts: string = 'versions: { drafts: true },'
 
   it('reports an unconditionally true read on a drafting collection', () => {
-    const open: string = 'access: { read: () => true, create: x, update: x, delete: x }'
+    const open: string =
+      'access: { read: () => true, create: x, update: x, delete: x, readVersions: x }'
     const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} ${open} }`
     expect(rulesOf(source)).toEqual(['no-anonymous-draft-reads'])
   })
@@ -179,8 +219,45 @@ describe('no-anonymous-draft-reads', () => {
   // that grants nothing beyond itself as though the collection were open.
   it('does not read a field-level always-true read as the collection own', () => {
     const field: string = `{ name: 'x', access: { read: () => true } }`
-    const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} ${COMPLETE_ACCESS} fields: [${field}] }`
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} ${VERSIONED_ACCESS} fields: [${field}] }`
     expect(rulesOf(source)).toEqual([])
+  })
+})
+
+// A version carries the whole document, and `readVersions` is the one operation Payload never fills in,
+// so an undeclared rule falls through to "any signed-in user". A read narrowed to an audience is then
+// bypassed by asking for a version of the document instead of the document, which is why this is asked
+// wherever versions are kept rather than only where drafts are.
+describe('require-version-read-access', () => {
+  it('reports a collection that keeps versions and decides no version read', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', versions: { drafts: true }, ${COMPLETE_ACCESS} }`
+    expect(rulesOf(source)).toEqual(['require-version-read-access'])
+  })
+
+  it('accepts a collection that decides who may read a version', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', versions: true, ${VERSIONED_ACCESS} }`
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it('reports a global that keeps versions, which Payload leaves undeclared too', () => {
+    const access: string = 'access: { read: isAdmin, update: isAdmin },'
+    const source: string = `const H: GlobalConfig = { slug: 'h', versions: true, ${access} }`
+    expect(rulesOf(source)).toEqual(['require-version-read-access'])
+  })
+
+  it('says nothing about a config that keeps no versions', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', ${COMPLETE_ACCESS} }`
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it('reads an explicit disable as keeping no versions', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', versions: false, ${COMPLETE_ACCESS} }`
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it('names the operation it wants in the reason it gives', () => {
+    const source: string = `const A: CollectionConfig = { slug: 'a', versions: true, ${COMPLETE_ACCESS} }`
+    expect(findUndeclaredVersionReads(source)[0]?.reason).toContain('readVersions')
   })
 })
 
@@ -221,14 +298,16 @@ describe('require-upload-restrictions', () => {
 describe('the always-true form a governed project actually writes', () => {
   it('reports a typed always-true read on a drafting collection', () => {
     const drafts: string = 'versions: { drafts: true },'
-    const open: string = 'access: { read: (): boolean => true, create: x, update: x, delete: x }'
+    const open: string =
+      'access: { read: (): boolean => true, create: x, update: x, delete: x, readVersions: x }'
     const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} ${open} }`
     expect(rulesOf(source)).toEqual(['no-anonymous-draft-reads'])
   })
 
   it('still accepts a typed rule that returns false', () => {
     const drafts: string = 'versions: { drafts: true },'
-    const closed: string = 'access: { read: (): boolean => false, create: x, update: x, delete: x }'
+    const closed: string =
+      'access: { read: (): boolean => false, create: x, update: x, delete: x, readVersions: x }'
     const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} ${closed} }`
     expect(rulesOf(source)).toEqual([])
   })

@@ -20,6 +20,33 @@ export const COLLECTION_OPERATIONS: readonly string[] = ['create', 'read', 'upda
 /** The operations a global must decide. */
 export const GLOBAL_OPERATIONS: readonly string[] = ['read', 'update']
 
+/** The operation an auth collection decides on top of the four: who may clear a locked account. */
+export const UNLOCK_OPERATION: string = 'unlock'
+
+/** The operation a versioned collection or global decides: who may read a stored version. */
+export const READ_VERSIONS_OPERATION: string = 'readVersions'
+
+/** What an entity of the built configuration is, as far as the operations it owes depend on it. */
+export interface PayloadSubjectTraits {
+  readonly kind: PayloadSubjectKind
+  readonly hasAuth: boolean
+  readonly hasVersions: boolean
+}
+
+/**
+ * The access operations one entity owes a decision on. Two of them are conditional, and neither may be
+ * added to the lists above: Payload writes `unlock` onto EVERY collection during sanitisation, auth or
+ * not, so demanding it unconditionally would report the whole configuration, and `readVersions` means
+ * nothing on an entity that keeps no versions.
+ * @param traits what the entity is: its kind, and whether it authenticates or keeps versions.
+ * @returns the operations that entity must decide, in the order they are reported.
+ */
+export const accessOperationsFor = (traits: PayloadSubjectTraits): readonly string[] => [
+  ...(traits.kind === 'collection' ? COLLECTION_OPERATIONS : GLOBAL_OPERATIONS),
+  ...(traits.kind === 'collection' && traits.hasAuth ? [UNLOCK_OPERATION] : []),
+  ...(traits.hasVersions ? [READ_VERSIONS_OPERATION] : []),
+]
+
 /**
  * The prefix the probe prints its report behind. A plugin may log on import, and a line the parser can
  * name is what separates the report from that chatter.

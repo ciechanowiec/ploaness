@@ -76,9 +76,15 @@ ploaness governs all of the following domains:
   handler finds the body consumed and answers a generic 500 - and access control decided rather than
   inherited: every collection decides create, read, update and
   delete, every global decides read and update, and an auth collection caps login attempts and locks
-  the account. Payload fills what a config omits during sanitisation, and its default admits every
-  signed-in user to every operation, so a partial access block is invisible once the application
-  boots. The same default reaches the collections Payload builds for the project - the folder tree
+  the account. Two further operations are owed by the configs that carry them, and both are missed by
+  a block that looks complete. An auth collection decides `unlock`, or any signed-in user may clear
+  the lockout the attempt cap just set - which is advisory GHSA-jg8r-5jh2-v2xj, reported against
+  Payload itself. A collection or global that keeps `versions` decides `readVersions`, drafts or no
+  drafts, or a read narrowed to an audience is bypassed by asking for a version of a document instead
+  of the document, a version being the whole document. Payload fills what a config omits during
+  sanitisation, and its default admits every signed-in user to every operation, so a partial access
+  block is invisible once the application boots; `readVersions` it does not fill in at all, and an
+  access check handed no rule falls through to the same place. The same default reaches the collections Payload builds for the project - the folder tree
   behind `folders`, the job queue behind `jobs`, a plugin's own - which the `payload-defaults` gate
   judges in the built configuration; decide those through `folders.collectionOverrides`,
   `jobs.jobsCollectionOverrides`, or the override the plugin offers. An upload collection must declare

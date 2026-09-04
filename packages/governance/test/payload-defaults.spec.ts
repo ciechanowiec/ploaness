@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  accessOperationsFor,
   COLLECTION_OPERATIONS,
   DEFAULT_PAYLOAD_CONFIG_PATH,
   EXEMPT_PAYLOAD_SUBJECTS,
@@ -21,6 +22,59 @@ const DECIDED: InheritedAccessReport = {
 }
 
 const reportOf = (line: string): string => `${INHERITED_ACCESS_REPORT_MARKER}${line}`
+
+// Two of the operations are conditional, and both would be wrong as constants. Payload writes `unlock`
+// onto every collection during sanitisation, auth or not, so asking for it unconditionally would report
+// the whole configuration; `readVersions` means nothing where no version is kept.
+describe('accessOperationsFor', () => {
+  it('asks an ordinary collection for the four and nothing more', () => {
+    expect(accessOperationsFor({ kind: 'collection', hasAuth: false, hasVersions: false })).toEqual(
+      COLLECTION_OPERATIONS,
+    )
+  })
+
+  it('asks an auth collection for unlock as well', () => {
+    expect(accessOperationsFor({ kind: 'collection', hasAuth: true, hasVersions: false })).toEqual([
+      ...COLLECTION_OPERATIONS,
+      'unlock',
+    ])
+  })
+
+  it('asks a versioned collection for the version read as well', () => {
+    expect(accessOperationsFor({ kind: 'collection', hasAuth: false, hasVersions: true })).toEqual([
+      ...COLLECTION_OPERATIONS,
+      'readVersions',
+    ])
+  })
+
+  it('asks a collection that does both for both', () => {
+    expect(accessOperationsFor({ kind: 'collection', hasAuth: true, hasVersions: true })).toEqual([
+      ...COLLECTION_OPERATIONS,
+      'unlock',
+      'readVersions',
+    ])
+  })
+
+  it('asks an ordinary global for the two', () => {
+    expect(accessOperationsFor({ kind: 'global', hasAuth: false, hasVersions: false })).toEqual(
+      GLOBAL_OPERATIONS,
+    )
+  })
+
+  it('asks a versioned global for the version read, which Payload leaves undeclared there too', () => {
+    expect(accessOperationsFor({ kind: 'global', hasAuth: false, hasVersions: true })).toEqual([
+      ...GLOBAL_OPERATIONS,
+      'readVersions',
+    ])
+  })
+
+  // A global has no login of its own, so the unlock operation does not exist on one whatever it claims.
+  it('never asks a global for unlock', () => {
+    expect(accessOperationsFor({ kind: 'global', hasAuth: true, hasVersions: false })).toEqual(
+      GLOBAL_OPERATIONS,
+    )
+  })
+})
 
 describe('findInheritedAccess', () => {
   it('passes an empty configuration and one whose every entity decides its access', () => {

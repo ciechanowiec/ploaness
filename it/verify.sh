@@ -414,6 +414,8 @@ drop_text "$scratch/fail-collection-access/src/collections/Posts.ts" "  access: 
     create: nobody,
     update: nobody,
     delete: nobody,
+    // The fail-version-read-access case drops this line.
+    readVersions: nobody,
   },
 "
 commit_case fail-collection-access 'feat(fixture): omit the collection access rules' "$CONFORMING_BODY"
@@ -645,6 +647,24 @@ drop_text "$scratch/fail-unhardened-auth/src/collections/Users.ts" "    maxLogin
 "
 commit_case fail-unhardened-auth 'feat(fixture): drop the login-attempt cap' "$CONFORMING_BODY"
 expect fail-unhardened-auth payload-rules FAIL require-auth-hardening
+
+# The cap above, undone from inside. `unlock` is one of the operations Payload fills the access block
+# with, so a collection can cap attempts, lock the account, decide all four ordinary operations, and
+# still let any signed-in user clear the lockout - which is advisory GHSA-jg8r-5jh2-v2xj.
+new_case fail-unlock-access
+drop_text "$scratch/fail-unlock-access/src/collections/Users.ts" "    unlock: nobody,
+"
+commit_case fail-unlock-access 'feat(fixture): leave the account unlock to the defaults' "$CONFORMING_BODY"
+expect fail-unlock-access payload-rules FAIL require-unlock-access
+
+# A version carries the whole document, and `readVersions` is the one access operation Payload never
+# fills in, so an undeclared rule falls through to every signed-in user and a scoped read is bypassed by
+# asking for a version instead of the document.
+new_case fail-version-read-access
+drop_text "$scratch/fail-version-read-access/src/collections/Posts.ts" "    readVersions: nobody,
+"
+commit_case fail-version-read-access 'feat(fixture): leave the version read to the defaults' "$CONFORMING_BODY"
+expect fail-version-read-access payload-rules FAIL require-version-read-access
 
 new_case fail-partial-access
 drop_text "$scratch/fail-partial-access/src/collections/Posts.ts" "    create: nobody,

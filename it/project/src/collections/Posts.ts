@@ -5,11 +5,16 @@ import { anyone, nobody } from '@/access'
 // are referenced by name because an inline function in a config file carries no seam a test can reach.
 export const Posts: CollectionConfig = {
   slug: 'posts',
+  // Versions without drafts: a stored version carries the whole document, so who may read one is a
+  // decision of its own, and Payload never fills that one in at all.
+  versions: true,
   access: {
     read: anyone,
     create: nobody,
     update: nobody,
     delete: nobody,
+    // The fail-version-read-access case drops this line.
+    readVersions: nobody,
   },
   fields: [
     { name: 'title', type: 'text', required: true },

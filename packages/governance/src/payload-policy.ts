@@ -14,7 +14,9 @@ import {
   findAnonymousDraftReads,
   findUndecidedSvgHeaders,
   findUndeclaredAccess,
+  findUndeclaredVersionReads,
   findUnhardenedAuth,
+  findUnlockableAuth,
   findUnrestrictedUploads,
 } from './payload-access.js'
 import { findUnprotectedPrivilegedFields } from './payload-field-access.js'
@@ -325,7 +327,9 @@ export const findPayloadViolations = (source: string): readonly PayloadViolation
     ...findOverrideAccess(code),
     ...findUndeclaredAccess(code),
     ...findUnhardenedAuth(code),
+    ...findUnlockableAuth(code),
     ...findAnonymousDraftReads(code),
+    ...findUndeclaredVersionReads(code),
     ...findUnrestrictedUploads(code),
     ...findUndecidedSvgHeaders(code),
     ...findUnprotectedPrivilegedFields(code),
