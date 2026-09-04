@@ -299,6 +299,22 @@ export const guidelineRules: RuleTable = {
   // that turned off the rule above.
   '@typescript-eslint/prefer-as-const': 'off',
   '@typescript-eslint/no-non-null-assertion': 'error',
+  // The rule that WRITES what the line above forbids, which is why it sits here rather than anywhere
+  // else. `non-nullable-type-assertion-style` arrives from `stylisticTypeChecked` and mandates `x!`
+  // wherever `x as T` only strips null or undefined; Biome refuses `!` outright, explicitly through
+  // `noNonNullAssertion` in `biome-core.json` and again through `noNonNullAssertedOptionalChain` in the
+  // recommended preset it enables.
+  //
+  // The two meet inside a single `ploaness format`, which runs Biome and then the ESLint fixers: the
+  // fixer rewrites the cast to `x!`, and the next `verify` fails on the character the harness itself
+  // just wrote. Nothing the author typed was wrong, no third spelling satisfies both tools, and the
+  // suggested repair the developer is left holding is a suppression.
+  //
+  // This one yields, in the direction the harness already settles a style disagreement: the formatter
+  // casts the deciding vote, so one tool owns the question and the other defers. Nothing is lost by
+  // it - the ban on `!` is unchanged and now belongs to Biome alone, and the cast the rule wanted to
+  // shorten remains legal, explicit, and type-checked.
+  '@typescript-eslint/non-nullable-type-assertion-style': 'off',
   '@typescript-eslint/strict-boolean-expressions': 'error',
   '@typescript-eslint/switch-exhaustiveness-check': 'error',
   '@typescript-eslint/no-unnecessary-condition': 'error',

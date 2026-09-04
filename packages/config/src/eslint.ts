@@ -330,6 +330,20 @@ export default compose(
       'tests/component/**/*.tsx',
     ],
     plugins: { vitest: vitestPlugin, 'testing-library': testingLibrary },
+    // The plugin decides what a query IS by name, matching `/^(get|query|find)(All)?By.+$/`, and in its
+    // default "aggressive" mode it treats every match as one - a deliberate reach, so that a project's
+    // own `findByLabel` wrapper is linted like the built-in it wraps. In a Payload project that reach
+    // lands on the framework: `payload.findByID(...)` matches, so every read in an integration spec is
+    // reported as an unhandled query. The autofix then compounds it, inserting `await` in front of the
+    // ARGUMENT rather than the call, so `ploaness format` turns a correct spec into one that no longer
+    // type-checks. An agent meeting that has no true repair available and the cheap escapes - a
+    // suppression, a weakened test - are the ones the integrity rules above exist to prevent.
+    //
+    // Switching the setting off narrows detection to the built-in Testing Library names, which is
+    // exactly the set these rules were written for. What it costs is that a project's own custom query
+    // helper is no longer linted; the harness already asks specs to query by role and text, so that is
+    // a small surface, and it is the half of the reach that cannot tell a query from a database read.
+    settings: { 'testing-library/custom-queries': 'off' },
     rules: {
       // A test must actually run and actually assert. The rules live in eslint-core.js, because the
       // ploaness repository's own suite is held to them too.
