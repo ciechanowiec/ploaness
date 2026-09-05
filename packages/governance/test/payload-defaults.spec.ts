@@ -13,6 +13,7 @@ import {
   type InheritedAccessReport,
   parseInheritedAccessReport,
   payloadConfigPathOf,
+  QUERY_PRESETS_SLUG,
   requiresPublishedStatus,
 } from '../src/payload-defaults.js'
 
@@ -107,6 +108,32 @@ describe('findInheritedAccess', () => {
       globals: [],
     }
     expect(findInheritedAccess(report)[0]).toContain('decide them in jobs.jobsCollectionOverrides')
+  })
+
+  // The slug the probe imports has to stay a key of the repairs table, because the two are what make
+  // this collection reportable at all: the probe reads its access off the configuration under that
+  // slug, and the table is what turns the finding into the repair that actually works. A rename on
+  // either side would otherwise leave the collection judged and pointed at an access block it does
+  // not have.
+  it('names the query-presets setting for the collection the saved filters build', () => {
+    const report: InheritedAccessReport = {
+      collections: [{ slug: QUERY_PRESETS_SLUG, inherited: COLLECTION_OPERATIONS }],
+      draftReads: [],
+      globals: [],
+    }
+    expect(findInheritedAccess(report)).toEqual([
+      `collection "${QUERY_PRESETS_SLUG}" leaves create, read, update, delete to Payload's default ` +
+        'access, which admits every signed-in user; decide them in queryPresets.access',
+    ])
+  })
+
+  // Payload builds this one for its own use, like the ledgers above it, and the resemblance is the
+  // hazard: exempting it would restore exactly the blindness this rule was added to close, because an
+  // undecided `create` there admits every signed-in user.
+  it('judges the query-presets collection rather than exempting it as framework bookkeeping', () => {
+    expect(
+      EXEMPT_PAYLOAD_SUBJECTS.map((subject: ExemptPayloadSubject): string => subject.slug),
+    ).not.toContain(QUERY_PRESETS_SLUG)
   })
 
   it('points a project or plugin collection at its own access block, singular for one operation', () => {

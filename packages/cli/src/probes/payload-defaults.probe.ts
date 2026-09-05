@@ -29,6 +29,7 @@ import {
   isArray,
   isRecord,
   type PayloadSubjectKind,
+  QUERY_PRESETS_SLUG,
   readKey,
 } from '@ploaness/governance'
 
@@ -69,15 +70,23 @@ if (!(isArray(collections) && isArray(globals))) {
 // `auth` survives as an object on an auth collection and as `false` elsewhere, and `versions` survives
 // as an object where it is enabled and is deleted where it is not. Both reads are therefore about the
 // built object rather than the source the project wrote.
+// The access a project decided, which for one collection is not the access the collection carries.
+// Payload builds the query-presets collection's rules itself, wrapping each operation in a closure that
+// falls back to its own default, so the wrapper is never the default this probe recognises; the block
+// the project wrote sits on the configuration instead. See QUERY_PRESETS_SLUG for what that hides.
+const accessOf = (entity: unknown, slug: string): unknown =>
+  readKey(slug === QUERY_PRESETS_SLUG ? readKey(config, 'queryPresets') : entity, 'access')
+
 const entryOf = (entity: unknown, kind: PayloadSubjectKind): InheritedAccessEntry => {
-  const access: unknown = readKey(entity, 'access')
+  const slug: string = String(readKey(entity, 'slug'))
+  const access: unknown = accessOf(entity, slug)
   const operations: readonly string[] = accessOperationsFor({
     kind,
     hasAuth: Boolean(readKey(entity, 'auth')),
     hasVersions: Boolean(readKey(entity, 'versions')),
   })
   return {
-    slug: String(readKey(entity, 'slug')),
+    slug,
     inherited: operations.filter((operation: string): boolean =>
       isInherited(readKey(access, operation)),
     ),

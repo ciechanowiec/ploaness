@@ -126,11 +126,25 @@ export const EXEMPT_PAYLOAD_SUBJECTS: readonly ExemptPayloadSubject[] = [
   },
 ]
 
+/**
+ * The saved-filter collection Payload builds behind `enableQueryPresets`.
+ *
+ * It is named here because the probe has to read its access from somewhere other than the collection.
+ * `getAccess` wraps EVERY operation of this one collection in a closure that calls the project's rule
+ * where there is one and Payload's own default where there is not, so the built collection carries four
+ * functions that match neither the default by reference nor its source text. Read there, a project that
+ * decided nothing is indistinguishable from one that decided everything - and undecided means an
+ * unconstrained `create` for any signed-in user, and a preset shared as `everyone` readable by every
+ * role that can log in, the ones a project keeps outside its editorial staff included.
+ */
+export const QUERY_PRESETS_SLUG: string = 'payload-query-presets'
+
 // Where the framework lets a project decide the access of an entity it built. Anything else is either
 // the project's own collection, which has an access block, or a plugin's, which has an override option.
 const FRAMEWORK_REPAIRS: Readonly<Record<string, string>> = {
   'payload-folders': 'folders.collectionOverrides',
   'payload-jobs': 'jobs.jobsCollectionOverrides',
+  [QUERY_PRESETS_SLUG]: 'queryPresets.access',
 }
 
 const isExempt = (kind: PayloadSubjectKind, slug: string): boolean =>
