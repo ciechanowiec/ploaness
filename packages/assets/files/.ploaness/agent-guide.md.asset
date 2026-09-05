@@ -67,8 +67,11 @@ ploaness governs all of the following domains:
   carry a description: an empty `/** */` used to satisfy the rule while documenting nothing. Test
   code is source code and passes the same checks.
 - **Payload usage:** bounded Local API reads, no access-control override, a call that passes `user` and
-  explicitly sets `overrideAccess: false` so Payload applies that user's permissions, no parent-relative
-  imports, and a Local API call reached through `req.payload` that threads `req` so it joins the caller's
+  explicitly sets `overrideAccess: false` so Payload applies that user's permissions, every Local API
+  call under `src/endpoints` stating `overrideAccess` rather than inheriting it - Payload defaults it to
+  true, so a route that says nothing serves the document to whoever reached the URL, and an omission is
+  the one bypass no rule reading a written value can see - no parent-relative imports, and a Local API
+  call reached through `req.payload` that threads `req` so it joins the caller's
   transaction - without it the operation opens its own, cannot see the in-flight write, and is not
   rolled back with it, which is invisible in every passing test until a hook runs inside a transaction -
   a custom endpoint that receives its body unread, because Payload parses JSON and multipart for its own

@@ -310,6 +310,14 @@ commit_case fail-user-access-control 'feat(fixture): bypass access for the suppl
     "$CONFORMING_BODY"
 expect fail-user-access-control payload-rules FAIL require-user-access-control
 
+# Payload defaults overrideAccess to true, so this case removes no visible guard - it removes the
+# only thing that was holding the default back, which is precisely why the rule reads the omission.
+new_case fail-endpoint-access
+drop_text "$scratch/fail-endpoint-access/src/endpoints/reports.ts" ', overrideAccess: false'
+commit_case fail-endpoint-access 'feat(fixture): let a route inherit administrator privilege' \
+    "$CONFORMING_BODY"
+expect fail-endpoint-access payload-rules FAIL require-endpoint-access
+
 new_case fail-privileged-field-create
 drop_text "$scratch/fail-privileged-field-create/src/collections/Users.ts" "        create: nobodyField,
 "

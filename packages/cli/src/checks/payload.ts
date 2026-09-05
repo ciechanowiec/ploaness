@@ -5,6 +5,7 @@ import path from 'node:path'
 import {
   type DeclaredAdminView,
   findDeclaredAdminViews,
+  findEndpointViolations,
   findGeneratedDrift,
   findInheritedAccess,
   findPayloadViolations,
@@ -234,9 +235,10 @@ const SOURCE_EXTENSIONS: readonly string[] = ['.ts', '.tsx']
 // misuse. Held together, the import rule ran only where Payload did - so a frontend beside the CMS, the
 // place a parent-relative import is MOST likely because it has no Payload config to anchor on, was the
 // one package never checked for it.
-const violationsIn = (source: string, isPayload: boolean): readonly PayloadViolation[] => [
-  ...findSourceViolations(source),
-  ...(isPayload ? findPayloadViolations(source) : []),
+const violationsIn = (file: SpecSource, isPayload: boolean): readonly PayloadViolation[] => [
+  ...findSourceViolations(file.source),
+  ...(isPayload ? findPayloadViolations(file.source) : []),
+  ...(isPayload ? findEndpointViolations(file.path, file.source) : []),
 ]
 
 const sourceCandidates = (context: Member): readonly string[] => {
@@ -275,7 +277,7 @@ export const payloadRules = (context: Member): GateResult => {
   )
   const findings: readonly string[] = [
     ...files.flatMap((file: SpecSource): readonly string[] =>
-      violationsIn(file.source, context.isPayload).map((violation: PayloadViolation): string =>
+      violationsIn(file, context.isPayload).map((violation: PayloadViolation): string =>
         reported(file.path, violation),
       ),
     ),

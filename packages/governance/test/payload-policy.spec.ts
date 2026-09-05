@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { findPayloadViolations, findSourceViolations } from '../src/payload-policy.js'
+import {
+  findEndpointViolations,
+  findPayloadViolations,
+  findSourceViolations,
+} from '../src/payload-policy.js'
 import type { PayloadViolation } from '../src/payload-source.js'
 import { stripComments, topLevelSlice } from '../src/source-text.js'
 
@@ -217,6 +221,20 @@ describe('no-override-access', () => {
     expect(
       rulesOf("await payload.find({ collection: 'p', depth: 0, overrideAccess: false })"),
     ).toEqual([])
+  })
+
+  // The message is the whole remediation an unreviewed agent gets, so it names what actually repairs
+  // the call. Threading req joins a transaction; it never re-enables an access rule.
+  it('names overrideAccess: false rather than req', () => {
+    const violations: readonly PayloadViolation[] = findPayloadViolations(
+      "await payload.find({ collection: 'p', depth: 0, limit: 1, overrideAccess: true })",
+    )
+    const reason: string =
+      violations.find(
+        (violation: PayloadViolation): boolean => violation.rule === 'no-override-access',
+      )?.reason ?? ''
+    expect(reason).toContain('set overrideAccess: false')
+    expect(reason).not.toContain('pass req')
   })
 })
 
@@ -467,5 +485,61 @@ describe('no-anonymous-draft-reads', () => {
       '  access: { read: () => true, update: admins } }',
     ].join('\n')
     expect(rulesOf(source)).toContain('no-anonymous-draft-reads')
+  })
+})
+
+const endpointRulesOf = (path: string, source: string): readonly string[] =>
+  findEndpointViolations(path, source).map((violation) => violation.rule)
+
+const ENDPOINT: string = 'src/endpoints/reports.ts'
+
+describe('require-endpoint-access', () => {
+  it('flags a route handler that leaves the access decision to the default', () => {
+    const source: string =
+      "await req.payload.find({ collection: 'media', req, depth: 0, limit: 10 })"
+    expect(endpointRulesOf(ENDPOINT, source)).toEqual(['require-endpoint-access'])
+  })
+
+  it('accepts a route handler that states it', () => {
+    const source: string =
+      "await req.payload.find({ collection: 'media', req, depth: 0, limit: 10, overrideAccess: false })"
+    expect(endpointRulesOf(ENDPOINT, source)).toEqual([])
+  })
+
+  // A shorthand carries no colon, and it is still a decision the author wrote down.
+  it('accepts the property in shorthand form', () => {
+    const source: string =
+      "await req.payload.find({ collection: 'media', depth: 0, limit: 10, overrideAccess })"
+    expect(endpointRulesOf(ENDPOINT, source)).toEqual([])
+  })
+
+  it('names the operation and the value that repairs it', () => {
+    const source: string = "await req.payload.findByID({ collection: 'media', id, depth: 0 })"
+    const reason: string = findEndpointViolations(ENDPOINT, source)[0]?.reason ?? ''
+    expect(reason).toContain('findByID()')
+    expect(reason).toContain('overrideAccess: false')
+  })
+})
+
+// Its own block, because a describe callback counts towards the line ceiling.
+describe('require-endpoint-access, where it stays silent', () => {
+  it('ignores a call outside the endpoint directory', () => {
+    const source: string = "await payload.find({ collection: 'media', depth: 0, limit: 10 })"
+    expect(endpointRulesOf('src/hooks/media.ts', source)).toEqual([])
+  })
+
+  // A spread may supply the property from another object, so the omission cannot be proven here.
+  it('stays silent when a top-level spread could carry the property', () => {
+    const source: string = "await payload.find({ collection: 'media', depth: 0, ...options })"
+    expect(endpointRulesOf(ENDPOINT, source)).toEqual([])
+  })
+
+  it('ignores a find that is not a Local API call', () => {
+    expect(endpointRulesOf(ENDPOINT, 'rows.find({ id: 1 })')).toEqual([])
+  })
+
+  it('reads the code and not the prose around it', () => {
+    const source: string = "// await payload.find({ collection: 'media' })"
+    expect(endpointRulesOf(ENDPOINT, source)).toEqual([])
   })
 })

@@ -262,9 +262,38 @@ const findOverrideAccess = (source: string): readonly PayloadViolation[] =>
       line: lineOf(source, match.index),
       rule: 'no-override-access',
       reason:
-        'overrideAccess: true bypasses Payload access control; pass req so the access rules run, or drop the override',
+        'overrideAccess: true bypasses Payload access control; set overrideAccess: false so the ' +
+        'access rules run against the calling user',
     }),
   )
+
+// The one layer whose caller is a stranger. Everywhere else a Local API call runs in a context the
+// project already trusts - a hook inside the write that authored it, a scheduled job, a seed - and
+// privilege there is legitimate rather than a mistake. A route handler serves whoever reached the URL,
+// so what it is allowed to read is the one thing it must never inherit by saying nothing.
+const ENDPOINT_ROOT: string = 'src/endpoints/'
+
+// Read through `optionKeysAt` rather than `topLevelOptionsAt`, because the question is whether a key is
+// ABSENT: a top-level spread can supply it from another object, so a call carrying one is left alone
+// rather than accused of an omission this reader cannot see.
+const endpointAccessViolationAt = (
+  source: string,
+  call: string,
+  found: number,
+): PayloadViolation | undefined => {
+  const topLevel: string | undefined = optionKeysAt(source, call, found, PAYLOAD_RECEIVER)
+  if (topLevel === undefined || declaresProperty(topLevel, 'overrideAccess')) {
+    return undefined
+  }
+  return {
+    line: lineOf(source, found),
+    rule: 'require-endpoint-access',
+    reason:
+      `state overrideAccess on ${call.slice(1, -1)}() in a route handler; Payload defaults it to ` +
+      'true, so an omission runs as an administrator and serves the document to whoever called the ' +
+      'route - set overrideAccess: false',
+  }
+}
 
 // Anchored on the keyword that immediately precedes the specifier rather than on the statement that
 // opens it. Requiring the whole statement to fit on one line missed a multi-line brace list, which is
@@ -334,4 +363,38 @@ export const findPayloadViolations = (source: string): readonly PayloadViolation
     ...findUndecidedSvgHeaders(code),
     ...findUnprotectedPrivilegedFields(code),
   ]
+}
+
+/**
+ * The access decision a route handler has to state rather than inherit.
+ *
+ * The two rules that already read `overrideAccess` judge a value that is written down: one bans `true`,
+ * the other requires `false` beside a `user`. Neither can see an absent property, and absent is the
+ * dangerous spelling - Payload defaults `overrideAccess` to `true`, so the call that says nothing is
+ * the call that runs as an administrator. Under `src/endpoints` the omission is therefore the
+ * violation, which is why this rule reads the path and the others do not.
+ * @param filePath the repository-relative path of the file, which decides whether the rule applies.
+ * @param source the file's text.
+ * @returns one violation per Local API call that leaves the decision to the default.
+ */
+export const findEndpointViolations = (
+  filePath: string,
+  source: string,
+): readonly PayloadViolation[] => {
+  if (!filePath.startsWith(ENDPOINT_ROOT)) {
+    return []
+  }
+  // Runs outside `findPayloadViolations`, so it strips its own comments: prose that names a call must
+  // not be read as one.
+  const code: string = stripComments(source)
+  return LOCAL_API_CALLS.flatMap((call: string): readonly PayloadViolation[] =>
+    occurrences(code, call)
+      .map((found: number): PayloadViolation | undefined =>
+        endpointAccessViolationAt(code, call, found),
+      )
+      .filter(
+        (violation: PayloadViolation | undefined): violation is PayloadViolation =>
+          violation !== undefined,
+      ),
+  )
 }
