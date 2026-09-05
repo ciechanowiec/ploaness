@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   type AccessReport,
+  type DatalessFields,
+  datalessFieldsIn,
   describeGrant,
   type Granted,
   grantedPermissions,
@@ -442,5 +444,134 @@ describe('staleDeclarations', () => {
         (finding: string): string => finding.split('"', 2)[1] ?? '',
       ),
     ).toEqual(['posts.read', 'media.read.gone'])
+  })
+})
+
+// A `type: 'ui'` field is a panel control with nothing stored behind it, and Payload reports it exactly
+// as it reports a real column. Only the built configuration can tell them apart, and the walk over it
+// has to compose a path the way the response composes one - a named field adds a segment, an unnamed
+// container hoists its children, and a block set is a map of its own the sweep never descends.
+const withFields = (fields: readonly unknown[]): unknown => ({
+  collections: [{ slug: 'media', fields }],
+})
+
+describe('datalessFieldsIn', () => {
+  const Banner: unknown = { name: 'banner', type: 'ui' }
+
+  it('namesAUiFieldDeclaredAtTheTopLevel', () => {
+    expect(datalessFieldsIn(withFields([Banner, { name: 'alt', type: 'text' }]))).toEqual({
+      media: ['banner'],
+    })
+  })
+
+  it('addsASegmentForTheNamedGroupAUiFieldSitsIn', () => {
+    const config: unknown = withFields([{ name: 'meta', type: 'group', fields: [Banner] }])
+    expect(datalessFieldsIn(config)).toEqual({ media: ['meta.banner'] })
+  })
+
+  it('hoistsAUiFieldOutOfAnUnnamedContainerAsPayloadReportsIt', () => {
+    for (const type of ['row', 'collapsible', 'group']) {
+      expect(datalessFieldsIn(withFields([{ type, fields: [Banner] }]))).toEqual({
+        media: ['banner'],
+      })
+    }
+  })
+
+  it('addsASegmentForANamedTab', () => {
+    const config: unknown = withFields([
+      { type: 'tabs', tabs: [{ name: 'settings', fields: [Banner] }] },
+    ])
+    expect(datalessFieldsIn(config)).toEqual({ media: ['settings.banner'] })
+  })
+
+  it('hoistsAUiFieldOutOfAnUnnamedTab', () => {
+    const config: unknown = withFields([
+      { type: 'tabs', tabs: [{ label: 'Settings', fields: [Banner] }] },
+    ])
+    expect(datalessFieldsIn(config)).toEqual({ media: ['banner'] })
+  })
+
+  it('neverDescendsIntoABlockSetTheReportKeepsAsAMapOfItsOwn', () => {
+    const config: unknown = withFields([
+      { name: 'layout', type: 'blocks', blocks: [{ slug: 'hero', fields: [Banner] }] },
+    ])
+    expect(datalessFieldsIn(config)).toEqual({})
+  })
+
+  it('ignoresAUiFieldWithNoNameBecauseNothingReportsOne', () => {
+    expect(datalessFieldsIn(withFields([{ type: 'ui' }]))).toEqual({})
+  })
+
+  it('namesNoEntityThatStoresSomethingBehindEveryFieldItReports', () => {
+    expect(datalessFieldsIn(withFields([{ name: 'alt', type: 'text' }]))).toEqual({})
+  })
+
+  it('readsGlobalsExactlyAsItReadsCollections', () => {
+    const config: unknown = { globals: [{ slug: 'settings', fields: [Banner] }] }
+    expect(datalessFieldsIn(config)).toEqual({ settings: ['banner'] })
+  })
+
+  it('answersNothingForSomethingThatIsNotABuiltConfiguration', () => {
+    expect(datalessFieldsIn(undefined)).toEqual({})
+  })
+})
+
+// A permission over a field that holds nothing is not a finding a project could answer: the field
+// carries no `access` property to close it with. It is dropped from both directions, so a declaration
+// naming one is reported stale and can be removed rather than sitting there forever.
+describe('the grants a field storing nothing makes', () => {
+  const Media: AccessReport = {
+    collections: {
+      media: {
+        read: OPEN,
+        fields: {
+          alt: { read: OPEN },
+          banner: { read: OPEN },
+          sizes: { read: OPEN, fields: { banner: { read: OPEN } } },
+        },
+      },
+    },
+  }
+  const Dataless: DatalessFields = { media: ['banner'] }
+
+  it('dropsThePathTheConfigurationStoresNothingBehind', () => {
+    expect(undeclaredGrants(Media, declaring('media', 'read'), Dataless)).not.toContain(
+      'media.read.banner',
+    )
+  })
+
+  it('keepsADataFieldSharingItsNameAtAnotherLevel', () => {
+    expect(undeclaredGrants(Media, declaring('media', 'read'), Dataless)).toEqual([
+      'media.read.alt',
+      'media.read.sizes',
+      'media.read.sizes.banner',
+    ])
+  })
+
+  it('judgesEveryReportedPathWhenNoDatalessPathsAreKnown', () => {
+    expect(undeclaredGrants(Media, declaring('media', 'read'))).toContain('media.read.banner')
+  })
+
+  it('leavesTheEntityLevelGrantAlone', () => {
+    const report: AccessReport = {
+      collections: { media: { read: OPEN, fields: { banner: { read: OPEN } } } },
+    }
+    expect(undeclaredGrants(report, NOTHING_DECLARED, Dataless)).toEqual(['media.read'])
+  })
+
+  it('reportsADeclarationNamingOneAsStaleSoItCanBeRemovedForGood', () => {
+    const declared: readonly PublicAccess[] = declaringFields('media', 'read', ['banner'])
+    expect(staleDeclarations(Media, declared, Dataless)).toHaveLength(1)
+    expect(staleDeclarations(Media, declared)).toEqual([])
+  })
+
+  it('reportsASubtreeWhoseOnlyGrantsStoreNothing', () => {
+    const report: AccessReport = {
+      collections: { media: { read: OPEN, fields: { sizes: { read: OPEN } } } },
+    }
+    const dataless: DatalessFields = { media: ['sizes'] }
+    expect(
+      staleDeclarations(report, declaringFields('media', 'read', ['sizes.**']), dataless),
+    ).toHaveLength(1)
   })
 })

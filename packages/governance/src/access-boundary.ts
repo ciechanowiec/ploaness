@@ -20,6 +20,22 @@
 // column that says who owns a row. A collection open to `create` with every field writable lets an
 // anonymous caller compose the whole document, ownership included - which is a forgery rather than a
 // creation, and passed both halves of the old sweep because neither looked.
+//
+// One kind of field in that map holds nothing. A `type: 'ui'` field is a panel control - a banner, a
+// button, a computed label - with no column behind it, and `populateFieldPermissions` gates only on
+// `'name' in field && field.name`, so Payload reports it exactly as it reports a real column. A
+// `UIField` also carries no `access` property, so the project can neither close the grant nor decline
+// to declare it: the only way to answer the finding was to record under `publicAccess` that a stranger
+// may read a field that stores nothing, which degrades the very record this sweep exists to keep
+// readable. Those paths are therefore dropped, on the doctrine `grantsForEntity` already follows - a
+// permission over nothing is not a finding a project could answer - and they are dropped from the
+// declaration side too, so an entry naming one is reported as stale and can be removed for good rather
+// than sitting there forever, neither required nor mentioned.
+//
+// Knowing which paths those are needs the BUILT configuration, because the response cannot tell them
+// apart. The walk over it is the walk `fieldPathsFor` makes over the response, and has to stay so: a
+// path composed differently on the two sides matches nothing and drops nothing.
+import { isArray, readKey } from './json-shapes.js'
 import {
   COLLECTION_OPERATIONS,
   READ_VERSIONS_OPERATION,
@@ -173,6 +189,104 @@ export const describeGrant = (granted: Granted): string =>
     ? `${granted.entity}.${granted.operation}`
     : `${granted.entity}.${granted.operation}${PATH_SEPARATOR}${granted.field}`
 
+/** The field paths an entity reports but stores nothing behind, keyed by the entity's slug. */
+export type DatalessFields = Readonly<Record<string, readonly string[]>>
+
+/** The field type Payload renders in the panel and keeps no column for. */
+const UI_FIELD_TYPE: string = 'ui'
+
+// A tab set is a container whose children live one level down; each tab hoists or adds a segment of its
+// own, which is why it is walked apart from an ordinary named field.
+const TABS_FIELD_TYPE: string = 'tabs'
+
+// Blocks are reported as a map of their own, keyed by block slug, and `fieldPathsFor` never descends
+// into one. Descending here would compose paths the report never sends, which match nothing.
+const BLOCKS_FIELD_TYPE: string = 'blocks'
+
+/** A field's or tab's own name, or nothing when it is presentational and hoists its children. */
+const nameOf = (subject: unknown): string | undefined => {
+  const name: unknown = readKey(subject, 'name')
+  return typeof name === 'string' && name.length > 0 ? name : undefined
+}
+
+// A named container adds its segment; an unnamed one - a row, a collapsible, an unnamed group or tab -
+// stores nothing of its own, and Payload reports its children at the parent's level.
+const prefixUnder = (prefix: string, name: string | undefined): string =>
+  name === undefined ? prefix : `${prefix}${name}${PATH_SEPARATOR}`
+
+/** A list of child fields, and the prefix the paths beneath it are composed under. */
+interface ChildFields {
+  readonly fields: unknown
+  readonly prefix: string
+}
+
+// Stated as the lists to descend into rather than by recursing here, so the walk below recurses into
+// itself alone. A tab set contributes one list per tab, each hoisting or adding its own segment; a UI
+// field and a block set contribute none; everything else contributes its own `fields`, which is absent
+// on a leaf and read as an empty list.
+const childFieldsOf = (field: unknown, prefix: string): readonly ChildFields[] => {
+  const type: unknown = readKey(field, 'type')
+  if (type === UI_FIELD_TYPE || type === BLOCKS_FIELD_TYPE) {
+    return []
+  }
+  if (type === TABS_FIELD_TYPE) {
+    const tabs: unknown = readKey(field, 'tabs')
+    return (isArray(tabs) ? tabs : []).map(
+      (tab: unknown): ChildFields => ({
+        fields: readKey(tab, 'fields'),
+        prefix: prefixUnder(prefix, nameOf(tab)),
+      }),
+    )
+  }
+  return [{ fields: readKey(field, 'fields'), prefix: prefixUnder(prefix, nameOf(field)) }]
+}
+
+// An unnamed UI field is reported by nothing, so it names no path to drop.
+const datalessPathOf = (field: unknown, prefix: string): readonly string[] => {
+  const name: string | undefined = nameOf(field)
+  return name !== undefined && readKey(field, 'type') === UI_FIELD_TYPE ? [`${prefix}${name}`] : []
+}
+
+const datalessInFields = (fields: unknown, prefix: string): readonly string[] =>
+  (isArray(fields) ? fields : []).flatMap((field: unknown): readonly string[] => [
+    ...datalessPathOf(field, prefix),
+    ...childFieldsOf(field, prefix).flatMap((child: ChildFields): readonly string[] =>
+      datalessInFields(child.fields, child.prefix),
+    ),
+  ])
+
+const datalessInEntities = (entities: unknown): DatalessFields =>
+  Object.fromEntries(
+    (isArray(entities) ? entities : []).flatMap(
+      (entity: unknown): readonly (readonly [string, readonly string[]])[] => {
+        const slug: unknown = readKey(entity, 'slug')
+        const paths: readonly string[] = datalessInFields(readKey(entity, 'fields'), '')
+        return typeof slug !== 'string' || paths.length === 0 ? [] : [[slug, paths]]
+      },
+    ),
+  )
+
+/**
+ * Every field path a built Payload configuration reports but keeps no data behind.
+ *
+ * Read through the untyped accessors rather than through Payload's types, because this package depends
+ * on nothing: what arrives is the configuration Payload booted, and what is read of it is the same four
+ * keys the response is built from.
+ * @param config the built Payload configuration, as its module's default export.
+ * @returns the dataless paths of each entity that has any, keyed by slug.
+ */
+export const datalessFieldsIn = (config: unknown): DatalessFields => ({
+  ...datalessInEntities(readKey(config, 'collections')),
+  ...datalessInEntities(readKey(config, 'globals')),
+})
+
+const isDataless = (granted: Granted, dataless: DatalessFields): boolean =>
+  granted.field !== undefined && (dataless[granted.entity] ?? []).includes(granted.field)
+
+/** Every permission the report grants over something the configuration actually stores. */
+const dataBearingGrants = (report: AccessReport, dataless: DatalessFields): readonly Granted[] =>
+  grantedPermissions(report).filter((granted: Granted): boolean => !isDataless(granted, dataless))
+
 // A field is matched by name and never by a wildcard the project could write for itself. An entry
 // listing `*` covers only the grant Payload itself collapsed to `*`, where every field is open and the
 // declaration is therefore exact rather than blanket.
@@ -209,12 +323,18 @@ const isDeclared = (granted: Granted, declared: readonly PublicAccess[]): boolea
  * The grants the running application makes to a stranger that the project has not recorded. Empty is
  * the only passing answer: a project that declares nothing is judged most strictly, and a declaration
  * narrows nothing else.
+ * @param report the body of `/api/access` for an anonymous caller.
+ * @param declared the project's `publicAccess` entries.
+ * @param dataless the field paths the configuration reports but stores nothing behind, from
+ * `datalessFieldsIn`. Defaulted to none, which judges every reported path and so errs strictly.
+ * @returns one finding per undeclared grant, in report order.
  */
 export const undeclaredGrants = (
   report: AccessReport,
   declared: readonly PublicAccess[],
+  dataless: DatalessFields = {},
 ): readonly string[] =>
-  grantedPermissions(report)
+  dataBearingGrants(report, dataless)
     .filter((granted: Granted): boolean => !isDeclared(granted, declared))
     .map((granted: Granted): string => describeGrant(granted))
 
@@ -253,13 +373,16 @@ const NO_MATCHING_GRANT: string = 'covers no grant the application makes'
  * form makes; a subtree under which nothing is granted is a misspelling like any other.
  * @param report the body of `/api/access` for an anonymous caller.
  * @param declared the project's `publicAccess` entries.
+ * @param dataless the field paths the configuration reports but stores nothing behind, from
+ * `datalessFieldsIn`. A declaration naming one is therefore reported stale and can be removed.
  * @returns one finding per stale entry or field, in declaration order.
  */
 export const staleDeclarations = (
   report: AccessReport,
   declared: readonly PublicAccess[],
+  dataless: DatalessFields = {},
 ): readonly string[] => {
-  const granted: readonly Granted[] = grantedPermissions(report)
+  const granted: readonly Granted[] = dataBearingGrants(report, dataless)
   return declared.flatMap((entry: PublicAccess): readonly string[] => {
     if (!isGranted(entry, granted)) {
       return [

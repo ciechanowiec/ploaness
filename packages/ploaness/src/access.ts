@@ -9,6 +9,8 @@
 
 export {
   type AccessReport,
+  type DatalessFields,
+  datalessFields,
   PUBLIC_ACCESS,
   staleDeclarations,
   undeclaredGrants,

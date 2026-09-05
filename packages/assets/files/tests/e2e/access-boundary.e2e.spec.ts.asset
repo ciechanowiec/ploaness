@@ -16,9 +16,17 @@
 // sending it, so a grant arrives in one of two shapes depending on whether a query constraint survived
 // beside it, and reading only the object shape reported the constrained grants while missing the open
 // ones. No unit test can reach a spec, which is why the decision does not live in one.
+//
+// One thing the answer cannot say is which of the fields it reports hold nothing. A `type: 'ui'` field
+// is a panel control with no column behind it, and Payload reports it exactly as it reports a real
+// column while offering no `access` property to close it with. `datalessFields` reads the built
+// configuration to name those paths so they are judged by neither half below: they are not a grant a
+// project could close, and they are not a declaration a project should have to write.
 import { type APIResponse, expect, test } from '@playwright/test'
 import {
   type AccessReport,
+  type DatalessFields,
+  datalessFields,
   PUBLIC_ACCESS,
   staleDeclarations,
   undeclaredGrants,
@@ -44,6 +52,7 @@ test.describe('Access boundary', () => {
       `${ACCESS_ENDPOINT} did not answer; every Payload application serves it`,
     ).toBe(true)
     const report: AccessReport = (await anonymous.json()) as AccessReport
+    const dataless: DatalessFields = await datalessFields()
 
     expect(
       report.canAccessAdmin ?? false,
@@ -51,7 +60,7 @@ test.describe('Access boundary', () => {
     ).toBe(false)
 
     expect(
-      undeclaredGrants(report, PUBLIC_ACCESS),
+      undeclaredGrants(report, PUBLIC_ACCESS, dataless),
       'the running application grants these to anyone, and the project has not said it meant to. ' +
         'Close the access rule, or record the grant under ploaness.publicAccess with the reason ' +
         'it is intended',
@@ -61,7 +70,7 @@ test.describe('Access boundary', () => {
     // no effect and covers the field the day it is exposed again, which is the same silence the
     // exclusion-reach rule refuses elsewhere.
     expect(
-      staleDeclarations(report, PUBLIC_ACCESS),
+      staleDeclarations(report, PUBLIC_ACCESS, dataless),
       'the project declares these under ploaness.publicAccess, and the running application grants ' +
         'none of them to anyone. Correct the path, or remove the entry',
     ).toEqual([])
