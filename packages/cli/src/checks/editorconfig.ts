@@ -1,18 +1,18 @@
 // Conformance to the committed `.editorconfig`. The decision lives in governance; this reads the tree.
 //
 // Every file in the working tree is checked except those excluded by role: a binary asset, recognised
-// from its own
-// bytes, and a path the project declares generated. The standard's line cap applies to code roles only,
-// because a line cap is a Code Rule and prose wraps by meaning rather than by column.
+// from its own bytes rather than from its name, and a path the project excludes from the typography
+// rules. The standard's line cap is narrower still, because a cap is a Code Rule written for a person:
+// it binds on authored code, not on prose, which wraps by meaning rather than by column, and not on a
+// path the project declares generated, whose lines nobody here chose.
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import {
-  CODE_EXTENSIONS,
   type EditorconfigRules,
   type EditorconfigViolation,
   findEditorconfigViolations,
-  hasExtension,
   isBinary,
+  isLineCapEnforced,
   matchesRole,
   parseEditorconfig,
 } from '@ploaness/governance'
@@ -54,7 +54,7 @@ export const editorconfig = (context: Context): GateResult => {
     findEditorconfigViolations(
       entry.bytes.toString('utf8'),
       rules,
-      hasExtension(entry.file, CODE_EXTENSIONS),
+      isLineCapEnforced(entry.file, context.settings.generatedArtefacts),
     ).map(
       (violation: EditorconfigViolation): string =>
         `${entry.file}:${String(violation.line)} ${violation.reason}`,

@@ -6,6 +6,7 @@ import {
   type EditorconfigRules,
   type EditorconfigViolation,
   findEditorconfigViolations,
+  isLineCapEnforced,
   MAX_LINE_LENGTH,
   parseEditorconfig,
 } from '../src/editorconfig-policy.js'
@@ -108,5 +109,27 @@ describe('findEditorconfigViolations', () => {
 
   it('leaves a long prose line alone, because the cap is a Code Rule', () => {
     expect(reasons(`${'x'.repeat(MAX_LINE_LENGTH + 50)}\n`, rules(), false)).toEqual([])
+  })
+})
+
+describe('isLineCapEnforced', () => {
+  it('binds on authored code', () => {
+    expect(isLineCapEnforced('src/lib/features.ts', [])).toBe(true)
+  })
+
+  it('does not bind on prose, which wraps by meaning', () => {
+    expect(isLineCapEnforced('README.md', [])).toBe(false)
+  })
+
+  it('does not bind on code the project declares generated', () => {
+    // The case that named this: a Payload migration renders each statement as one SQL string, so its
+    // lines are the generator's and no formatter run or hand edit shortens them.
+    expect(isLineCapEnforced('src/migrations/20260101_initial.ts', ['src/migrations/**'])).toBe(
+      false,
+    )
+  })
+
+  it('still binds on code beside a generated path, so the exemption is not a blanket', () => {
+    expect(isLineCapEnforced('src/lib/features.ts', ['src/migrations/**'])).toBe(true)
   })
 })

@@ -11,6 +11,8 @@
 // ruler where to sit, while the standard's 120 characters is a cap that binds as an error. A project's
 // formatter may aim shorter, and frequently does.
 
+import { CODE_EXTENSIONS, hasExtension, matchesGlob } from './file-roles.js'
+
 /** The standard's line cap. Not configurable: a cap is never raised. */
 export const MAX_LINE_LENGTH: number = 120
 
@@ -119,6 +121,28 @@ const lineViolations = (
       })
     })
 }
+
+/**
+ * Decide whether the standard's line cap binds for one file.
+ * @param filePath the repo-relative path.
+ * @param generatedArtefacts the globs the project declares generated.
+ * @returns true for an authored code file; false for prose and for generated output.
+ */
+// A cap is a rule about how a person writes code, so it reaches code roles only - and only where a
+// person wrote it. A generator emits what it emits: Payload renders each migration statement as one SQL
+// string, and no formatter setting and no edit shortens it, because the file is frozen once applied.
+// Holding a project to a cap it cannot satisfy would teach it to exclude the path from this gate
+// altogether, which would cost the encoding and whitespace rules too - and those a generated file does
+// satisfy, because the project runs its own formatter over the output.
+// Matched as globs, not through `isGovernedCode`: `generatedArtefacts` is declared as globs and reaches
+// ESLint's ignore list as globs, and `src/migrations/**` is not merely a different pattern under regex
+// rules - `new RegExp` rejects it outright, so the gate would have thrown rather than reported.
+export const isLineCapEnforced = (
+  filePath: string,
+  generatedArtefacts: readonly string[],
+): boolean =>
+  hasExtension(filePath, CODE_EXTENSIONS) &&
+  !generatedArtefacts.some((pattern: string): boolean => matchesGlob(pattern, filePath))
 
 /**
  * Check one file against the committed configuration.
