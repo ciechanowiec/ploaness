@@ -689,6 +689,26 @@ commit_case fail-folders-default-access 'feat(fixture): leave the folder tree to
     "$CONFORMING_BODY"
 expect fail-folders-default-access payload-defaults FAIL payload-folders
 
+# The code that DECIDES a framework-built collection's access is an override function, and the
+# configuration literal it is given is a call ARGUMENT, not the annotated binding. The reader used to
+# anchor on the type name and then take the next brace anywhere after it, so it adopted that argument as
+# though it were the collection and reported it for declaring no access - the very code written to close
+# the hole was the finding, and there was nothing the project could write instead.
+new_case pass-override-call-argument
+replace_text "$scratch/pass-override-call-argument/src/lib/folders.ts" \
+    "  access: { create: nobody, read: nobody, readVersions: nobody, update: nobody, delete: nobody },
+})" \
+    "  access: { create: nobody, read: nobody, readVersions: nobody, update: nobody, delete: nobody },
+})
+
+/** The folder collection this configuration builds, decided by the override above. */
+export const folders: CollectionConfig = foldersAccess({
+  collection: { slug: 'payload-folders', fields: [] },
+})"
+commit_case pass-override-call-argument \
+    'feat(fixture): build the folder collection through its override' "$CONFORMING_BODY"
+expect pass-override-call-argument payload-rules PASS
+
 # The job queue is the other collection the framework builds, and it declares no access at all.
 new_case fail-jobs-default-access
 replace_text "$scratch/fail-jobs-default-access/src/payload.config.ts" "  globals: [Header]," \

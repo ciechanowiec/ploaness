@@ -20,24 +20,15 @@
 // collection some other module declares. It therefore reads every candidate at once, the way
 // `admin-view-coverage.ts` does, rather than joining the single-source finders in `payload-policy.ts`.
 import type { SpecSource } from './axe-coverage.js'
-import {
-  configBody,
-  depthOneBlockKeys,
-  depthOneValue,
-  type PayloadViolation,
-} from './payload-source.js'
-import { enclosingLiteral, lineOf, occurrences, stripComments } from './source-text.js'
+import { type FoundPayloadConfig, payloadConfigsIn } from './payload-configs.js'
+import { depthOneBlockKeys, depthOneValue, type PayloadViolation } from './payload-source.js'
+import { enclosingLiteral, occurrences, stripComments } from './source-text.js'
 
 /** A violation together with the file it was found in, because this rule reads more than one. */
 export interface LocatedViolation {
   readonly path: string
   readonly violation: PayloadViolation
 }
-
-// Only the annotation and `satisfies` forms a collection is actually written in, matching
-// `payload-access.ts`. A global has no relationship column of its own to constrain.
-const COLLECTION_DECLARATION: RegExp = /(:|satisfies)\s*CollectionConfig(?=[<=,)\s]|$)/g
-const SATISFIES: string = 'satisfies'
 
 // The two field types that put a foreign key on the table rather than in the join table. `upload` is
 // one of them: it is a relationship to the media collection wearing a different name.
@@ -75,23 +66,25 @@ const slugOf = (body: string): string | undefined =>
 const declaresDrafts = (body: string): boolean =>
   DRAFTS_ENABLED.test(depthOneValue(body, 'versions') ?? '')
 
+// Which literal in a file IS a collection is `payload-configs.ts`'s question, and this rule asks it
+// there rather than carrying a second copy of the answer. A global is dropped: it has no relationship
+// column of its own to constrain. A collection with no readable slug is dropped too, because the whole
+// rule is a lookup by slug.
+//
 // Comments are blanked before anything is read, the way every other Payload rule reads a file. The keys
 // this rule looks for sit at depth one, and a depth-one key is recognised by the delimiter in front of
 // it - so a comment between the previous entry and `hooks:` hid the hook, and the rule reported a
 // collection that was guarded. `stripComments` preserves offsets and newlines, so the reported line is
 // still the line of the source.
-const collectionsIn = (file: SpecSource): readonly FoundCollection[] => {
-  const source: string = stripComments(file.source)
-  return [...source.matchAll(COLLECTION_DECLARATION)].flatMap(
-    (match: RegExpExecArray): readonly FoundCollection[] => {
-      const body: string | undefined = configBody(source, match.index, match[1] === SATISFIES)
-      const slug: string | undefined = body === undefined ? undefined : slugOf(body)
-      return body === undefined || slug === undefined
+const collectionsIn = (file: SpecSource): readonly FoundCollection[] =>
+  payloadConfigsIn(stripComments(file.source))
+    .filter((found: FoundPayloadConfig): boolean => found.kind.kind === 'collection')
+    .flatMap((found: FoundPayloadConfig): readonly FoundCollection[] => {
+      const slug: string | undefined = slugOf(found.body)
+      return slug === undefined
         ? []
-        : [{ path: file.path, slug, body, line: lineOf(source, match.index) }]
-    },
-  )
-}
+        : [{ path: file.path, slug, body: found.body, line: found.line }]
+    })
 
 // Every field of one collection that puts a NOT NULL column against another collection's primary key.
 // The field literal is recovered from the offset of its own `type` key, so a relationship nested inside

@@ -26,7 +26,6 @@ export interface PayloadConfigKind {
 /** One Payload configuration literal, with the source position its body begins at. */
 export interface FoundPayloadConfig {
   readonly kind: PayloadConfigKind
-  readonly marker: number
   readonly body: string
   readonly bodyStart: number
   readonly line: number
@@ -58,8 +57,43 @@ const CONFIG_KINDS: readonly (PayloadConfigKind & { readonly declaration: RegExp
 
 const SATISFIES: string = 'satisfies'
 
-const bodyStartOf = (source: string, body: string, marker: number, isTrailing: boolean): number =>
-  isTrailing ? source.lastIndexOf(body, marker) : source.indexOf(body, marker)
+/** A configuration literal: its text, and where that text starts in the file it was read from. */
+interface ConfigLiteral {
+  readonly body: string
+  readonly bodyStart: number
+}
+
+// What may stand between a leading type reference and the literal it types. Every form a config is
+// really written in puts one of four things there: `= {`, a generic argument and then `= {`, `=> ({`,
+// or the opening brace of a function body. Taking "the next brace anywhere after the type name"
+// instead crossed statement boundaries and read an unrelated literal further down the file as the
+// configuration. A call argument (`= jobsAccess({ ... })`), a parameter annotation
+// (`(config: CollectionConfig): void => { ... }`), an interface member and a type-alias member each
+// put an identifier, a `)` or a `}` in this gap, and each was judged as though it were a collection -
+// so the very code a project writes to GIVE a generated collection its access block was reported as a
+// collection with none.
+const GOVERNED_BODY: RegExp = /^\s*(?:<[^;{}]*>\s*)?(?:=>?\s*(?:\(\s*)?)?\{/
+
+/** The literal a leading annotation governs, or nothing when the annotation types something else. */
+const governedLiteral = (source: string, afterType: number): ConfigLiteral | undefined => {
+  const gap: null | RegExpExecArray = GOVERNED_BODY.exec(source.slice(afterType))
+  if (gap === null) {
+    return undefined
+  }
+  const bodyStart: number = afterType + gap[0].length - 1
+  const inner: string | undefined = balancedArguments(source, bodyStart)
+  return inner === undefined ? undefined : { body: `{${inner}}`, bodyStart }
+}
+
+/** The literal a trailing `satisfies` types: the one that closed just before it. */
+const precedingLiteral = (source: string, marker: number): ConfigLiteral | undefined => {
+  const body: string | undefined = configBody(source, marker, true)
+  if (body === undefined) {
+    return undefined
+  }
+  const bodyStart: number = source.lastIndexOf(body, marker)
+  return bodyStart === NOT_FOUND ? undefined : { body, bodyStart }
+}
 
 const configsOfKind = (
   source: string,
@@ -67,15 +101,11 @@ const configsOfKind = (
 ): readonly FoundPayloadConfig[] =>
   [...source.matchAll(kind.declaration)].flatMap(
     (match: RegExpExecArray): readonly FoundPayloadConfig[] => {
-      const isTrailing: boolean = match[1] === SATISFIES
-      const body: string | undefined = configBody(source, match.index, isTrailing)
-      if (body === undefined) {
-        return []
-      }
-      const bodyStart: number = bodyStartOf(source, body, match.index, isTrailing)
-      return bodyStart === NOT_FOUND
-        ? []
-        : [{ kind, marker: match.index, body, bodyStart, line: lineOf(source, match.index) }]
+      const literal: ConfigLiteral | undefined =
+        match[1] === SATISFIES
+          ? precedingLiteral(source, match.index)
+          : governedLiteral(source, match.index + match[0].length)
+      return literal === undefined ? [] : [{ kind, ...literal, line: lineOf(source, match.index) }]
     },
   )
 
