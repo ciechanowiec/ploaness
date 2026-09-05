@@ -8,7 +8,7 @@
 // Each property below is asserted of EVERY suite rather than of the config object, because the shipped
 // config splits into per-environment projects and a project inherits nothing from the root it is not
 // given. A guard that held only for the suite somebody remembered is not a guard.
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -83,6 +83,9 @@ const suitesOf = (config: VitestConfig): readonly Suite[] => {
 }
 
 const shippedSuites = (): readonly Suite[] => suitesOf(SHIPPED)
+
+const shippedGlobs = (): readonly string[] =>
+  shippedSuites().flatMap((suite: Suite): readonly string[] => suite.include ?? [])
 
 const coversDirectory = (suite: Suite, fragment: string): boolean =>
   (suite.include ?? []).some((glob: string): boolean => glob.includes(fragment))
@@ -195,5 +198,33 @@ describe('the reporter list', () => {
   it('is declared by this repository too, from the same source, so the two cannot drift', () => {
     const config: VitestConfig = WORKSPACE
     expect(config.test?.reporters).toEqual(testReporters())
+  })
+})
+
+// The joint between the shipped globs and the sentence that tells an agent where to put a spec. Nothing
+// linked the two, and they drifted: the guide named three locations while the config collected five, so
+// an agent following it wrote a component spec into `tests/unit`, where nothing collects a `.tsx` at
+// all. The file then never ran and the per-file coverage floor failed on the code it was written to
+// cover, which reads as a coverage defect rather than as a misplaced test - the exact silence the same
+// bullet warns about. Asserted of the joint rather than of any list: nothing here says what the globs
+// are, only that the document still names every one the config declares.
+describe('the spec locations the agent guide states', () => {
+  // The shipped body rather than a consumer's copy: the `.asset` suffix is how npm is stopped from
+  // rewriting a dotfile path when it packs the package.
+  const AgentGuide: string = readFileSync(
+    path.join(workspaceRoot, 'packages/assets/files/.ploaness/agent-guide.md.asset'),
+    'utf8',
+  )
+
+  it('namesEveryGlobTheShippedConfigCollectsFrom', () => {
+    const globs: readonly string[] = shippedGlobs()
+    expect(globs.length).toBeGreaterThan(0)
+    for (const glob of globs) {
+      expect(AgentGuide, `the agent guide does not name ${glob}`).toContain(`\`${glob}\``)
+    }
+  })
+
+  it('namesTheBrowserSuiteTheseGlobsDoNotCover', () => {
+    expect(AgentGuide).toContain('`tests/e2e`')
   })
 })

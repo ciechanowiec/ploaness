@@ -291,7 +291,7 @@ three project scripts once, at the repository root.
 
 ### Project Layout
 
-Module architecture is a shape rather than a preference, and four rules of it follow from neither the
+Module architecture is a shape rather than a preference, and these rules of it follow from neither the
 governing standard nor Payload's own documentation.
 
 - `src/access` and `src/lib` are the pure-logic floor: they import nothing else under `src/`, so the code
@@ -308,9 +308,12 @@ governing standard nor Payload's own documentation.
 - `process.env` is read only in `src/lib/environment.ts`, `payload.config.ts` included. That module
   validates and narrows what it reads and every other module consumes the typed values it returns, so
   the environment surface stays auditable in one place.
-- A spec is collected only from `tests/unit/**/*.unit.spec.ts`, `tests/int/**/*.int.spec.ts`, or
-  `tests/e2e`. A file outside those paths never runs, and the per-file coverage floor then fails on the
-  code that file was written to cover, which reads as a coverage defect rather than as a misplaced test.
+- A spec is collected only from `tests/unit/**/*.unit.spec.ts`,
+  `tests/component/**/*.component.spec.ts`, `tests/component/**/*.component.spec.tsx`,
+  `tests/int/**/*.int.spec.ts`, `tests/int/**/*.int.spec.tsx`, or `tests/e2e`. A component spec is its
+  own tier and belongs under `tests/component`, not under `tests/unit`, which collects no `.tsx` at all.
+  A file outside those paths never runs, and the per-file coverage floor then fails on the code that
+  file was written to cover, which reads as a coverage defect rather than as a misplaced test.
 
 ### Commit Messages
 
