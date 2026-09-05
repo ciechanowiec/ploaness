@@ -5,6 +5,14 @@
 // marker-prefixed JSON line that the gate parses. What the report MEANS is decided in
 // `@ploaness/governance`; this file only reads.
 //
+// It also asks every drafts-enabled entity's read rule what it answers a caller with no credentials.
+// That is the one place the harness CALLS a project's function rather than inspecting it, and it is
+// deliberate: the constraint a read returns is the half `/api/access` reports and the anonymous sweep
+// never opens, so there is nowhere else to see it. The call is confined to entities that keep drafts,
+// it is awaited so a legitimately asynchronous rule is not punished for being one, and a rule that
+// throws is reported as undecidable rather than assumed safe. The harness already requires an access
+// decision to be a pure function of the values it is handed, which is the shape this relies on.
+//
 // Two arguments, both absolute: the configuration file, and Payload's `dist/auth/defaultAccess.js`.
 // Identity is judged by reference first and by source text second, because a loader can register the
 // same module twice under two URLs and a project function cannot be byte-identical to Payload's by
@@ -12,11 +20,14 @@
 // matters is the one the project installed.
 import { pathToFileURL } from 'node:url'
 import {
+  type AnonymousRead,
   accessOperationsFor,
+  type DraftReadEntry,
   INHERITED_ACCESS_REPORT_MARKER,
   type InheritedAccessEntry,
   type InheritedAccessReport,
   isArray,
+  isRecord,
   type PayloadSubjectKind,
   readKey,
 } from '@ploaness/governance'
@@ -73,10 +84,58 @@ const entryOf = (entity: unknown, kind: PayloadSubjectKind): InheritedAccessEntr
   }
 }
 
+// What Payload hands an access rule, cut down to the half a read of a stranger's turns on. A rule that
+// reaches for anything else throws, and a throw is reported rather than read as a denial.
+type AccessRule = (arguments_: { readonly req: { readonly user: null } }) => unknown
+
+const hasDrafts = (entity: unknown): boolean =>
+  Boolean(readKey(readKey(entity, 'versions'), 'drafts'))
+
+// A predicate rather than an assertion, for the reason `isArray` is one: calling a value narrowed only
+// to `Function` hands back `any`, and an assertion is what type coverage counts against the harness.
+const isAccessRule = (value: unknown): value is AccessRule => typeof value === 'function'
+
+const anonymousReadOf = async (entity: unknown): Promise<AnonymousRead> => {
+  const rule: unknown = readKey(readKey(entity, 'access'), 'read')
+  if (!isAccessRule(rule)) {
+    // An undeclared read is Payload's own default, which the inherited half of this report names.
+    return { kind: 'denied' }
+  }
+  try {
+    const answer: unknown = await rule({ req: { user: null } })
+    if (answer === true) {
+      return { kind: 'open' }
+    }
+    return isRecord(answer) ? { kind: 'filtered', where: answer } : { kind: 'denied' }
+  } catch (error: unknown) {
+    return {
+      kind: 'undecidable',
+      reason: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+const draftReadsOf = async (
+  entities: readonly unknown[],
+  kind: PayloadSubjectKind,
+): Promise<readonly DraftReadEntry[]> =>
+  await Promise.all(
+    entities
+      .filter((entity: unknown): boolean => hasDrafts(entity))
+      .map(async (entity: unknown): Promise<DraftReadEntry> => {
+        const anonymousRead: AnonymousRead = await anonymousReadOf(entity)
+        return { kind, slug: String(readKey(entity, 'slug')), anonymousRead }
+      }),
+  )
+
 const report: InheritedAccessReport = {
   collections: collections.map(
     (collection: unknown): InheritedAccessEntry => entryOf(collection, 'collection'),
   ),
+  draftReads: [
+    ...(await draftReadsOf(collections, 'collection')),
+    ...(await draftReadsOf(globals, 'global')),
+  ],
   globals: globals.map((global: unknown): InheritedAccessEntry => entryOf(global, 'global')),
 }
 

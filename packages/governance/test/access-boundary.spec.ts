@@ -10,6 +10,7 @@ import {
   staleDeclarations,
   undeclaredGrants,
 } from '../src/access-boundary.js'
+import { accessOperationsFor } from '../src/payload-defaults.js'
 import type { PublicAccess } from '../src/settings.js'
 
 const NOTHING_DECLARED: readonly PublicAccess[] = []
@@ -79,25 +80,56 @@ describe('grantedPermissions', () => {
     ).toEqual(['configuration.read'])
   })
 
-  it('reportsEveryWriteOperationAndNotOnlyRead', () => {
+  it('reportsEveryOperationItJudgesAndNotOnlyRead', () => {
     const report: AccessReport = {
-      collections: { pages: { create: OPEN, delete: OPEN, read: OPEN, update: OPEN } },
+      collections: {
+        pages: {
+          create: OPEN,
+          delete: OPEN,
+          read: OPEN,
+          readVersions: OPEN,
+          unlock: OPEN,
+          update: OPEN,
+        },
+      },
     }
     expect(grantedPermissions(report)).toHaveLength(JUDGED_OPERATIONS.length)
   })
 
-  // Payload reports field-level entries and version operations beside the four this sweep judges, and
-  // collapses a fully-permitted `fields` map to a bare `true`. Reading every key would name entries no
+  // A version is the whole document, so a read narrowed by a filter is undone by asking for a version
+  // instead - and `readVersions: theSameHelperAsRead` reads as obviously right. Payload reports it
+  // beside the four, and it was passing unlooked-at.
+  it('reportsAnAnonymousVersionRead', () => {
+    const report: AccessReport = { collections: { pages: { readVersions: OPEN } } }
+    expect(grantedPermissions(report)).toEqual([{ entity: 'pages', operation: 'readVersions' }])
+  })
+
+  // Payload reports field-level entries beside the operations this sweep judges, and collapses a
+  // fully-permitted `fields` map to a bare `true`. Reading every key would name entries no
   // `publicAccess` entry can be written against.
   it('ignoresKeysThatAreNotTheOperationsItJudges', () => {
     const report: AccessReport = {
-      collections: { pages: { fields: OPEN, readVersions: OPEN } },
+      collections: { pages: { fields: OPEN, count: OPEN } },
     }
     expect(grantedPermissions(report)).toEqual([])
   })
 
   it('reportsNothingForAReportWithNeitherHalf', () => {
     expect(grantedPermissions({})).toEqual([])
+  })
+
+  // The joint between the two halves of the harness: an operation `payload-defaults` makes a config
+  // DECIDE is an operation this sweep must JUDGE, or the project writes a rule nobody ever asks a
+  // stranger about. Asserting the joint rather than the literal is what keeps the lists from drifting
+  // apart the next time one of them grows.
+  it('judgesEveryOperationAConfigIsMadeToDecide', () => {
+    const owed: ReadonlySet<string> = new Set([
+      ...accessOperationsFor({ kind: 'collection', hasAuth: true, hasVersions: true }),
+      ...accessOperationsFor({ kind: 'global', hasAuth: false, hasVersions: true }),
+    ])
+    for (const operation of owed) {
+      expect(JUDGED_OPERATIONS).toContain(operation)
+    }
   })
 })
 

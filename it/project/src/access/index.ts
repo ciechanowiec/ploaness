@@ -11,5 +11,12 @@ export const anyone: Access = (): boolean => true
 /** Refuses the operation to everyone, so the config decides rather than inheriting a default. */
 export const nobody: Access = (): boolean => false
 
+/**
+ * Grants an unauthenticated read of published documents alone, which is what a collection that keeps
+ * drafts owes a stranger: an unpublished save leaves the main row alone, so without this clause the
+ * ordinary list serves work nobody approved.
+ */
+export const publishedOnly: Access = () => ({ _status: { equals: 'published' } })
+
 /** Refuses writes to a field whose value grants account authority. */
 export const nobodyField: FieldAccess = (): boolean => false

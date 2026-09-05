@@ -97,11 +97,17 @@ ploaness governs all of the following domains:
   excludes SVG, and the headers are not asked for. Hook state is written through `req.context` from
   `src/hooks`, the one path exempt from the immutability rule for it; `req.file`, a bare `context`, and
   replacing the bag itself (`req.context = {}`) stay reported everywhere.
-- **Drafts:** a collection or global with `versions.drafts` enabled must not grant a read that admits
-  anyone, because `?draft=true` then serves unpublished content to an unauthenticated client. The gate
-  catches the inline always-true form; a read delegated to a helper is yours to judge, and the helper
-  must require authentication or published status. What the source cannot decide, the access-boundary
-  sweep below asks the running application instead.
+- **Drafts:** a collection or global with `versions.drafts` enabled must not let an unauthenticated
+  caller read what nobody has approved. A draft is not hidden behind `?draft=true`: Payload writes an
+  unpublished save to the versions table and leaves the main row alone, so a document that has never
+  been published carries `_status: 'draft'` in the row the ORDINARY list reads. The read a drafts
+  entity grants a stranger must therefore either refuse outright or filter on `_status` equals
+  `published`, and `payload-defaults` decides that by asking the built configuration's own read rule
+  what it answers a caller with no credentials, then reading the filter it hands back. A clause under
+  `and` counts; a clause under `or` counts only when every branch carries one. This is not left to
+  judgement: a read that scopes by audience and forgets the status is the exact shape that passed the
+  source rules and the anonymous sweep alike, because the sweep sees THAT a filter exists and never
+  opens it.
 - **Generated output:** the Payload types and admin import map must match the configuration that
   produces them.
 - **Versions:** ploaness owns two sets of them. The toolchain is every package whose version changes
@@ -198,6 +204,10 @@ ploaness governs all of the following domains:
   stranger. The admin panel must refuse an unauthenticated caller, and every permission the application
   grants anonymously must be one the project recorded under `ploaness.publicAccess` with the reason it
   is intended. Close the access rule, or record the grant; a grant nobody wrote is the finding.
+  The operations judged are the ones a config is made to decide: create, read, update, delete, and
+  beside them `readVersions` and `unlock`. A version is the whole document, so a read narrowed by a
+  filter is undone by asking for a version instead, and `readVersions` set to the same helper as `read`
+  reads as obviously right while handing a stranger everything that filter was written to keep back.
   Payload answers per FIELD as well as per operation, and both halves are judged. A collection open to
   `create` with every field writable lets a stranger compose the whole document, ownership included,
   which is a forgery rather than a creation; a collection open to `read` with every field readable
@@ -416,7 +426,7 @@ rewrite a tracked file.
 | `arch` | package | dependency-cruiser: layering, cycles, and orphans. |
 | `type-coverage` | package | Type coverage of 100% over hand-written TypeScript. |
 | `payload-generated` | payload | The generated Payload types and admin import map are current. |
-| `payload-defaults` | payload | Every collection and global in the built configuration decides its access, the folder, job, query-preset and plugin collections included, rather than inheriting Payload's default, which admits every signed-in user. |
+| `payload-defaults` | payload | Every collection and global in the built configuration decides its access, the folder, job, query-preset and plugin collections included, rather than inheriting Payload's default, which admits every signed-in user. Every entity that keeps drafts is also asked what its read grants a stranger, and must refuse or filter on `_status` equals `published`. |
 | `generated-denial` | repository | The agent runtime is denied write access to every generated artefact. |
 | `payload-rules` | package | The Payload usage rules, including access control and drafts. |
 | `admin-views` | payload | Every custom admin view is scanned for accessibility by a spec of the project's own. |

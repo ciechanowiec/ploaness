@@ -9,6 +9,7 @@ import {
   findInheritedAccess,
   findPayloadViolations,
   findSourceViolations,
+  findUnconstrainedDraftReads,
   findUnguardedRelationships,
   findUnscannedAdminViews,
   type InheritedAccessReport,
@@ -135,6 +136,20 @@ const defaultAccessFileOf = (context: Context): string | undefined => {
     : path.join(path.dirname(manifest), ...DEFAULT_ACCESS_MODULE)
 }
 
+// The two defects the report can carry, named separately so the summary says which one was found
+// rather than counting them together under whichever wording came first.
+const summariseAccessFindings = (inherited: number, draftReads: number): string => {
+  const parts: readonly string[] = [
+    ...(inherited > 0
+      ? [`${String(inherited)} collection(s) or global(s) inherit Payload's default access`]
+      : []),
+    ...(draftReads > 0
+      ? [`${String(draftReads)} drafts read(s) serve an unapproved document to a stranger`]
+      : []),
+  ]
+  return parts.join('; ')
+}
+
 // The probe's outcome, once it ran: a report that was not printed, or not readable, is a failure of its
 // own rather than an empty finding list, because nothing else stands between a crashed probe and a pass.
 const judgeProbe = (result: RunResult): GateResult => {
@@ -145,13 +160,15 @@ const judgeProbe = (result: RunResult): GateResult => {
   if (report === undefined) {
     return failed('the access probe printed no readable report', asFindings(result.output))
   }
-  const findings: readonly string[] = findInheritedAccess(report)
+  const inherited: readonly string[] = findInheritedAccess(report)
+  const draftReads: readonly string[] = findUnconstrainedDraftReads(report)
+  const findings: readonly string[] = [...inherited, ...draftReads]
   return findings.length > 0
-    ? failed(
-        `${String(findings.length)} collection(s) or global(s) inherit Payload's default access`,
-        findings,
+    ? failed(summariseAccessFindings(inherited.length, draftReads.length), findings)
+    : passed(
+        'every collection and global decides its access, framework-built ones included, and no ' +
+          'drafts read serves an unapproved document to a stranger',
       )
-    : passed('every collection and global decides its access, framework-built ones included')
 }
 
 /**

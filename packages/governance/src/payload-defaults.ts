@@ -59,9 +59,29 @@ export interface InheritedAccessEntry {
   readonly inherited: readonly string[]
 }
 
+/**
+ * What a read rule answered an anonymous caller, as the probe observed it. `filtered` carries the
+ * query constraint the rule returned, which is the half `/api/access` reports and the anonymous sweep
+ * never opens; `undecidable` is a rule that threw when asked, which is reported rather than assumed
+ * safe.
+ */
+export type AnonymousRead =
+  | { readonly kind: 'denied' }
+  | { readonly kind: 'filtered'; readonly where: unknown }
+  | { readonly kind: 'open' }
+  | { readonly kind: 'undecidable'; readonly reason: string }
+
+/** One entity that keeps drafts, and what its read rule answers a caller with no credentials. */
+export interface DraftReadEntry {
+  readonly kind: PayloadSubjectKind
+  readonly slug: string
+  readonly anonymousRead: AnonymousRead
+}
+
 /** What the probe reports: every collection and every global, decided ones included. */
 export interface InheritedAccessReport {
   readonly collections: readonly InheritedAccessEntry[]
+  readonly draftReads: readonly DraftReadEntry[]
   readonly globals: readonly InheritedAccessEntry[]
 }
 
@@ -155,6 +175,102 @@ export const findInheritedAccess = (report: InheritedAccessReport): readonly str
   ...judge('global', report.globals),
 ]
 
+// The read a drafts-enabled entity grants a stranger.
+//
+// A draft is a document nobody has approved. Payload writes an unpublished save to the versions table
+// and leaves the main row alone, so a document that has never been published carries `_status: 'draft'`
+// in the row a plain list reads - which means an unconstrained read serves unapproved content through
+// the ordinary endpoint, not only through `?draft=true`.
+//
+// The static rule in payload-access.ts can only catch the inline spelling `read: (): boolean => true`,
+// and the shipped ESLint config forbids exactly that spelling in a config file, so a conforming project
+// writes `read: someHelper` and the static rule is blind to it. The anonymous sweep is blind too: it
+// separates a grant that carries a query constraint from one that does not, and never opens the
+// constraint to see what it constrains. Between the two, a read filtered by audience but not by status
+// passed everything. This is the rule that reads the constraint.
+
+/** The status Payload stamps on the version that is live. */
+const PUBLISHED_STATUS: string = 'published'
+
+/** The field Payload adds to an entity that keeps drafts. */
+const STATUS_FIELD: string = '_status'
+
+const declaresPublished = (where: Record<string, unknown>): boolean => {
+  const status: unknown = where[STATUS_FIELD]
+  return isRecord(status) && status['equals'] === PUBLISHED_STATUS
+}
+
+/**
+ * Whether a read filter admits published documents alone.
+ *
+ * A clause under `and` is enough on its own, because every conjunct holds. A clause under `or` counts
+ * only when EVERY branch carries one, because a single branch without it is a way in - which is the
+ * shape of the defect this rule exists for.
+ * @param where the query constraint the read rule returned.
+ * @returns whether every document the filter admits is a published one.
+ */
+export const requiresPublishedStatus = (where: unknown): boolean => {
+  if (!isRecord(where)) {
+    return false
+  }
+  if (declaresPublished(where)) {
+    return true
+  }
+  const conjuncts: unknown = where['and']
+  if (
+    isArray(conjuncts) &&
+    conjuncts.some((one: unknown): boolean => requiresPublishedStatus(one))
+  ) {
+    return true
+  }
+  const disjuncts: unknown = where['or']
+  return (
+    isArray(disjuncts) &&
+    disjuncts.length > 0 &&
+    disjuncts.every((one: unknown): boolean => requiresPublishedStatus(one))
+  )
+}
+
+const DRAFT_READ_REPAIR: string =
+  'a read that keeps unapproved work from a stranger either refuses them outright or filters on ' +
+  `${STATUS_FIELD} equals ${PUBLISHED_STATUS}`
+
+const describeDraftRead = (entry: DraftReadEntry): string | undefined => {
+  const subject: string = `${entry.kind} "${entry.slug}" keeps drafts and`
+  const read: AnonymousRead = entry.anonymousRead
+  if (read.kind === 'open') {
+    return (
+      `${subject} grants an unconditional anonymous read, so every unapproved document in it is ` +
+      `served to anyone; ${DRAFT_READ_REPAIR}`
+    )
+  }
+  if (read.kind === 'undecidable') {
+    return (
+      `${subject} its read rule could not be decided from the request alone (${read.reason}); an ` +
+      'access rule is a pure decision over the caller it is handed, so the harness can read it'
+    )
+  }
+  if (read.kind === 'filtered' && !requiresPublishedStatus(read.where)) {
+    return (
+      `${subject} filters its anonymous read without constraining ${STATUS_FIELD}, so an ` +
+      `unapproved document is served to anyone the filter admits; ${DRAFT_READ_REPAIR}`
+    )
+  }
+  return undefined
+}
+
+/**
+ * Every entity that keeps drafts and lets a stranger read something that was never approved, in
+ * configuration order.
+ * @param report what the probe read from the built configuration.
+ * @returns one finding per entity, or nothing when no drafts read admits an unapproved document.
+ */
+export const findUnconstrainedDraftReads = (report: InheritedAccessReport): readonly string[] =>
+  report.draftReads.flatMap((entry: DraftReadEntry): readonly string[] => {
+    const finding: string | undefined = describeDraftRead(entry)
+    return finding === undefined ? [] : [finding]
+  })
+
 const asEntry = (raw: unknown): InheritedAccessEntry | undefined => {
   if (!isRecord(raw)) {
     return undefined
@@ -178,6 +294,44 @@ const asEntries = (raw: unknown): readonly InheritedAccessEntry[] | undefined =>
   )
   return entries.every(
     (entry: InheritedAccessEntry | undefined): entry is InheritedAccessEntry => entry !== undefined,
+  )
+    ? entries
+    : undefined
+}
+
+const asAnonymousRead = (raw: unknown): AnonymousRead | undefined => {
+  const kind: unknown = readKey(raw, 'kind')
+  if (kind === 'denied') {
+    return { kind }
+  }
+  if (kind === 'open') {
+    return { kind }
+  }
+  if (kind === 'filtered') {
+    return { kind, where: readKey(raw, 'where') }
+  }
+  return kind === 'undecidable' ? { kind, reason: asText(readKey(raw, 'reason')) } : undefined
+}
+
+const asDraftRead = (raw: unknown): DraftReadEntry | undefined => {
+  const slug: unknown = readKey(raw, 'slug')
+  const kind: unknown = readKey(raw, 'kind')
+  const anonymousRead: AnonymousRead | undefined = asAnonymousRead(readKey(raw, 'anonymousRead'))
+  if (typeof slug !== 'string' || anonymousRead === undefined) {
+    return undefined
+  }
+  return kind === 'collection' || kind === 'global' ? { kind, slug, anonymousRead } : undefined
+}
+
+const asDraftReads = (raw: unknown): readonly DraftReadEntry[] | undefined => {
+  if (!isArray(raw)) {
+    return undefined
+  }
+  const entries: readonly (DraftReadEntry | undefined)[] = raw.map((entry: unknown) =>
+    asDraftRead(entry),
+  )
+  return entries.every(
+    (entry: DraftReadEntry | undefined): entry is DraftReadEntry => entry !== undefined,
   )
     ? entries
     : undefined
@@ -213,7 +367,13 @@ export const parseInheritedAccessReport = (text: string): InheritedAccessReport 
     readKey(parsed, 'collections'),
   )
   const globals: readonly InheritedAccessEntry[] | undefined = asEntries(readKey(parsed, 'globals'))
-  return collections === undefined || globals === undefined ? undefined : { collections, globals }
+  const draftReads: readonly DraftReadEntry[] | undefined = asDraftReads(
+    readKey(parsed, 'draftReads'),
+  )
+  if (collections === undefined || globals === undefined || draftReads === undefined) {
+    return undefined
+  }
+  return { collections, draftReads, globals }
 }
 
 /** Where a Payload member keeps its configuration when its tsconfig says nothing else. */

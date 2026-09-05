@@ -698,6 +698,29 @@ commit_case fail-jobs-default-access 'feat(fixture): queue a task and leave the 
     "$CONFORMING_BODY"
 expect fail-jobs-default-access payload-defaults FAIL payload-jobs
 
+# The defect the source rules and the anonymous sweep both passed: a drafts collection whose read
+# filters on something other than the status. Payload leaves the main row alone on an unpublished save,
+# so the ordinary list serves work nobody approved - no ?draft=true required.
+new_case fail-drafts-unconstrained-read
+replace_text "$scratch/fail-drafts-unconstrained-read/src/access/index.ts" \
+    "export const publishedOnly: Access = () => ({ _status: { equals: 'published' } })" \
+    "export const publishedOnly: Access = () => ({ title: { not_equals: '' } })"
+commit_case fail-drafts-unconstrained-read \
+    'feat(fixture): filter the drafts read without the status' "$CONFORMING_BODY"
+expect fail-drafts-unconstrained-read payload-defaults FAIL articles
+
+# The same collection with a read that admits anyone. The static rule cannot see this one either: it
+# matches the inline always-true spelling, and the shipped ESLint config forbids that spelling in a
+# config file, so a conforming project names a helper instead.
+new_case fail-drafts-open-read
+replace_text "$scratch/fail-drafts-open-read/src/collections/Articles.ts" \
+    "    read: publishedOnly," "    read: anyone,"
+replace_text "$scratch/fail-drafts-open-read/src/collections/Articles.ts" \
+    "import { nobody, publishedOnly } from '@/access'" "import { anyone, nobody } from '@/access'"
+commit_case fail-drafts-open-read \
+    'feat(fixture): open the drafts read to every caller' "$CONFORMING_BODY"
+expect fail-drafts-open-read payload-defaults FAIL articles
+
 # A required relationship gives one table a NOT NULL column against a foreign key Payload declares
 # ON DELETE SET NULL. The two contradict, so deleting the row being pointed AT aborts on a constraint
 # belonging to a table the caller never mentioned - unless that collection takes its dependants down

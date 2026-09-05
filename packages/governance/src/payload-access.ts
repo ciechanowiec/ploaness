@@ -173,9 +173,14 @@ const blockEnd = (access: string, open: number): number => {
 // collection itself were open to anyone.
 //
 // Only the inline form is decidable here, and the lint pass forbids that form in a config file, so a
-// conforming project writes `read: anyone` and this rule stays silent on it. What covers the conforming
-// case is the managed access-boundary sweep, which asks the running application what it grants rather
-// than reading the source. This rule reaches a config declared outside the linted directories.
+// conforming project writes `read: anyone` and this rule stays silent on it. This rule therefore
+// reaches only a config declared outside the linted directories.
+//
+// What covers the conforming case is `findUnconstrainedDraftReads` in payload-defaults.ts, which asks
+// the built configuration's own read rule what it answers a stranger and reads the constraint it hands
+// back. The anonymous sweep does NOT cover it: the sweep separates a grant carrying a query constraint
+// from one that does not, and never opens the constraint, so a read filtered by audience and not by
+// status passed it. That gap was open for as long as this comment claimed the sweep closed it.
 const isDraftExposed = (body: string): boolean => {
   const versions: string | undefined = depthOneValue(body, 'versions')
   if (versions === undefined || !DRAFTS_ENABLED.test(versions)) {

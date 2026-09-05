@@ -1,5 +1,6 @@
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { buildConfig } from 'payload'
+import { Articles } from '@/collections/Articles'
 import { Media } from '@/collections/Media'
 import { Posts } from '@/collections/Posts'
 import { Users } from '@/collections/Users'
@@ -14,7 +15,7 @@ const { payloadSecret, databaseUrl }: Environment = loadEnvironment()
 
 export default buildConfig({
   admin: { user: Users.slug },
-  collections: [Users, Media, Posts],
+  collections: [Users, Media, Posts, Articles],
   globals: [Header],
   folders: { collectionOverrides: [foldersAccess] },
   db: postgresAdapter({ pool: { connectionString: databaseUrl } }),

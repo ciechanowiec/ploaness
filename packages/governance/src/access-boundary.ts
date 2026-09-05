@@ -20,6 +20,11 @@
 // column that says who owns a row. A collection open to `create` with every field writable lets an
 // anonymous caller compose the whole document, ownership included - which is a forgery rather than a
 // creation, and passed both halves of the old sweep because neither looked.
+import {
+  COLLECTION_OPERATIONS,
+  READ_VERSIONS_OPERATION,
+  UNLOCK_OPERATION,
+} from './payload-defaults.js'
 import type { PublicAccess } from './settings.js'
 
 /**
@@ -65,8 +70,21 @@ export interface Granted {
  * A write is never a default a project should be able to reach by accident: Payload grants none of these
  * to an anonymous caller unless the project's own rule says so. `read` is judged too, but it is the one
  * a public site legitimately grants, which is what `publicAccess` exists to record.
+ *
+ * `readVersions` and `unlock` are judged for the reason `payload-defaults` demands they be decided at
+ * all. A version is the whole document, so a read narrowed to an audience is undone by asking for a
+ * version instead - and `readVersions: theSameHelperAsRead` reads as obviously right while handing a
+ * stranger everything the helper's filter was written to keep back. `unlock` clears the lockout an
+ * attempt cap just set. Payload reports both beside the four, and both were passing unlooked-at.
+ *
+ * Composed from the lists `payload-defaults.ts` already declares rather than restated here, so the two
+ * halves of the harness cannot drift into disagreeing about what an operation is called.
  */
-export const JUDGED_OPERATIONS: readonly string[] = ['create', 'read', 'update', 'delete']
+export const JUDGED_OPERATIONS: readonly string[] = [
+  ...COLLECTION_OPERATIONS,
+  READ_VERSIONS_OPERATION,
+  UNLOCK_OPERATION,
+]
 
 /** The path standing in for a `fields` map Payload collapsed, which grants every field at once. */
 const EVERY_FIELD: string = '*'
