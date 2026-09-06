@@ -41,11 +41,14 @@ ploaness governs all of the following domains:
   config, redeclares a Biome section, overrides a compiler option, or replaces the vitest or Playwright
   config fails this domain rather than passing quietly. So does one that redefines a pinned version
   through an install override, or silences the vulnerability gate through `pnpm.auditConfig`. A setting
-  may make the harness stricter and never looser. Never name an `@ploaness/...` package: every entry
-  point is re-exported through `ploaness` itself, and under the layout pnpm creates, a scoped package the
-  project does not depend on will not resolve. Where verification runs is the project's own decision and
-  no gate rules on it. `--enforce=false` prints findings and exits zero; a run in that mode is not a
-  pass, whoever started it.
+  may make the harness stricter and never looser. Import harness tools and configurations through
+  `ploaness`, which re-exports their entry points: under pnpm's layout, an internal `@ploaness/*`
+  package the project does not declare will not resolve. Application code imports production helpers
+  from `@ploaness/runtime`, which every application declares in `dependencies` at the same version as
+  its `ploaness` devDependency. This keeps the analyzer toolchain out of a production install; Layer 6
+  describes the runtime helpers. Where verification runs is the project's own decision and no gate
+  rules on it. `--enforce=false` prints findings and exits zero; a run in that mode is not a pass,
+  whoever started it.
 - **The two settings no check can verify:** `ploaness.pretest` and `ploaness.testWrapper` are arbitrary
   argv, and a wrapper that swallows its child's exit code is indistinguishable from one that does not
   until it runs. So the rule is stated here rather than enforced. The wrapper exists to put a database
