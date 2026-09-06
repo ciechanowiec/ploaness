@@ -5,7 +5,8 @@
 // reach is not (the MongoDB driver is Apache 2.0; the MongoDB server is SSPL). A package downloads a
 // binary at install or first run under terms its manifest never mentions (puppeteer fetches Chrome for
 // Testing). And a container image has no manifest at all, so nothing judged it: a compose file could pull
-// MinIO or Redis 8 through a harness that refuses an AGPL npm package.
+// MinIO or Redis 8 through a harness that refuses an AGPL npm package. Retired analyzers are also
+// refused when the harness already owns their checks.
 //
 // Every entry names the reason and the replacement, because a refusal that stops a build without saying
 // what to use instead sends the reader to the same search this table already did. Where a project turned
@@ -281,6 +282,12 @@ export const BLOCKED_IMAGES: readonly BlockedImage[] = [
 
 /** The npm packages ploaness refuses, in the order the report lists them. */
 export const BLOCKED_PACKAGES: readonly BlockedPackage[] = [
+  {
+    name: 'eslint-plugin-jsx-a11y',
+    reason:
+      'the retired JSX accessibility analyzer duplicates checks owned by the ploaness Oxlint gate',
+    replacement: 'the harness-owned oxlint gate; remove the legacy plugin dependency',
+  },
   {
     name: '@payloadcms/db-mongodb',
     reason: MONGODB_REASON,

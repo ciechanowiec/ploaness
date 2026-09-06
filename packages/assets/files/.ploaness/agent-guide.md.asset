@@ -56,7 +56,8 @@ ploaness governs all of the following domains:
   `ploaness format` still uses Biome and ESLint. The gate supplies its own configuration and explicit
   file list, disables nested configuration discovery, and checks the native report's file and rule
   counts. A missing executable or incomplete report fails. A consumer may not own an Oxlint config
-  or ignore file, or override the version the harness installs.
+  or ignore file, or override the version the harness installs. The `blocklist` gate refuses the
+  retired `eslint-plugin-jsx-a11y` package anywhere in the installed dependency graph.
   An Oxlint suppression names an exact `jsx-a11y/` rule, uses `oxlint-disable-next-line` or
   `oxlint-disable-line`, and carries a reason after `--`. File-wide directives are refused. Native
   directives count against the existing ceiling, and unused directives fail. Migrate old JSX-a11y

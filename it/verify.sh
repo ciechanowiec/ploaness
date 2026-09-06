@@ -374,6 +374,15 @@ printf '%s\n' '// oxlint-disable-next-line jsx-a11y/iframe-has-title -- delibera
 expect nested-a11y-ownership suppressions PASS
 expect_in nested-a11y-ownership apps/web suppressions FAIL 'suppression ceiling is 0'
 
+# An alias cannot revive the retired plugin: the real installed inventory reports its canonical name.
+new_case fail-retired-jsx-analyzer
+edit_json "$scratch/fail-retired-jsx-analyzer/package.json" devDependencies.retired-jsx-checker \
+    '"npm:eslint-plugin-jsx-a11y@6.10.2"'
+rm "$scratch/fail-retired-jsx-analyzer/node_modules"
+(cd "$scratch/fail-retired-jsx-analyzer" && pnpm install --silent >/dev/null)
+commit_case fail-retired-jsx-analyzer 'test(fixture): install the retired JSX analyzer through an alias' "$CONFORMING_BODY"
+expect fail-retired-jsx-analyzer blocklist FAIL 'retired JSX accessibility analyzer'
+
 # A real Next server executes the pinned sweep. Its default scan must catch accessible-name
 # defects that the static JSX rules cannot establish, and accept the corrected forms.
 (cd "$template" && pnpm exec playwright install chromium >/dev/null)

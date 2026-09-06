@@ -143,6 +143,17 @@ describe('refuseImage', (): void => {
 })
 
 describe('refusePackage', (): void => {
+  it.each(['6.10.2', '7.0.0'])('refuses the retired JSX analyzer at version %s', (version) => {
+    expect(refusePackage('eslint-plugin-jsx-a11y', version)?.replacement).toContain('oxlint gate')
+  })
+
+  it('keeps the retired package refusal specific to its identity', () => {
+    expect(refusePackage('oxlint', '1.81.0')).toBeUndefined()
+    expect(refusePackage('@biomejs/biome', '2.5.11')).toBeUndefined()
+    expect(refusePackage('eslint', '10.9.1')).toBeUndefined()
+    expect(refusePackage('eslint-plugin-jsx-a11y-x', '0.2.0')).toBeUndefined()
+  })
+
   it('refusesADriverWhoseOnlyServerIsNotOpenSource', (): void => {
     expect(refusePackage('mongoose', '8.5.1')?.replacement).toBe('@payloadcms/db-postgres')
     expect(refusePackage('@payloadcms/db-mongodb', '3.88.0')).toBeDefined()
