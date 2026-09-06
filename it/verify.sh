@@ -44,8 +44,9 @@ fi
 
 # Fixtures live under the home directory so a Docker-backed gate could mount them later: a macOS daemon
 # shares the home directory and need not share the system temporary directory, and an unshared source
-# mounts as an empty directory rather than as an error.
-scratch="$(mktemp -d "$HOME/.ploaness-it-XXXXXX")"
+# mounts as an empty directory rather than as an error. Keep the directory visible: the pinned Biome
+# scanner skips nested members when an ancestor such as .cache is hidden.
+scratch="$(mktemp -d "$HOME/ploaness-it-XXXXXX")"
 trap 'chmod -R u+w "$scratch" 2>/dev/null || true; rm -rf "$scratch" 2>/dev/null || true' EXIT INT TERM
 
 template="$scratch/template"
@@ -314,6 +315,21 @@ printf '%s\n' '// eslint-disable-next-line alt-text -- an unqualified alias must
 commit_case fail-legacy-native-suppression 'test(fixture): try an unqualified legacy JSX exception' "$CONFORMING_BODY"
 expect fail-legacy-native-suppression oxlint FAIL 'use a named, explained Oxlint'
 
+# The native unused-directive reporter also reads ESLint comments. Their real owner still runs.
+new_case pass-foreign-suppression
+printf '%s\n' '// eslint-disable-next-line @typescript-eslint/typedef -- infer this fixture literal to exercise ownership' \
+    'export const answer = 1' > "$scratch/pass-foreign-suppression/src/Typed.tsx"
+commit_case pass-foreign-suppression 'test(fixture): retain a typed ESLint exception' "$CONFORMING_BODY"
+expect pass-foreign-suppression oxlint PASS
+expect pass-foreign-suppression eslint PASS
+replace_text "$scratch/pass-foreign-suppression/src/Typed.tsx" 'export const answer = 1' 'export const answer: number = 1'
+expect pass-foreign-suppression eslint FAIL 'Unused eslint-disable directive'
+replace_text "$scratch/pass-foreign-suppression/src/Typed.tsx" 'export const answer: number = 1' 'export const answer = 1'
+printf '%s\n' '// oxlint-disable-next-line jsx-a11y/iframe-has-title -- deliberately leave an unused native exception' \
+    'export const frame = <iframe title="External content" src="/frame" />' \
+    >> "$scratch/pass-foreign-suppression/src/Typed.tsx"
+expect pass-foreign-suppression oxlint FAIL 'Unused oxlint-disable'
+
 new_case fail-oxlint-override
 edit_json "$scratch/fail-oxlint-override/package.json" pnpm.overrides.oxlint '"1.80.0"'
 commit_case fail-oxlint-override 'test(fixture): try to replace the native analyzer pin' "$CONFORMING_BODY"
@@ -329,6 +345,34 @@ expect_command biome-a11y-ownership PASS 'Checked 1 file' \
     "$root/packages/cli/node_modules/.bin/biome" lint --error-on-warnings src/Frame.tsx
 expect_command biome-a11y-ownership FAIL 'lint/a11y/useIframeTitle' \
     "$root/packages/cli/node_modules/.bin/biome" lint --error-on-warnings src/frame.html
+
+# Nested applications delegate the same rules; a sibling library retains core Biome ownership.
+new_case nested-a11y-ownership
+node "$lib/make-workspace.ts" "$scratch/nested-a11y-ownership"
+(cd "$scratch/nested-a11y-ownership" && ./node_modules/.bin/ploaness init >/dev/null)
+mkdir -p "$scratch/nested-a11y-ownership/packages/ui/src"
+printf '%s\n' 'export const frame = <iframe src="/frame" />' \
+    > "$scratch/nested-a11y-ownership/apps/web/src/Frame.tsx"
+printf '%s\n' '<iframe src="/frame"></iframe>' \
+    > "$scratch/nested-a11y-ownership/apps/web/src/frame.html"
+cp "$scratch/nested-a11y-ownership/apps/web/src/Frame.tsx" "$scratch/nested-a11y-ownership/packages/ui/src/Frame.tsx"
+commit_case nested-a11y-ownership 'test(fixture): distinguish nested JSX owners' "$CONFORMING_BODY"
+expect_command nested-a11y-ownership/apps/web PASS 'Checked 1 file' \
+    "$root/packages/cli/node_modules/.bin/biome" lint --error-on-warnings src/Frame.tsx
+expect_in nested-a11y-ownership apps/web oxlint FAIL 'jsx-a11y(iframe-has-title)'
+expect_command nested-a11y-ownership/apps/web FAIL 'lint/a11y/useIframeTitle' \
+    "$root/packages/cli/node_modules/.bin/biome" lint --error-on-warnings src/frame.html
+expect_command nested-a11y-ownership/packages/ui FAIL 'lint/a11y/useIframeTitle' \
+    "$root/packages/cli/node_modules/.bin/biome" lint --error-on-warnings src/Frame.tsx
+
+# A package cannot spend its siblings' exceptions or receive a larger ceiling from their source.
+edit_json "$scratch/nested-a11y-ownership/package.json" ploaness.maxSuppressions 0
+edit_json "$scratch/nested-a11y-ownership/apps/web/package.json" ploaness.maxSuppressions 0
+printf '%s\n' '// oxlint-disable-next-line jsx-a11y/iframe-has-title -- deliberate member-scoped fixture exception' \
+    'export const frame = <iframe src="/frame" />' \
+    > "$scratch/nested-a11y-ownership/apps/web/src/Frame.tsx"
+expect nested-a11y-ownership suppressions PASS
+expect_in nested-a11y-ownership apps/web suppressions FAIL 'suppression ceiling is 0'
 
 # A real Next server executes the pinned sweep. Its default scan must catch accessible-name
 # defects that the static JSX rules cannot establish, and accept the corrected forms.

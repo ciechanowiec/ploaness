@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isEslintOwnedSuppression,
   isOxlintSuppression,
   oxlintSuppressionProblems,
   type SourceComment,
@@ -15,6 +16,7 @@ describe('native accessibility suppression policy', () => {
       `// ${NATIVE}-${scope} jsx-a11y/alt-text -- supplied by the adapter`,
     )
     expect(isOxlintSuppression(source)).toBe(true)
+    expect(isEslintOwnedSuppression(source)).toBe(false)
     expect(oxlintSuppressionProblems([source])).toEqual([])
   })
 
@@ -57,7 +59,9 @@ describe('native accessibility suppression policy', () => {
     `${LEGACY}-next-line no-console,alt-text -- reason`,
     'eslint jsx-a11y/alt-text: off',
   ])('refuses compatibility syntax that could hide the native rule: %s', (directive) => {
-    expect(oxlintSuppressionProblems([comment(`/* ${directive} */`)])).not.toEqual([])
+    const source: SourceComment = comment(`/* ${directive} */`)
+    expect(isEslintOwnedSuppression(source)).toBe(false)
+    expect(oxlintSuppressionProblems([source])).not.toEqual([])
   })
 
   it('leaves another analyzer narrowly scoped to its own rules', () => {
@@ -65,6 +69,7 @@ describe('native accessibility suppression policy', () => {
       `// ${LEGACY}-next-line functional/no-let -- parser cursor`,
     )
     expect(isOxlintSuppression(source)).toBe(false)
+    expect(isEslintOwnedSuppression(source)).toBe(true)
     expect(oxlintSuppressionProblems([source])).toEqual([])
   })
 

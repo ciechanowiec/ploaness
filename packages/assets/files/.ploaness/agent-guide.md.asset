@@ -60,7 +60,8 @@ ploaness governs all of the following domains:
   An Oxlint suppression names an exact `jsx-a11y/` rule, uses `oxlint-disable-next-line` or
   `oxlint-disable-line`, and carries a reason after `--`. File-wide directives are refused. Native
   directives count against the existing ceiling, and unused directives fail. Migrate old JSX-a11y
-  ESLint directives to this syntax; directives for other ESLint rules remain with ESLint.
+  ESLint directives to this syntax; directives for other ESLint rules remain with ESLint, which
+  judges their validity and unused status.
   Static analysis does not establish a rendered accessible name or keyboard behavior. The managed
   browser sweep and the application's interaction and access tests remain mandatory.
 - **The two settings no check can verify:** `ploaness.pretest` and `ploaness.testWrapper` are arbitrary

@@ -67,3 +67,76 @@ describe('the owned invocation', () => {
     expect(arguments_).not.toContain('--fix')
   })
 })
+
+const foreignDiagnostic = (
+  changes: Readonly<Record<string, unknown>> = {},
+): Record<string, unknown> => ({
+  message: 'Unused eslint-disable directive (no problems were reported).',
+  severity: 'error',
+  filename: 'src/Typed.tsx',
+  labels: [{ span: { line: 7 } }],
+  ...changes,
+})
+
+const legacy: readonly { readonly file: string; readonly line: number }[] = [
+  { file: 'src/Typed.tsx', line: 7 },
+]
+
+describe('one owner for unused directives', () => {
+  it('leaves only a parser-confirmed foreign directive to ESLint', () => {
+    expect(
+      oxlintReportProblems(report({ diagnostics: [foreignDiagnostic()] }), 2, 31, {
+        exitCode: 1,
+        legacy,
+      }),
+    ).toEqual([])
+  })
+
+  it.each([
+    { filename: 'src/Other.tsx' },
+    { labels: [{ span: { line: 8 } }] },
+    { labels: undefined },
+    { code: 'jsx-a11y(alt-text)' },
+    { severity: 'warning' },
+    { message: 'Unused oxlint-disable directive (no problems were reported).' },
+  ])('refuses a diagnostic without the exact foreign owner and location: %s', (changes) => {
+    expect(
+      oxlintReportProblems(report({ diagnostics: [foreignDiagnostic(changes)] }), 2, 31, {
+        exitCode: 1,
+        legacy,
+      }),
+    ).not.toEqual([])
+  })
+
+  it('keeps a native finding beside a foreign directive', () => {
+    const output: string = report({
+      diagnostics: [
+        foreignDiagnostic(),
+        {
+          message: 'missing alt',
+          filename: 'src/Typed.tsx',
+          code: 'jsx-a11y(alt-text)',
+          severity: 'error',
+        },
+      ],
+    })
+    expect(oxlintReportProblems(output, 2, 31, { exitCode: 1, legacy }).join(' ')).toContain(
+      'missing alt',
+    )
+  })
+
+  it.each([1, 2, 124, 127])('refuses an unexplained nonzero process status: %s', (exitCode) => {
+    expect(oxlintReportProblems(report(), 2, 31, { exitCode, legacy }).join(' ')).toContain(
+      'exited with status',
+    )
+  })
+
+  it('refuses a process failure even when a foreign diagnostic is present', () => {
+    expect(
+      oxlintReportProblems(report({ diagnostics: [foreignDiagnostic()] }), 2, 31, {
+        exitCode: 2,
+        legacy,
+      }).join(' '),
+    ).toContain('exited with status')
+  })
+})

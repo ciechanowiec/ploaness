@@ -56,9 +56,15 @@ const isLegacySuppression = (body: string): boolean => {
   ].includes(declaration)
   const hasNativeRule: boolean = declaration
     .split(/[\s,:]+/u)
-    .some((name: string): boolean => LEGACY_RULES.has(name))
+    .some((name: string): boolean => LEGACY_RULES.has(name) || name.startsWith('jsx-a11y/'))
   const isInline: boolean = body.startsWith(`${LEGACY} `) && hasNativeRule
   return isInline || (isLegacy && (isBlanket || hasNativeRule))
+}
+
+/** A narrow directive for another ESLint rule remains that analyzer's responsibility. */
+export const isEslintOwnedSuppression = (comment: SourceComment): boolean => {
+  const body: string = commentBody(comment.text)
+  return body.startsWith(`${LEGACY}-${DISABLE}`) && !isLegacySuppression(body)
 }
 
 /**

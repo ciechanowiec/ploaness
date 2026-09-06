@@ -20,7 +20,7 @@ import {
   type SuppressionReport,
   type SuppressionSite,
 } from '@ploaness/governance'
-import { type Context, workingTreeFiles } from '../context.js'
+import { type Member, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 import { sourceComments } from '../source-comments.js'
 import { managedPaths } from './assets.js'
@@ -49,7 +49,7 @@ const sitesOf = (scanned: ScannedFile): readonly SuppressionSite[] => [
 ]
 
 /** Count suppressions and source lines across the project's own code. */
-export const suppressions = (context: Context): GateResult => {
+export const suppressions = (context: Member): GateResult => {
   const excluded: readonly string[] = context.settings.typographyExclusions
   // A managed file is ploaness's, byte for byte, and the project can neither remove a suppression
   // inside it nor be asked to justify one. Its lines are left out of the denominator for the same
@@ -58,7 +58,7 @@ export const suppressions = (context: Context): GateResult => {
   // An enumerated path is not always a regular file: a symlink and a submodule gitlink both appear here.
   const inventory: readonly string[] = workingTreeFiles(context.root)
   const jsx: ReadonlySet<string> = new Set(
-    jsxAccessibilityFiles(inventory, context.settings.generatedArtefacts, []),
+    jsxAccessibilityFiles(inventory, context.settings.generatedArtefacts, context.siblingPaths),
   )
   const files: readonly string[] = inventory.filter((file: string): boolean => {
     const full: string = path.join(context.root, file)

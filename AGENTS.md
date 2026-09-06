@@ -442,7 +442,10 @@ unrelated element still fails. Executable consumer fixtures cover both sides, al
 the rule set. The CLI resolves its own Oxlint installation, writes its configuration outside the
 consumer tree, and verifies the actual file and rule counts. Configuration discovery and ignore files
 cannot narrow the explicit target list. Suppression comments are parsed as source, require a named
-rule and reason, and spend the existing budget; strings and JSX text are not directives.
+rule and reason, and spend the existing budget; strings and JSX text are not directives. The native
+unused-directive reporter also judges ESLint comments. Only reports tied to a parser-confirmed
+comment for a foreign ESLint rule are delegated back to ESLint; unknown diagnostics and unexplained
+nonzero exits still fail.
 
 A library retains its existing Biome policy because this migration moves the application checks.
 Other analyzer families are unchanged. Native fixers are not part of `ploaness format`.

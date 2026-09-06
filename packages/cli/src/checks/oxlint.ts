@@ -4,13 +4,16 @@ import path from 'node:path'
 import {
   asRecord,
   asText,
+  isEslintOwnedSuppression,
   isOxlintConfig,
   JSX_ACCESSIBILITY_RULES,
   jsxAccessibilityFiles,
+  type OxlintLegacySite,
   oxlintAccessibilityConfig,
   oxlintArguments,
   oxlintReportProblems,
   oxlintSuppressionProblems,
+  type SourceComment,
 } from '@ploaness/governance'
 import {
   cliDirectory,
@@ -53,14 +56,27 @@ const suppressionProblems = (member: Member, files: readonly string[]): readonly
     return problems.map((problem: string): string => `${file}: ${problem}`)
   })
 
-const nativeVerdict = (result: RunResult, files: number): GateResult => {
+const legacySitesIn = (member: Member, files: readonly string[]): readonly OxlintLegacySite[] =>
+  files.flatMap((file: string): readonly OxlintLegacySite[] => {
+    const text: string = readFileSync(path.join(member.root, file), 'utf8')
+    return sourceComments(text)
+      .filter(isEslintOwnedSuppression)
+      .map((comment: SourceComment): OxlintLegacySite => ({ file, line: comment.line }))
+  })
+
+const nativeVerdict = (
+  result: RunResult,
+  files: number,
+  legacy: readonly OxlintLegacySite[],
+): GateResult => {
   const findings: readonly string[] = oxlintReportProblems(
     result.stdout,
     files,
     JSX_ACCESSIBILITY_RULES.length,
+    { exitCode: result.code, legacy },
   )
   return withOutput(
-    result.code === 0 && findings.length === 0
+    findings.length === 0
       ? passed(
           `${String(files)} JSX file(s) pass ${String(JSX_ACCESSIBILITY_RULES.length)} accessibility rules`,
         )
@@ -77,9 +93,11 @@ const analyze = (member: Member, files: readonly string[]): GateResult => {
   try {
     const config: string = path.join(directory, 'oxlint.json')
     writeFileSync(config, `${JSON.stringify(oxlintAccessibilityConfig(), null, JSON_INDENT)}\n`)
+    const legacy: readonly OxlintLegacySite[] = legacySitesIn(member, files)
     return nativeVerdict(
       runNode(resolveTool('oxlint'), [...oxlintArguments(config, files)], { cwd: member.root }),
       files.length,
+      legacy,
     )
   } finally {
     rmSync(directory, { recursive: true, force: true })
