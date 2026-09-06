@@ -256,8 +256,8 @@ probe_part_two='X2tleV93aXRoX2VudHJvcHk'
 
 # A declared focused subset for iterating on the new analyzer; the default run remains complete.
 case "${1-}" in
-    ''|--jsx-only) ;;
-    *) echo 'usage: verify.sh [--jsx-only]' >&2; exit 1 ;;
+    ''|--jsx-only|--native-only) ;;
+    *) echo 'usage: verify.sh [--jsx-only|--native-only]' >&2; exit 1 ;;
 esac
 
 # The pass case: the untouched scaffold must satisfy every gate that judges a project's own shape.
@@ -268,6 +268,21 @@ expect pass preflight PASS
 expect pass wiring PASS
 expect pass assets PASS
 expect pass oxlint PASS
+new_case native-contracts
+commit_case native-contracts 'test(fixture): establish native core conformance cases' "$CONFORMING_BODY"
+expect_command native-contracts PASS '30 native source and suppression contracts passed' \
+    node "$lib/oxlint-conformance.ts" "$here/fixtures/oxlint-core.json" \
+    "$scratch/native-contracts/node_modules/.bin/ploaness"
+
+if [ "${1-}" = --native-only ]; then
+    if [ "$failures" -ne 0 ]; then
+        echo "$failures native fixture assertion(s) failed" >&2
+        exit 1
+    fi
+    echo 'native core fixture contracts passed'
+    exit 0
+fi
+
 new_case jsx-contracts
 commit_case jsx-contracts 'test(fixture): establish native JSX conformance cases' "$CONFORMING_BODY"
 expect_command jsx-contracts PASS '70 JSX detection and valid-markup contracts passed' \
@@ -373,6 +388,20 @@ printf '%s\n' '// oxlint-disable-next-line jsx-a11y/iframe-has-title -- delibera
     > "$scratch/nested-a11y-ownership/apps/web/src/Frame.tsx"
 expect nested-a11y-ownership suppressions PASS
 expect_in nested-a11y-ownership apps/web suppressions FAIL 'suppression ceiling is 0'
+
+# Core policy reaches libraries and hidden tooling while member budgets remain separate.
+expect_in nested-a11y-ownership packages/ui oxlint PASS '2 native rules'
+mkdir -p "$scratch/nested-a11y-ownership/packages/ui/.storybook"
+printf '%s\n' '// oxlint-disable-next-line eslint/no-promise-executor-return -- deliberate library exception' \
+    'export const value = new Promise(() => 1)' \
+    > "$scratch/nested-a11y-ownership/packages/ui/.storybook/preview.ts"
+edit_json "$scratch/nested-a11y-ownership/packages/ui/package.json" ploaness.maxSuppressions 0
+expect nested-a11y-ownership suppressions PASS
+expect_in nested-a11y-ownership packages/ui oxlint PASS '2 native rules'
+expect_in nested-a11y-ownership packages/ui suppressions FAIL 'suppression ceiling is 0'
+printf '%s\n' 'export const value = new Promise(() => 1)' \
+    > "$scratch/nested-a11y-ownership/packages/ui/.storybook/preview.ts"
+expect_in nested-a11y-ownership packages/ui oxlint FAIL 'eslint(no-promise-executor-return)'
 
 # An alias cannot revive the retired plugin: the real installed inventory reports its canonical name.
 new_case fail-retired-jsx-analyzer
@@ -930,9 +959,21 @@ cat > "$scratch/format-converges/src/lib/trim.ts" <<'FIXTURE'
 export const dropLast = (values: readonly number[]): readonly number[] =>
   values.slice(0, values.length - 1)
 FIXTURE
+cat > "$scratch/format-converges/src/lib/promise.ts" <<'FIXTURE'
+/**
+ * Resolve a value without returning the ignored result of a Promise executor.
+ * @param value - the number to resolve.
+ * @returns the resolved number.
+ */
+export const resolved = (value: number): Promise<number> =>
+  new Promise<number>((resolve): void => {
+    resolve(value)
+  })
+FIXTURE
 commit_case format-converges 'feat(fixture): add a value a fixer rewrites' "$CONFORMING_BODY"
 (cd "$scratch/format-converges" && ./node_modules/.bin/ploaness format >/dev/null 2>&1)
 expect format-converges biome PASS
+expect format-converges oxlint PASS
 
 # A range on a package a gate depends on lets an upstream release change a verdict while the project
 # stays unchanged, which is what pinning the toolchain exists to prevent.

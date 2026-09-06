@@ -125,7 +125,13 @@ const DEFAULT_GATES: readonly Gate[] = [
     isExtended: false,
     run: biomeSchema,
   },
-  { id: 'oxlint', scope: 'package', title: 'JSX accessibility', isExtended: false, run: oxlint },
+  {
+    id: 'oxlint',
+    scope: 'package',
+    title: 'Native JavaScript and TypeScript rules',
+    isExtended: false,
+    run: oxlint,
+  },
   { id: 'eslint', scope: 'package', title: 'type-aware lint', isExtended: false, run: eslint },
   {
     id: 'conventions',

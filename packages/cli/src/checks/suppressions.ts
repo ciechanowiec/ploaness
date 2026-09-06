@@ -13,9 +13,9 @@ import {
   hasExtension,
   isGovernedCode,
   isOxlintSuppression,
-  JSX_EXTENSIONS,
-  jsxAccessibilityFiles,
   judgeSuppressions,
+  OXLINT_EXTENSIONS,
+  oxlintSourceFiles,
   type SourceComment,
   type SuppressionReport,
   type SuppressionSite,
@@ -35,8 +35,8 @@ const isUnderSourceRoots = (file: string, sourceRoots: readonly string[]): boole
 
 const sitesOf = (scanned: ScannedFile): readonly SuppressionSite[] => [
   ...findSuppressions(scanned.file, scanned.content),
-  ...(hasExtension(scanned.file, JSX_EXTENSIONS)
-    ? sourceComments(scanned.content)
+  ...(hasExtension(scanned.file, OXLINT_EXTENSIONS)
+    ? sourceComments(scanned.content, scanned.file)
         .filter(isOxlintSuppression)
         .map(
           (comment: SourceComment): SuppressionSite => ({
@@ -48,28 +48,38 @@ const sitesOf = (scanned: ScannedFile): readonly SuppressionSite[] => [
     : []),
 ]
 
-/** Count suppressions and source lines across the project's own code. */
-export const suppressions = (context: Member): GateResult => {
-  const excluded: readonly string[] = context.settings.typographyExclusions
-  // A managed file is ploaness's, byte for byte, and the project can neither remove a suppression
-  // inside it nor be asked to justify one. Its lines are left out of the denominator for the same
-  // reason: a ceiling earned by code the project did not write would be an allowance, not a measure.
+const eligibleFiles = (
+  context: Member,
+  inventory: readonly string[],
+  native: ReadonlySet<string>,
+): readonly string[] => {
   const managed: ReadonlySet<string> = managedPaths(context)
-  // An enumerated path is not always a regular file: a symlink and a submodule gitlink both appear here.
-  const inventory: readonly string[] = workingTreeFiles(context.root)
-  const jsx: ReadonlySet<string> = new Set(
-    jsxAccessibilityFiles(inventory, context.settings.generatedArtefacts, context.siblingPaths),
-  )
-  const files: readonly string[] = inventory.filter((file: string): boolean => {
+  const excluded: readonly string[] = context.settings.typographyExclusions
+  return inventory.filter((file: string): boolean => {
     const full: string = path.join(context.root, file)
     return (
-      (isUnderSourceRoots(file, context.settings.sourceRoots) || jsx.has(file)) &&
+      (hasExtension(file, OXLINT_EXTENSIONS)
+        ? native.has(file)
+        : isUnderSourceRoots(file, context.settings.sourceRoots)) &&
       !managed.has(file) &&
       isGovernedCode(file, excluded) &&
       existsSync(full) &&
       statSync(full).isFile()
     )
   })
+}
+
+/** Count suppressions and source lines across the project's own code. */
+export const suppressions = (context: Member): GateResult => {
+  // A managed file is ploaness's, byte for byte, and the project can neither remove a suppression
+  // inside it nor be asked to justify one. Its lines are left out of the denominator for the same
+  // reason: a ceiling earned by code the project did not write would be an allowance, not a measure.
+  // An enumerated path is not always a regular file: a symlink and a submodule gitlink both appear here.
+  const inventory: readonly string[] = workingTreeFiles(context.root)
+  const native: ReadonlySet<string> = new Set(
+    oxlintSourceFiles(inventory, context.settings.generatedArtefacts, context.siblingPaths),
+  )
+  const files: readonly string[] = eligibleFiles(context, inventory, native)
 
   // Read once, then derive both figures from the same contents rather than accumulating as we go.
   const contents: readonly ScannedFile[] = files.map(

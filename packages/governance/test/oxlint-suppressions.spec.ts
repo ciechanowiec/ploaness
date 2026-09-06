@@ -64,14 +64,15 @@ describe('native accessibility suppression policy', () => {
     expect(oxlintSuppressionProblems([source])).not.toEqual([])
   })
 
-  it('leaves another analyzer narrowly scoped to its own rules', () => {
-    const source: SourceComment = comment(
-      `// ${LEGACY}-next-line functional/no-let -- parser cursor`,
-    )
-    expect(isOxlintSuppression(source)).toBe(false)
-    expect(isEslintOwnedSuppression(source)).toBe(true)
-    expect(oxlintSuppressionProblems([source])).toEqual([])
-  })
+  it.each(['disable-next-line', 'enable'])(
+    'leaves foreign %s directives with their analyzer',
+    (form) => {
+      const source: SourceComment = comment(`// eslint-${form} functional/no-let -- parser cursor`)
+      expect(isOxlintSuppression(source)).toBe(false)
+      expect(isEslintOwnedSuppression(source)).toBe(true)
+      expect(oxlintSuppressionProblems([source])).toEqual([])
+    },
+  )
 
   it('does not treat ordinary explanatory prose as a directive', () => {
     expect(oxlintSuppressionProblems([comment('// The native checker owns this rule.')])).toEqual(
@@ -84,4 +85,38 @@ describe('native accessibility suppression policy', () => {
     expect(isOxlintSuppression(source)).toBe(false)
     expect(oxlintSuppressionProblems([source])).not.toEqual([])
   })
+})
+
+describe('file-specific native suppression ownership', () => {
+  const core: readonly string[] = ['eslint/no-promise-executor-return', 'import/no-absolute-path']
+
+  it.each(core)('accepts a canonical active core rule: %s', (rule) => {
+    expect(
+      oxlintSuppressionProblems(
+        [comment(`// ${NATIVE}-next-line ${rule} -- intentional fixture`)],
+        core,
+      ),
+    ).toEqual([])
+  })
+
+  it.each(['jsx-a11y/alt-text', 'no-promise-executor-return', 'no-absolute-path'])(
+    'rejects inactive rules and compatibility aliases: %s',
+    (rule) => {
+      expect(
+        oxlintSuppressionProblems(
+          [comment(`// ${NATIVE}-next-line ${rule} -- intentional fixture`)],
+          core,
+        ).join(' '),
+      ).toContain('active for this file')
+    },
+  )
+
+  it.each([...core, 'no-promise-executor-return', 'no-absolute-path'])(
+    'rejects legacy syntax targeting a native owner: %s',
+    (rule) => {
+      const source: SourceComment = comment(`// ${LEGACY}-next-line ${rule} -- intentional fixture`)
+      expect(isEslintOwnedSuppression(source)).toBe(false)
+      expect(oxlintSuppressionProblems([source], core)).not.toEqual([])
+    },
+  )
 })

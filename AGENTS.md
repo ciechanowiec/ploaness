@@ -39,6 +39,7 @@ CLI holding nothing but `readFileSync` and a call.
   everyday work; it is not a verdict.
 - `pnpm run it` - runs the consumer fixtures against the packed tarballs. Run this whenever a rule, the
   scaffolder, or the packaging changes. Run `pnpm run pack:local` first.
+- `sh it/verify.sh --native-only` - the packed core semantics and suppression contracts; a diagnostic subset.
 - `sh it/verify.sh --jsx-only` - the packed JSX and browser-name contracts; a diagnostic subset.
 - `pnpm run pack:local` - packs the tarballs into `dist-tarballs/` without running the fixtures.
 - `pnpm run format` - applies the formatting `pnpm run lint` judges.
@@ -429,7 +430,7 @@ formatting for the whole run. One stylesheet, passing `css` and unparseable to `
 teaches the parser a dialect and turns no rule off, which is why it is not a relaxation - the same
 reasoning that admitted the at-rules to stylelint, applied where it was missing.
 
-### One owner for application JSX accessibility
+### Explicit native coverage with one owner per rule
 
 The native `oxlint` gate owns application JSX accessibility. The registry in
 `packages/governance/src/jsx-accessibility.ts` declares the rule names, semantic options, and Biome
@@ -447,8 +448,33 @@ unused-directive reporter also judges ESLint comments. Only reports tied to a pa
 comment for a foreign ESLint rule are delegated back to ESLint; unknown diagnostics and unexplained
 nonzero exits still fail.
 
-A library retains its existing Biome policy because this migration moves the application checks.
-Other analyzer families are unchanged. Native fixers are not part of `ploaness format`.
+The core registry in `packages/governance/src/oxlint-policy.ts` adds two validated gaps:
+`eslint/no-promise-executor-return` with `allowVoid: false`, and `import/no-absolute-path` for ESM.
+CommonJS and AMD detection are disabled because a locally defined `require` is not a module loader.
+Authored JS/TS files, including hidden tooling and files outside source roots, receive these rules.
+Declarations, build outputs, Payload-generated artefacts, declared generated roles, and siblings are
+excluded. Framework glue remains authored source. Disjoint groups receive either two core checks or
+those two plus the existing 31 application JSX checks; every report states its own file/rule counts.
+Libraries receive core checks and retain Biome accessibility. Suppressions must name canonical rules
+active for that file; compatibility aliases cannot bypass the native owner. Their budget covers the
+same authored source without counting managed files or siblings. Process output outside the native
+JSON report fails even beside an ESLint-owned unused-directive report.
+Native fixers are not part of `ploaness format`.
+
+Expansion is based on additional coverage and valid-code probes, not category-wide enablement. Pinned
+Oxlint 1.81.0 candidates held after those probes include:
+
+- `oxc/number-arg-out-of-range`: `(1.25).toFixed(100)` is valid but rejected.
+- `unicorn/require-post-message-target-origin`: `worker.postMessage('hello')` needs no window origin.
+- `eslint/no-unmodified-loop-condition`: a registered callback may change the loop condition.
+- `vitest/require-awaited-expect-poll`: returned poll assertions and `await Promise.all` are valid.
+- `react/checked-requires-onchange-or-readonly`: disabled controlled inputs can legitimately omit handlers.
+- `react/void-use-memo` and `react/forward-ref-uses-ref`: local names can be mistaken for React APIs.
+- `oxc/const-comparisons`: repeated property reads can invoke getters with different results.
+
+Equivalent checks retain their existing owners, including regex flags, character comparisons,
+recursive-only parameters, multiple Promise resolutions, and nested React components. These holds
+are evidence boundaries for this batch, not a claim that every other native rule is unsuitable.
 
 ### The static half of Web Vitals is a lint rule, and the measured half is not a gate
 

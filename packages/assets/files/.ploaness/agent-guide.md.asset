@@ -49,20 +49,26 @@ ploaness governs all of the following domains:
   describes the runtime helpers. Where verification runs is the project's own decision and no gate
   rules on it. `--enforce=false` prints findings and exits zero; a run in that mode is not a pass,
   whoever started it.
-- **Application JSX accessibility:** the `oxlint` gate owns the 31 checks in the harness's
+- **Native JS/TS rules and application JSX accessibility:** the `oxlint` gate adds
+  `eslint/no-promise-executor-return` (with `allowVoid: false`) and ESM `import/no-absolute-path`
+  to authored JS/TS in every member, including hidden tooling and files outside source roots.
+  Declarations, build outputs, generated artefacts, and sibling members are excluded; authored
+  framework glue remains in scope. CommonJS and AMD calls are outside the import rule because local
+  helpers can share their names. The gate also owns the 31 checks in the harness's
   accessibility registry. Biome delegates those checks only for the same application JSX/TSX scope;
   its HTML checks, its library policy, and its complementary rules remain active. ESLint retains
   typed and specialized checks and does not load the former JSX-a11y plugin. Oxlint is lint-only:
   `ploaness format` still uses Biome and ESLint. The gate supplies its own configuration and explicit
   file list, disables nested configuration discovery, and checks the native report's file and rule
-  counts. A missing executable or incomplete report fails. A consumer may not own an Oxlint config
-  or ignore file, or override the version the harness installs. The `blocklist` gate refuses the
+  counts separately for core-only and application JSX groups. A missing executable or incomplete
+  report fails. A consumer may not own an Oxlint config or ignore file, or override the version
+  the harness installs. The `blocklist` gate refuses the
   retired `eslint-plugin-jsx-a11y` package anywhere in the installed dependency graph.
-  An Oxlint suppression names an exact `jsx-a11y/` rule, uses `oxlint-disable-next-line` or
-  `oxlint-disable-line`, and carries a reason after `--`. File-wide directives are refused. Native
-  directives count against the existing ceiling, and unused directives fail. Migrate old JSX-a11y
-  ESLint directives to this syntax; directives for other ESLint rules remain with ESLint, which
-  judges their validity and unused status.
+  An Oxlint suppression names an exact canonical rule active for the file, uses
+  `oxlint-disable-next-line` or `oxlint-disable-line`, and carries a reason after `--`. File-wide directives are refused. Native
+  directives count against the existing ceiling, and unused directives fail. Migrate ESLint directives
+  targeting native-owned rules to this syntax; directives for other ESLint rules remain with ESLint,
+  which judges their validity and unused status.
   Static analysis does not establish a rendered accessible name or keyboard behavior. The managed
   browser sweep and the application's interaction and access tests remain mandatory.
 - **The two settings no check can verify:** `ploaness.pretest` and `ploaness.testWrapper` are arbitrary
@@ -442,7 +448,7 @@ rewrite a tracked file.
 | `types` | package | `tsc --noEmit`. |
 | `biome` | package | Formatting and the fast lint pass. |
 | `biome-schema` | repository | The `$schema` in `biome.json` names the installed Biome version. |
-| `oxlint` | package | Application JSX accessibility under the harness-owned rule set. Libraries retain their Biome policy. |
+| `oxlint` | package | Two native rules across authored JS/TS plus 31 application JSX accessibility checks. Libraries retain Biome accessibility. |
 | `eslint` | package | The remaining type-aware and specialized lint checks. |
 | `conventions` | repository | The typography ban and the hand-written JavaScript ban, over every tracked text file, and documenting comments left above another comment rather than above what they document. |
 | `editorconfig` | repository | Every tracked text file matches the pinned `.editorconfig`, and no code line passes 120 characters. |

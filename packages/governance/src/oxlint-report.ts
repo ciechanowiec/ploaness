@@ -9,6 +9,8 @@ export interface OxlintLegacySite {
 /** Process status and foreign directive locations validated before native analysis. */
 export interface OxlintExecution {
   readonly exitCode: number
+  /** Combined process output, including stderr, startup failures, and termination signals. */
+  readonly output?: string
   readonly legacy: readonly OxlintLegacySite[]
 }
 
@@ -79,12 +81,15 @@ export const oxlintReportProblems = (
   }
   return [
     ...exitProblems(report['diagnostics'], execution),
+    ...(execution.output === undefined || execution.output.trim() === output.trim()
+      ? []
+      : ['Oxlint produced output outside its diagnostic report']),
     ...(report['number_of_files'] === files
       ? []
-      : [`Oxlint did not analyze the expected ${String(files)} JSX file(s)`]),
+      : [`Oxlint did not analyze the expected ${String(files)} source file(s)`]),
     ...(report['number_of_rules'] === rules
       ? []
-      : [`Oxlint did not enable the expected ${String(rules)} accessibility rule(s)`]),
+      : [`Oxlint did not enable the expected ${String(rules)} rule(s)`]),
     ...report['diagnostics']
       .filter((value: unknown): boolean => !isEslintOwnedDiagnostic(value, execution.legacy))
       .map((value: unknown): string => diagnostic(value)),

@@ -1,0 +1,182 @@
+[
+  {
+    "name": "returned-value",
+    "code": "export const value = new Promise(() => 1)",
+    "expected": "eslint(no-promise-executor-return)",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "returned-resolve",
+    "code": "export const value = new Promise(resolve => resolve(1))",
+    "expected": "eslint(no-promise-executor-return)",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "returned-void",
+    "code": "export const value = new Promise(resolve => void resolve(1))",
+    "expected": "eslint(no-promise-executor-return)",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "bare-return",
+    "code": "export const value = new Promise(resolve => { resolve(1); return })",
+    "expected": "",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "resolve-reject",
+    "code": "export const value = new Promise((resolve, reject) => { if (Date.now()) { resolve(1) } else { reject(new Error(\"failed\")) } })",
+    "expected": "",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "local-promise",
+    "code": "class Promise { constructor(callback: () => number) { callback() } }; export const value = new Promise(() => 1)",
+    "expected": "",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "namespaced-promise",
+    "code": "export const value = new helper.Promise(() => 1)",
+    "expected": "",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "absolute-import",
+    "code": "import value from '/tmp/value.js'; export { value }",
+    "expected": "import(no-absolute-path)",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "relative-import",
+    "code": "import value from './value.js'; export { value }",
+    "expected": "",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "package-import",
+    "code": "import value from 'package'; export { value }",
+    "expected": "",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "builtin-import",
+    "code": "import value from 'node:path'; export { value }",
+    "expected": "",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "alias-import",
+    "code": "import value from '@/value'; export { value }",
+    "expected": "",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "local-require",
+    "code": "const require = (key: string): string => key; export const value = require('/key')",
+    "expected": "",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "hidden-tooling",
+    "code": "export const value = new Promise(() => 1)",
+    "expected": "eslint(no-promise-executor-return)",
+    "file": ".storybook/main.ts"
+  },
+  {
+    "name": "extension-js",
+    "code": "export const value = new Promise(() => 1)",
+    "expected": "eslint(no-promise-executor-return)",
+    "file": "tools/source.js"
+  },
+  {
+    "name": "extension-jsx",
+    "code": "export const value = new Promise(() => 1)",
+    "expected": "eslint(no-promise-executor-return)",
+    "file": "tools/source.jsx"
+  },
+  {
+    "name": "extension-mjs",
+    "code": "export const value = new Promise(() => 1)",
+    "expected": "eslint(no-promise-executor-return)",
+    "file": "tools/source.mjs"
+  },
+  {
+    "name": "extension-cjs",
+    "code": "module.exports = new Promise(() => 1)",
+    "expected": "eslint(no-promise-executor-return)",
+    "file": "tools/source.cjs"
+  },
+  {
+    "name": "extension-mts",
+    "code": "export const value = new Promise(() => 1)",
+    "expected": "eslint(no-promise-executor-return)",
+    "file": "tools/source.mts"
+  },
+  {
+    "name": "extension-cts",
+    "code": "module.exports = new Promise(() => 1)",
+    "expected": "eslint(no-promise-executor-return)",
+    "file": "tools/source.cts"
+  },
+  {
+    "name": "native-suppression",
+    "code": "// oxlint-disable-next-line eslint/no-promise-executor-return -- exercise a deliberate exception\nexport const value = new Promise(() => 1)",
+    "expected": "",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "unused-suppression",
+    "code": "// oxlint-disable-next-line eslint/no-promise-executor-return -- exercise a stale exception\nexport const value = 1",
+    "expected": "Unused oxlint-disable",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "blanket-suppression",
+    "code": "// oxlint-disable-next-line -- exercise a broad exception\nexport const value = new Promise(() => 1)",
+    "expected": "name the exact governed",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "inactive-suppression",
+    "code": "// oxlint-disable-next-line jsx-a11y/alt-text -- exercise inactive JSX ownership\nexport const value = 1",
+    "expected": "active for this file",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "unknown-suppression",
+    "code": "// oxlint-disable-next-line eslint/unknown -- exercise a typo\nexport const value = 1",
+    "expected": "active for this file",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "legacy-suppression",
+    "code": "// eslint-disable-next-line no-promise-executor-return -- exercise native ownership\nexport const value = new Promise(() => 1)",
+    "expected": "use a named, explained Oxlint",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "foreign-suppression",
+    "code": "// eslint-disable functional/no-let -- the other analyzer judges this exception\nlet value = 1; value++; export { value }\n// eslint-enable functional/no-let -- close the foreign exception",
+    "expected": "",
+    "file": "tools/[route]/with spaces.ts"
+  },
+  {
+    "name": "generated-declaration",
+    "code": "declare const value: number",
+    "expected": "",
+    "file": "src/types.d.ts"
+  },
+  {
+    "name": "generated-payload",
+    "code": "import value from '/tmp/value.js'; export { value }",
+    "expected": "",
+    "file": "src/payload-generated-schema.ts"
+  },
+  {
+    "name": "framework-glue",
+    "code": "export const value = new Promise(() => 1)",
+    "expected": "eslint(no-promise-executor-return)",
+    "file": "src/app/(payload)/layout.tsx"
+  }
+]

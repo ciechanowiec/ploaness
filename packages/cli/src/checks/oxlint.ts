@@ -6,12 +6,14 @@ import {
   asText,
   isEslintOwnedSuppression,
   isOxlintConfig,
-  JSX_ACCESSIBILITY_RULES,
-  jsxAccessibilityFiles,
+  type OxlintGroup,
   type OxlintLegacySite,
-  oxlintAccessibilityConfig,
   oxlintArguments,
+  oxlintConfig,
+  oxlintGroups,
   oxlintReportProblems,
+  oxlintRuleNames,
+  oxlintSourceFiles,
   oxlintSuppressionProblems,
   type SourceComment,
 } from '@ploaness/governance'
@@ -42,45 +44,48 @@ const versionProblems = (): readonly string[] => {
 }
 
 const eligibleFiles = (member: Member, inventory: readonly string[]): readonly string[] =>
-  jsxAccessibilityFiles(inventory, member.settings.generatedArtefacts, member.siblingPaths).filter(
+  oxlintSourceFiles(inventory, member.settings.generatedArtefacts, member.siblingPaths).filter(
     (file: string): boolean => {
       const absolute: string = path.join(member.root, file)
       return existsSync(absolute) && statSync(absolute).isFile()
     },
   )
 
-const suppressionProblems = (member: Member, files: readonly string[]): readonly string[] =>
-  files.flatMap((file: string): readonly string[] => {
+const suppressionProblems = (member: Member, group: OxlintGroup): readonly string[] =>
+  group.files.flatMap((file: string): readonly string[] => {
     const text: string = readFileSync(path.join(member.root, file), 'utf8')
-    const problems: readonly string[] = oxlintSuppressionProblems(sourceComments(text))
+    const problems: readonly string[] = oxlintSuppressionProblems(
+      sourceComments(text, file),
+      oxlintRuleNames(group.rules),
+    )
     return problems.map((problem: string): string => `${file}: ${problem}`)
   })
 
 const legacySitesIn = (member: Member, files: readonly string[]): readonly OxlintLegacySite[] =>
   files.flatMap((file: string): readonly OxlintLegacySite[] => {
     const text: string = readFileSync(path.join(member.root, file), 'utf8')
-    return sourceComments(text)
+    return sourceComments(text, file)
       .filter(isEslintOwnedSuppression)
       .map((comment: SourceComment): OxlintLegacySite => ({ file, line: comment.line }))
   })
 
 const nativeVerdict = (
   result: RunResult,
-  files: number,
+  group: OxlintGroup,
   legacy: readonly OxlintLegacySite[],
 ): GateResult => {
   const findings: readonly string[] = oxlintReportProblems(
     result.stdout,
-    files,
-    JSX_ACCESSIBILITY_RULES.length,
-    { exitCode: result.code, legacy },
+    group.files.length,
+    group.rules.length,
+    { exitCode: result.code, output: result.output, legacy },
   )
   return withOutput(
     findings.length === 0
       ? passed(
-          `${String(files)} JSX file(s) pass ${String(JSX_ACCESSIBILITY_RULES.length)} accessibility rules`,
+          `${String(group.files.length)} source file(s) pass ${String(group.rules.length)} native rules`,
         )
-      : failed('Oxlint did not establish JSX accessibility conformance', [
+      : failed('Oxlint did not establish conformance', [
           ...findings,
           ...(result.code === 0 ? [] : [result.output]),
         ]),
@@ -88,15 +93,17 @@ const nativeVerdict = (
   )
 }
 
-const analyze = (member: Member, files: readonly string[]): GateResult => {
+const analyze = (member: Member, group: OxlintGroup): GateResult => {
   const directory: string = mkdtempSync(path.join(tmpdir(), 'ploaness-oxlint-'))
   try {
     const config: string = path.join(directory, 'oxlint.json')
-    writeFileSync(config, `${JSON.stringify(oxlintAccessibilityConfig(), null, JSON_INDENT)}\n`)
-    const legacy: readonly OxlintLegacySite[] = legacySitesIn(member, files)
+    writeFileSync(config, `${JSON.stringify(oxlintConfig(group.rules), null, JSON_INDENT)}\n`)
+    const legacy: readonly OxlintLegacySite[] = legacySitesIn(member, group.files)
     return nativeVerdict(
-      runNode(resolveTool('oxlint'), [...oxlintArguments(config, files)], { cwd: member.root }),
-      files.length,
+      runNode(resolveTool('oxlint'), [...oxlintArguments(config, group.files)], {
+        cwd: member.root,
+      }),
+      group,
       legacy,
     )
   } finally {
@@ -104,24 +111,41 @@ const analyze = (member: Member, files: readonly string[]): GateResult => {
   }
 }
 
-/** Native application JSX checks; libraries keep the Biome policy their existing config supplies. */
-export const oxlint = (member: Member): GateResult => {
-  if (!hasOwnRuntime(member)) {
-    return passed('this library retains its Biome accessibility policy')
+/** Run disjoint groups sequentially, preserving each invocation's measured coverage. */
+const analyzeGroups = (member: Member, groups: readonly OxlintGroup[]): GateResult => {
+  const [first, ...rest]: readonly OxlintGroup[] = groups
+  if (first === undefined) {
+    return passed('no eligible source remains to analyze')
   }
+  const result: GateResult = analyze(member, first)
+  if (!result.ok || rest.length === 0) {
+    return result
+  }
+  const remaining: GateResult = analyzeGroups(member, rest)
+  return withOutput(
+    { ...remaining, summary: `${result.summary}; ${remaining.summary}` },
+    [result.output, remaining.output].filter(Boolean).join('\n'),
+  )
+}
+
+/** Native core checks for every member, with accessibility only in the existing application scope. */
+export const oxlint = (member: Member): GateResult => {
   const inventory: readonly string[] = workingTreeFiles(member.root)
-  const files: readonly string[] = eligibleFiles(member, inventory)
+  const groups: readonly OxlintGroup[] = oxlintGroups(
+    eligibleFiles(member, inventory),
+    hasOwnRuntime(member),
+  )
   const problems: readonly string[] = [
     ...versionProblems(),
     ...inventory
       .filter(isOxlintConfig)
       .map((file: string): string => `${file}: Oxlint configuration is owned by ploaness`),
-    ...suppressionProblems(member, files),
+    ...groups.flatMap((group: OxlintGroup): readonly string[] =>
+      suppressionProblems(member, group),
+    ),
   ]
   if (problems.length > 0) {
     return failed('Oxlint wiring or suppression policy is violated', problems)
   }
-  return files.length === 0
-    ? passed('this application has no eligible JSX source to analyze')
-    : analyze(member, files)
+  return analyzeGroups(member, groups)
 }

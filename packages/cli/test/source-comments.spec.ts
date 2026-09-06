@@ -32,3 +32,34 @@ describe('actual source comments', () => {
     expect(sourceComments('const value = 1\n// final')).toEqual([{ line: 2, text: '// final' }])
   })
 })
+
+describe('filename-aware source parsing', () => {
+  it.each(['source.ts', 'source.mts', 'source.cts'])(
+    'reads comments after type assertions and generic arrows in %s',
+    (file) => {
+      const source: string = [
+        'const identity = <Value>(value: Value): Value => value',
+        'const value = <number>1',
+        `// ${DIRECTIVE}`,
+        'export { identity, value }',
+      ].join('\n')
+      expect(sourceComments(source, file)).toEqual([{ line: 3, text: `// ${DIRECTIVE}` }])
+    },
+  )
+
+  it.each(['source.tsx', 'source.jsx'])(
+    'distinguishes JSX data from JSX comments in %s',
+    (file) => {
+      const source: string = `const view = <div>// ${DIRECTIVE}\n{/* actual */}</div>`
+      expect(sourceComments(source, file)).toEqual([{ line: 2, text: '/* actual */' }])
+    },
+  )
+
+  it.each(['source.js', 'source.mjs', 'source.cjs'])(
+    'reads JavaScript comments without treating strings as directives in %s',
+    (file) => {
+      const source: string = `const text = '// ${DIRECTIVE}'\n// actual`
+      expect(sourceComments(source, file)).toEqual([{ line: 2, text: '// actual' }])
+    },
+  )
+})

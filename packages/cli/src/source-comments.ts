@@ -36,18 +36,16 @@ const rangesOf = (node: ts.Node, source: ts.SourceFile): readonly ts.CommentRang
 ]
 
 /**
- * Read actual JSX comments without mistaking strings, regular expressions, or JSX text for directives.
+ * Read actual source comments without mistaking strings, regular expressions, or JSX text for directives.
  * @param text the source being checked.
+ * @param file the filename, which determines whether angle brackets are types or JSX.
  * @returns comments once each, located at their original source lines.
  */
-export const sourceComments = (text: string): readonly SourceComment[] => {
-  const source: ts.SourceFile = ts.createSourceFile(
-    'source.tsx',
-    text,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  )
+export const sourceComments = (
+  text: string,
+  file: string = 'source.tsx',
+): readonly SourceComment[] => {
+  const source: ts.SourceFile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
   const ranges: ReadonlyMap<number, ts.CommentRange> = new Map(
     rangesOf(source, source).map((range: ts.CommentRange): readonly [number, ts.CommentRange] => [
       range.pos,

@@ -18,13 +18,13 @@ describe('the native accessibility verdict', () => {
 
   it.each([0, 1, 3, '2', undefined])('refuses an unexpected file count: %s', (count) => {
     expect(oxlintReportProblems(report({ number_of_files: count }), 2, 31)).toContain(
-      'Oxlint did not analyze the expected 2 JSX file(s)',
+      'Oxlint did not analyze the expected 2 source file(s)',
     )
   })
 
   it.each([0, 30, 32, '31', undefined])('refuses an unexpected rule count: %s', (count) => {
     expect(oxlintReportProblems(report({ number_of_rules: count }), 2, 31)).toContain(
-      'Oxlint did not enable the expected 31 accessibility rule(s)',
+      'Oxlint did not enable the expected 31 rule(s)',
     )
   })
 
@@ -138,5 +138,32 @@ describe('one owner for unused directives', () => {
         legacy,
       }).join(' '),
     ).toContain('exited with status')
+  })
+})
+
+describe('process evidence outside the native report', () => {
+  it.each(['native startup failure', 'the process was killed by SIGKILL', 'unexpected stderr'])(
+    'rejects %s even beside a delegated foreign directive',
+    (extra) => {
+      const output: string = report({ diagnostics: [foreignDiagnostic()] })
+      expect(
+        oxlintReportProblems(output, 2, 31, {
+          exitCode: 1,
+          legacy,
+          output: `${output}\n${extra}`,
+        }),
+      ).toContain('Oxlint produced output outside its diagnostic report')
+    },
+  )
+
+  it('accepts the complete report with insignificant surrounding whitespace', () => {
+    const output: string = report({ diagnostics: [foreignDiagnostic()] })
+    expect(
+      oxlintReportProblems(output, 2, 31, {
+        exitCode: 1,
+        legacy,
+        output: `\n${output}\n`,
+      }),
+    ).toEqual([])
   })
 })
