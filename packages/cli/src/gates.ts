@@ -26,6 +26,7 @@ import { generatedDenial } from './checks/generated.js'
 import { commitHistory, linearHistory, requireFullHistory } from './checks/history.js'
 import { installScripts, releaseAge } from './checks/install.js'
 import { bundle, imageAssets } from './checks/integrity.js'
+import { oxlint } from './checks/oxlint.js'
 import { adminViews, payloadDefaults, payloadGenerated, payloadRules } from './checks/payload.js'
 import { preflight } from './checks/preflight.js'
 import { configReferences, documentation, skills } from './checks/references.js'
@@ -124,6 +125,7 @@ const DEFAULT_GATES: readonly Gate[] = [
     isExtended: false,
     run: biomeSchema,
   },
+  { id: 'oxlint', scope: 'package', title: 'JSX accessibility', isExtended: false, run: oxlint },
   { id: 'eslint', scope: 'package', title: 'type-aware lint', isExtended: false, run: eslint },
   {
     id: 'conventions',

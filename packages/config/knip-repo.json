@@ -15,6 +15,7 @@
         "@ploaness/config",
         "dependency-cruiser",
         "eslint",
+        "oxlint",
         "tsx",
         "type-coverage"
       ]

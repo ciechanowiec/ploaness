@@ -148,6 +148,7 @@ check_gate_coverage
 gate biome-schema
 gate conventions
 gate tailwind-tokens
+gate oxlint
 gate editorconfig
 gate suppressions
 gate config-refs

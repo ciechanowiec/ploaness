@@ -78,3 +78,14 @@ knip.json	FORBIDDEN	EVERYWHERE
 # `plugins` is NOT a forbidden path. What shadows the shipped GritQL rules is the biome.json key that
 # loads them, which the wiring gate owns; the directory name is one a project may legitimately use for
 # something else entirely.
+
+# The native JSX checker receives its configuration from the harness, never from the consumer.
+.oxlintrc.json	FORBIDDEN	EVERYWHERE
+.oxlintrc.jsonc	FORBIDDEN	EVERYWHERE
+.oxlintignore	FORBIDDEN	EVERYWHERE
+oxlint.config.ts	FORBIDDEN	EVERYWHERE
+oxlint.config.mts	FORBIDDEN	EVERYWHERE
+oxlint.config.cts	FORBIDDEN	EVERYWHERE
+oxlint.config.js	FORBIDDEN	EVERYWHERE
+oxlint.config.mjs	FORBIDDEN	EVERYWHERE
+oxlint.config.cjs	FORBIDDEN	EVERYWHERE

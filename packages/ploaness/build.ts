@@ -15,7 +15,11 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { asRecord } from '@ploaness/governance'
+import {
+  asRecord,
+  jsxAnalysisPatterns,
+  replacedBiomeAccessibilityRules,
+} from '@ploaness/governance'
 
 const here: string = path.dirname(fileURLToPath(import.meta.url))
 // The indent every JSON file in this repository is written with.
@@ -70,6 +74,12 @@ const flatten = (specifier: string): Record<string, unknown> => {
 const shared: Record<string, unknown> = flatten('@ploaness/config/biome')
 const generated: Record<string, unknown> = {
   ...shared,
+  overrides: [
+    {
+      includes: jsxAnalysisPatterns(),
+      linter: { rules: { a11y: replacedBiomeAccessibilityRules() } },
+    },
+  ],
   // A generated file: edit packages/config/biome.json instead.
   // biome-ignore lint/style/useNamingConvention: a JSON Schema keyword, dictated by the format
   $schema: shared['$schema'],

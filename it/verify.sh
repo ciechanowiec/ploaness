@@ -14,8 +14,8 @@
 # `ploaness init` exactly as a consumer does, so it is where they are first read as the code they are.
 # Two defects had already escaped to real projects by the time that was noticed.
 #
-# What it still does not prove: `tests`, `build`, and `e2e`. Those need a real Payload application and
-# a browser, and are proven end to end by a consumer project rather than by a fixture.
+# The accessibility name contracts also run the pinned browser sweep against a real Next server.
+# Full Payload tests, builds, and end-to-end flows still require the real consumer verification leg.
 set -eu
 
 # The gate report has two formats, and the ASCII one carries the `[PASS] <id>` token every assertion
@@ -164,6 +164,7 @@ expect_command() {
     else
         actual=FAIL
     fi
+    printf '%s\n' "$output" > "$directory/command-output.log"
     if [ "$actual" != "$verdict" ] || ! printf '%s' "$output" | grep -q "$needle"; then
         echo "FAILED $name: command was $actual, expected $verdict mentioning \"$needle\"" >&2
         echo "$output" | sed 's/^/    /' >&2
@@ -252,9 +253,110 @@ only arrangement that resolves the way a published install does.'
 probe_part_one='dGhpcy1pc19hX3Zlcnlfc2VjcmV0'
 probe_part_two='X2tleV93aXRoX2VudHJvcHk'
 
+# A declared focused subset for iterating on the new analyzer; the default run remains complete.
+case "${1-}" in
+    ''|--jsx-only) ;;
+    *) echo 'usage: verify.sh [--jsx-only]' >&2; exit 1 ;;
+esac
+
 # The pass case: the untouched scaffold must satisfy every gate that judges a project's own shape.
 new_case pass
 commit_case pass 'feat(fixture): add the ploaness integration consumer' "$CONFORMING_BODY"
+# The native accessibility contracts execute the actual packed CLI and its generated configuration.
+expect pass preflight PASS
+expect pass wiring PASS
+expect pass assets PASS
+expect pass oxlint PASS
+new_case jsx-contracts
+commit_case jsx-contracts 'test(fixture): establish native JSX conformance cases' "$CONFORMING_BODY"
+expect_command jsx-contracts PASS '70 JSX detection and valid-markup contracts passed' \
+    node "$lib/jsx-conformance.ts" "$here/fixtures/jsx-accessibility.json" \
+    "$scratch/jsx-contracts/node_modules/.bin/ploaness"
+
+# Source written after a commit remains in scope, and an unrelated ignore file cannot hide it.
+new_case fail-untracked-jsx
+commit_case fail-untracked-jsx 'test(fixture): establish new JSX source coverage' "$CONFORMING_BODY"
+printf '%s\n' 'export const image = <img src="/photo.png" />' > "$scratch/fail-untracked-jsx/src/Untracked.tsx"
+printf '%s\n' 'src/Untracked.tsx' > "$scratch/fail-untracked-jsx/.eslintignore"
+expect fail-untracked-jsx oxlint FAIL 'jsx-a11y(alt-text)'
+
+new_case fail-nested-oxlint
+mkdir -p "$scratch/fail-nested-oxlint/src/nested"
+printf '%s\n' '{"rules":{"jsx-a11y/alt-text":"off"}}' > "$scratch/fail-nested-oxlint/src/nested/.oxlintrc.json"
+commit_case fail-nested-oxlint 'test(fixture): try to shadow native JSX policy' "$CONFORMING_BODY"
+expect fail-nested-oxlint assets FAIL 'Oxlint configuration is owned'
+expect fail-nested-oxlint oxlint FAIL 'Oxlint configuration is owned'
+
+new_case pass-native-suppression
+mkdir -p "$scratch/pass-native-suppression/widgets"
+printf '%s\n' '// oxlint-disable-next-line jsx-a11y/alt-text -- the fixture deliberately exercises a justified exception' \
+    'export const image = <img src="/photo.png" />' > "$scratch/pass-native-suppression/widgets/Suppressed.tsx"
+commit_case pass-native-suppression 'test(fixture): exercise an explained JSX exception' "$CONFORMING_BODY"
+expect pass-native-suppression oxlint PASS
+edit_json "$scratch/pass-native-suppression/package.json" ploaness.maxSuppressions 0
+expect pass-native-suppression suppressions FAIL 'suppression ceiling is 0'
+
+new_case fail-unused-native-suppression
+printf '%s\n' '// oxlint-disable-next-line jsx-a11y/alt-text -- the fixture leaves a stale exception' \
+    'export const image = <img src="/photo.png" alt="Portrait" />' > "$scratch/fail-unused-native-suppression/src/Suppressed.tsx"
+commit_case fail-unused-native-suppression 'test(fixture): leave an unused JSX exception' "$CONFORMING_BODY"
+expect fail-unused-native-suppression oxlint FAIL 'Unused'
+
+new_case fail-bare-native-suppression
+printf '%s\n' '// oxlint-disable-next-line' 'export const image = <img src="/photo.png" />' \
+    > "$scratch/fail-bare-native-suppression/src/Suppressed.tsx"
+commit_case fail-bare-native-suppression 'test(fixture): try an unexplained blanket JSX exception' "$CONFORMING_BODY"
+expect fail-bare-native-suppression oxlint FAIL 'name the exact governed'
+
+new_case fail-legacy-native-suppression
+printf '%s\n' '// eslint-disable-next-line alt-text -- an unqualified alias must not bypass governance' \
+    'export const image = <img src="/photo.png" />' > "$scratch/fail-legacy-native-suppression/src/Suppressed.tsx"
+commit_case fail-legacy-native-suppression 'test(fixture): try an unqualified legacy JSX exception' "$CONFORMING_BODY"
+expect fail-legacy-native-suppression oxlint FAIL 'use a named, explained Oxlint'
+
+new_case fail-oxlint-override
+edit_json "$scratch/fail-oxlint-override/package.json" pnpm.overrides.oxlint '"1.80.0"'
+commit_case fail-oxlint-override 'test(fixture): try to replace the native analyzer pin' "$CONFORMING_BODY"
+expect fail-oxlint-override wiring FAIL 'oxlint'
+
+# Read the packed generated Biome config through the actual pinned tool. JSX delegation must not
+# disable the same accessibility check in HTML, which the native gate does not analyze.
+new_case biome-a11y-ownership
+printf '%s\n' 'export const frame = <iframe src="/frame" />' > "$scratch/biome-a11y-ownership/src/Frame.tsx"
+printf '%s\n' '<iframe src="/frame"></iframe>' > "$scratch/biome-a11y-ownership/src/frame.html"
+commit_case biome-a11y-ownership 'test(fixture): preserve HTML accessibility ownership' "$CONFORMING_BODY"
+expect_command biome-a11y-ownership PASS 'Checked 1 file' \
+    "$root/packages/cli/node_modules/.bin/biome" lint --error-on-warnings src/Frame.tsx
+expect_command biome-a11y-ownership FAIL 'lint/a11y/useIframeTitle' \
+    "$root/packages/cli/node_modules/.bin/biome" lint --error-on-warnings src/frame.html
+
+# A real Next server executes the pinned sweep. Its default scan must catch accessible-name
+# defects that the static JSX rules cannot establish, and accept the corrected forms.
+(cd "$template" && pnpm exec playwright install chromium >/dev/null)
+new_case pass-browser-names
+node "$lib/create-a11y-page.ts" "$scratch/pass-browser-names" valid
+commit_case pass-browser-names 'test(fixture): render accessible controls in Next' "$CONFORMING_BODY"
+expect_command pass-browser-names PASS '1 passed' \
+    pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+new_case fail-browser-names
+node "$lib/create-a11y-page.ts" "$scratch/fail-browser-names" invalid
+commit_case fail-browser-names 'test(fixture): render controls without accessible names' "$CONFORMING_BODY"
+expect_command fail-browser-names FAIL 'button-name' \
+    pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+if ! grep -q '"id": "label"' "$scratch/fail-browser-names/command-output.log"; then
+    echo 'FAILED fail-browser-names: the sweep did not report the unlabeled input' >&2
+    failures=$((failures + 1))
+fi
+
+if [ "${1-}" = --jsx-only ]; then
+    if [ "$failures" -ne 0 ]; then
+        echo "$failures JSX integration contract(s) failed" >&2
+        exit 1
+    fi
+    echo 'JSX integration contracts passed; run pnpm run verify for the complete verdict'
+    exit 0
+fi
+
 # `install-scripts` is here because its only other fixture is a failure case, and this file's own
 # reasoning applies symmetrically: a rule that only ever failed proves as little as one that only ever
 # passed - neither tells you the gate is wired to the scaffold at all.

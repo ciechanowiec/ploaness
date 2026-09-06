@@ -39,6 +39,7 @@ CLI holding nothing but `readFileSync` and a call.
   everyday work; it is not a verdict.
 - `pnpm run it` - runs the consumer fixtures against the packed tarballs. Run this whenever a rule, the
   scaffolder, or the packaging changes. Run `pnpm run pack:local` first.
+- `sh it/verify.sh --jsx-only` - the packed JSX and browser-name contracts; a diagnostic subset.
 - `pnpm run pack:local` - packs the tarballs into `dist-tarballs/` without running the fixtures.
 - `pnpm run format` - applies the formatting `pnpm run lint` judges.
 - `pnpm run lint:eslint` - the type-aware pass, part of `pnpm run verify`.
@@ -428,22 +429,23 @@ formatting for the whole run. One stylesheet, passing `css` and unparseable to `
 teaches the parser a dialect and turns no rule off, which is why it is not a relaxation - the same
 reasoning that admitted the at-rules to stylelint, applied where it was missing.
 
-### One linter decides an interactive role, because two of them cannot
+### One owner for application JSX accessibility
 
-Biome carries two a11y rules that contradict each other over one shape. `useSemanticElements` requires
-`role="grid"` to sit on a `<table>`, which is what the ARIA pattern documents; then
-`noNoninteractiveElementToInteractiveRole` refuses the table carrying it. No markup satisfies both, and
-the second rule accepts no options, so the allowance cannot be configured in. The cost fell on the
-consumer: a project building an accessible grid, treegrid, listbox or tab-strip on the correct native
-element spent a suppression on a disagreement between two rules rather than on a hard case.
+The native `oxlint` gate owns application JSX accessibility. The registry in
+`packages/governance/src/jsx-accessibility.ts` declares the rule names, semantic options, and Biome
+counterparts once. The meta-package build uses it to generate JSX-only Biome delegation; HTML and
+library policy are preserved. The application ESLint configuration keeps its typed and specialized
+checks, and imports no JSX-a11y plugin.
 
-`noNoninteractiveElementToInteractiveRole` is therefore `off` in `packages/config/biome.json` - the
-application half, and only that half. The ESLint port of the same rule is mounted for `**/*.tsx` in
-`packages/config/src/eslint.ts` and gets the case right: its recommended options name `table: ['grid']`,
-`td: ['gridcell']` and `li: ['row']` explicitly. A library extends `biome-core.json` and receives no
-jsx-a11y at all, so turning the rule off there would remove the check rather than move it, and the core
-half is deliberately untouched. `packages/config/test/a11y-role-authority.spec.ts` asserts both halves,
-because either alone is a hazard.
+The grid and grid-cell allowances are deliberate: a correct native grid must pass while a role on an
+unrelated element still fails. Executable consumer fixtures cover both sides, along with the rest of
+the rule set. The CLI resolves its own Oxlint installation, writes its configuration outside the
+consumer tree, and verifies the actual file and rule counts. Configuration discovery and ignore files
+cannot narrow the explicit target list. Suppression comments are parsed as source, require a named
+rule and reason, and spend the existing budget; strings and JSX text are not directives.
+
+A library retains its existing Biome policy because this migration moves the application checks.
+Other analyzer families are unchanged. Native fixers are not part of `ploaness format`.
 
 ### The static half of Web Vitals is a lint rule, and the measured half is not a gate
 

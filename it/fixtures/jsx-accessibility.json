@@ -1,0 +1,355 @@
+[
+  {
+    "name": "alt-text-bad",
+    "code": "<img src=\"/x.png\" />",
+    "expected": ["jsx-a11y/alt-text"]
+  },
+  {
+    "name": "alt-text-good",
+    "code": "<img src=\"/x.png\" alt=\"\" />",
+    "expected": []
+  },
+  {
+    "name": "anchor-has-content-bad",
+    "code": "<a href=\"/x\" />",
+    "expected": ["jsx-a11y/anchor-has-content"]
+  },
+  {
+    "name": "anchor-has-content-good",
+    "code": "<a href=\"/x\">Read</a>",
+    "expected": []
+  },
+  {
+    "name": "anchor-is-valid-bad",
+    "code": "<a href=\"#\">Read</a>",
+    "expected": ["jsx-a11y/anchor-is-valid"]
+  },
+  {
+    "name": "anchor-is-valid-good",
+    "code": "<a href=\"/x\">Read</a>",
+    "expected": []
+  },
+  {
+    "name": "aria-activedescendant-has-tabindex-bad",
+    "code": "<div aria-activedescendant=\"item\">Read</div>",
+    "expected": ["jsx-a11y/aria-activedescendant-has-tabindex"]
+  },
+  {
+    "name": "aria-activedescendant-has-tabindex-good",
+    "code": "<div aria-activedescendant=\"item\" tabIndex={0}>Read</div>",
+    "expected": ["jsx-a11y/no-noninteractive-tabindex"]
+  },
+  {
+    "name": "aria-props-bad",
+    "code": "<button aria-labl=\"Read\">Read</button>",
+    "expected": ["jsx-a11y/aria-props"]
+  },
+  {
+    "name": "aria-props-good",
+    "code": "<button aria-label=\"Read\">Read</button>",
+    "expected": []
+  },
+  {
+    "name": "aria-proptypes-bad",
+    "code": "<div aria-hidden=\"banana\">Read</div>",
+    "expected": ["jsx-a11y/aria-proptypes"]
+  },
+  {
+    "name": "aria-proptypes-good",
+    "code": "<div aria-hidden=\"true\">Read</div>",
+    "expected": []
+  },
+  {
+    "name": "aria-role-bad",
+    "code": "<div role=\"nonsense\">Read</div>",
+    "expected": ["jsx-a11y/aria-role"]
+  },
+  {
+    "name": "aria-role-good",
+    "code": "<div role=\"status\">Read</div>",
+    "expected": []
+  },
+  {
+    "name": "aria-unsupported-elements-bad",
+    "code": "<meta aria-label=\"Read\" />",
+    "expected": ["jsx-a11y/aria-unsupported-elements"]
+  },
+  {
+    "name": "aria-unsupported-elements-good",
+    "code": "<meta name=\"description\" content=\"Read\" />",
+    "expected": []
+  },
+  {
+    "name": "autocomplete-valid-bad",
+    "code": "<input autoComplete=\"nonsense\" />",
+    "expected": ["jsx-a11y/autocomplete-valid"]
+  },
+  {
+    "name": "autocomplete-valid-good",
+    "code": "<input autoComplete=\"email\" />",
+    "expected": []
+  },
+  {
+    "name": "click-events-have-key-events-bad",
+    "code": "<div onClick={() => {}}>Read</div>",
+    "expected": ["jsx-a11y/click-events-have-key-events", "jsx-a11y/no-static-element-interactions"]
+  },
+  {
+    "name": "click-events-have-key-events-good",
+    "code": "<button onClick={() => {}}>Read</button>",
+    "expected": []
+  },
+  {
+    "name": "heading-has-content-bad",
+    "code": "<h2 />",
+    "expected": ["jsx-a11y/heading-has-content"]
+  },
+  {
+    "name": "heading-has-content-good",
+    "code": "<h2>Read</h2>",
+    "expected": []
+  },
+  {
+    "name": "html-has-lang-bad",
+    "code": "<html />",
+    "expected": ["jsx-a11y/html-has-lang"]
+  },
+  {
+    "name": "html-has-lang-good",
+    "code": "<html lang=\"en\" />",
+    "expected": []
+  },
+  {
+    "name": "iframe-has-title-bad",
+    "code": "<iframe src=\"/x\" />",
+    "expected": ["jsx-a11y/iframe-has-title"]
+  },
+  {
+    "name": "iframe-has-title-good",
+    "code": "<iframe src=\"/x\" title=\"Read\" />",
+    "expected": []
+  },
+  {
+    "name": "img-redundant-alt-bad",
+    "code": "<img src=\"/x.png\" alt=\"Picture of a dog\" />",
+    "expected": ["jsx-a11y/img-redundant-alt"]
+  },
+  {
+    "name": "img-redundant-alt-good",
+    "code": "<img src=\"/x.png\" alt=\"A dog\" />",
+    "expected": []
+  },
+  {
+    "name": "interactive-supports-focus-bad",
+    "code": "<div role=\"button\" onClick={() => {}} onKeyDown={() => {}}>Read</div>",
+    "expected": ["jsx-a11y/interactive-supports-focus"]
+  },
+  {
+    "name": "interactive-supports-focus-good",
+    "code": "<div role=\"button\" tabIndex={0} onClick={() => {}} onKeyDown={() => {}}>Read</div>",
+    "expected": []
+  },
+  {
+    "name": "label-has-associated-control-bad",
+    "code": "<label>Name</label>",
+    "expected": ["jsx-a11y/label-has-associated-control"]
+  },
+  {
+    "name": "label-has-associated-control-good",
+    "code": "<label>Name<input /></label>",
+    "expected": []
+  },
+  {
+    "name": "media-has-caption-bad",
+    "code": "<video src=\"/x.mp4\" />",
+    "expected": ["jsx-a11y/media-has-caption"]
+  },
+  {
+    "name": "media-has-caption-good",
+    "code": "<video src=\"/x.mp4\"><track kind=\"captions\" src=\"/x.vtt\" /></video>",
+    "expected": []
+  },
+  {
+    "name": "mouse-events-have-key-events-bad",
+    "code": "<div onMouseOver={() => {}}>Read</div>",
+    "expected": ["jsx-a11y/mouse-events-have-key-events"]
+  },
+  {
+    "name": "mouse-events-have-key-events-good",
+    "code": "<div onMouseOver={() => {}} onFocus={() => {}}>Read</div>",
+    "expected": []
+  },
+  {
+    "name": "no-access-key-bad",
+    "code": "<button accessKey=\"s\">Save</button>",
+    "expected": ["jsx-a11y/no-access-key"]
+  },
+  {
+    "name": "no-access-key-good",
+    "code": "<button>Save</button>",
+    "expected": []
+  },
+  {
+    "name": "no-autofocus-bad",
+    "code": "<input autoFocus />",
+    "expected": ["jsx-a11y/no-autofocus"]
+  },
+  {
+    "name": "no-autofocus-good",
+    "code": "<input />",
+    "expected": []
+  },
+  {
+    "name": "no-distracting-elements-bad",
+    "code": "<blink>Read</blink>",
+    "expected": ["jsx-a11y/no-distracting-elements"]
+  },
+  {
+    "name": "no-distracting-elements-good",
+    "code": "<span>Read</span>",
+    "expected": []
+  },
+  {
+    "name": "no-interactive-element-to-noninteractive-role-bad",
+    "code": "<button role=\"article\">Read</button>",
+    "expected": ["jsx-a11y/no-interactive-element-to-noninteractive-role"]
+  },
+  {
+    "name": "no-interactive-element-to-noninteractive-role-good",
+    "code": "<button>Read</button>",
+    "expected": []
+  },
+  {
+    "name": "no-noninteractive-element-interactions-bad",
+    "code": "<h1 onClick={() => {}}>Read</h1>",
+    "expected": [
+      "jsx-a11y/click-events-have-key-events",
+      "jsx-a11y/no-noninteractive-element-interactions"
+    ]
+  },
+  {
+    "name": "no-noninteractive-element-interactions-good",
+    "code": "<h1>Read</h1>",
+    "expected": []
+  },
+  {
+    "name": "no-noninteractive-element-to-interactive-role-bad",
+    "code": "<h1 role=\"button\">Read</h1>",
+    "expected": ["jsx-a11y/no-noninteractive-element-to-interactive-role"]
+  },
+  {
+    "name": "no-noninteractive-element-to-interactive-role-good",
+    "code": "<table role=\"grid\"><tbody><tr><td role=\"gridcell\">Read</td></tr></tbody></table>",
+    "expected": []
+  },
+  {
+    "name": "no-noninteractive-tabindex-bad",
+    "code": "<article tabIndex={0}>Read</article>",
+    "expected": ["jsx-a11y/no-noninteractive-tabindex"]
+  },
+  {
+    "name": "no-noninteractive-tabindex-good",
+    "code": "<button tabIndex={0}>Read</button>",
+    "expected": []
+  },
+  {
+    "name": "no-redundant-roles-bad",
+    "code": "<button role=\"button\">Read</button>",
+    "expected": ["jsx-a11y/no-redundant-roles"]
+  },
+  {
+    "name": "no-redundant-roles-good",
+    "code": "<button>Read</button>",
+    "expected": []
+  },
+  {
+    "name": "no-static-element-interactions-bad",
+    "code": "<div onKeyDown={() => {}}>Read</div>",
+    "expected": ["jsx-a11y/no-static-element-interactions"]
+  },
+  {
+    "name": "no-static-element-interactions-good",
+    "code": "<div>Read</div>",
+    "expected": []
+  },
+  {
+    "name": "role-has-required-aria-props-bad",
+    "code": "<div role=\"checkbox\">Read</div>",
+    "expected": ["jsx-a11y/role-has-required-aria-props"]
+  },
+  {
+    "name": "role-has-required-aria-props-good",
+    "code": "<div role=\"checkbox\" aria-checked=\"false\">Read</div>",
+    "expected": []
+  },
+  {
+    "name": "role-supports-aria-props-bad",
+    "code": "<h1 aria-expanded=\"false\">Read</h1>",
+    "expected": ["jsx-a11y/role-supports-aria-props"]
+  },
+  {
+    "name": "role-supports-aria-props-good",
+    "code": "<h1>Read</h1>",
+    "expected": []
+  },
+  {
+    "name": "scope-bad",
+    "code": "<td scope=\"row\">Read</td>",
+    "expected": ["jsx-a11y/scope"]
+  },
+  {
+    "name": "scope-good",
+    "code": "<th scope=\"row\">Read</th>",
+    "expected": []
+  },
+  {
+    "name": "tabindex-no-positive-bad",
+    "code": "<button tabIndex={2}>Read</button>",
+    "expected": ["jsx-a11y/tabindex-no-positive"]
+  },
+  {
+    "name": "tabindex-no-positive-good",
+    "code": "<button tabIndex={0}>Read</button>",
+    "expected": []
+  },
+  {
+    "name": "grid-cell",
+    "code": "<td role=\"gridcell\">Read</td>",
+    "expected": []
+  },
+  {
+    "name": "list-row",
+    "code": "<li role=\"row\">Read</li>",
+    "expected": []
+  },
+  {
+    "name": "tab-list",
+    "code": "<ul role=\"tablist\"><li role=\"tab\" tabIndex={0}>Read</li></ul>",
+    "expected": []
+  },
+  {
+    "name": "invalid-list-grid",
+    "code": "<ul role=\"grid\"><li>Read</li></ul>",
+    "expected": ["jsx-a11y/no-noninteractive-element-to-interactive-role"]
+  },
+  {
+    "name": "dynamic-role",
+    "code": "<div role={active ? \"button\" : \"link\"} tabIndex={0} onClick={() => {}} onKeyDown={() => {}}>Read</div>",
+    "expected": []
+  },
+  {
+    "name": "dynamic-tabindex",
+    "code": "<div tabIndex={active ? 0 : -1}>Read</div>",
+    "expected": ["jsx-a11y/no-noninteractive-tabindex"]
+  },
+  {
+    "name": "image-load-handler",
+    "code": "<img src=\"/x.png\" alt=\"Read\" onLoad={() => {}} />",
+    "expected": []
+  },
+  {
+    "name": "presentational-row",
+    "code": "<tr role=\"presentation\"><td>Read</td></tr>",
+    "expected": []
+  }
+]

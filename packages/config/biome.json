@@ -7,11 +7,6 @@
       "react": "all",
       "next": "all",
       "project": "all"
-    },
-    "rules": {
-      "a11y": {
-        "noNoninteractiveElementToInteractiveRole": "off"
-      }
     }
   }
 }

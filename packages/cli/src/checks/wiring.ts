@@ -160,7 +160,10 @@ export const harnessDecidedVersions = (): Readonly<Record<string, string>> => {
   )
   const fromDependencies: Record<string, string> = asStringRecord(
     Object.fromEntries(
-      TEST_LIBRARY_NAMES.map((name: string): readonly [string, unknown] => [name, declared[name]]),
+      [...TEST_LIBRARY_NAMES, 'oxlint'].map((name: string): readonly [string, unknown] => [
+        name,
+        declared[name],
+      ]),
     ),
   )
   return { ...fromDependencies, ...ownedVersions(), ...harnessRuntimeVersion() }

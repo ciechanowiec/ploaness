@@ -49,6 +49,20 @@ ploaness governs all of the following domains:
   describes the runtime helpers. Where verification runs is the project's own decision and no gate
   rules on it. `--enforce=false` prints findings and exits zero; a run in that mode is not a pass,
   whoever started it.
+- **Application JSX accessibility:** the `oxlint` gate owns the 31 checks in the harness's
+  accessibility registry. Biome delegates those checks only for the same application JSX/TSX scope;
+  its HTML checks, its library policy, and its complementary rules remain active. ESLint retains
+  typed and specialized checks and does not load the former JSX-a11y plugin. Oxlint is lint-only:
+  `ploaness format` still uses Biome and ESLint. The gate supplies its own configuration and explicit
+  file list, disables nested configuration discovery, and checks the native report's file and rule
+  counts. A missing executable or incomplete report fails. A consumer may not own an Oxlint config
+  or ignore file, or override the version the harness installs.
+  An Oxlint suppression names an exact `jsx-a11y/` rule, uses `oxlint-disable-next-line` or
+  `oxlint-disable-line`, and carries a reason after `--`. File-wide directives are refused. Native
+  directives count against the existing ceiling, and unused directives fail. Migrate old JSX-a11y
+  ESLint directives to this syntax; directives for other ESLint rules remain with ESLint.
+  Static analysis does not establish a rendered accessible name or keyboard behavior. The managed
+  browser sweep and the application's interaction and access tests remain mandatory.
 - **The two settings no check can verify:** `ploaness.pretest` and `ploaness.testWrapper` are arbitrary
   argv, and a wrapper that swallows its child's exit code is indistinguishable from one that does not
   until it runs. So the rule is stated here rather than enforced. The wrapper exists to put a database
@@ -412,7 +426,7 @@ transcripts bury the one finding the report exists to surface.
 
 ### Default Verification Gates
 
-Default verification runs 37 gates, in the order below. A repository-scope gate runs once; a
+Default verification runs 38 gates, in the order below. A repository-scope gate runs once; a
 package-scope gate runs once per member; a Payload-scope gate runs only for the members that declare
 Payload. `tree-verify` is last in both tiers, because the extended gates are the ones most able to
 rewrite a tracked file.
@@ -426,7 +440,8 @@ rewrite a tracked file.
 | `types` | package | `tsc --noEmit`. |
 | `biome` | package | Formatting and the fast lint pass. |
 | `biome-schema` | repository | The `$schema` in `biome.json` names the installed Biome version. |
-| `eslint` | package | The type-aware lint pass. |
+| `oxlint` | package | Application JSX accessibility under the harness-owned rule set. Libraries retain their Biome policy. |
+| `eslint` | package | The remaining type-aware and specialized lint checks. |
 | `conventions` | repository | The typography ban and the hand-written JavaScript ban, over every tracked text file, and documenting comments left above another comment rather than above what they document. |
 | `editorconfig` | repository | Every tracked text file matches the pinned `.editorconfig`, and no code line passes 120 characters. |
 | `suppressions` | package | The suppression count against the earned ceiling, over the project's own files. |

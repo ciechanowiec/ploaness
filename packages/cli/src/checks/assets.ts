@@ -17,6 +17,7 @@ import {
   applyManagedSection,
   findAssetViolations,
   hasRuntime,
+  isOxlintConfig,
   type ManagedAsset,
   memberAssets,
   memberKindOf,
@@ -27,7 +28,13 @@ import {
   syncAction,
   type UnmanagedAsset,
 } from '@ploaness/governance'
-import { type Context, type Member, type Repository, shippedDirectory } from '../context.js'
+import {
+  type Context,
+  type Member,
+  type Repository,
+  shippedDirectory,
+  workingTreeFiles,
+} from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 const assetsRoot = (): string => shippedDirectory('@ploaness/assets')
@@ -139,11 +146,17 @@ export const assets = (repository: Repository): GateResult => {
     ])
   }
   const sites: readonly AssetSite[] = sitesOf(repository, parsed.assets)
-  const findings: readonly string[] = sites.flatMap((site: AssetSite): readonly string[] =>
-    findAssetViolations(site.assets, site.unmanaged, stateOf(site.root)).map(
-      (violation: AssetViolation): string => `${site.label}${violation.path}: ${violation.reason}`,
+  const findings: readonly string[] = [
+    ...sites.flatMap((site: AssetSite): readonly string[] =>
+      findAssetViolations(site.assets, site.unmanaged, stateOf(site.root)).map(
+        (violation: AssetViolation): string =>
+          `${site.label}${violation.path}: ${violation.reason}`,
+      ),
     ),
-  )
+    ...workingTreeFiles(repository.root)
+      .filter(isOxlintConfig)
+      .map((file: string): string => `${file}: Oxlint configuration is owned by ploaness`),
+  ]
   const checked: number = sites.reduce(
     (total: number, site: AssetSite): number => total + site.assets.length,
     0,

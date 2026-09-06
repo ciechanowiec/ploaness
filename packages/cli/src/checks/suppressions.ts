@@ -10,13 +10,19 @@ import path from 'node:path'
 import {
   countSourceLines,
   findSuppressions,
+  hasExtension,
   isGovernedCode,
+  isOxlintSuppression,
+  JSX_EXTENSIONS,
+  jsxAccessibilityFiles,
   judgeSuppressions,
+  type SourceComment,
   type SuppressionReport,
   type SuppressionSite,
 } from '@ploaness/governance'
 import { type Context, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
+import { sourceComments } from '../source-comments.js'
 import { managedPaths } from './assets.js'
 
 interface ScannedFile {
@@ -27,6 +33,21 @@ interface ScannedFile {
 const isUnderSourceRoots = (file: string, sourceRoots: readonly string[]): boolean =>
   sourceRoots.some((sourceRoot: string): boolean => file.startsWith(`${sourceRoot}/`))
 
+const sitesOf = (scanned: ScannedFile): readonly SuppressionSite[] => [
+  ...findSuppressions(scanned.file, scanned.content),
+  ...(hasExtension(scanned.file, JSX_EXTENSIONS)
+    ? sourceComments(scanned.content)
+        .filter(isOxlintSuppression)
+        .map(
+          (comment: SourceComment): SuppressionSite => ({
+            file: scanned.file,
+            line: comment.line,
+            token: 'oxlint-disable',
+          }),
+        )
+    : []),
+]
+
 /** Count suppressions and source lines across the project's own code. */
 export const suppressions = (context: Context): GateResult => {
   const excluded: readonly string[] = context.settings.typographyExclusions
@@ -35,18 +56,20 @@ export const suppressions = (context: Context): GateResult => {
   // reason: a ceiling earned by code the project did not write would be an allowance, not a measure.
   const managed: ReadonlySet<string> = managedPaths(context)
   // An enumerated path is not always a regular file: a symlink and a submodule gitlink both appear here.
-  const files: readonly string[] = workingTreeFiles(context.root).filter(
-    (file: string): boolean => {
-      const full: string = path.join(context.root, file)
-      return (
-        isUnderSourceRoots(file, context.settings.sourceRoots) &&
-        !managed.has(file) &&
-        isGovernedCode(file, excluded) &&
-        existsSync(full) &&
-        statSync(full).isFile()
-      )
-    },
+  const inventory: readonly string[] = workingTreeFiles(context.root)
+  const jsx: ReadonlySet<string> = new Set(
+    jsxAccessibilityFiles(inventory, context.settings.generatedArtefacts, []),
   )
+  const files: readonly string[] = inventory.filter((file: string): boolean => {
+    const full: string = path.join(context.root, file)
+    return (
+      (isUnderSourceRoots(file, context.settings.sourceRoots) || jsx.has(file)) &&
+      !managed.has(file) &&
+      isGovernedCode(file, excluded) &&
+      existsSync(full) &&
+      statSync(full).isFile()
+    )
+  })
 
   // Read once, then derive both figures from the same contents rather than accumulating as we go.
   const contents: readonly ScannedFile[] = files.map(
@@ -56,8 +79,7 @@ export const suppressions = (context: Context): GateResult => {
     }),
   )
   const sites: readonly SuppressionSite[] = contents.flatMap(
-    (scanned: ScannedFile): readonly SuppressionSite[] =>
-      findSuppressions(scanned.file, scanned.content),
+    (scanned: ScannedFile): readonly SuppressionSite[] => sitesOf(scanned),
   )
   const sourceLines: number = contents.reduce(
     (total: number, scanned: ScannedFile): number => total + countSourceLines(scanned.content),

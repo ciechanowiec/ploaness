@@ -12,13 +12,16 @@
 // passes is verbose, explicit and readable by construction.
 
 import nextPlugin from '@next/eslint-plugin-next'
-import { ENVIRONMENT_READ_EXEMPTIONS, REEXPORT_CONFIG_FILES } from '@ploaness/governance'
+import {
+  APPLICATION_JSX_IGNORES,
+  ENVIRONMENT_READ_EXEMPTIONS,
+  REEXPORT_CONFIG_FILES,
+} from '@ploaness/governance'
 //
 // The framework-neutral half - the caps, the explicitness rules, the naming ban, the suppression
 // discipline, the mock ban - lives in ./eslint-core.js and is shared with the ploaness repository's own
 // lint run. What stays here is what is genuinely about Payload and Next: the generated mount, the
 // collection configs, the environment module, the a11y layer, and the test-integrity block.
-import jsxA11y from 'eslint-plugin-jsx-a11y'
 import testingLibrary from 'eslint-plugin-testing-library'
 import {
   baseLayers,
@@ -68,10 +71,7 @@ export default compose(
   // ── What is never linted ────────────────────────────────────────────────────────────────────
   {
     ignores: [
-      '.next/**',
-      'node_modules/**',
-      'coverage/**',
-      'pgadmin/**',
+      ...APPLICATION_JSX_IGNORES,
 
       '**/*.d.ts',
       'src/payload-types.ts',
@@ -91,7 +91,6 @@ export default compose(
       // parsing error rather than a finding, on every run, with no edit a project is permitted to make
       // that would clear it: `include` is dictated and this config is re-exported verbatim. Biome and
       // the conventions gate still read these files.
-      '.*/**',
     ],
   },
 
@@ -153,26 +152,8 @@ export default compose(
     },
   },
 
-  // ── Accessibility: lint JSX for a11y defects - missing alt text, unlabeled controls, invalid or
-  //    misused ARIA, click handlers with no keyboard equivalent, non-focusable interactive elements.
-  //    This is pure static analysis, so it is deterministic (never flaky) and the baseline every site
-  //    needs. What it CANNOT see (it does not render): color contrast, focus order, real keyboard
-  //    navigation - those need a browser and are covered by axe-in-e2e (see AGENTS.md testing policy).
-  //
-  //    This block also settles one rule for the whole application configuration. Biome ships a port of
-  //    `no-noninteractive-element-to-interactive-role`, and it is `off` in `biome.json` because it
-  //    contradicts Biome's own `useSemanticElements`: that rule requires `role="grid"` to sit on a
-  //    `<table>`, which is what the ARIA pattern documents, and the port then refuses the table carrying
-  //    it. No markup satisfies both, the port accepts no options, and the cost fell on any consumer
-  //    building an accessible grid, treegrid, listbox or tab-strip on the correct native element - a
-  //    suppression each, spent on a disagreement between two rules rather than on a hard case. The
-  //    recommended options mounted here are the same check with the allowances the port lacks: they
-  //    name `table: ['grid']`, `td: ['gridcell']` and `li: ['row']` explicitly, so nothing is lost.
-  {
-    files: ['**/*.tsx'],
-    plugins: { 'jsx-a11y': jsxA11y },
-    rules: jsxA11y.flatConfigs.recommended.rules,
-  },
+  // Application JSX accessibility is owned by the Oxlint gate. Its rule registry also generates
+  // Biome's matching exclusions, while this configuration keeps the remaining typed checks.
 
   // ── Core Web Vitals: the static half of a measurement no gate can take. A vitals score, like a
   //    Lighthouse score, moves between two runs of an unchanged tree and would measure `next dev`'s

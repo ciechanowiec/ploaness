@@ -42,6 +42,7 @@
     "dependency-cruiser": "18.2.0",
     "eslint": "10.9.1",
     "knip": "6.34.0",
+    "oxlint": "1.81.0",
     "stylelint": "17.14.1",
     "tsx": "4.23.13",
     "type-coverage": "2.30.1",

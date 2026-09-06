@@ -14,6 +14,7 @@ const BINARY_PROBE_BYTES: number = 8192
 export const CODE_EXTENSIONS: readonly string[] = [
   '.ts',
   '.tsx',
+  '.jsx',
   '.mts',
   '.cts',
   '.js',
