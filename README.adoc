@@ -47,11 +47,8 @@ endif::[]
 == Overview
 
 . _ploaness_ is a quality harness for https://payloadcms.com[Payload CMS^] projects.
-+
-A project declares `ploaness` as a development dependency and receives the analyzer settings, the commit rules, the xref:#managed-files[managed files], and the xref:#gates[gates] that inspect the project. Analyzer configurations are inherited. Managed files are written into the project and checked for drift.
-. This guide is written for an engineer who attaches _ploaness_ version `{ploaness-version}` to a https://payloadcms.com[Payload CMS^] project, or works day to day in a project that already runs the harness.
-+
-The guide covers what the harness does, what the harness requires, and the steps that attach the harness. The guide doesn't state the individual rules, which _ploaness_ installs into the project for the coding agent that repairs them.
+. A project declares `ploaness` as a development dependency and receives the analyzer settings, the commit rules, the xref:#managed-files[managed files], and the xref:#gates[gates] that inspect the project. Analyzer configurations are inherited. Managed files are written into the project and checked for drift.
+. This guide is written for an engineer who attaches _ploaness_ version `{ploaness-version}` to a https://payloadcms.com[Payload CMS^] project, or works day to day in a project that already runs the harness. The guide covers what the harness does, what the harness requires, and the steps that attach the harness. The guide doesn't state the individual rules, which _ploaness_ installs into the project for the coding agent that repairs them.
 
 [[harness-structure]]
 == Harness Structure
@@ -59,12 +56,8 @@ The guide covers what the harness does, what the harness requires, and the steps
 [[gates]]
 === Gates
 
-. A [[gate,gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding,finding]]_finding_ is one problem a gate reports.
-+
-Default verification runs 38 gates. Extended verification adds six more, covering the history, the production build, the client bundle, and the browser suite.
-. A run stops at the first failing gate and names how many gates the run didn't reach.
-+
-Stopping there is deliberate: a gate is free to leave the tree in a shape the next gate misreads, and a column of passes beneath a failure would describe a state nobody established.
+. A [[gate,gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding,finding]]_finding_ is one problem a gate reports. Default verification runs 38 gates. Extended verification adds six more, covering the history, the production build, the client bundle, and the browser suite.
+. A run stops at the first failing gate and names how many gates the run didn't reach. Stopping there is deliberate: a gate is free to leave the tree in a shape the next gate misreads, and a column of passes beneath a failure would describe a state nobody established.
 
 [[managed-files]]
 === Managed Files
@@ -74,17 +67,11 @@ _ploaness_ owns the text of certain files in the project, among them the editor 
 [[requirements]]
 == Requirements
 
-. _ploaness_ runs on Node 26 or newer, under pnpm 11 or newer, in a Git working tree.
-. The repository contains an application declaring the https://www.npmjs.com/package/payload[`payload` package^].
-+
-A workspace may also contain Next.js applications and libraries.
-. Applications declare `@ploaness/runtime` in `dependencies` at the same version as `ploaness`.
-. _ploaness_ sets a pin on every package whose version can change a verdict, and rejects any other value.
-+
-A project matching those pins is what makes a passing run mean the same thing twice.
-. Some gates run their analyzer in a container and need a reachable Docker daemon, and others read the advisory database or the package registry over the network.
-+
-A gate whose daemon, database, or registry is unreachable fails rather than passes.
+. Use Node 26 or newer, the pnpm version pinned by _ploaness_, and Git.
+. Include at least one application that declares the https://www.npmjs.com/package/payload[`payload` package^].
+. Use the dependency versions pinned by _ploaness_.
+. Declare `@ploaness/runtime` in each application's `dependencies`, matching its `ploaness` version.
+. Provide a reachable Docker daemon and network access to the package and advisory registries.
 
 [[adding-ploaness-to-a-project]]
 == Adding _ploaness_ to a Project
@@ -103,9 +90,7 @@ pnpm exec ploaness init && pnpm install
 ----
 +
 `ploaness init` writes the project's scripts, creates the configuration files that point at the shipped settings, and materializes the xref:#managed-files[managed files]. Existing member configurations are left in place. Root scripts and managed content are updated.
-. Hand the project to a coding agent and ask the agent to bring the project up to the harness.
-+
-`ploaness init` has already written the instructions that agent reads: a managed block at the top of `AGENTS.md` points at `.ploaness/agent-guide.md`, which describes the harness and the order to work in.
+. Hand the project to a coding agent and ask the agent to bring the project up to the harness. `ploaness init` has already written the instructions that agent reads: a managed block at the top of `AGENTS.md` points at `.ploaness/agent-guide.md`, which describes the harness and the order to work in.
 
 [[commands]]
 == Commands
