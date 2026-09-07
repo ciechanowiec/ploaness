@@ -122,6 +122,32 @@ without starting one, and the day somebody adds a Dockerfile it is already linte
 is not held to, so prefer adding one here over asserting that it cannot apply - `arch` was absent on
 that reasoning, and a module cycle grew in `packages/governance` where nothing was looking.
 
+### A subject the hosting platform wrote is not the author's
+
+`commit-history` held every commit to the header rule with no exemption, and that is still the rule. What
+it did not distinguish was who wrote the characters it judged. A platform that completes a pull request
+as a squash writes the start of the subject itself - Azure DevOps prefixes the title with
+`Merged PR <number>: ` and offers no other default - so a project hosted there had every commit on its
+default branch fail for a prefix nobody typed, and the only repair was to rewrite the platform's
+message by hand in the completion dialog, on every pull request, or to force-push `main` after the fact.
+
+`squashMerges` declares the platform and the branch it merges into, which are facts ploaness cannot
+know, and `packages/governance/src/squash-merge.ts` sets the prefix aside on exactly the commits the
+platform produces: one parent, reachable from that branch. Three decisions keep it from being an
+exemption list by another name. The platform comes from a catalogue rather than a pattern the project
+declares, because a declarable pattern is `.*` waiting to be written. The parents are counted from what
+git recorded, as `linear-history` already does, so a merge commit carrying the prefix is reported by
+this gate too rather than vouched for. And a prefixed commit off the branch is a finding that names the
+branch, because a hand-written subject imitating the platform is the one thing the setting must not
+admit. What remains after the prefix is the title the author typed, and it is held to every rule,
+the 72-character ceiling included. The pending-message mode never applies it: an author writing a
+message is not a platform completing a pull request.
+
+The branch is resolved through `refs/heads/<branch>` and `refs/remotes/*/<branch>` together, because in
+CI it is usually only the second: a full-depth checkout of a pull request brings `origin/main` and no
+local `main`. A branch present under neither yields an empty set, so every prefixed commit is then a
+finding naming the branch rather than a pass nothing verified.
+
 ### Three scopes, and why the run order did not move
 
 A gate judges a repository, a package, or a Payload package. The distinction is not cosmetic: reading a

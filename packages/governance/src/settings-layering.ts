@@ -42,6 +42,10 @@ const REPLACED: ReadonlySet<string> = new Set<string>([
   'testWrapper',
   'serverUrl',
   'vulnerabilitySeverity',
+  // One platform squashes one repository's pull requests. The history gates read the repository's own
+  // block, so a member's answer is never consulted; it is classified so that a member that repeats it
+  // cannot merge a half-record with the repository's.
+  'squashMerges',
 ])
 
 const mergeArrays = (base: unknown, overlay: unknown): unknown => [

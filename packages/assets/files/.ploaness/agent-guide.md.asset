@@ -359,6 +359,16 @@ There are no exemptions. Every commit is held to every rule, including the ones 
 merge, a revert, or an autosquash commit must be given a conforming subject by hand. There is no
 `revert` type - a revert is described by what it does, like any other change.
 
+One prefix is set aside, and it is not an exemption: a hosting platform that completes a pull request as
+a squash writes the start of the subject itself. Azure DevOps prefixes the pull request title with
+`Merged PR <number>: ` and offers no other default. A project that declares `squashMerges` has that
+prefix removed before the rules above apply, on exactly the commits the platform produces - one parent,
+on the declared branch - and everything after it, which is the title the author typed, is judged in
+full, the 72-character ceiling included. The pull request description becomes the body, so it has to
+explain why. The same prefix on a merge commit, on any other branch, or in a project that declares no
+platform is a finding. A pending message is never treated as a squash: `ploaness commit-message <file>`
+judges what the author is writing, and the platform is not writing it.
+
 Three traps account for most failures:
 
 - The 15-character floor rejects a short subject such as `fix typo`.
@@ -559,6 +569,7 @@ default, so a typo can never widen a rule.
 | `analysisEnv` | `PAYLOAD_SECRET`, `DATABASE_URL` | Placeholder environment for the gates that import the project. |
 | `pretest` | empty | A command run before the `tests`, `build`, and `e2e` gates. |
 | `testWrapper` | empty | An argument list wrapping the process those gates run. |
+| `squashMerges` | none | The platform that squashes pull requests into the history: `platform` (`azure-devops`) and `branch` (`main`). Its subject prefix is set aside on one-parent commits on that branch, and the rest of the subject is judged in full. A platform outside the catalogue is dropped. |
 
 Two of these answer a finding that has no other answer. A fake credential committed as a test fixture is
 declared through `secretAllowlist`, because `.gitleaks.toml` is forbidden and ploaness renders the

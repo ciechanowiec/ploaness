@@ -361,3 +361,33 @@ describe('the accessibility route budget clamps in one direction only', () => {
     ).toBe(shipped)
   })
 })
+
+describe('squashMerges', () => {
+  it('is undefined for a project that declares nothing', () => {
+    expect(readSettings({}).squashMerges).toBeUndefined()
+  })
+
+  it('reads the platform and defaults the branch to main', () => {
+    expect(
+      readSettings({ ploaness: { squashMerges: { platform: 'azure-devops' } } }).squashMerges,
+    ).toEqual({
+      platform: 'azure-devops',
+      branch: 'main',
+    })
+  })
+
+  it('honours a declared branch', () => {
+    expect(
+      readSettings({ ploaness: { squashMerges: { platform: 'azure-devops', branch: 'trunk' } } })
+        .squashMerges?.branch,
+    ).toBe('trunk')
+  })
+
+  it.each([
+    ['a platform outside the catalogue', { platform: 'github' }],
+    ['a missing platform', { branch: 'main' }],
+    ['a bare string', 'azure-devops'],
+  ])("drops %s, so the prefix stays the author's own", (_kind, declared) => {
+    expect(readSettings({ ploaness: { squashMerges: declared } }).squashMerges).toBeUndefined()
+  })
+})

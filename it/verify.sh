@@ -71,17 +71,29 @@ new_case() {
     ln -s "$template/node_modules" "$directory/node_modules"
 }
 
-commit_case() {
+# git in a case directory, with the identity every fixture commit carries.
+case_git() {
     directory="$scratch/$1"
-    subject="$2"
-    body="$3"
-    git -C "$directory" init -q -b main
-    git -C "$directory" add -A
+    shift
     git -C "$directory" \
         -c user.name='ploaness integration suite' \
         -c user.email='it@ploaness.invalid' \
         -c commit.gpgsign=false \
-        commit -q -m "$subject" -m "$body"
+        "$@"
+}
+
+# Record everything in the working tree as one more commit of an already initialised case.
+commit_in() {
+    name="$1"
+    subject="$2"
+    body="$3"
+    case_git "$name" add -A
+    case_git "$name" commit -q -m "$subject" -m "$body"
+}
+
+commit_case() {
+    git -C "$scratch/$1" init -q -b main
+    commit_in "$1" "$2" "$3"
 }
 
 # Assert one gate's verdict, and when it must fail, that the reported findings name the expected rule.
@@ -636,6 +648,51 @@ expect fail-commit-junk-word commit-history FAIL 'low-effort'
 new_case fail-commit-revert-type
 commit_case fail-commit-revert-type 'revert: restore the previous gate' "$CONFORMING_BODY"
 expect fail-commit-revert-type commit-history FAIL 'invalid header'
+
+# A subject the hosting platform wrote is not the author's. A project that declares the platform its
+# pull requests are squashed by has that platform's prefix set aside on the one shape the platform
+# produces - one parent, on the merged-into branch - and everything after it judged in full.
+# The prefixed commit is the second one: a root commit has no parent, and a squash always has one.
+new_case pass-squash-subject
+edit_json "$scratch/pass-squash-subject/package.json" ploaness.squashMerges '{"platform":"azure-devops"}'
+commit_case pass-squash-subject 'feat(fixture): add the ploaness integration consumer' "$CONFORMING_BODY"
+printf 'squashed\n' > "$scratch/pass-squash-subject/squashed.txt"
+commit_in pass-squash-subject 'Merged PR 12: feat(fixture): land a pull request as the platform does' \
+    "$CONFORMING_BODY"
+expect pass-squash-subject commit-history PASS
+
+# The same prefix on any other branch is a hand-written subject imitating the platform.
+new_case fail-squash-subject-off-branch
+edit_json "$scratch/fail-squash-subject-off-branch/package.json" ploaness.squashMerges \
+    '{"platform":"azure-devops"}'
+commit_case fail-squash-subject-off-branch 'feat(fixture): add the ploaness integration consumer' \
+    "$CONFORMING_BODY"
+case_git fail-squash-subject-off-branch checkout -q -b topic
+printf 'topic\n' > "$scratch/fail-squash-subject-off-branch/topic.txt"
+commit_in fail-squash-subject-off-branch 'Merged PR 13: feat(fixture): imitate the platform on a topic' \
+    "$CONFORMING_BODY"
+expect fail-squash-subject-off-branch commit-history FAIL 'not on main'
+
+# And on a merge commit it is a merge, whatever the subject says. linear-history refuses that commit as
+# well, but this gate must not vouch for the subject on its own.
+new_case fail-squash-subject-merge
+edit_json "$scratch/fail-squash-subject-merge/package.json" ploaness.squashMerges \
+    '{"platform":"azure-devops"}'
+commit_case fail-squash-subject-merge 'feat(fixture): add the ploaness integration consumer' \
+    "$CONFORMING_BODY"
+case_git fail-squash-subject-merge checkout -q -b topic
+printf 'topic\n' > "$scratch/fail-squash-subject-merge/topic.txt"
+commit_in fail-squash-subject-merge 'feat(fixture): add a commit on the topic branch' "$CONFORMING_BODY"
+case_git fail-squash-subject-merge checkout -q main
+case_git fail-squash-subject-merge merge -q --no-ff topic \
+    -m 'Merged PR 14: feat(fixture): merge the topic branch' -m "$CONFORMING_BODY"
+expect fail-squash-subject-merge commit-history FAIL 'parent(s)'
+
+# Without the declaration the prefix stays the author's own and fails as it always did.
+new_case fail-squash-subject-undeclared
+commit_case fail-squash-subject-undeclared \
+    'Merged PR 15: feat(fixture): add the ploaness integration consumer' "$CONFORMING_BODY"
+expect fail-squash-subject-undeclared commit-history FAIL 'invalid header'
 
 # The committed .editorconfig is pinned, and until now nothing checked a file against it.
 new_case fail-editorconfig

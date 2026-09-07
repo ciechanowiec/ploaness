@@ -14,6 +14,7 @@ import { GENERATED_ARTEFACTS } from './generated-denial.js'
 // malformed environment.
 import { asRecord, asStringRecord, asText, isArray, isRecord } from './json-shapes.js'
 import type { SecretException } from './secret-policy.js'
+import { isSquashPlatform, type SquashMergePolicy } from './squash-merge.js'
 import type { VulnerabilityException } from './vulnerability-policy.js'
 
 /**
@@ -189,6 +190,14 @@ export interface Settings {
    * (`build`, `tests`, `e2e`) ignores this and uses the real environment.
    */
   readonly analysisEnv: Readonly<Record<string, string>>
+  /**
+   * The platform that completes the project's pull requests as squash commits, and the branch it merges
+   * into. Which platform hosts a repository is a fact ploaness cannot know, and declaring it weakens no
+   * rule: the platform's own subject prefix is set aside on the commits it demonstrably wrote, and the
+   * title the author typed is judged in full behind it. Undefined for a project that declares none,
+   * where the prefix stays the author's and fails the header rule as it always did.
+   */
+  readonly squashMerges: SquashMergePolicy | undefined
 }
 
 // Imported rather than recomputed. The same three lines stood here and in `bundle-budget.ts`, which is
@@ -285,6 +294,20 @@ const DEFAULT_COVERAGE_EXCLUDE: readonly string[] = [
   // running application what it actually sent, which is the question worth failing on.
   'src/proxy.ts',
 ]
+
+// A platform outside the catalogue is dropped rather than honoured, for the reason every other malformed
+// entry is: a typo must leave the prefix judged as the author's own, which is the strict direction. The
+// branch defaults to the one nearly every hosted repository merges into.
+const DEFAULT_SQUASH_BRANCH: string = 'main'
+const asSquashMerges = (raw: unknown): SquashMergePolicy | undefined => {
+  const record: Record<string, unknown> = asRecord(raw)
+  const platform: unknown = record['platform']
+  if (!isSquashPlatform(platform)) {
+    return undefined
+  }
+  const branch: string = asText(record['branch']).trim()
+  return { platform, branch: branch.length > 0 ? branch : DEFAULT_SQUASH_BRANCH }
+}
 
 const isTextArray = (raw: unknown): raw is readonly string[] =>
   isArray(raw) && raw.every((entry: unknown): boolean => typeof entry === 'string')
@@ -517,6 +540,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
       DEFAULT_ACCESSIBILITY_ROUTE_BUDGET,
     ),
     analysisEnv: { ...DEFAULT_ANALYSIS_ENV, ...asStringRecord(raw['analysisEnv']) },
+    squashMerges: asSquashMerges(raw['squashMerges']),
   }
 }
 
