@@ -1,19 +1,4 @@
-// Which files of a Next.js application declare a page, and what address each one answers at.
-//
-// The accessibility sweep discovers routes by following links from the home page. To say what it
-// MISSED, something has to say what exists, and the only statement of that a project always carries is
-// its own file tree: `app/.../page.tsx` is the one declaration Next.js reads.
-//
-// This is string work over relative paths that were already listed, which is why it is here rather
-// than beside the walker that lists them. The mapping is the error-prone half - route groups, parallel
-// slots, intercepting routes, three kinds of dynamic segment - and a rule kept out of this package is
-// a rule kept out of the coverage measurement.
-//
-// What it deliberately does NOT do is read `next.config`. `basePath`, `trailingSlash`, `rewrites`,
-// `redirects` and a custom `pageExtensions` all change the address a file answers at, and the config
-// cannot be evaluated without importing the application. A project that uses one of those tells the
-// sweep so through `accessibilitySkipRoutes`; the limitation is stated in the guide rather than
-// guessed at here.
+// Map Next.js route files to URL patterns for comparison with actual crawl results.
 
 /** A page a project's file tree declares, and the address it answers at. */
 export interface DeclaredRoute {

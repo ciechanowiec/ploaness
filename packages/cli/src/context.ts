@@ -19,6 +19,7 @@ import {
   parseJsonc,
   ploanessBlock,
   ROOT_MEMBER_PATH,
+  type RolePattern,
   readKey,
   readMemberSettings,
   readSettings,
@@ -29,6 +30,10 @@ import {
   type Settings,
   selectProjects,
 } from '@ploaness/governance'
+
+import { workingTreeFiles } from './working-tree.js'
+
+export { workingTreeFiles } from './working-tree.js'
 
 const nodeRequire: NodeJS.Require = createRequire(import.meta.url)
 const BYTES_PER_KIB: number = 1024
@@ -237,39 +242,6 @@ export const shippedDirectory = (packageName: string): string =>
 export const cliDirectory = (): string =>
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-/**
- * List the repository's files as they exist on disk, NUL-delimited so paths with spaces survive intact.
- *
- * `--cached --others --exclude-standard` rather than the bare `git ls-files` this used to run, and the
- * difference is the whole guarantee. The bare form lists the INDEX, so a file that had been written but
- * not staged was invisible to every check built on this - the typography ban, the line-length check,
- * the suppression ceiling, the Payload usage rules, the tree fingerprint, and the discovery of which
- * directories are governed members at all. An agent's loop is write, verify, commit; nothing in that
- * loop stages anything, so a session could run twelve checks over its own new code, see them all pass,
- * and have the commit rejected by a rule that had simply never been shown the file. A green run is
- * documented as a verdict, and against the index it was not one.
- *
- * `--exclude-standard` is what keeps that honest in the other direction: everything a project ignores
- * stays out, so a build directory or a coverage report does not arrive as new source.
- *
- * Deliberately not memoised, though it is called once per consuming check and twice more for the
- * fingerprint. Measured at about a millisecond over the bare form on a few hundred files, which buys
- * nothing worth a cache - and a cached list is exactly the defect above, one layer in: the second
- * fingerprint MUST see a file a gate created since the first, and a memo is a promise that it will not.
- * @param root the directory to enumerate, which for a member is that member's own directory.
- * @returns every file git can see there that the project does not ignore.
- */
-export const workingTreeFiles = (root: string): readonly string[] =>
-  execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
-    cwd: root,
-    encoding: 'utf8',
-    maxBuffer: MAX_OUTPUT_BYTES,
-    // A directory that is not a repository is a case the caller handles, not a diagnosis to print.
-    stdio: ['ignore', 'pipe', 'ignore'],
-  })
-    .split('\0')
-    .filter((file: string): boolean => file !== '')
-
 /** Run a git command in the project and return its trimmed stdout. */
 export const git = (context: Context, commandArguments: readonly string[]): string =>
   execFileSync('git', [...commandArguments], {
@@ -465,10 +437,18 @@ const withMemberExclusions = (base: Settings, members: readonly Member[]): Setti
         (entry: DeclaredExclusion): DeclaredExclusion => rebaseExclusion(member.path, entry),
       ),
   )
-  const patternsFor = (setting: string): readonly string[] =>
+  const patternsFor = (setting: string): readonly RolePattern[] =>
     rebased
-      .filter((entry: DeclaredExclusion): boolean => entry.setting === setting)
-      .map((entry: DeclaredExclusion): string => entry.pattern)
+      .filter(
+        (entry: DeclaredExclusion): boolean =>
+          entry.setting === setting && entry.reason.length > 0 && entry.pattern.length > 0,
+      )
+      .map(
+        (entry: DeclaredExclusion): RolePattern =>
+          entry.memberPath === undefined
+            ? entry.pattern
+            : { memberPath: entry.memberPath, pattern: entry.pattern },
+      )
   return {
     ...base,
     typographyExclusions: [...base.typographyExclusions, ...patternsFor('typographyExclusions')],

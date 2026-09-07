@@ -1,23 +1,4 @@
-// One version, and every place this repository writes it down.
-//
-// The packages are published together and pin each other at an EXACT version, because
-// `workspace:*` does not resolve when a package is installed from a tarball outside its workspace -
-// which is how `it/` verifies the harness before it is published. That exactness is what makes a
-// release safe and what makes a bump dangerous: nothing derives those numbers from a single value,
-// so the version is written down once per manifest, once per cross-reference, twice in the fixture
-// and once in the guide. A release that publishes with two of them disagreeing produces packages that
-// install and then fail to resolve.
-//
-// So the joint is checked rather than the value. `packages/ploaness` is the version a consumer installs,
-// so it is the site every other one is measured against.
-//
-// This file also checks WHICH packages, not only which version, and it does so because the comment
-// that used to sit here gave up on exactly that: it declined to state a count "because a sixth package
-// changed it and no check reads this comment". The sixth package had by then been missed twice. The
-// release workflow published five of six, so a release would have shipped every package that pins
-// `@ploaness/runtime` and never runtime itself; and knip's workspace list omitted it, so that package
-// was never analysed at all. Both lists are hand-written, both were correct when written, and nothing
-// compared either against the tree. A roster is checked here for the same reason a version is.
+// Check release versions and package rosters against the meta package and discovered workspace packages.
 import { type Dirent, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'

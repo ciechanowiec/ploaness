@@ -39,7 +39,7 @@ describe('require-user-access-control', () => {
       rulesOf("await payload.create({ collection: 'p', data: { user }, overrideAccess: false })"),
     ).toEqual([])
     expect(rulesOf('await client.find({ user, overrideAccess: false })')).toEqual([])
-    expect(rulesOf('await payload.find(options)')).toEqual([])
+    expect(rulesOf('await payload.find(options)')).toEqual(['require-explicit-payload-options'])
   })
 
   it('accepts only a false that follows the last top-level spread', () => {

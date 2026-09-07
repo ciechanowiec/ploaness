@@ -1,24 +1,4 @@
-// A required relationship makes the collection it points at undeletable, unless that collection takes
-// its dependants down first.
-//
-// Payload's Postgres adapter emits two settings for one field, and they contradict each other. For a
-// single-value, non-polymorphic `relationship` or `upload` it puts a column on the table with
-// `ON DELETE SET NULL`, and it adds `NOT NULL` to that same column when the field is `required` - unless
-// the field carries an `admin.condition`, or the collection enables drafts, both of which switch the
-// null constraint off. So deleting the row being pointed AT asks the database to null a column that may
-// never be null, and the whole transaction aborts.
-//
-// Nothing reports it until something deletes. The configuration is valid, the build passes, and every
-// test passes; then an unrelated spec deletes a user and fails with a constraint on a table it never
-// mentioned. That is what this rule exists to move: from a runtime error naming the wrong collection to
-// a source finding naming the right one.
-//
-// The repair is a `beforeDelete` hook on the collection being pointed at. It has to be BEFORE rather
-// than after, because the row must go while its target still exists.
-//
-// This is the one Payload rule that cannot be decided from a single file: `relationTo: 'users'` names a
-// collection some other module declares. It therefore reads every candidate at once, the way
-// `admin-view-coverage.ts` does, rather than joining the single-source finders in `payload-policy.ts`.
+// Require cleanup when a required relationship would otherwise prevent deletion of the referenced document.
 import type { SpecSource } from './axe-coverage.js'
 import { type FoundPayloadConfig, payloadConfigsIn } from './payload-configs.js'
 import { depthOneBlockKeys, depthOneValue, type PayloadViolation } from './payload-source.js'

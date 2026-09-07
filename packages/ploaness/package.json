@@ -1,7 +1,7 @@
 {
   "name": "ploaness",
   "version": "1.2.0",
-  "description": "An external, versioned quality harness for Payload CMS projects. Declare one dependency and inherit the whole contract.",
+  "description": "Shared governance, analyzer configuration, and managed files for Payload CMS repositories.",
   "keywords": [
     "payload",
     "payloadcms",

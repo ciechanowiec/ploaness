@@ -16,6 +16,7 @@ import {
   judgeSuppressions,
   OXLINT_EXTENSIONS,
   oxlintSourceFiles,
+  type RolePattern,
   type SourceComment,
   type SuppressionReport,
   type SuppressionSite,
@@ -54,7 +55,7 @@ const eligibleFiles = (
   native: ReadonlySet<string>,
 ): readonly string[] => {
   const managed: ReadonlySet<string> = managedPaths(context)
-  const excluded: readonly string[] = context.settings.typographyExclusions
+  const excluded: readonly RolePattern[] = context.settings.typographyExclusions
   return inventory.filter((file: string): boolean => {
     const full: string = path.join(context.root, file)
     return (

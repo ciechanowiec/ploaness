@@ -8,7 +8,7 @@
 // is the contract rather than a preference.
 
 import { BUNDLE_BUDGET_BYTES } from './bundle-budget.js'
-import { matchesGlob, matchesRole } from './file-roles.js'
+import { matchesGlob, matchesRole, type RolePattern } from './file-roles.js'
 import { GENERATED_ARTEFACTS } from './generated-denial.js'
 // Only string-valued entries survive `asStringRecord`: a non-string would reach `spawn` as a
 // malformed environment.
@@ -25,6 +25,8 @@ export type ExclusionKind = 'regex' | 'glob' | 'route'
 
 /** One exclusion a project declared, and the file role it claims. */
 export interface DeclaredExclusion {
+  /** Internal scope retained when a repository gate reads a member-owned regex. */
+  readonly memberPath?: string
   /** Which setting it came from, so a finding can name it. */
   readonly setting: string
   readonly pattern: string
@@ -100,7 +102,7 @@ export interface Settings {
   /** Managed paths the project owns instead, each with a recorded reason. */
   readonly unmanagedAssets: readonly UnmanagedAsset[]
   /** Repo-relative path patterns exempt from the typography ban (generated files only). */
-  readonly typographyExclusions: readonly string[]
+  readonly typographyExclusions: readonly RolePattern[]
   /**
    * Paths holding framework-generated scaffolding, which the lint pass relaxes rather than judges.
    *
@@ -132,7 +134,7 @@ export interface Settings {
   /** Every exclusion the project declared, honoured or not, so a gate can judge them. */
   readonly declaredExclusions: readonly DeclaredExclusion[]
   /** Repo-relative path patterns exempt from the hand-written-JavaScript ban. */
-  readonly javascriptAllowlist: readonly string[]
+  readonly javascriptAllowlist: readonly RolePattern[]
   /** Glob patterns excluded from coverage measurement, by role rather than by convenience. */
   readonly coverageExclude: readonly string[]
   /** Ceiling for total gzipped client JavaScript, in bytes. */

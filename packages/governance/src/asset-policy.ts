@@ -1,26 +1,4 @@
-// Managed-file policy. Some configuration is read
-// from the working tree by tools ploaness does not run (git, editors, coding agents), so it cannot live
-// inside the package and be resolved through node_modules the way an ESLint or Biome config can. Those
-// files are materialised into the consumer tree by `ploaness sync` and policed here.
-//
-// Five dispositions:
-//   PINNED    - ploaness owns the content; the file must exist and match byte for byte.
-//   SEED      - ploaness writes it once when absent; the project owns it thereafter and may edit it.
-//   FORBIDDEN - the path must not exist, because ploaness supplies that configuration itself and a
-//               working-tree copy would silently shadow or contradict it.
-//   SECTION   - ploaness owns a marked block at the top of the file; the project owns everything below
-//               it. Neither PINNED nor SEED fits a file both parties must write: pinning it would forbid
-//               the project its own agent instructions, and seeding it would let the contract statement
-//               drift the moment ploaness changed.
-//   REFERENCE - the path need not exist, but if it does it carries nothing but a pointer at AGENTS.md.
-//               This is for the entry-point file a coding agent other than Claude reads. PINNED cannot
-//               express it: pinning would force a project to carry an entry point for a tool it does
-//               not use, and FORBIDDEN would bar it from using that tool at all. What the rule refuses
-//               is a second set of instructions - the standard says the root instruction file holds the
-//               rules and a tool-specific one only points at it, so two agents cannot be told two
-//               different things. The form of the pointer is the tool's own: `@AGENTS.md` is Claude's
-//               import syntax and means nothing to Cursor, so the check reads for the NAME rather than
-//               demanding one spelling and forcing a file the tool cannot act on.
+// Manage files that tools read from the working tree, where installed package configuration cannot reach them.
 
 /** How ploaness treats a path in the consumer working tree. */
 export type Disposition = 'PINNED' | 'SEED' | 'FORBIDDEN' | 'SECTION' | 'REFERENCE'

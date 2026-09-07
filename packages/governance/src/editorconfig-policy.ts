@@ -1,15 +1,4 @@
-// Conformance to the committed `.editorconfig`, plus the standard's line cap.
-//
-// The `.editorconfig` is a pinned managed file, so every project holds the same one - and until now
-// nothing checked a single file against it. The formatter covers only the globs it owns, which leaves
-// Markdown, YAML, shell scripts, and Dockerfiles free to carry a CRLF, a tab, a trailing space, or a
-// missing final newline.
-//
-// The expectations are read from the `.editorconfig` itself rather than restated here, so editing the
-// pinned file moves the gate with it and the gate cannot contradict the file it checks against. The one
-// value that does NOT come from there is the line cap: `max_line_length` is an editor hint that tells a
-// ruler where to sit, while the standard's 120 characters is a cap that binds as an error. A project's
-// formatter may aim shorter, and frequently does.
+// Judge committed formatting and the authored-code line cap independently of filesystem access.
 
 import { CODE_EXTENSIONS, hasExtension, matchesGlob } from './file-roles.js'
 

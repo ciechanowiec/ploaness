@@ -1,26 +1,4 @@
-// Environment-coherence policy: the pure logic that finds an environment variable declared in one place
-// and missing from another it must also reach. The `environment` gate in
-// packages/cli/src/checks/environment.ts reads the files.
-//
-// A variable lands in more than one place by nature, and nothing links those places. The application
-// reads it, `.env.example` documents it for a clone, a compose file interpolates it, and a workflow
-// exports it into the job. Miss one and the failure is somewhere other than where the omission is: a
-// clone boots on a default it never chose, or `docker compose config` fails on CI alone, several steps
-// from the commit that added the name. This is the sibling of document-references.ts and
-// config-references.ts, applied to environment variables instead of scripts, docs, or config paths.
-//
-// EVERY RULE IS ONE-DIRECTIONAL, which is what makes the gate false-positive-free. What is read, or
-// interpolated, must be documented; what is documented need not be read. `.env.example` legitimately
-// carries an optional variable no code path requires - a key for a manual script, a value only a
-// developer regenerating an asset ever sets - and demanding the reverse containment would report those
-// as rot.
-//
-// It is NOT a YAML parser and must not become one, for the reason yaml-blocks.ts states. The workflow
-// half asks only whether a name appears in the file at all, not whether it appears in the block that
-// would put it in the job's environment. That is deliberate: adjudicating YAML scoping would need a
-// parser, and the mistake this gate exists to catch is forgetting the variable altogether rather than
-// declaring it one nesting level from where it was needed. Over-accepting costs a missed finding;
-// guessing at scope would cost a wrong one.
+// Require environment reads, example declarations, compose interpolation, and verifying workflows to agree.
 
 /** Where a variable was declared, for a message that names the two places rather than one. */
 export type EnvironmentOrigin = 'application' | 'compose'

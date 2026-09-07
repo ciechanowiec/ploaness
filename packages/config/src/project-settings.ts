@@ -1,16 +1,4 @@
-// The consuming project's declared settings, read once from the package.json in the working directory.
-//
-// Three shipped configurations need them - the Vitest config, the Playwright config, and the constants
-// the managed accessibility sweep imports - and none of them may carry a second copy of this reader. A
-// value the harness both writes and judges is declared once; the same holds for the value it reads.
-//
-// In a workspace the answer is TWO blocks rather than one. A member declares its own settings and the
-// repository root declares the ones every member inherits, and the CLI layers them through
-// `readMemberSettings` before any gate sees them. Reading only the member's block here left the
-// shipped configurations disagreeing with every gate about the same project: a skip route declared at
-// the root reached the gates and not the sweep, so the crawl followed a prefix it had been told to
-// leave alone. The layering is one-directional, exactly as it is in the CLI - a list adds, a threshold
-// is honoured only when stricter - so a member can never widen what the root set.
+// Read the consumer's settings from the working directory, where its tools are invoked.
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import {

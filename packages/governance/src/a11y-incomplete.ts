@@ -1,21 +1,4 @@
-// What to do with the axe bucket the shipped sweep used to discard.
-//
-// axe returns three buckets, not two: `violations`, `passes`, and `incomplete` - the last meaning "a
-// check ran and could not decide". The accessibility sweep asserted `violations` alone, which reads as
-// the obvious thing to write and silently excluded the single worst defect the sweep exists to catch.
-//
-// An exactly equal foreground and background is filed as incomplete rather than as a violation,
-// because axe reads identical colours as text hidden on purpose and refers the question to a human.
-// So a control drawn in its own background colour - contrast ratio 1:1, invisible to every reader -
-// passed a gate built to measure contrast. A project confirmed it by mutation: removing the colour fix
-// from the page left the assertion green.
-//
-// The answer is narrow on purpose. A blanket "incomplete must be empty" would be wrong for a rule no
-// project can edit: text over a photograph, a gradient, or a partly transparent layer lands in this
-// bucket legitimately, and axe defers there because the question genuinely needs a human. `equalRatio`
-// is the one key that needs none - two identical colours cannot be a judgement call - so it is the one
-// key that fails. The list is a floor to widen when another key turns out to be as unambiguous, not a
-// ceiling.
+// Promote only mechanically decidable axe incomplete results to failures; retain cases requiring visual judgment.
 import { asRecord, asText, isArray } from './json-shapes.js'
 
 /**

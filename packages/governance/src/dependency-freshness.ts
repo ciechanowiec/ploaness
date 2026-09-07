@@ -1,20 +1,4 @@
-// Dependency-freshness policy: the pure, unit-tested logic that reads the coordinates a repository
-// declares and classifies how far each has drifted from its latest published release. The `deps` gate in
-// packages/cli/src/checks/dependencies.ts reads the manifests and asks the registry.
-//
-// Policy: a declared dependency (transitive deps never count) whose current major version is
-// MAJOR_FAIL_THRESHOLD or more behind the latest published major FAILS the build; any lesser lag (a
-// single major behind, or a minor/patch behind) appears in the non-failing update report. The Biome config `$schema`
-// URL version is fed through the same classifier as a pseudo-dependency. There is no exemption list:
-// every declared dependency is MEASURED against the same bar, so a deliberately old pin that falls two
-// majors behind must be bumped or the pin dropped.
-//
-// One thing the bar does not decide is who the build stops. A coordinate an INHERITED manifest declares
-// is measured identically and reported at its real verdict, and it never fails the build: the version
-// belongs to ploaness, the project has no file in which to change it, and a gate that stopped every
-// consumer at once over a pin none of them can edit would be reporting ploaness's defect as theirs.
-// That is a statement about whose repair it is rather than an exemption from the measurement, which is
-// why the verdict survives into the report instead of being softened into an ordinary update.
+// Compare declared coordinates with stable releases and apply the fixed major-version freshness bound.
 
 import { isHarnessPackage } from './harness-package.js'
 import { declaredDependencies } from './json-shapes.js'

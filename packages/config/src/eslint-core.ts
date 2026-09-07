@@ -1,13 +1,4 @@
-// The framework-neutral half of the ploaness ESLint contract.
-//
-// It was extracted because ploaness never ran ESLint on itself. The rules below carry every size cap,
-// explicitness rule, naming ban, and suppression discipline the governing standard states - and the
-// harness that publishes them was not measured by them. Sharing only the five cap NUMBERS would have
-// left roughly seventy rule declarations to drift; the blocks are shared instead, and the globs are the
-// caller's, because the globs are the only genuinely project-shaped part.
-//
-// `packages/config/eslint.js` composes these with the Payload-specific blocks. The ploaness repository
-// composes them with its own workspace layout. Neither restates a rule.
+// Framework-neutral lint policy shared by this repository and the configurations shipped to consumers.
 import js from '@eslint/js'
 import comments from '@eslint-community/eslint-plugin-eslint-comments/configs'
 import { PROJECT_SETUP_FILE } from '@ploaness/governance'

@@ -1,12 +1,4 @@
-// Generates the shipped asset bodies from the files this repository already holds at its root.
-//
-// Seven paths exist twice: once at the root, where git, the editors, and the agents working on ploaness
-// itself read them, and once as an `.asset` body, which is what a consumer receives. Nothing but
-// discipline kept the two equal, and discipline lost - the guideline body was written at the first
-// commit and never touched again while the root file was rewritten twice, so every consumer was pinned
-// to a stale contract that no gate could see.
-//
-// The `.asset` suffix exists because npm strips a packed `.npmrc` and renames a packed `.gitignore`.
+// Generate paired asset bodies from canonical root files. The .asset suffix preserves npm-sensitive names.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'

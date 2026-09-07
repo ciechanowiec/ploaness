@@ -1,9 +1,4 @@
-// The shared catalogue of Payload configuration literals.
-//
-// Access policy and field policy ask different questions of the same object: whether a collection or
-// global has declared its operation boundary, and whether a privilege-bearing field has declared its
-// own. The declaration forms must therefore have one owner. A second regex beside the access rule was
-// how generic annotations and `satisfies` configurations previously escaped every Payload check.
+// Share the vocabulary of Payload configuration literals across source-policy checks.
 
 import { COLLECTION_OPERATIONS, GLOBAL_OPERATIONS } from './payload-defaults.js'
 import { configBody, depthOneValue } from './payload-source.js'

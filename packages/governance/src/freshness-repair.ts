@@ -1,17 +1,4 @@
-// Whose repair a freshness finding is.
-//
-// The update report used to say the same thing on every line - `update <manifest> <name>: declared X,
-// latest Y` - and left the reader to work out, line by line, whether the change was theirs to make. For
-// two of the three kinds of line it is not. A coordinate in a manifest the project INHERITS belongs to
-// ploaness outright. A coordinate the project declares at a version ploaness PINS is the project's line
-// and not the project's number: the wiring gate holds the declaration to the pin, so taking the update
-// as written produced a wiring failure on the next run. A consuming project read the flat list as a
-// to-do and found that two thirds of it could not be done, which is what made the report unreadable
-// rather than merely long.
-//
-// So a finding is sorted by the repair it names, and the report prints three groups under a heading
-// that states the action once, instead of a note on every line. The sorting is a decision about what a
-// project may edit, which is why it is here and not beside the registry calls that produce the lines.
+// Assign each update to the project or harness that owns its version, using the wiring policy as authority.
 
 import type {
   DeclaredCoordinate,

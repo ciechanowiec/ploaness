@@ -1,443 +1,100 @@
-# ploaness Agent Guide
+# Ploaness Agent Guide
 
-This guide maps the governing standard to the ploaness harness. After it, continue through the lower
-`AGENTS.md` layers in the order the standard declares. Exact analyzer rules remain in the executable
-harness.
+Read `README-guideline-software-project.adoc`, this guide, and then the project-owned instructions in
+`AGENTS.md`. Each layer may strengthen the earlier contract. The guideline states the general rules;
+this guide supplies the Ploaness-specific workflow, settings, and responsibilities.
 
-## Layer 1: Governing Standard
+## Ownership and Requirements
 
-- Read `README-guideline-software-project.adoc` before using this ploaness-specific mapping. It states
-  the rules themselves; this guide only maps them onto the harness that enforces them.
+Ploaness governs Git repositories containing at least one Payload CMS application. A repository can
+also contain Next.js applications and libraries. Member kinds are derived from their dependencies:
+`payload` identifies a Payload application, `next` identifies another application, and neither identifies
+a library. A project cannot select a weaker kind through configuration.
 
-## Layer 2: Harness Invariants
+Use Node 26 or later and the exact pnpm version Ploaness pins. Declare `ploaness` as a devDependency.
+Every application also declares `@ploaness/runtime` in dependencies at the same release version.
+Import harness configurations and test helpers through `ploaness`; import production helpers through
+`@ploaness/runtime`. Library members do not need the runtime package.
 
-- The project declares `ploaness` as a dependency and receives its whole contract from it. Do not weaken,
-  replace, duplicate, or version the tools, configurations, rules, thresholds, or managed files that
-  ploaness owns.
-- ploaness governs Payload CMS projects only. It refuses to run when `payload` is not a declared
-  dependency.
-- Use Node 26 or later, pnpm 11 or later, and a Git working tree.
-- Some gates need more than the working tree. `secrets`, `docker`, and `actions` run their analyzer in a
-  digest-pinned container and need a reachable Docker daemon; `vulnerabilities` reads the advisory
-  database and `deps` reads the package registry. An unreachable daemon, database, or registry fails its
-  gate rather than passing it, so read that failure as absent infrastructure rather than as a defect in
-  the code.
-- Treat every finding and every tool, setup, or compilation failure as a failed verification. Reporting
-  findings with `--enforce=false` is not a pass.
+Ploaness owns analyzer versions, configurations, gate selection, thresholds, and managed content.
+Consumer settings describe the project or tighten an allowed threshold. Do not replace the harness,
+copy its rules locally, or suppress a finding where a structural repair is available.
 
-## Layer 3: Governed Domains
+Container analyzers require Docker. Dependency and vulnerability checks require their registries.
+Unavailable infrastructure and tool failures fail verification. Set up the required infrastructure and
+rerun; an incomplete run establishes no full verdict.
 
-ploaness governs all of the following domains:
+### Repository and Member Configuration
 
-- **Harness wiring:** the scripts, tool-config inheritance, and pinned versions through which the
-  project installs ploaness. Five project files carry that inheritance and carry nothing else.
-  `eslint.config.mjs`, `vitest.config.mts`, and `playwright.config.ts` are an import of the ploaness
-  entry point and its default re-export; one further statement fails the gate. `biome.json` extends
-  `ploaness/biome` and declares only its `files` block. `tsconfig.json` extends the literal path
-  `ploaness/tsconfig.json`, because Next.js does not read an exports map, and adds only the compiler
-  options ploaness leaves open. Those two blocks sit at the member root because Biome and TypeScript
-  resolve a relative glob against the directory of the file that declares it, and a glob left inside
-  `node_modules` would match nothing in the working tree. A project that rewrites `verify`, appends rules after the harness ESLint
-  config, redeclares a Biome section, overrides a compiler option, or replaces the vitest or Playwright
-  config fails this domain rather than passing quietly. So does one that redefines a pinned version
-  through an install override, or silences the vulnerability gate through `pnpm.auditConfig`. A setting
-  may make the harness stricter and never looser. Import harness tools and configurations through
-  `ploaness`, which re-exports their entry points: under pnpm's layout, an internal `@ploaness/*`
-  package the project does not declare will not resolve. Application code imports production helpers
-  from `@ploaness/runtime`, which every application declares in `dependencies` at the same version as
-  its `ploaness` devDependency. This keeps the analyzer toolchain out of a production install; Layer 6
-  describes the runtime helpers. Where verification runs is the project's own decision and no gate
-  rules on it. `--enforce=false` prints findings and exits zero; a run in that mode is not a pass,
-  whoever started it.
-- **Native JS/TS rules and application JSX accessibility:** the `oxlint` gate adds
-  `eslint/no-promise-executor-return` (with `allowVoid: false`) and ESM `import/no-absolute-path`
-  to authored JS/TS in every member, including hidden tooling and files outside source roots.
-  Declarations, build outputs, generated artefacts, and sibling members are excluded; authored
-  framework glue remains in scope. CommonJS and AMD calls are outside the import rule because local
-  helpers can share their names. The gate also owns the 31 checks in the harness's
-  accessibility registry. Biome delegates those checks only for the same application JSX/TSX scope;
-  its HTML checks, its library policy, and its complementary rules remain active. ESLint retains
-  typed and specialized checks and does not load the former JSX-a11y plugin. Oxlint is lint-only:
-  `ploaness format` still uses Biome and ESLint. The gate supplies its own configuration and explicit
-  file list, disables nested configuration discovery, and checks the native report's file and rule
-  counts separately for core-only and application JSX groups. A missing executable or incomplete
-  report fails. A consumer may not own an Oxlint config or ignore file, or override the version
-  the harness installs. The `blocklist` gate refuses the
-  retired `eslint-plugin-jsx-a11y` package anywhere in the installed dependency graph.
-  An Oxlint suppression names an exact canonical rule active for the file, uses
-  `oxlint-disable-next-line` or `oxlint-disable-line`, and carries a reason after `--`. File-wide directives are refused. Native
-  directives count against the existing ceiling, and unused directives fail. Migrate ESLint directives
-  targeting native-owned rules to this syntax; directives for other ESLint rules remain with ESLint,
-  which judges their validity and unused status.
-  Static analysis does not establish a rendered accessible name or keyboard behavior. The managed
-  browser sweep and the application's interaction and access tests remain mandatory.
-- **The two settings no check can verify:** `ploaness.pretest` and `ploaness.testWrapper` are arbitrary
-  argv, and a wrapper that swallows its child's exit code is indistinguishable from one that does not
-  until it runs. So the rule is stated here rather than enforced. The wrapper exists to put a database
-  in front of the suite and nothing else: it passes the child's exit code through unchanged, it does not
-  retry, it does not filter output, and it does not decide what runs. A pretest command provisions;
-  it does not edit the tree being verified. Either one used to turn a red run green is a bypass, and the
-  fact that no gate reports it is the reason it is written down.
-- **Repository files:** managed, seeded, and forbidden paths, and an unchanged committable tree during
-  verification. Five paths must not exist at all, because ploaness supplies each of those configurations
-  itself: `.stylelintrc.json`, `.dependency-cruiser.json`, `knip.json`, `.gitleaks.toml`, and `plugins`.
-  The Stylelint configuration ploaness supplies accepts Tailwind v4 as written - every at-rule it
-  defines, and the `@import "tailwindcss"` string form it mandates - so a project styled with Tailwind
-  needs no configuration of its own. A misspelled at-rule still fails: this is an allowance for a CSS
-  dialect, not the rule turned off.
-  Writing one to quiet a finding is the reflex this forbids; answer the finding in the source instead.
-- **Source:** formatting, fast lint, type-aware lint, strict type checking, type coverage, typography,
-  source conventions, committed whitespace and encoding, style sheets, token-bound Tailwind values,
-  and module architecture. A public helper carries a documenting comment block, and that block must
-  carry a description: an empty `/** */` used to satisfy the rule while documenting nothing. Test
-  code is source code and passes the same checks.
-- **Payload usage:** bounded Local API reads, no access-control override, a call that passes `user` and
-  explicitly sets `overrideAccess: false` so Payload applies that user's permissions, every Local API
-  call under `src/endpoints` stating `overrideAccess` rather than inheriting it - Payload defaults it to
-  true, so a route that says nothing serves the document to whoever reached the URL, and an omission is
-  the one bypass no rule reading a written value can see - no parent-relative imports, and a Local API
-  call reached through `req.payload` that threads `req` so it joins the caller's
-  transaction - without it the operation opens its own, cannot see the in-flight write, and is not
-  rolled back with it, which is invisible in every passing test until a hook runs inside a transaction -
-  a custom endpoint that receives its body unread, because Payload parses JSON and multipart for its own
-  endpoints only, so a handler that wraps another reads a `clone()` of the request or the wrapped
-  handler finds the body consumed and answers a generic 500 - and access control decided rather than
-  inherited: every collection decides create, read, update and
-  delete, every global decides read and update, and an auth collection caps login attempts and locks
-  the account. Two further operations are owed by the configs that carry them, and both are missed by
-  a block that looks complete. An auth collection decides `unlock`, or any signed-in user may clear
-  the lockout the attempt cap just set - which is advisory GHSA-jg8r-5jh2-v2xj, reported against
-  Payload itself. A collection or global that keeps `versions` decides `readVersions`, drafts or no
-  drafts, or a read narrowed to an audience is bypassed by asking for a version of a document instead
-  of the document, a version being the whole document. Payload fills what a config omits during
-  sanitisation, and its default admits every signed-in user to every operation, so a partial access
-  block is invisible once the application boots; `readVersions` it does not fill in at all, and an
-  access check handed no rule falls through to the same place. The same default reaches the collections Payload builds for the project - the folder tree
-  behind `folders`, the job queue behind `jobs`, a plugin's own - which the `payload-defaults` gate
-  judges in the built configuration; decide those through `folders.collectionOverrides`,
-  `jobs.jobsCollectionOverrides`, or the override the plugin offers. An upload collection must declare
-  `mimeTypes`: undeclared, it accepts whatever a client sends, and an SVG served from this origin is
-  script that runs as the site. A collection whose `mimeTypes` admit `image/svg+xml` - by name, by
-  `image/*`, by an empty list, or by a list the gate cannot read because it is imported, spread, or
-  computed - must also declare `upload.modifyResponseHeaders` (or `upload.handlers`) setting
-  `Content-Disposition: attachment` and `Content-Security-Policy: sandbox`, because Payload's own
-  scripted-SVG check skips a file that opens with an XML declaration. Write the list inline where it
-  excludes SVG, and the headers are not asked for. Hook state is written through `req.context` from
-  `src/hooks`, the one path exempt from the immutability rule for it; `req.file`, a bare `context`, and
-  replacing the bag itself (`req.context = {}`) stay reported everywhere.
-- **Drafts:** a collection or global with `versions.drafts` enabled must not let an unauthenticated
-  caller read what nobody has approved. A draft is not hidden behind `?draft=true`: Payload writes an
-  unpublished save to the versions table and leaves the main row alone, so a document that has never
-  been published carries `_status: 'draft'` in the row the ORDINARY list reads. The read a drafts
-  entity grants a stranger must therefore either refuse outright or filter on `_status` equals
-  `published`, and `payload-defaults` decides that by asking the built configuration's own read rule
-  what it answers a caller with no credentials, then reading the filter it hands back. A clause under
-  `and` counts; a clause under `or` counts only when every branch carries one. This is not left to
-  judgement: a read that scopes by audience and forgets the status is the exact shape that passed the
-  source rules and the anonymous sweep alike, because the sweep sees THAT a filter exists and never
-  opens it.
-- **Generated output:** the Payload types and admin import map must match the configuration that
-  produces them.
-- **Versions:** ploaness owns two sets of them. The toolchain is every package whose version changes
-  what a gate does, and it is read from ploaness's own manifests, so there is no second copy to drift.
-  The rest is `pins.json`, in four groups, each naming the member kinds that must declare it. `payload`
-  (`payload`, `sharp`, `graphql`) is required of a Payload application alone. `web` (`next`, `react`,
-  `react-dom`, `@types/react`, `@types/react-dom`) is required of every Next application, whether or
-  not Payload is mounted inside it. `runtime-types` (`@types/node`) is required of every member.
-  `ecosystem` (`pg`, `@types/pg`, `dotenv`, `cross-env`, `vite`) is matched when declared and required
-  of nobody, because a project on MongoDB has no Postgres driver. `vite` sits there because ploaness's
-  own test runner and React plugin resolve a vite of their own, and that plugin declares vite as a
-  PEER, so a project declaring a different one gets a loading failure rather than mere duplication.
-  A type package is pinned for the toolchain's reason: it is an input
-  to tsc, so a patch release changes what type-checks while the project stays unchanged. `packageManager`
-  and `engines` are pinned too - Corepack runs exactly the package manager named, so it decides how
-  every other pin resolves. `engines.pnpm` is the exact version `packageManager` names rather than a
-  floor, for the reason no dependency carries a range; and `preflight` reads the pnpm actually running
-  the command, because a declaration Corepack is not enabled to obey resolves the tree with something
-  else. Declare each at the exact version ploaness pins, and every
-  `@payloadcms/*` package at the pinned `payload` version, because Payload fails at runtime when its
-  own packages disagree. No dependency carries a range: a caret, tilde, comparator, wildcard or
-  partial version means the build and the suite run against whatever was newest at install time. An
-  install override may redefine a package the project does NOT declare, which is the only way to
-  reach a transitive advisory. It may not redefine one the project declares, nor one ploaness pins even
-  where the project declares neither, and `overrides`, `resolutions`, `patchedDependencies`, and
-  `packageExtensions` in `package.json` are read exactly as the workspace file is.
-- **Dependencies:** licenses, known vulnerabilities, available stable updates, the maximum permitted
-  freshness gap, dead code, unused dependencies, and the allowlist naming which dependencies may run a
-  build or postinstall script. An empty allowlist is a valid answer; an undeclared one is not, because
-  it lets every package in the resolved set execute code at install time. A vulnerability is resolved by
-  upgrading the package. Record an exception only when no upgrade exists, and an exception that
-  suppresses nothing fails. Some software is refused by name whatever licence its own manifest
-  declares, because the licence that matters belongs to a server it exists to reach or to a binary it
-  downloads: the MongoDB server and its drivers, Redis images from 7.4, the Elastic images and clients,
-  MinIO, LocalStack, the Bitnami catalogue, CockroachDB, the HashiCorp tools under the Business Source
-  License, Redpanda, the Timescale images without an `-oss` tag, self-hosted Sentry, n8n, Directus, the
-  proprietary database servers, the Apollo Router, puppeteer (which downloads Chrome for Testing), and
-  the AGPL services with a permissive equivalent - Garage, Citus, the Grafana stores, Plausible,
-  Metabase, Ghostscript and MuPDF. A refusal names the replacement. Where a project turned
-  non-permissive at a known release the refusal starts there, and the freshness bound never demands an
-  upgrade into a refused release or into one licensed outside the allowlist. An image reference is
-  pinned to a tag: `latest` or no tag lets what is pulled change without the repository changing. There
-  is no setting that widens or narrows the list.
-- **Accessibility:** a sweep ploaness pins into `tests/e2e/a11y.e2e.spec.ts` crawls the public routes
-  reachable from the home page and runs axe on each. A route's default state is scanned in full; the
-  `:hover` and `:focus` states of its interactive controls are scanned for contrast alone, which is the
-  defect those states actually hide. Site chrome is swept once, because one stylesheet renders it
-  everywhere, and the content of `main` is swept per route. The crawl stops and fails at 250 routes, so a
-  passing sweep never describes a site whose remaining pages were silently left unread. It is a managed file: edit it and the
-  assets gate reports drift. What the project declares about it is the origin (`ploaness.serverUrl`),
-  any further route prefix the crawl must not follow (`ploaness.accessibilitySkipRoutes`, which adds to
-  `/admin` and `/api` rather than replacing them), and a smaller route ceiling than the shipped one
-  (`ploaness.accessibilityRouteBudget`, honoured only downward). Reaching the ceiling is a failure
-  rather than a truncation, and the answer to it is the harness raising the ceiling after measuring:
-  narrowing the crawl to fit means excusing real public pages from accessibility checking so that the
-  accessibility check passes. A finding is a defect in the page, never in the sweep:
-  repair the markup or the contrast rather than narrowing what is scanned.
-  What the crawl reached is only half of what it reports. The other half is what it MISSED: the sweep
-  reads the project's own route files, and a page it never reached is a page nothing has scanned. Three
-  shapes of page fall outside a link crawl and all three are ordinary - one linked from nowhere, one
-  whose link renders only for a signed-in visitor, and one whose address does not exist until a record
-  is created - so a sweep that reported only what it found described half a site as though it were the
-  whole of one. There are three honest answers and the finding names all three: link the page from one
-  the crawl reaches, scan it in a spec of the project's own that reaches axe, or declare it in
-  `accessibilitySkipRoutes` with the reason it is out of scope. A dynamic route is covered when the
-  crawl scanned any address it produces, so `posts/[slug]` needs nothing extra on a site that links its
-  posts; a spec answers for one by BUILDING an address beneath it, because visiting the parent of a
-  family scans none of its members. This check is in the end-to-end tier rather than beside the
-  default-tier `admin-views` gate, and unavoidably: only a crawl that has run knows what it reached.
-  The sweep skips `/admin` and `/api` and always will: the panel is Payload's markup, not the
-  project's, and the crawl carries no credential to sign in with. A CUSTOM admin view is the one thing
-  inside that exemption the project wrote itself, so the `admin-views` gate requires the project to
-  have scanned it: a configuration declaring a view under `admin.components.views` must be matched by a
-  spec under `tests/` that drives that route and reaches axe, directly or through a helper it imports.
-  ploaness cannot run that scan - it cannot sign in, and it does not know which container belongs to
-  the project rather than to the framework - so scope the scan to the view's own container, because a
-  scan of the whole panel reports defects in components nobody in the project can repair.
-- **Security headers:** a sweep ploaness pins into `tests/e2e/security-headers.e2e.spec.ts` asks the
-  running application what it answers with. A Next.js application sends no security header unless the
-  project configures one, and no static check can see that it did not: the page renders and the build
-  passes. The baseline is `X-Content-Type-Options: nosniff`, a `Referrer-Policy`, a decision about who
-  may frame the page, and a `Content-Security-Policy` that constrains script without readmitting
-  `'unsafe-inline'`. In practice that means a per-request nonce from a `middleware.ts`, because the
-  suite drives `next dev` and its inline scripts would otherwise need blanket permission. A header set
-  there replaces the same-named header a route handler set, so a page policy stamped on every response
-  overwrites the policy Payload's file handler puts on an SVG (a sandbox); the stored-file path,
-  `/api/<collection>/file/*`, must keep the handler's own policy and receive only the static headers.
-  The sweep requests `/` alone and cannot see this.
-- **Access boundary:** a sweep ploaness pins into `tests/e2e/access-boundary.e2e.spec.ts` asks Payload
-  itself, through `/api/access` with no credential, what an unauthenticated caller may do to every
-  collection and global. The static rules see that each operation was decided and can see an inline
-  always-true rule; they cannot see what `read: anyone` decides, nor what Payload made of the config
-  after sanitisation, so a project can satisfy all of them and still serve every document to every
-  stranger. The admin panel must refuse an unauthenticated caller, and every permission the application
-  grants anonymously must be one the project recorded under `ploaness.publicAccess` with the reason it
-  is intended. Close the access rule, or record the grant; a grant nobody wrote is the finding.
-  The operations judged are the ones a config is made to decide: create, read, update, delete, and
-  beside them `readVersions` and `unlock`. A version is the whole document, so a read narrowed by a
-  filter is undone by asking for a version instead, and `readVersions` set to the same helper as `read`
-  reads as obviously right while handing a stranger everything that filter was written to keep back.
-  Payload answers per FIELD as well as per operation, and both halves are judged. A collection open to
-  `create` with every field writable lets a stranger compose the whole document, ownership included,
-  which is a forgery rather than a creation; a collection open to `read` with every field readable
-  serves the credential column beside the public one. A field is judged only for an operation the
-  entity itself grants, because Payload reports a field's own verdict even where the operation
-  carrying it is closed, and a permission nobody holds is not a finding a project could answer. Name
-  each field. For a group whose children are all of one kind - the renditions under an upload
-  collection's `sizes` - declare `sizes.**` once, knowing a field added under that group later is
-  covered without a new declaration; a top-level field cannot be declared that way. The declaration is
-  judged in the other direction too: an entry, or a field path, that the running application grants to
-  nobody is a finding, because it records a decision with no effect and would cover the field the day
-  it is exposed again. A subtree is borne out while the group or anything beneath it is granted.
-- **Test determinism:** two rules of the governing standard that used to be prose and are now checks.
-  The suite runs under a network guard the shipped setup file installs before any setup of yours: a
-  socket, a DNS lookup, or a fetch that leaves this machine fails the test that made it, naming the
-  destination and quoting the rule. Loopback passes, so does an address this machine itself carries, and
-  so does a unix socket - a database on `127.0.0.1` is the intended case. Every resolver query fails,
-  loopback included, because a resolver sends a packet to a nameserver rather than reading a hosts file,
-  which is why a `mongodb+srv://` connection string cannot be used from a test. A service that exists
-  only outside the machine is exercised through a local component that implements its protocol; there is
-  no setting that widens the guard, because widening it is the thing the rule forbids. Raw datagrams,
-  child or cluster processes, and workers are rejected by the lint pass because each creates a transport
-  or runtime outside the installed guard. The suite also
-  runs shuffled - both the files and the tests within them - under a seed ploaness owns, so a test that
-  only passed in the order its file happened to be written in now fails. Repair the coupling: make each
-  test establish what it needs. `it.concurrent`, `it.sequential`, and `vi.setConfig` are rejected,
-  because each one buys a green run by reintroducing the coupling the shuffle exists to find.
-- **Suppressions:** the suppression count is capped against the size of the source: two, plus one for
-  every 500 non-blank lines of the project's own code. Every run reports the count and the distance left.
-  When the ceiling is reached, the way to spend a suppression is to remove another one - not to raise the
-  ceiling, which no setting can do. A suppression inside a managed file is ploaness's and is not counted,
-  so it is also not yours to remove.
-- **Assets and documentation:** image integrity, documentation references, config references, and
-  the agent skill manifest. `AGENTS.md` holds the rules; the entry-point file any other coding agent
-  reads - `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `.clinerules`,
-  `.github/copilot-instructions.md` - is optional, and one that exists carries nothing but a pointer at
-  `AGENTS.md`. Write the pointer in whatever form that tool understands. Anything else in the file is a
-  second contract, and two agents answering to two contracts is the thing this refuses.
-- **Repository assurance:** secret scanning, container and workflow linting, test execution with
-  per-file coverage, commit-message policy, commit typography, and linear history.
+Run full verification from the repository root. Repository gates run once, package gates run per governed
+member, and Payload gates run only for Payload members. Registry order determines the sequence; a
+workspace report labels each member invocation. Libraries receive the framework-neutral configurations
+and have no application build or browser suite.
 
-Do not treat a domain omitted from one command's output as ungoverned. The shipped configurations and
-the ploaness gates together define the executable contract.
+Ploaness requires the root verification scripts and each member's inherited configuration:
 
-### Workspaces
+- `biome.json` extends `ploaness/biome` for applications or `ploaness/biome-core` for libraries. Its
+  member-relative file-selection block is governed; nested configurations also carry `root: false`.
+- `tsconfig.json` extends `ploaness/tsconfig.json` or `ploaness/tsconfig-core.json`. Only the project
+  paths and compiler options the wiring gate permits may be added.
+- `eslint.config.mjs` and `vitest.config.mts` contain only the appropriate Ploaness import and default
+  re-export. Libraries use `ploaness/eslint-library` and `ploaness/vitest-library`.
+- Applications also re-export `ploaness/playwright` from `playwright.config.ts`.
 
-ploaness governs a repository rather than a directory. A repository holding one package is the case
-where those are the same thing, and it is what most projects are: nothing here changes anything for it.
+The workspace install policy belongs in the root `pnpm-workspace.yaml`: declare the install-script
+allowlist and `minimumReleaseAgeStrict: true`. Release-age exclusions may name only `ploaness` and
+`@ploaness/*`. The wiring gate reports required dependency pins and rejects overrides of harness-owned
+versions. A permitted override may repair an unpinned transitive dependency.
 
-A **member** is a package ploaness governs, and a package is a member when it declares `ploaness` as a
-dependency. That is not a switch to flip. Under pnpm's strict layout a package that does not depend on
-the harness cannot resolve `ploaness/biome` or `ploaness/eslint` from its own configuration files, so
-its wiring could not work whatever it declared. A pnpm project that is neither a member nor inside a
-member's `sourceRoots` is reported by the `wiring` gate, so removing the declaration to escape the gates
-is loud rather than silent.
+### Managed Files
 
-Each member has a **kind**, derived from what it declares and never from what it says about itself. A
-package cannot receive a weaker configuration by describing itself differently.
+`ploaness sync` applies the managed catalogue and generated-file write denials. The catalogue distinguishes:
 
-| Kind | Derived from | What it receives |
-| --- | --- | --- |
-| Payload application | declares `payload` | Every gate, every managed file, and the Payload-shaped configurations. |
-| application | declares `next`, not `payload` | Everything except the Payload rules and the access-boundary sweep. A Next.js frontend reading a CMS over HTTP still has a build, a client bundle, and a browser suite to govern. |
-| library | declares neither | The framework-neutral configurations - `ploaness/biome-core`, `ploaness/tsconfig-core.json`, `ploaness/eslint-library`, `ploaness/vitest-library` - and no browser configuration, because it has no application to drive. |
+- **Pinned:** content is owned by Ploaness and must match its shipped bytes.
+- **Section:** Ploaness owns the leading marked block of `AGENTS.md`; project instructions follow it.
+- **Seed:** written only when absent, then owned by the project, such as the initial proxy and ignore file.
+- **Reference:** an optional agent-specific instruction file may contain only a reference to `AGENTS.md`.
+- **Forbidden:** a local analyzer configuration that would shadow the harness may not exist.
 
-Every gate judges one of three **scopes**: `repository` for the tracked tree, the dependency graph, the
-history, and the managed files a tool reads from the tree root; `package` for one member's own source,
-configuration, and suite; `payload` for the rules about Payload itself. The install-script allowlist and
-the `overrides` block are read at repository scope and nowhere else, because that is the only place pnpm
-honours them.
+Repair pinned drift with `ploaness sync`, not a hand edit. Malformed or duplicate managed markers require
+manual repair before synchronization. Generated application files change through their generator.
+`unmanagedAssets` requires an explicit assignment to take ownership and a recorded reason.
 
-The run order is the registry's order, unchanged. A repository with one member produces exactly the
-sequence ploaness ran before members existed, and a repository with several interleaves them, with the
-run log naming the member each gate was asked about.
+## Workflow
 
-A member declares its own settings under the `ploaness` key of its own `package.json`, layered onto
-whatever the repository root declared. A list a project adds to stays additive, a threshold is honoured
-only when it is stricter, and a command list or an origin describes one package, so the member's answer
-stands. `ploaness init` writes each member the project files its own kind is judged against, and the
-three project scripts once, at the repository root.
+1. Inspect the repository instructions and current changes before editing.
+2. For initial setup, install `ploaness`, run `pnpm exec ploaness init`, satisfy the dependency and
+   workspace requirements reported by wiring, and run `pnpm install`. Init updates the root scripts,
+   seeds missing configuration files, and synchronizes managed content; it leaves existing member
+   configurations in place. `sync` repairs managed files, not project-owned configuration stubs.
+3. Implement the change and its meaningful tests. Run `pnpm run format` to apply Biome and ESLint fixes.
+4. Use `pnpm run verify` during development. Use `pnpm exec ploaness gate <id> --verbose` to diagnose
+   an individual gate; its analyzer output is evidence for that gate alone.
+5. Run `pnpm run verify:full` before finishing. It includes history, production build, bundle, and
+   browser checks, and must reach the final tree check without a failure.
+6. Review the diff, commit, and verify the resulting commit. A commit changing more than two files or
+   more than 50 added/deleted lines needs a body explaining why. Check a new message with
+   `pnpm exec ploaness commit-message --range HEAD~1..HEAD`; the complete policy is in the guideline.
 
-### Project Layout
+Verification stops at its first failing gate. Fix the reported cause, then start a new full run.
+A formatter or generator that changes source during verification leaves the tree unverified until the
+changes are reviewed and a subsequent run leaves it unchanged. Logs and build artifacts belong in
+ignored locations. Do not edit source while a full run is in progress.
 
-Module architecture is a shape rather than a preference, and these rules of it follow from neither the
-governing standard nor Payload's own documentation.
+`--enforce=false` surveys findings and exits zero; that exit status is not a pass. Failed preconditions
+still stop the survey. `ploaness gates` lists the current registry; `--scope=repository --ids` restricts
+that listing. Neither a diagnostic subset nor a survey replaces full verification.
 
-- `src/access` and `src/lib` are the pure-logic floor: they import nothing else under `src/`, so the code
-  deciding who may read a document stays testable without booting the framework. Nothing outside
-  `src/app` imports `src/app`, which is the top layer and composes the rest.
-- A collection, global, field, or block config is declarative wiring, so no function is written inline in
-  one. Access rules, hooks, and validators live in `src/access` or `src/lib` and are imported by
-  reference, because a function inlined into a config carries no seam a unit test can reach.
-- **A new environment variable lands in every place that needs it, in one commit**: the validated
-  module that reads it, the example file that documents it for a clone, and - when a compose file
-  interpolates it - the `env:` block of every workflow that verifies. Nothing links those places, so
-  the omission surfaces somewhere other than where it was made: a clone booting on a default it never
-  chose, or `docker compose config` failing on CI alone. The `environment` gate holds them together.
-- `process.env` is read only in `src/lib/environment.ts`, `payload.config.ts` included. That module
-  validates and narrows what it reads and every other module consumes the typed values it returns, so
-  the environment surface stays auditable in one place.
-- A spec is collected only from `tests/unit/**/*.unit.spec.ts`,
-  `tests/component/**/*.component.spec.ts`, `tests/component/**/*.component.spec.tsx`,
-  `tests/int/**/*.int.spec.ts`, `tests/int/**/*.int.spec.tsx`, or `tests/e2e`. A component spec is its
-  own tier and belongs under `tests/component`, not under `tests/unit`, which collects no `.tsx` at all.
-  A file outside those paths never runs, and the per-file coverage floor then fails on the code that
-  file was written to cover, which reads as a coverage defect rather than as a misplaced test.
+When a correct program is blocked by a reproducible harness defect, repair it in Ploaness. Preserve the
+failing output and a minimal synthetic reproduction. A consumer must not weaken a check to hide a
+harness bug. A managed sweep can contain a defect just as another check can.
 
-### Commit Messages
+## Gates
 
-Exact analyzer rules stay in the executable harness. This domain is the one exception. No format command
-repairs a commit message, no source file holds it, and a published one cannot be rewritten. An agent
-satisfies the policy only while writing the message, so the policy is declared here in full.
-
-| Rule | Value |
-| --- | --- |
-| Header | `type(scope): subject` |
-| Type | one of `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `test` |
-| Scope | optional, and when present drawn from `a-z`, `0-9`, and `-` |
-| Subject | 15 characters or more, with the whole header at most 72 characters |
-| Subject ending | no trailing period |
-| Junk words | `wip`, `tmp`, `temp`, `misc`, `stuff`, `asdf`, `fixup`, anywhere in the subject |
-| Body | every line after the header, required past 2 changed files or 50 added plus deleted lines |
-| Typography | plain ASCII only: no em dash, en dash, one-character ellipsis, or curly quotation mark |
-| Attribution | no marker naming an AI agent or an agent session, in any commit |
-
-There are no exemptions. Every commit is held to every rule, including the ones git writes for you: a
-merge, a revert, or an autosquash commit must be given a conforming subject by hand. There is no
-`revert` type - a revert is described by what it does, like any other change.
-
-Three traps account for most failures:
-
-- The 15-character floor rejects a short subject such as `fix typo`.
-- The body threshold counts added and deleted lines together, so a routine change crosses it quickly.
-- A junk word is rejected anywhere in the subject, not only as its first word, so `fix: clear the tmp
-  directory` fails. Name the thing in full.
-
-Check a commit as soon as it is recorded, with `ploaness commit-message --range HEAD~1..HEAD`. The
-command reads the repository rather than the build, so an unpublished commit can still be amended.
-
-### History Shape
-
-The history is linear, so a merge commit is prohibited wherever it sits, including between two side
-branches. A branch takes the work of another by `git rebase` or `git cherry-pick`. The check counts the
-parents Git recorded rather than reading the header, so a subject that mentions merging is an ordinary
-commit, and rewording a merge does not hide it.
-
-The rule reaches back to the first commit and has no exception. Avoid a merge rather than plan to repair
-one: once it is published, only a fresh history satisfies the rule.
-
-## Layer 4: Command Workflow
-
-`ploaness init` writes three project scripts, so `pnpm run verify`, `pnpm run verify:full`, and
-`pnpm run format` invoke the commands below.
-
-1. Run `ploaness sync` only to create or restore managed repository files, then review and commit its
-   edits.
-2. Run `ploaness format` (`pnpm run format`) to apply formatting, then review the resulting source.
-3. Run `ploaness verify` (`pnpm run verify`) for Default verification.
-4. Run `ploaness verify --extended` (`pnpm run verify:full`) before finishing. Extended verification
-   includes Default verification and adds history, build, bundle, and end-to-end checks.
-
-A run stops at the first failing gate and names how many gates it did not reach, so it reports the
-findings of one gate rather than of all of them. Repair that gate and rerun. Nothing below a failing
-gate has been verified: a gate is free to leave the tree in a shape the next one misreads, and a column
-of passes beneath a failure describes a state nobody established. A passing freshness gate still prints
-its update report, because an available version below the failure bound is information rather than a
-third verdict.
-
-`--enforce=false` is the exception, and the reason the flag exists. A report-only run carries on past a
-failing gate, so one run lists every finding a project has instead of handing them over one rerun at a
-time. Reach for it to survey what is outstanding, not to finish. It still exits 0 and it is still not
-a pass. `preflight` and `wiring` stop it anyway: below a failing one, ploaness either may not judge this
-project or cannot tell whether what it is judging is what it thinks.
-
-Run a single gate with `ploaness gate <id>`, and `ploaness gates` to list every gate in run order with
-the tier it belongs to. Use it freely while iterating and to answer one focused question - `ploaness
-gate deps` to see what has a newer release, `ploaness gate suppressions` to see where the budget
-stands. What a single gate is not is a verdict: it skips `preflight`, so it never establishes that this
-project is one ploaness may judge, and it says nothing about the gates it did not run. Only a full run
-answers "is this ready".
-
-The update report `deps` prints is sorted by who can act on a line, and the heading over each group
-states the action once. `yours to change` is the project's own declarations at versions it chooses.
-`pinned by ploaness` is declarations the project wrote at a version ploaness decides - the framework
-pins, the analyzers the wiring gate holds to the harness's own versions, and any `@payloadcms/*` or
-`@ploaness/*` package - so do not edit those; the wiring gate refuses the change, and the repair is a
-newer ploaness. `declared by ploaness` is the manifests the project inherits, with nothing in the
-project to edit at all. The heading says whether a newer ploaness exists to upgrade to or whether the
-wait is on a ploaness release.
-
-A gate normally reports a verdict rather than a transcript, and `ploaness gate <id> --verbose` prints
-what its underlying tool actually wrote - passing or failing, whole and unfiltered. Reach for it to
-audit a verdict rather than take it on faith: "no vulnerability at or above moderate" is a claim, and
-the scanner's own output is the evidence for it. A full run has no such flag, because thirty-eight
-transcripts bury the one finding the report exists to surface.
+Default verification runs 38 gates. These are gate definitions; workspace members can produce multiple
+invocations of a package gate. `tree-verify` runs after all other gates in either tier.
 
 ### Default Verification Gates
-
-Default verification runs 38 gates, in the order below. A repository-scope gate runs once; a
-package-scope gate runs once per member; a Payload-scope gate runs only for the members that declare
-Payload. `tree-verify` is last in both tiers, because the extended gates are the ones most able to
-rewrite a tracked file.
 
 | Gate | Scope | What it verifies |
 | --- | --- | --- |
@@ -445,23 +102,23 @@ rewrite a tracked file.
 | `wiring` | repository | The scripts, the five project files, and the pinned versions are intact and nothing undoes them. |
 | `assets` | repository | Every managed file matches what ploaness ships. |
 | `tree-snapshot` | repository | Records a fingerprint of the working tree. |
-| `types` | package | `tsc --noEmit`. |
+| `types` | package | Strict TypeScript checking for the member. |
 | `biome` | package | Formatting and the fast lint pass. |
 | `biome-schema` | repository | The `$schema` in `biome.json` names the installed Biome version. |
 | `oxlint` | package | Two native rules across authored JS/TS plus 31 application JSX accessibility checks. Libraries retain Biome accessibility. |
 | `eslint` | package | The remaining type-aware and specialized lint checks. |
-| `conventions` | repository | The typography ban and the hand-written JavaScript ban, over every tracked text file, and documenting comments left above another comment rather than above what they document. |
-| `editorconfig` | repository | Every tracked text file matches the pinned `.editorconfig`, and no code line passes 120 characters. |
+| `conventions` | repository | The typography ban and the hand-written JavaScript ban, over tracked and non-ignored untracked text files, and documenting comments left above another comment rather than above what they document. |
+| `editorconfig` | repository | Every tracked and non-ignored untracked text file matches the pinned `.editorconfig`, and no code line passes 120 characters. |
 | `suppressions` | package | The suppression count against the earned ceiling, over the project's own files. |
 | `css` | package | Stylelint over every style sheet under the source roots, with Tailwind v4 accepted as written. |
 | `tailwind-tokens` | package | Every visual value in the markup comes from the theme rather than an arbitrary value. |
 | `arch` | package | dependency-cruiser: layering, cycles, and orphans. |
-| `type-coverage` | package | Type coverage of 100% over hand-written TypeScript. |
+| `type-coverage` | package | 100% type coverage of authored production TypeScript; test assertions are excluded from this measurement. |
 | `payload-generated` | payload | The generated Payload types and admin import map are current. |
-| `payload-defaults` | payload | Every collection and global in the built configuration decides its access, the folder, job, query-preset and plugin collections included, rather than inheriting Payload's default, which admits every signed-in user. Every entity that keeps drafts is also asked what its read grants a stranger, and must refuse or filter on `_status` equals `published`. |
+| `payload-defaults` | payload | Explicit access decisions in the built Payload configuration, including framework/plugin collections, and anonymous draft-read protection. |
 | `generated-denial` | repository | The agent runtime is denied write access to every generated artefact. |
-| `payload-rules` | package | The Payload usage rules, including access control and drafts. |
-| `admin-views` | payload | Every custom admin view is scanned for accessibility by a spec of the project's own. |
+| `payload-rules` | package | Source policy, including explicit Payload options, access control, request threading, drafts, and upload restrictions. |
+| `admin-views` | payload | Static evidence that custom admin views have project-owned accessibility specs; the browser suite establishes execution. |
 | `config-refs` | package | No analyzer setting carves out a path that no longer exists or matches nothing. |
 | `secrets` | repository | gitleaks over the git history, plus the declared `secretAllowlist`. |
 | `licenses` | repository | The license of every dependency sits inside the allowlist. |
@@ -470,7 +127,7 @@ rewrite a tracked file.
 | `release-age` | repository | pnpm's release-age floor is strict, and only the ploaness packages are excluded from it. |
 | `blocklist` | repository | No container image, Dockerfile system package, or installed npm package is one ploaness refuses by name, and every image reference is pinned to a tag. |
 | `deps` | repository | No declared dependency is two or more major versions behind. Pinned images are reported, never failed. |
-| `image-assets` | repository | Every tracked image decodes as the format its bytes claim. |
+| `image-assets` | repository | Every working-tree image decodes as the format its bytes claim. |
 | `environment` | repository | Every variable the application reads, and every one a compose file interpolates, is documented in the example file and supplied by each verifying workflow. |
 | `docs` | repository | The agent documentation names no script and no file that has gone. |
 | `skills` | repository | The metadata header of every `SKILL.md`. |
@@ -482,7 +139,7 @@ rewrite a tracked file.
 
 ### Extended Verification Gates
 
-Extended verification adds six gates to the tier above.
+Extended verification adds 6 gates before the final tree check.
 
 | Gate | Scope | What it verifies |
 | --- | --- | --- |
@@ -493,152 +150,114 @@ Extended verification adds six gates to the tier above.
 | `bundle` | package | The gzipped client JavaScript stays under the bundle budget. |
 | `e2e` | package | The end-to-end suite, including the three sweeps ploaness ships into it. |
 
-## Layer 5: Exceptions and Repairs
+## Consumer Settings
 
-- Fix a managed-file finding with `ploaness sync`. A project may take over a managed path through
-  `ploaness.unmanagedAssets` only when the assignment explicitly requires it, and the entry must record
-  the reason. An entry without a reason is ignored.
-- `AGENTS.md` is the one managed file the project also writes in. ploaness owns the block between the
-  `BEGIN PLOANESS MANAGED INSTRUCTIONS` and `END PLOANESS MANAGED INSTRUCTIONS` markers; it leads the
-  file and appears exactly once, and the project's own instructions go below it, where `sync` carries
-  them through untouched. Duplicated or incomplete markers are the one case `sync` refuses, because
-  every edit it could make there would either duplicate the block or swallow text the project owns.
-  Repair those by hand.
-- Fix formatting findings with `ploaness format`. Fix type, lint, architecture, Payload, dependency,
-  test, coverage, history, and security findings at their source. Do not disable the failing check.
-- An exclusion narrows a gate, which ploaness permits only by file role. Each entry is a `pattern` and
-  the `reason` it is excluded, and the reason states the role: what that file IS, not that testing or
-  checking it is inconvenient. An entry without a reason fails the `wiring` gate and is dropped as well,
-  so the narrowing it asked for never takes effect. An entry that matches nothing the gate would have
-  judged is a finding too: it leaves the report reading exactly as it would have read without it, and it
-  outlives the file it was written for.
-- There is no setting that turns a gate off. If a gate is wrong for the project, that is a ploaness bug
-  to be fixed in ploaness, not a local override.
-- For a source suppression, use the analyzer's exact rule identifier and put the reason on the same
-  line. A bare suppression without a stated reason is itself a finding, and every suppression counts
-  against the ceiling.
+Settings live under `ploaness` in `package.json`. A member inherits the root settings. Source and role
+lists add entries; command arrays and origins describe one member and replace inherited values.
+Numeric ceilings honor the smallest valid value and cannot weaken an ancestor. Environment maps merge
+by variable name. Malformed values use the strict default or contribute no exception; a malformed
+member ceiling cannot discard a valid root ceiling.
 
-### Change Requests
+File-role declarations use `{ "pattern": "...", "reason": "..." }`. The reason names the file's role,
+not the convenience of excluding it. Patterns must reach files the relevant check would otherwise judge.
+Regexes and globs are identified below; a member's regex applies to paths inside that member. Route
+prefixes name URLs and are not checked against filesystem paths.
 
-A project cannot repair the harness from inside itself, and that is the design rather than a gap in it:
-a rule a project can edit is not a rule. What follows from it is that a rule improves only when somebody
-reports it, which makes the report part of the contract rather than a courtesy.
-
-Raise it with the ploaness maintainers when:
-
-- a gate blocks work that is correct, and the only way past it is a suppression or a carve-out;
-- the same finding is repaired the same way in project after project, which is a rule that belongs in
-  the harness rather than in each project's habits;
-- a project-owned check turns out to be true of every project of this kind, and should move into a gate;
-- a message names a defect without naming the repair, or names the wrong repair.
-
-Bring the failing output, the smallest case that reproduces it, and what the rule should have said. A
-suppression to get past a gate is a local answer to a general problem: take it when the work cannot
-wait, and report it either way, because the next project meets the same gate with no memory of this one.
-
-### Settings
-
-Every setting lives under the `ploaness` key of `package.json`, and every one is optional. A list-valued
-setting adds to the shipped default rather than replacing it, and a malformed value falls back to that
-default, so a typo can never widen a rule.
-
-| Setting | Default | Effect |
+| Setting | Default | Input and effect |
 | --- | --- | --- |
-| `sourceRoots` | `src`, `tests`, `scripts` | Where the project's own source lives. Added to, never narrowed. |
-| `unmanagedAssets` | empty | Managed paths the project takes over. `path` and `reason`. |
-| `typographyExclusions` | the generated Payload files | Paths the typography ban skips, as a regex. |
-| `javascriptAllowlist` | `eslint.config.mjs`, `importMap.js` | Paths the hand-written JavaScript ban skips, as a regex. |
-| `coverageExclude` | the framework glue, the generated files, the components | Paths left out of coverage, as a glob. |
-| `frameworkGlue` | `src/app/(payload)/**`, `src/payload.config.ts` | Paths holding framework-written scaffolding, which the lint pass relaxes rather than judges. Added to. |
-| `generatedArtefacts` | where Payload puts them in a stock installation | Paths a generator owns, which no rule judges and no agent may edit. Added to, for an admin panel mounted elsewhere. |
-| `pureLogicRoots` | `src/access`, `src/lib` | Directories that may depend on nothing else under the source root. Added to. |
-| `bundleBudgetBytes` | `1126400` | The ceiling on gzipped client JavaScript. Only a smaller value is honoured. |
-| `maxSuppressions` | the earned ceiling | A stricter ceiling; `0` permits none. A looser value is ignored. |
-| `vulnerabilitySeverity` | `moderate` | The severity that fails the gate. Only a stricter value is honoured. |
-| `vulnerabilityAllowlist` | empty | `advisory`, `reason`, and `addedOn`. An entry missing one is dropped. An advisory carried by ploaness's own dependencies is recorded by ploaness, not here. |
-| `secretAllowlist` | empty | Fake credentials committed as fixtures. `path` and `reason`. |
-| `serverUrl` | `http://localhost:3000` | The origin the end-to-end suite drives. |
-| `auxiliaryServers` | empty | Servers the end-to-end run starts beside the application. `command` and `url`. An entry missing either is dropped. The application is still started first and still answers at `serverUrl`. |
-| `publicAccess` | empty | Anonymous permissions the project grants on purpose. `entity`, `operation`, and `reason`, plus an optional `fields` naming the fields that operation reaches, each by the path that reaches it (`sessions.id`) and `*` for a map Payload collapsed because every field was open. A path ending in `.**` (`sizes.**`) declares that group and every field beneath it and is the only pattern honoured; `**` alone or mid-path is a literal name that matches nothing. An entry missing one of the three is dropped, which restores the finding rather than excusing it; a field absent from `fields` stays undeclared, so a new column on a public collection reopens the finding - except beneath a declared subtree, which is the trade that form makes. An entry or field the application grants to nobody is a finding of its own: correct the path or remove it. |
-| `accessibilitySkipRoutes` | `/admin`, `/api` | Route prefixes the sweep skips, added to those two. A route is a URL, so the reach rule above does not judge it. |
-| `accessibilityRouteBudget` | `250` | How many routes the sweep may discover before it stops and fails. Only a smaller value is honoured. |
-| `analysisEnv` | `PAYLOAD_SECRET`, `DATABASE_URL` | Placeholder environment for the gates that import the project. |
-| `pretest` | empty | A command run before the `tests`, `build`, and `e2e` gates. |
-| `testWrapper` | empty | An argument list wrapping the process those gates run. |
+| `sourceRoots` | `src`, `tests`, `scripts` | String array adding source directories. |
+| `unmanagedAssets` | empty | Entries with `path` and `reason` recording explicitly assigned project ownership. |
+| `typographyExclusions` | generated Payload files | File-role entries with regex patterns. |
+| `javascriptAllowlist` | ESLint config and generated import map | File-role entries with regex patterns for necessary JavaScript. |
+| `coverageExclude` | framework glue, generated files, components | File-role entries with glob patterns; each must reach measured code. |
+| `frameworkGlue` | `src/app/(payload)/**`, `src/payload.config.ts` | File-role entries with globs for framework scaffolding; authored behavior is not scaffolding. |
+| `generatedArtefacts` | stock Payload types, import map, schema | File-role entries with globs for generator-owned files, added to the shipped set. |
+| `pureLogicRoots` | `src/access`, `src/lib` | File-role entries naming additional pure-logic directories. |
+| `bundleBudgetBytes` | `1126400` | Positive integer; only a smaller budget is honored. |
+| `maxSuppressions` | earned ceiling | Nonnegative integer setting a stricter ceiling; zero permits none. |
+| `vulnerabilitySeverity` | `moderate` | Only a stricter severity is honored. Vulnerability checking is repository-scoped. |
+| `vulnerabilityAllowlist` | empty | Entries with `advisory`, `reason`, and `addedOn`; use only when no upgrade repairs the issue. Unused entries fail. |
+| `secretAllowlist` | empty | Entries with `path` and `reason` for committed fake credentials. |
+| `serverUrl` | `http://localhost:3000` | Origin of the member's application under test. |
+| `auxiliaryServers` | empty | Entries with `command`, `url`, and optional member-relative `cwd`; starts additional application dependencies for browser tests. |
+| `publicAccess` | empty | Entries with `entity`, `operation`, `reason`, and optional `fields`, declaring intentional anonymous permissions. |
+| `accessibilitySkipRoutes` | `/admin`, `/api` | File-role-shaped entries whose patterns are additional URL prefixes; explain why each is outside the sweep. |
+| `accessibilityRouteBudget` | `250` | Positive integer; a smaller ceiling is honored. Reaching the ceiling fails rather than truncating coverage. |
+| `analysisEnv` | placeholders for `PAYLOAD_SECRET`, `DATABASE_URL` | String-valued map used by analysis gates that import the application. |
+| `pretest` | empty | Argument array for preparation before the test, build, and end-to-end gates. |
+| `testWrapper` | empty | Argument array wrapping those gate processes, for example to supply a disposable database. |
 
-Two of these answer a finding that has no other answer. A fake credential committed as a test fixture is
-declared through `secretAllowlist`, because `.gitleaks.toml` is forbidden and ploaness renders the
-scanner's configuration outside the working tree with the scanner's own rules still on, so an entry can
-only add a named exception and never replaces anything. And a Payload configuration reads `process.env`
-as the module loads, which a gate that only imports the project cannot satisfy in a bare shell;
-`analysisEnv` supplies placeholders for exactly those gates, while the gates that run the application
-use the real environment. That environment reaches the end-to-end run through the Playwright
-configuration, which reads `.env.local` and then `.env` into its own process before a spec is
-collected, because a helper seeding through `getPayload` loads the Payload config at import time and
-the bare re-export leaves the project nowhere to read them itself. Neither file replaces a variable
-that is already set, so a value exported by CI or a service container still outranks both. The
-`tests` gate reads the same two files, from the setup file ploaness loads first, so an integration
-spec that boots the project finds its database without the project arranging it. A project that
-still loads them in its own `vitest.setup.ts` is unaffected.
+`publicAccess.fields` lists exact field paths such as `sessions.id`. `*` names the map Payload reports
+when every field is open. A suffix such as `sizes.**` declares that group and all descendants, including
+future fields; other wildcard positions are literal. Missing fields remain undeclared, and permissions
+or fields the application does not grant make the corresponding declaration stale.
 
-## Layer 6: Rules No Check Verifies
+Runtime tests use the real environment. Vitest and Playwright load `.env.local` followed by `.env`
+without replacing already-set variables. `analysisEnv` is for import-only analysis, not a substitute for
+the database and services that runtime verification starts. Keep environment reads in
+`src/lib/environment.ts`, validate them there, and document required variables in the example file.
 
-A rule that no automated check can verify reliably binds with the same force as one that a gate
-enforces. These are decided by reading the code against the wording below, not by a passing run.
+## Application Code and Tests
 
-- A test fails when the behavior its name states is removed from the code under test. A test that keeps
-  passing after its subject is deleted is measuring nothing, however green the suite is.
-- The accessibility sweep maps a route file to the address it answers at by reading the file tree, and
-  a Next.js configuration can move that address after the fact. `basePath`, `trailingSlash`,
-  `rewrites`, `redirects`, `middleware` and a custom `pageExtensions` all do, and none can be read
-  without importing the application - so a project using one is responsible for the pages the sweep
-  then names or fails to name, and answers for them through `accessibilitySkipRoutes` and its own
-  scans. A route named to a spec only inside a regular expression IS found, because that is how
-  Playwright waits for one; a route named inside a comment is not, except where the comment spells it
-  as a regular expression, which is a hole nobody falls into by accident and one worth leaving open to
-  keep the ordinary idiom working.
-- A test verifies one behavior and states that behavior in its name.
-- An assertion whose verdict does not depend on the code under test is banned. The gate catches the
-  literal form, such as an assertion that a constant is true. It cannot catch the same mistake made
-  through a variable, and that is still the same mistake.
-- A component's name decides nothing about whether it is real. An in-memory library component that
-  implements a protocol is real; a class inside the test tree whose answers a test sets is a
-  substitute, whatever it is called. The bans on the known mocking libraries cover the named cases, not
-  a hand-rolled fake. The same reading decides a web layer: a framework's OWN request pipeline, driven
-  in the process under test, is real - it runs the routing, the authentication, the transaction and the
-  serialization a live request runs - while a test-only imitation of it is a substitute. What the
-  in-process pipeline does not reach is the socket and whatever the server wraps around it, so a suite
-  that drives it still starts the real application somewhere.
-- A test that authenticates by cookie sends an `Origin` header, or it is testing the anonymous path
-  under another name. Payload refuses a session token when a request carries neither `Origin` nor
-  `Sec-Fetch-Site` and the config declares a CSRF allowlist, so the request is not rejected - it is
-  served as an anonymous one. The test passes, against the wrong code path, and nothing reports it.
-- Every wait a test performs is bounded by a timeout sized so that its expiry signals a defect of the
-  code rather than the speed of the machine. The reach beyond this machine is a check now; how long a
-  test is willing to wait is still a reading.
-- A test does not shell out, start a worker, or open a raw datagram. Each leaves the guarded runtime, so
-  the lint pass rejects the API before the suite runs.
-- A callable does not return null, and does not accept null, where an optional or result type says the
-  same thing. A callable that cannot do its job fails immediately with an error that says what went
-  wrong, rather than falling back silently to a default.
-- One concept has one name everywhere in the project, and a name consists of full words. An
-  abbreviation appears only where it is more recognizable than the full form.
-- A dependency cycle is broken by moving the shared concept into a unit both sides depend on, or by
-  inverting one direction behind an abstraction. A cycle is never declared acceptable.
-- The attribution ban binds in prose as well as by pattern: a marker naming an AI agent that no pattern
-  yet knows is still a violation.
-- A URL that came from a CMS field is passed through `safeHref` before it reaches an `href`. React
-  escapes text content, so an editor cannot inject markup through a field, but an href is an attribute:
-  `javascript:alert(1)` stored in a link field executes as the site the moment a visitor clicks it, and
-  nothing in the framework, the type system, or the lint pass reports it. The helper is shipped so no
-  project has to get the scheme rules right twice; calling it where editor content becomes a link is
-  the part no check can see.
-  - Import it from `@ploaness/runtime`. Nothing has to be installed first: the `wiring` gate requires
-    every application to declare that package in `dependencies`, so it is already there. It is a
-    separate package precisely so this import is legal - `ploaness` is a devDependency, and the `arch`
-    gate forbids `src/**` from importing one because a devDependency is absent from a production
-    install. Do not resolve that by moving `ploaness` into `dependencies`, which ships ESLint,
-    Playwright and the rest of the analyzer toolchain to production, and do not carve an exception
-    into `not-to-dev-dep`, which is reporting a real hazard. `@ploaness/runtime` is pure and declares
-    no dependencies of its own, which is what makes it safe to ship.
-  - From `tests/**`, `ploaness/runtime` re-exports the same function, and either import is fine.
+The architecture floor is `src/access` and `src/lib`, plus declared `pureLogicRoots`; these directories
+must not import higher application layers. `src/app` composes those layers. Collection, global, field,
+and block definitions are declarative: import access rules, hooks, and validators by reference.
+
+At recognized Payload Local API call sites, use an explicit options object. A read states the depth or
+limit its rule requires; a request-scoped call passes `req` to join the request's transaction. Calls
+carrying `user`, calls composed with top-level spreads, and calls in endpoint modules or authored Next.js
+route handlers explicitly state `overrideAccess: false`. Protected fields follow any spread that could
+replace them. A nested spread in `data` is ordinary application data and does not replace call options.
+
+The source checks recognize documented Payload receiver forms, such as `payload`, `req.payload`, and
+`this.payload`; they are not a general data-flow proof of arbitrary aliases. Keep policy-sensitive calls
+in the supported explicit form. A green static gate does not replace tests of the intended access boundary.
+
+Vitest collects:
+
+- `tests/unit/**/*.unit.spec.ts` for pure behavior;
+- `tests/component/**/*.component.spec.ts` and `tests/component/**/*.component.spec.tsx` for components under jsdom;
+- `tests/int/**/*.int.spec.ts` and `tests/int/**/*.int.spec.tsx` for integration behavior.
+
+Playwright collects end-to-end specs under `tests/e2e`. Place tests in the collected paths. Test code
+receives strict typing and linting; type assertions are excluded from the production type-coverage
+measurement and expected numeric values need no named constants. Coverage floors still apply to each
+measured production file. The network guard confines runtime tests to the local machine; subprocesses,
+workers, and raw datagrams cannot bypass it through test code. Seed fast-check in the project's own
+Vitest setup so it configures the module instance the suite actually imports.
+
+Apply the guideline's behavioral test requirements as well as its automated checks: tests must judge
+the behavior they name, reach meaningful assertions, and use real components. For cookie-authenticated
+Payload requests with a CSRF allowlist, send the appropriate `Origin` header and assert the authenticated
+outcome, so an anonymous response cannot accidentally satisfy the test.
+
+### Browser Coverage and Security
+
+Ploaness pins three executable sweeps into applications where they apply:
+
+- Accessibility crawls public routes reachable from home, scans each default state with axe, and checks
+  hover/focus contrast. The crawl excludes `/admin` and `/api`; project-owned custom admin views need
+  their own authenticated scans, scoped to the authored view.
+- Security headers checks the home response for content-type protection, referrer policy, a framing
+  decision, and a script-constraining CSP. The seeded `src/proxy.ts` supplies a starting policy with a
+  per-request nonce. Preserve Payload file handlers' own SVG policy on `/api/<collection>/file/*`.
+- Access boundary asks Payload's `/api/access` what an anonymous caller may do and compares the result
+  with the project's `publicAccess` declarations, including field-level grants.
+
+The accessibility sweep compares discovered route files with visited URLs and project test evidence.
+Unlinked, authenticated, and dynamic routes need reachable links or explicit project scans. A dynamic
+family requires a concrete member URL; its parent route is not a substitute. Intentional exclusions
+require a reason. Do not narrow coverage merely to fit the route budget.
+
+Static route/test matching recognizes route literals, regular expressions, dynamic URL templates, and
+axe evidence through one relative helper import. It does not prove the spec executes that scan. Keep
+navigation and scans clear, run the full browser suite, and account for URL changes introduced by
+`basePath`, redirects, rewrites, proxy logic, or custom page extensions.
+
+The header sweep checks `/` and cannot establish every route's policy. Test project-specific file and
+API boundaries directly. Static Next.js Web Vitals rules and the bundle budget cover deterministic
+causes of performance problems; the harness does not claim a measured Lighthouse or Web Vitals score.
+
+Pass CMS-supplied link values through `safeHref` from `@ploaness/runtime` before assigning an `href`.
+Text escaping does not make an arbitrary URL scheme safe. Application code owns this call-site decision;
+tests may also import the re-export from `ploaness/runtime`.

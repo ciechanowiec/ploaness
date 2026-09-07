@@ -1,14 +1,4 @@
-// The bounds the harness places on its OWN outbound work, and the one combinator that applies them.
-//
-// This is the first async module among the rules, and it is here rather than in the CLI for the reason
-// the split states: what it decides is a policy - how long the harness waits, and how many sockets it
-// will hold open at once - and a policy expressed as a pure function can be asserted against, while the
-// same policy expressed inline in a fetch call can only be observed by hanging. Nothing here performs
-// I/O; the work is supplied by the caller, which is where the I/O stays.
-//
-// The bound that was missing cost more than the bound that was wrong. An unbounded fetch produces no
-// output and no verdict, so on a team's CI a stuck gate is indistinguishable from a stuck build - and
-// unlike a gate failure, nothing says which it is, because nothing ends.
+// Bound the harness outbound work so registry checks finish without unbounded concurrency.
 
 /**
  * How long any single request to a package or image registry may take.

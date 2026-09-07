@@ -1,6 +1,4 @@
-// `ploaness init`: write the wiring a consumer needs, so adopting the harness is two commands rather
-// than a page of copied configuration. Nothing here is magic: every file it writes is one the wiring
-// gate will afterwards require, and it never overwrites a file that already exists.
+// Scaffold missing member configurations, update root scripts, and synchronize managed content.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import {

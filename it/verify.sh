@@ -1281,6 +1281,57 @@ node "$here/lib/delete-dependency.ts" "$scratch/fail-ungoverned-project/packages
 expect fail-ungoverned-project wiring FAIL 'ploaness does not govern'
 
 
+# Policy boundaries must hold through the installed package, including source that has not been staged.
+new_case pass-explicit-options
+commit_case pass-explicit-options 'test(fixture): establish policy boundary case' "$CONFORMING_BODY"
+mkdir -p "$scratch/pass-explicit-options/src/endpoints"
+cat > "$scratch/pass-explicit-options/src/endpoints/posts.ts" <<'EOF'
+import type { PayloadRequest } from 'payload'
+export const posts = async (req: PayloadRequest, options: object) =>
+  req.payload.find({ ...options, collection: 'users', depth: 0, req, overrideAccess: false })
+EOF
+expect pass-explicit-options payload-rules PASS
+
+new_case fail-opaque-options
+commit_case fail-opaque-options 'test(fixture): establish policy boundary case' "$CONFORMING_BODY"
+cat > "$scratch/fail-opaque-options/src/lib/posts.ts" <<'EOF'
+import type { Payload } from 'payload'
+export const posts = async (payload: Payload, options: Parameters<Payload['find']>[0]) =>
+  payload.find(options)
+EOF
+expect fail-opaque-options payload-rules FAIL 'require-explicit-payload-options'
+
+new_case fail-next-endpoint-access
+commit_case fail-next-endpoint-access 'test(fixture): establish policy boundary case' "$CONFORMING_BODY"
+mkdir -p "$scratch/fail-next-endpoint-access/src/app/api/posts"
+cat > "$scratch/fail-next-endpoint-access/src/app/api/posts/route.ts" <<'EOF'
+import type { Payload } from 'payload'
+export const posts = async (payload: Payload) => payload.find({ collection: 'users', depth: 0 })
+EOF
+expect fail-next-endpoint-access payload-rules FAIL 'require-endpoint-access'
+
+new_case fail-overwritten-options
+commit_case fail-overwritten-options 'test(fixture): establish policy boundary case' "$CONFORMING_BODY"
+cat > "$scratch/fail-overwritten-options/src/lib/posts.ts" <<'EOF'
+import type { PayloadRequest } from 'payload'
+export const posts = async (req: PayloadRequest, options: object) =>
+  req.payload.find({ collection: 'users', depth: 0, req, overrideAccess: false, ...options })
+EOF
+expect fail-overwritten-options payload-rules FAIL 'no-unthreaded-req'
+
+new_case fail-missing-snapshot
+commit_case fail-missing-snapshot 'test(fixture): establish policy boundary case' "$CONFORMING_BODY"
+expect fail-missing-snapshot tree-verify FAIL 'no tree snapshot'
+
+new_workspace scoped-member-exclusion
+node "$lib/edit-json.ts" "$scratch/scoped-member-exclusion/apps/web/package.json" \
+    ploaness.javascriptAllowlist '[{"pattern":"generated-code\\.js$","reason":"generated fixture"}]'
+printf 'export const generated = 1\n' > "$scratch/scoped-member-exclusion/apps/web/generated-code.js"
+expect scoped-member-exclusion conventions PASS
+printf 'export const authored = 1\n' > "$scratch/scoped-member-exclusion/packages/ui/generated-code.js"
+expect scoped-member-exclusion conventions FAIL 'packages/ui/generated-code.js'
+
+
 echo
 if [ "$failures" -eq 0 ]; then
     echo 'ploaness integration suite passed.'

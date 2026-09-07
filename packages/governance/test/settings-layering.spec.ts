@@ -134,18 +134,15 @@ describe('rebaseExclusion', () => {
     expect(rebaseExclusion('.', entry)).toEqual(entry)
   })
 
-  it('moves an anchored pattern into the member it was written in', () => {
-    expect(rebaseExclusion('apps/web', exclusion('^src/generated/', 'regex')).pattern).toBe(
-      '^apps/web/src/generated/',
-    )
-  })
-
-  it('leaves an unanchored pattern alone, because it already matches at any depth', () => {
-    // Prefixing would NARROW it to one member, which is the unsafe direction: the gate would stop
-    // skipping a file the project had already accounted for.
-    const entry: DeclaredExclusion = exclusion(String.raw`importMap\.js$`, 'regex')
-    expect(rebaseExclusion('apps/web', entry)).toEqual(entry)
-  })
+  it.each(['^src/generated/', 'generated/', '(^src/generated/|^vendor/)'])(
+    'keeps the regex unchanged and records its owning member: %s',
+    (pattern: string) => {
+      expect(rebaseExclusion('apps/web', exclusion(pattern, 'regex'))).toEqual({
+        ...exclusion(pattern, 'regex'),
+        memberPath: 'apps/web',
+      })
+    },
+  )
 
   it('prefixes a glob, which is always relative to the package that declared it', () => {
     expect(rebaseExclusion('apps/web', exclusion('src/migrations/**', 'glob')).pattern).toBe(

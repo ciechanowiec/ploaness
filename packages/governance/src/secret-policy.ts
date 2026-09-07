@@ -1,14 +1,4 @@
-// The secret allowlist.
-//
-// The standard requires a repository to list every fake credential it commits as a test fixture, and
-// requires the secret scan to fail on anything outside that list. Until now there was no way to satisfy
-// both: `.gitleaks.toml` is a forbidden managed path, precisely so a project cannot weaken the scanner's
-// own rules, and no setting replaced it. A project with a fixture credential could not pass at all.
-//
-// The resolution keeps the file forbidden and makes the allowlist data instead. ploaness renders the
-// scanner's configuration itself, outside the working tree, from entries the project declares. The
-// rendered config always extends the tool's default rules, so a declared entry can only add a named
-// exception and can never replace or disable what the scanner already looks for.
+// Allow declared fake credentials without replacing scanner rules or narrowing unrelated files.
 import { escapeForRegex } from './text-escapes.js'
 
 /** One committed fake credential, and the reason it is committed. */

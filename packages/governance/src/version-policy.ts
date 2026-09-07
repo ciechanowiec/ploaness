@@ -1,9 +1,4 @@
-// The versions a governed project declares, and every way it could change one without saying so.
-//
-// This is the wiring module's other half. `wiring-policy.ts` judges the files a project points at
-// ploaness with; this judges the numbers beside its dependencies. The two were one file until it passed
-// the size cap, which is the cap doing its job: they answer different questions and share only the
-// helpers below.
+// Hold declared package versions and install overrides to the harness-owned version policy.
 
 import { HARNESS_PACKAGE, isHarnessPackage } from './harness-package.js'
 import {

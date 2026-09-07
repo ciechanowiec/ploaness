@@ -1,11 +1,4 @@
-// Which files in a tracked tree are container definitions, and which directories hold a compose project.
-//
-// Discovery is stated here for both kinds at once, because stating it for only one is how the two halves
-// drifted. The Dockerfile half already walked the tracked tree - a project may keep a Dockerfile in any
-// directory, and a hard-coded path would silently skip the ones it did not anticipate - while the compose
-// half looked at the repository root and nowhere else. A Payload project that keeps its application in a
-// member directory keeps its compose file beside it, so the gate linted that member's Dockerfile and
-// reported a pass having validated no compose project at all.
+// Identify container definitions and compose projects from the working-tree inventory.
 
 /** A directory compose would treat as a project, and the file that identifies it. */
 export interface ComposeProject {

@@ -1,13 +1,4 @@
-// Image-asset integrity policy: the pure, unit-tested logic behind the repo-wide gate
-// (`image-assets`, in packages/cli/src/checks/integrity.ts). Given the bytes of a
-// tracked image, it reports whether the image is structurally broken - corrupt or truncated - so a
-// committed asset that will not render cannot ship. This is the class of defect that a 200 response and
-// a passing a11y sweep both miss: the original failure was a seeded PNG whose header parsed but whose
-// compressed image data was truncated, so it served fine yet rendered as "Image corrupt or truncated".
-//
-// PNG (the format that broke, and the one the CMS stores) gets a REAL decode: its IDAT stream is fully
-// inflated with zlib, which throws exactly on that truncation. The other formats get a structural
-// signature-and-trailer check that catches truncation cheaply and dependency-free.
+// Validate image structure and compressed data from their bytes; a served image can still be corrupt.
 import { inflateSync } from 'node:zlib'
 
 const LATIN1: TextDecoder = new TextDecoder('latin1')

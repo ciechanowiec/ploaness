@@ -2,26 +2,9 @@
 // judge the tree the project committed, not one a gate quietly rewrote as a side effect. A formatter or
 // a code generator that edits during `verify` would otherwise let a build pass on content that is not in
 // the repository, and the next clean checkout would fail.
-import { createHash } from 'node:crypto'
-import { readFileSync, statSync } from 'node:fs'
-import path from 'node:path'
-import { type Context, workingTreeFiles } from '../context.js'
+import type { Context } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
-
-const fingerprint = (context: Context): string => {
-  const hash: ReturnType<typeof createHash> = createHash('sha256')
-  for (const file of workingTreeFiles(context.root)) {
-    const full: string = path.join(context.root, file)
-    hash.update(file)
-    try {
-      hash.update(statSync(full).isFile() ? readFileSync(full) : Buffer.alloc(0))
-    } catch {
-      // An indexed-but-deleted path contributes its name only, so deleting one still changes the digest.
-      hash.update('<absent>')
-    }
-  }
-  return hash.digest('hex')
-}
+import { workingTreeFingerprint } from '../working-tree.js'
 
 // The fingerprint is taken by one gate and compared by another, so it must outlive both calls, and
 // there is no channel between gates to carry it as a value.
@@ -35,7 +18,7 @@ const FINGERPRINT_PREVIEW: number = 12
 export const treeSnapshot = (context: Context): GateResult => {
   // Recording state the later tree-verify gate reads is this gate's whole purpose.
   // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- see the binding above
-  snapshot = fingerprint(context)
+  snapshot = workingTreeFingerprint(context.root)
   return passed(`tree fingerprint recorded (${snapshot.slice(0, FINGERPRINT_PREVIEW)})`)
 }
 
@@ -49,9 +32,11 @@ export const treeSnapshot = (context: Context): GateResult => {
  */
 export const treeVerify = (context: Context): GateResult => {
   if (snapshot === undefined) {
-    return passed('no tree snapshot was taken, so there is nothing to compare')
+    return failed('no tree snapshot was taken', [
+      'run complete verification to establish tree integrity',
+    ])
   }
-  const current: string = fingerprint(context)
+  const current: string = workingTreeFingerprint(context.root)
   return current === snapshot
     ? passed('the working tree is unchanged since verification began')
     : failed('the working tree changed during verification', [

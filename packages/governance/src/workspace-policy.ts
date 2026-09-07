@@ -1,11 +1,4 @@
-// What a repository is made of: where its root is, which directories are pnpm projects, and which of
-// those ploaness governs.
-//
-// ploaness governed exactly one package until now - `process.cwd()`, with every path joined onto it. That
-// was not a simplification of workspaces, it was blindness to them: run from a member, the gates read the
-// member's directory for files that only exist at the workspace root, and two of them reported a verdict
-// about a file they had not found. This module is the missing distinction, kept pure so the rules about
-// which directories are governed can be spec'd against directory lists no filesystem has to produce.
+// Discover repository and package boundaries from manifests rather than project-selected labels.
 import { matchesGlob } from './file-roles.js'
 import { HARNESS_PACKAGE } from './harness-package.js'
 import { declaredDependencies } from './json-shapes.js'

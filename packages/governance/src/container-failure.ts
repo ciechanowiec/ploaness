@@ -1,21 +1,4 @@
-// Why a containerised gate failed, told apart from what its analyzer reported.
-//
-// `docker run` passes the container's own exit code through, so a gate that reads every non-zero exit as
-// the tool's verdict reads a failure of Docker as a finding. The consequence was not cosmetic: a Docker
-// Hub pull-rate limit - 100 anonymous pulls per six hours per IP, which several teams behind one CI
-// egress reach - made the secret scan announce that it had found a secret in the git history. That is the
-// one verdict a project cannot dismiss on its own judgement, and the worst thing this harness can say. A
-// registry outage, an unreachable network, and a digest the registry no longer serves all landed the same
-// way.
-//
-// Two classifiers rather than one, and the split is the actual repair. `classifyImageFailure` reads
-// markers out of the output because it judges `docker image inspect` and `docker pull`, whose every byte
-// docker wrote. `classifyContainerExit` judges a run of the analyzer, whose output carries content the
-// PROJECT authored - a commit message, a Dockerfile, a workflow - so it reads the exit code and nothing
-// else. Matching `no such host` against a commit message would invert the same bug rather than fix it.
-//
-// The rules are pure so they are exercised against captured `docker` output rather than against a live
-// daemon: every branch below describes a failure that is expensive or impossible to stage on demand.
+// Distinguish unavailable container infrastructure from analyzer findings so each failure names the right repair.
 
 /** One finished invocation, reduced to what a classifier reads. */
 export interface ContainerRun {

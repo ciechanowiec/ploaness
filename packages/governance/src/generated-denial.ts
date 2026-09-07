@@ -1,12 +1,4 @@
-// Write denial for generated files.
-//
-// A generated file changes only as the output of its generator, and the regeneration check already
-// fails on a hand edit. That check reports the damage after the fact; the denial stops the edit from
-// being made, which is the difference between a build that fails and work that was never wasted.
-//
-// The standard scopes this to "where the runtime used by AI agents supports the denial", so a rule here
-// binds one runtime and cannot bind them all. That is conformance rather than a shortfall, and the gate
-// says so rather than implying a guarantee it does not have.
+// Derive agent-runtime write denials from the generated-file roles the harness already governs.
 import { asRecord, isArray, readKey } from './json-shapes.js'
 
 /** The artefacts Payload derives from the configuration. Declared once and consumed by every rule. */

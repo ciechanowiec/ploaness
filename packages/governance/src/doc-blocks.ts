@@ -1,16 +1,4 @@
-// Orphaned documenting comments: a `/** ... */` block whose next non-blank line opens ANOTHER such
-// block, so the first documents nothing and the symbol it was written for carries no doc at all.
-//
-// This cannot be an eslint-plugin-jsdoc rule, and the reason is structural rather than a gap in that
-// plugin. Every rule it ships visits the block ATTACHED to a syntax node, and an orphan is attached to
-// nothing: the parser hands a declaration only the LAST block comment before it and discards the
-// earlier ones as leading trivia. The defect is invisible to the one analyzer that exists for
-// documenting comments, which is why it is a text rule here - the text is the only place it is still
-// visible.
-//
-// It is a real class rather than a hypothetical. Four instances were found in this repository the
-// first time anything looked, each one a doc that had been moved above the wrong symbol and left
-// there, and each one carried the description of a symbol that was then undocumented.
+// Report documenting blocks detached from a declaration by another documenting block.
 
 // Extensions whose comment syntax this rule understands. A stylesheet shares the delimiters but has
 // no JSDoc, so two adjacent blocks there are two comments rather than one orphan - which is why this

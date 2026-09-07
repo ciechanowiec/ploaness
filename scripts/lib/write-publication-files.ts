@@ -1,16 +1,4 @@
-// The per-package files npm requires and nobody should have to write.
-//
-// npm packs a LICENSE and a README beside every package.json whether or not `files` names them, and it
-// recognises a README by extension alone: `@npmcli/package-json` matches `/\.m?a?r?k?d?o?w?n?$/i`, so
-// the AsciiDoc guide this repository actually maintains cannot be the readme. A package published
-// without a match gets the literal string "ERROR: No README data found!" on its registry page, and the
-// version is immutable by the time anyone sees it.
-//
-// So the pages are DERIVED rather than authored. Every sentence on them already exists in a
-// package.json field that npm reads anyway - `description` is the registry's own search text, `homepage`
-// and `license` are rendered beside it - which means a page cannot drift from the package it describes,
-// and adding a sixth package cannot forget one. Five hand-written files were five documents to keep
-// true; this is none.
+// Generate publication READMEs and licenses from package metadata and canonical repository content.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'

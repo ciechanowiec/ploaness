@@ -1,24 +1,4 @@
-// Whether a control can be hovered, and what it means when it cannot.
-//
-// The shipped accessibility sweep hovers every control in the site chrome to measure hover contrast.
-// A skip link hidden with `clip-path: inset(50%)` - the standard accessible pattern - has no hit
-// target, because a clip removes an element from hit testing as well as from painting. Playwright
-// therefore retried the hover until the whole test timed out, and reported `<header> intercepts
-// pointer events`: a message that blames the ancestor the browser found instead, and sends the reader
-// to weaken a skip link that was correct.
-//
-// The repair cannot be "catch the failure and move on". A VISIBLE control that intercepts pointer
-// events is a real page defect, and swallowing both cases would trade a misleading failure for no
-// failure at all. So this decides between them, and the two answers differ:
-//
-//   - visually hidden: skip the hover pass and say why. Nothing is lost, because hover contrast is a
-//     measurement of painted pixels and this element paints none. The focus pass still runs, which is
-//     the state that actually matters for a skip link.
-//   - obscured: something is on top of a control that does paint. That is the defect the sweep is for,
-//     and it should be reported as such rather than as a timeout.
-//
-// The classification is deliberately conservative: anything it cannot place is hoverable, so an
-// undecided case runs the check rather than skipping it.
+// Classify whether a control has painted pixels and a pointer target before a hover contrast scan.
 
 /** What a browser must report about a control before this module can classify it. */
 export interface HitTargetProbe {

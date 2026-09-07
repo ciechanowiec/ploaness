@@ -1,13 +1,4 @@
-// The ordered gate registry. The run stops at the first failing gate, so order decides which finding a
-// project sees first and is deliberate twice over: the cheap structural checks that tell a project it is
-// not wired correctly run before the expensive ones that would otherwise fail confusingly, and the tree
-// fingerprint is taken before anything that could rewrite a file and read back after everything has run
-// - in extended verification too, which is where the gate most needs to look and where it used to run
-// before the build rather than after it.
-//
-// `preflight` and `wiring` lead, and they are the two preconditions: they decide whether ploaness may
-// judge this project at all, and whether what it is judging is what it thinks. Past a failing one,
-// nothing below means what it says, which is why they stop even a report-only run.
+// Registry order is run order: structural preconditions precede analyzers, and tree verification is last.
 
 import {
   type GateDescriptor,

@@ -46,7 +46,7 @@ endif::[]
 [[overview]]
 == Overview
 
-. _ploaness_ is a quality harness for https://payloadcms.com[Payload CMS^] projects. A project declares one dependency on the `ploaness` package and receives back the analyzer settings, the commit rules, the xref:#managed-files[managed files], and the xref:#gates[gates] that inspect the project. Nothing is copied into the project, so no setting drifts from the one the harness ships.
+. _ploaness_ is a quality harness for https://payloadcms.com[Payload CMS^] projects. A project declares `ploaness` as a development dependency and receives the analyzer settings, the commit rules, the xref:#managed-files[managed files], and the xref:#gates[gates] that inspect the project. Analyzer configurations are inherited from installed packages. Managed files are materialized in the working tree and checked against their canonical content. Applications declare `@ploaness/runtime` separately for production helpers.
 . This guide is written for an engineer who attaches _ploaness_ version `{ploaness-version}` to a https://payloadcms.com[Payload CMS^] project, or works day to day in a project that already runs the harness. The guide covers what the harness does, what the harness requires, and the steps that attach the harness. The guide doesn't state the individual rules, which _ploaness_ installs into the project for the coding agent that repairs them.
 
 [[harness-structure]]
@@ -55,7 +55,7 @@ endif::[]
 [[gates]]
 === Gates
 
-. A [[gate,gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding,finding]]_finding_ is one problem a gate reports. Default verification runs 38 gates. Extended verification adds six more, covering the history, the production build, the client bundle, and the browser suite.
+. A [[gate,gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding,finding]]_finding_ is one problem a gate reports. Default verification runs 38 gates. Extended verification adds 6 gates, covering the history, the production build, the client bundle, and the browser suite.
 . A run stops at the first failing gate and names how many gates the run didn't reach. Stopping there is deliberate: a gate is free to leave the tree in a shape the next gate misreads, and a column of passes beneath a failure would describe a state nobody established.
 
 [[managed-files]]
@@ -67,7 +67,7 @@ _ploaness_ owns the text of certain files in the project, among them the editor 
 == Requirements
 
 . _ploaness_ runs on Node 26 or newer, under pnpm 11 or newer, in a Git working tree.
-. A project declares a dependency on the https://www.npmjs.com/package/payload[`payload` package^]. Every rule _ploaness_ applies is a rule about https://payloadcms.com[Payload CMS^], and the harness refuses to run without that dependency.
+. The repository contains at least one application declaring the https://www.npmjs.com/package/payload[`payload` package^]. A workspace may also contain Next.js applications and libraries; gates apply according to repository and member scope.
 . _ploaness_ sets a pin on every package whose version can change a verdict, and rejects any other value. A project matching those pins is what makes a passing run mean the same thing twice.
 . Some gates run their analyzer in a container and need a reachable Docker daemon, and others read the advisory database or the package registry over the network. A gate whose daemon, database, or registry is unreachable fails rather than passes.
 
@@ -87,8 +87,8 @@ pnpm add -D ploaness@{ploaness-version}
 pnpm exec ploaness init && pnpm install
 ----
 +
-`ploaness init` writes the project's scripts, creates the configuration files that point at the shipped settings, and materializes the xref:#managed-files[managed files]. `ploaness init` never overwrites a file that already exists, and names every file left in place.
-. Hand the project to a coding agent and ask the agent to bring the project up to the harness. `ploaness init` has already written the instructions that agent reads: a managed block at the top of `AGENTS.md` points at `.ploaness/agent-guide.md`, which states every rule and the order to work in.
+`ploaness init` writes the project's scripts, creates the configuration files that point at the shipped settings, and materializes the xref:#managed-files[managed files]. `ploaness init` updates the root scripts, leaves existing member configurations in place, and synchronizes managed content. It reports files that need attention. Satisfy the dependency and workspace requirements reported by the wiring gate, including the application runtime package, then install again.
+. Hand the project to a coding agent and ask the agent to bring the project up to the harness. `ploaness init` has already written the instructions that agent reads: a managed block at the top of `AGENTS.md` points at `.ploaness/agent-guide.md`, which supplies the Ploaness workflow, complete gate and settings references, and application responsibilities alongside the governing guideline.
 
 [[commands]]
 == Commands
@@ -124,7 +124,7 @@ Every command runs through the `ploaness` executable:
 | Verifies one commit message. `ploaness commit-message` reads `--range <base>..<head>` or `--all` in place of a file.
 |===
 
-Both verification commands read one flag, `--enforce=false`, which carries the run past a failing xref:#gate[gate] instead of stopping there, so a single run lists every xref:#finding[finding] the project has. The run then exits with status `0`, and that status isn't a pass. Reach for the flag to measure the size of the job, not to declare the job done.
+Both verification commands read one flag, `--enforce=false`, which continues after ordinary failing xref:#gate[gates] to survey xref:#finding[findings]. Failed preconditions still stop the run. The run then exits with status `0`, and that status isn't a pass. Reach for the flag to measure the size of the job, not to declare the job done.
 
 [[installed-documentation]]
 == Installed Documentation
@@ -136,7 +136,7 @@ Both verification commands read one flag, `--enforce=false`, which carries the r
 | Path | Content
 
 | `.ploaness/agent-guide.md`
-| Every rule, every setting, and the order the commands run in. Read `.ploaness/agent-guide.md` before repairing a xref:#finding[finding].
+| The Ploaness workflow, complete gate and settings references, and responsibilities beyond automated checks. Read `.ploaness/agent-guide.md` before repairing a xref:#finding[finding].
 
 | `README-guideline-software-project.adoc`
 | The governing standard the harness maps onto. The standard states the rules themselves.

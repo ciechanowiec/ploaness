@@ -17,16 +17,12 @@ cd "$root"
 
 ploaness_bin="$root/packages/cli/dist/bin.js"
 
-# Written through a file rather than as one pipeline. POSIX `sh` has no `pipefail`, so a failure in
-# `git ls-files` or in the middle `git hash-object` was reported as the exit status of the LAST stage -
-# and the fingerprint would then describe a truncated stream while claiming to describe the tree. That
-# value is the whole of the tracked-tree guarantee, so it may not be computed from a masked failure.
+# This module uses only Node builtins, so the same inventory can bracket the build on a fresh clone.
 fingerprint() {
-    fingerprint_list="$(mktemp)"
-    git ls-files -z > "$fingerprint_list"
-    xargs -0 git hash-object < "$fingerprint_list" > "$fingerprint_list.hashes"
-    git hash-object --stdin < "$fingerprint_list.hashes"
-    rm -f "$fingerprint_list" "$fingerprint_list.hashes"
+    node --input-type=module -e '
+        import { workingTreeFingerprint } from "./packages/cli/src/working-tree.ts"
+        process.stdout.write(workingTreeFingerprint(process.cwd()))
+    '
 }
 
 # Reported on the way out of a failing run as well as at the end of a passing one. A check that failed
@@ -34,7 +30,7 @@ fingerprint() {
 # status` would show it, but only to someone who thought to look.
 report_tree() {
     if [ "$before" != "$(fingerprint)" ]; then
-        printf '\n!!! the verification rewrote a tracked file. Review and commit what git status shows, then rerun.\n'
+        printf '\n!!! the working tree changed during verification. Review and commit what git status shows, then rerun.\n'
         return 1
     fi
     return 0
@@ -98,12 +94,14 @@ step knip "$cli_bin/knip" --config packages/config/knip-repo.json
 shellcheck_image="$(node --input-type=module -e \
     "import { CONTAINER_IMAGES } from '$root/packages/governance/dist/index.js'
      process.stdout.write(CONTAINER_IMAGES.shellcheck)")"
-# Discovered from the tracked tree rather than enumerated. The list was correct at the time it was
-# written, which is the only time an enumeration is correct: a script added later is a script nothing
-# reads, and this repository already learned that lesson from the JavaScript allowlist.
-shellcheck_targets="$(git ls-files '*.sh' | tr '\n' ' ')"
-# shellcheck disable=SC2086 # the target list is deliberately word-split into separate arguments
-step shellcheck docker run --rm -v "$root:/mnt" "$shellcheck_image" $shellcheck_targets
+shellcheck_targets="$(mktemp)"
+node --input-type=module -e '
+    import { workingTreeFiles } from "./packages/cli/src/working-tree.ts"
+    const scripts = workingTreeFiles(process.cwd()).filter(file => file.endsWith(".sh"))
+    process.stdout.write(scripts.map(file => file + "\0").join(""))
+' > "$shellcheck_targets"
+step shellcheck xargs -0 docker run --rm -v "$root:/mnt" "$shellcheck_image" < "$shellcheck_targets"
+rm -f "$shellcheck_targets"
 
 # The specs are exempt for the reason AGENTS.md records: `--strict` counts every type assertion as
 # uncovered, and a spec exists to construct inputs the production types cannot express. Reaching 100%
@@ -130,7 +128,12 @@ inapplicable_gates='preflight wiring assets tree-snapshot tree-verify generated-
 
 check_gate_coverage() {
     missing=''
-    for id in $(node "$ploaness_bin" gates --scope=repository --ids); do
+    registry_ids="$(node "$ploaness_bin" gates --scope=repository --ids)"
+    if [ -z "$registry_ids" ]; then
+        echo 'the gate registry returned no repository gates' >&2
+        exit 1
+    fi
+    for id in $registry_ids; do
         case " $(grep -o '^gate [a-z-]*' "$0" | cut -d' ' -f2 | tr '\n' ' ') $inapplicable_gates " in
             *" $id "*) ;;
             *) missing="$missing $id" ;;

@@ -1,19 +1,4 @@
-// Whether a published release is old enough to be installed at all.
-//
-// pnpm refuses a release younger than a minimum age. That guards against a compromised publish: a
-// malicious version is usually pulled within hours of being noticed, so the wait costs a day and buys
-// the window in which the registry corrects itself. The freshness report has to know about it, because
-// an update named without it sends a reader to an install pnpm will refuse, and the reader then either
-// waits without knowing why or spends the guard on an exclusion to get past it.
-//
-// The floor is pnpm's rather than ploaness's, and pnpm neither documents the default nor answers
-// `pnpm config get minimumReleaseAge` for it. The value below was established by observation - refused
-// at 13h and again at 23h58m, taken at 33h and at six days - so it is stated as a named constant a
-// reader can check and a maintainer can correct, rather than buried inside a comparison.
-//
-// Held is a third thing the report can say, not a fourth verdict the gate can reach. Nothing here
-// fails a build: a release too young to install is a fact about the registry, never a defect in the
-// project reading it.
+// Classify whether a published release satisfies the install-age floor.
 
 const MILLISECONDS_PER_HOUR: number = 3_600_000
 

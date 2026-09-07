@@ -1,10 +1,4 @@
-// History-shape policy. The history is linear, so a merge commit is prohibited
-// wherever it sits, including between two side branches: a branch takes the work of another by rebase or
-// cherry-pick. The check counts the parents git recorded rather than reading the subject, so a commit
-// that merely mentions merging is an ordinary commit, and rewording a merge does not hide it.
-//
-// The rule reaches back to the first commit and has no exception. Avoid a merge rather than plan to
-// repair one: once it is published, only a fresh history satisfies the rule.
+// Judge Git parent counts rather than commit subjects, so rewording cannot conceal a merge.
 
 /** One commit reduced to the facts the history-shape rule needs. */
 export interface CommitShape {

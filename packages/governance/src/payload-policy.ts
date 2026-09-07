@@ -1,15 +1,4 @@
-// Payload-specific source policy: the rules that exist only because the project is a Payload CMS
-// application, and therefore the part of ploaness that a generic JavaScript harness cannot supply.
-//
-// ploaness governs a language and a framework; this module is the framework half. The rules here target
-// Payload defects that a type checker and a generic linter both miss: a Local API read that pulls an
-// unbounded relationship graph out of the database, and an access check that is deliberately bypassed.
-// The access-control rules - the ones about a decision left UNWRITTEN rather than written wrongly - are
-// in `payload-access.ts`, and the source reader both halves are decided by is in `payload-source.ts`.
-//
-// These rules were previously five GritQL files run as Biome plugins. Biome resolves a plugin path
-// relative to the config that declares it, which does not survive being extended from node_modules, so
-// they are reimplemented here instead. The move also makes them unit-testable, which they were not.
+// Payload source policy for explicit read bounds, request threading, and access decisions.
 import {
   findAnonymousDraftReads,
   findUndecidedSvgHeaders,
@@ -61,19 +50,10 @@ const BOUNDED_CALLS: readonly BoundedCallRule[] = [
   },
 ]
 
-// Only a call on an identifier that is recognisably the Payload instance is judged, so an unrelated
-// `array.find(...)` is never touched. `req` may itself be reached through a chain - `ctx.req.payload`
-// inside a hook is as much the Payload instance as `req.payload` - and excluding a preceding dot meant
-// every such call went unjudged. The chain is admitted only in front of `req`, so a property named
-// `payload` on some unrelated object is still left alone.
+// Recognized Payload receivers exclude unrelated collection methods such as array.find().
 const PAYLOAD_RECEIVER: RegExp = /(?:^|[^\w$.])(?:payload|(?:[\w$]+\.)*req\.payload|this\.payload)$/
 
-const declaresKey = (topLevel: string, key: string): boolean =>
-  new RegExp(String.raw`(?:^|,)\s*${key}\s*:`).test(topLevel)
-
-// A shorthand property has no colon, so `declaresKey` cannot see it. The property boundary must be the
-// start of the literal or a comma: admitting arbitrary whitespace made the `req` VALUE in
-// `request: req` look like a `req` PROPERTY and vouched for a transaction the call never received.
+// A property boundary keeps a value such as request: req from being read as a req property.
 const declaresProperty = (topLevel: string, key: string): boolean =>
   new RegExp(String.raw`(?:^|,)\s*${key}\s*(?::|,|$)`).test(topLevel)
 
@@ -88,24 +68,16 @@ const topLevelOptionsAt = (
     return undefined
   }
   const argumentText: string | undefined = balancedArguments(source, found + call.length - 1)
-  return argumentText?.includes('{') === true ? topLevelSlice(argumentText) : undefined
+  return argumentText?.trim().startsWith('{') === true ? topLevelSlice(argumentText) : undefined
 }
 
-// A top-level spread makes an absent key unknowable, so the rules that ask only whether a key exists
-// stay silent. A spread nested inside `data` is elided by `topLevelSlice` and changes none of the
-// options these rules judge.
-//
-// Shared by the two rules that read an options object. They ask different questions - is the read
-// bounded, is the request threaded - of the same three facts, and a second copy of the three guards is a
-// second place for the receiver pattern to fall out of step with this one.
-const optionKeysAt = (
-  source: string,
-  call: string,
-  found: number,
-  receiver: RegExp,
-): string | undefined => {
-  const topLevel: string | undefined = topLevelOptionsAt(source, call, found, receiver)
-  return topLevel === undefined || topLevel.includes('...') ? undefined : topLevel
+// A protected property must follow every spread that could replace it.
+const hasEffectiveProperty = (topLevel: string, key: string): boolean => {
+  const properties: readonly RegExpExecArray[] = [
+    ...topLevel.matchAll(new RegExp(String.raw`(?:^|,)\s*${key}\s*(?::|(?=,|$))`, 'gu')),
+  ]
+  const last: RegExpExecArray | undefined = properties.at(-1)
+  return last !== undefined && last.index > topLevel.lastIndexOf('...')
 }
 
 const unboundedCallAt = (
@@ -113,10 +85,10 @@ const unboundedCallAt = (
   rule: BoundedCallRule,
   found: number,
 ): PayloadViolation | undefined => {
-  const topLevel: string | undefined = optionKeysAt(source, rule.call, found, PAYLOAD_RECEIVER)
+  const topLevel: string | undefined = topLevelOptionsAt(source, rule.call, found, PAYLOAD_RECEIVER)
   if (
     topLevel === undefined ||
-    rule.required.some((key: string): boolean => declaresKey(topLevel, key))
+    rule.required.some((key: string): boolean => hasEffectiveProperty(topLevel, key))
   ) {
     return undefined
   }
@@ -161,13 +133,31 @@ const LOCAL_API_CALLS: readonly string[] = [
 // the instance THROUGH `req` is the proof that one does, so the omission is never a decision.
 const REQUEST_RECEIVER: RegExp = /(?:^|[^\w$.])(?:[\w$]+\.)*req\.payload$/
 
+const findOpaqueOptions = (source: string): readonly PayloadViolation[] =>
+  LOCAL_API_CALLS.flatMap((call: string): readonly PayloadViolation[] =>
+    occurrences(source, call).flatMap((found: number): readonly PayloadViolation[] =>
+      PAYLOAD_RECEIVER.test(source.slice(0, found)) &&
+      topLevelOptionsAt(source, call, found, PAYLOAD_RECEIVER) === undefined
+        ? [
+            {
+              line: lineOf(source, found),
+              rule: 'require-explicit-payload-options',
+              reason:
+                `cannot check ${call.slice(1, -1)}() options; use an object literal and state ` +
+                'the required depth/limit, req, and access settings after any spread',
+            },
+          ]
+        : [],
+    ),
+  )
+
 const unthreadedCallAt = (
   source: string,
   call: string,
   found: number,
 ): PayloadViolation | undefined => {
-  const topLevel: string | undefined = optionKeysAt(source, call, found, REQUEST_RECEIVER)
-  if (topLevel === undefined || declaresProperty(topLevel, 'req')) {
+  const topLevel: string | undefined = topLevelOptionsAt(source, call, found, REQUEST_RECEIVER)
+  if (topLevel === undefined || hasEffectiveProperty(topLevel, 'req')) {
     return undefined
   }
   return {
@@ -225,7 +215,7 @@ const userAccessViolationAt = (
   const topLevel: string | undefined = topLevelOptionsAt(source, call, found, PAYLOAD_RECEIVER)
   if (
     topLevel === undefined ||
-    !declaresProperty(topLevel, 'user') ||
+    !(declaresProperty(topLevel, 'user') || topLevel.includes('...')) ||
     hasEffectiveAccessControl(topLevel) ||
     overrideProperties(topLevel).some(
       (property: OverrideProperty): boolean => property.value === 'true',
@@ -237,7 +227,8 @@ const userAccessViolationAt = (
     line: lineOf(source, found),
     rule: 'require-user-access-control',
     reason:
-      `set overrideAccess: false on ${call.slice(1, -1)}() when passing user; Payload otherwise ` +
+      `set overrideAccess: false on ${call.slice(1, -1)}() after any spread; ` +
+      'a supplied or inherited user otherwise does not enable access control. Payload ' +
       'runs the operation as an administrator and ignores that user for access control',
   }
 }
@@ -271,25 +262,26 @@ const findOverrideAccess = (source: string): readonly PayloadViolation[] =>
 // project already trusts - a hook inside the write that authored it, a scheduled job, a seed - and
 // privilege there is legitimate rather than a mistake. A route handler serves whoever reached the URL,
 // so what it is allowed to read is the one thing it must never inherit by saying nothing.
-const ENDPOINT_ROOT: string = 'src/endpoints/'
+const ENDPOINT_PATH: RegExp = /^src\/(?:endpoints\/|app\/(?:.*\/)?route\.[jt]s$)/u
 
-// Read through `optionKeysAt` rather than `topLevelOptionsAt`, because the question is whether a key is
-// ABSENT: a top-level spread can supply it from another object, so a call carrying one is left alone
-// rather than accused of an omission this reader cannot see.
+// A route must prove access enforcement rather than inherit Payload's privileged default.
 const endpointAccessViolationAt = (
   source: string,
   call: string,
   found: number,
 ): PayloadViolation | undefined => {
-  const topLevel: string | undefined = optionKeysAt(source, call, found, PAYLOAD_RECEIVER)
-  if (topLevel === undefined || declaresProperty(topLevel, 'overrideAccess')) {
+  if (!PAYLOAD_RECEIVER.test(source.slice(0, found))) {
+    return undefined
+  }
+  const topLevel: string | undefined = topLevelOptionsAt(source, call, found, PAYLOAD_RECEIVER)
+  if (topLevel !== undefined && hasEffectiveAccessControl(topLevel)) {
     return undefined
   }
   return {
     line: lineOf(source, found),
     rule: 'require-endpoint-access',
     reason:
-      `state overrideAccess on ${call.slice(1, -1)}() in a route handler; Payload defaults it to ` +
+      `state overrideAccess: false on ${call.slice(1, -1)}() in a route handler; Payload defaults it to ` +
       'true, so an omission runs as an administrator and serves the document to whoever called the ' +
       'route - set overrideAccess: false',
   }
@@ -350,6 +342,7 @@ export const findPayloadViolations = (source: string): readonly PayloadViolation
   // order to explain why the code avoids it must not be reported as that construct.
   const code: string = stripComments(source)
   return [
+    ...findOpaqueOptions(code),
     ...findUnboundedCalls(code),
     ...findUnthreadedRequests(code),
     ...findIgnoredUsers(code),
@@ -381,7 +374,7 @@ export const findEndpointViolations = (
   filePath: string,
   source: string,
 ): readonly PayloadViolation[] => {
-  if (!filePath.startsWith(ENDPOINT_ROOT)) {
+  if (!ENDPOINT_PATH.test(filePath)) {
     return []
   }
   // Runs outside `findPayloadViolations`, so it strips its own comments: prose that names a call must

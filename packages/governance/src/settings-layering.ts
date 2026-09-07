@@ -1,13 +1,4 @@
-// How a member's settings sit on top of the repository's.
-//
-// A workspace declares some facts once and some per package. Which is which is not uniform, and reading
-// it wrong is silent either way: concatenating two `pretest` commands would run a mangled argv, while
-// letting a member REPLACE `sourceRoots` would narrow the scope the harness refuses to narrow.
-//
-// Layering happens on the RAW blocks, before any default is applied. Merging defaulted objects instead
-// would make "declared nothing" indistinguishable from "declared exactly the default", so a repository
-// that declared a stricter bundle budget would be silently overwritten by every member that declared
-// none.
+// Layer raw declarations before defaults, preserving inherited constraints and each member's ownership.
 import { asRecord, isArray } from './json-shapes.js'
 import { type DeclaredExclusion, readRawSettings, type Settings } from './settings.js'
 
@@ -24,6 +15,7 @@ const ADDITIVE: ReadonlySet<string> = new Set<string>([
   'auxiliaryServers',
   'accessibilitySkipRoutes',
   'frameworkGlue',
+  'generatedArtefacts',
   'pureLogicRoots',
 ])
 
@@ -49,11 +41,16 @@ const mergeArrays = (base: unknown, overlay: unknown): unknown => [
   ...(isArray(overlay) ? overlay : []),
 ]
 
-const smaller = (base: unknown, overlay: unknown): unknown => {
-  if (typeof base !== 'number') {
-    return overlay
+const isValidCeiling = (key: string, value: unknown): value is number =>
+  typeof value === 'number' &&
+  Number.isSafeInteger(value) &&
+  (key === 'maxSuppressions' ? value >= 0 : value > 0)
+
+const smaller = (key: string, base: unknown, overlay: unknown): unknown => {
+  if (!isValidCeiling(key, base)) {
+    return isValidCeiling(key, overlay) ? overlay : undefined
   }
-  return typeof overlay === 'number' ? Math.min(base, overlay) : base
+  return isValidCeiling(key, overlay) ? Math.min(base, overlay) : base
 }
 
 const mergeValue = (key: string, base: unknown, overlay: unknown): unknown => {
@@ -61,7 +58,7 @@ const mergeValue = (key: string, base: unknown, overlay: unknown): unknown => {
     return mergeArrays(base, overlay)
   }
   if (STRICTEST_NUMBER.has(key)) {
-    return smaller(base, overlay)
+    return smaller(key, base, overlay)
   }
   if (REPLACED.has(key)) {
     return overlay ?? base
@@ -93,21 +90,10 @@ export const layerSettingBlocks = (
 }
 
 /**
- * Move a member's exclusion into the repository's path space.
- *
- * The gates that walk the tracked tree run once, at the repository root, while a member declares its
- * exclusions relative to itself. `^src/generated/` written inside `apps/web` therefore matches nothing
- * when the repository-scope gate walks past `apps/web/src/generated/`, and a generated directory a
- * project correctly excused starts failing the typography ban.
- *
- * An UNANCHORED pattern is left alone, deliberately. `importMap\.js$` already matches at any depth, and
- * prefixing it would narrow it to one member - so the rule errs toward a pattern that matches too much
- * at repository scope rather than one that silently stops matching. Too wide is the safe direction here:
- * a repository-scope gate that skips one extra path reports one fewer finding, while a narrowed pattern
- * reports a project for a file it had already accounted for.
- * @param memberPath the member's repo-relative path, `.` for the member at the root.
- * @param entry the exclusion as the member declared it.
- * @returns the exclusion as the repository-scope gates must read it.
+ * Preserve a regex's package-relative meaning when repository gates read member exclusions.
+ * @param memberPath the declaring package's repository-relative path.
+ * @param entry the original exclusion.
+ * @returns a scoped regex, a rebased glob, or the unchanged root/route declaration.
  */
 export const rebaseExclusion = (
   memberPath: string,
@@ -122,27 +108,14 @@ export const rebaseExclusion = (
   if (entry.kind === 'glob') {
     return { ...entry, pattern: `${memberPath}/${entry.pattern}` }
   }
-  return entry.pattern.startsWith('^')
-    ? { ...entry, pattern: `^${memberPath}/${entry.pattern.slice(1)}` }
-    : entry
+  return { ...entry, memberPath }
 }
 
 /**
- * The settings one member runs under.
- *
- * Effective VALUES are layered - a member inherits the repository's source roots, its typography
- * exclusions, its floor. `declaredExclusions` is not, and that asymmetry is the point: it is the list of
- * decisions THIS package made, and every consumer of it judges the declarer. Layering it made a member
- * answer for the repository's declarations, so a workspace root that correctly excused its Vale detector
- * definitions - whose content IS the character the ban detects - had every member report that exclusion
- * as reaching nothing, because no member contains the file. One correct declaration, two gates failed,
- * and nothing a member could edit would have fixed it.
- *
- * The mirror direction was already handled: `rebaseExclusion` moves a member's exclusion up into the
- * repository's path space. This is the same seam read downward.
- * @param repositoryBlock the raw `ploaness` block of the repository root.
- * @param ownBlock the raw `ploaness` block of the member itself.
- * @returns the member's settings, inheriting values and owning declarations.
+ * Inherit effective values while retaining only the member's own declarations for reach checks.
+ * @param repositoryBlock the root settings before defaults.
+ * @param ownBlock the member settings before defaults.
+ * @returns effective settings and the member's declared exclusions.
  */
 export const readMemberSettings = (
   repositoryBlock: Record<string, unknown>,

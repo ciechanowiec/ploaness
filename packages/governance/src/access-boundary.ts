@@ -1,40 +1,4 @@
-// What a Payload application's own access report says an unauthenticated caller may do, decided here
-// rather than in the sweep that fetches it.
-//
-// The sweep is a managed end-to-end spec, so nothing in this repository compiles it against a running
-// Payload and no unit test can reach it. That is exactly the wrong place for the one decision it makes,
-// because the decision turns on a shape Payload does not document and does not send twice the same way.
-//
-// `sanitizePermissions` rewrites the response before it leaves the server: an operation whose grant
-// carries no query constraint is collapsed from `{ permission: true }` to the bare boolean `true`, and
-// the object shape survives only when a `where` clause survives beside it. So the UNCONSTRAINED grant -
-// `read: anyone`, the half the sweep exists to catch - is the one that is not an object. Reading
-// `.permission` alone reported the query-constrained grants and stayed silent on the open ones, which
-// is the sweep inverted against its own purpose: `payload-access.ts` stands its static rule down for
-// the conforming spelling `read: anyone` on the stated promise that this sweep covers it, so a
-// drafts-enabled collection open to every stranger passed the static rule and the dynamic one alike.
-//
-// Payload answers with a second half beside the operations: a `fields` map giving the same verdict per
-// field. This module read the operations alone for a while, and the half it discarded is the half that
-// decides whether a credential column is serialised to a stranger and whether a stranger may set the
-// column that says who owns a row. A collection open to `create` with every field writable lets an
-// anonymous caller compose the whole document, ownership included - which is a forgery rather than a
-// creation, and passed both halves of the old sweep because neither looked.
-//
-// One kind of field in that map holds nothing. A `type: 'ui'` field is a panel control - a banner, a
-// button, a computed label - with no column behind it, and `populateFieldPermissions` gates only on
-// `'name' in field && field.name`, so Payload reports it exactly as it reports a real column. A
-// `UIField` also carries no `access` property, so the project can neither close the grant nor decline
-// to declare it: the only way to answer the finding was to record under `publicAccess` that a stranger
-// may read a field that stores nothing, which degrades the very record this sweep exists to keep
-// readable. Those paths are therefore dropped, on the doctrine `grantsForEntity` already follows - a
-// permission over nothing is not a finding a project could answer - and they are dropped from the
-// declaration side too, so an entry naming one is reported as stale and can be removed for good rather
-// than sitting there forever, neither required nor mentioned.
-//
-// Knowing which paths those are needs the BUILT configuration, because the response cannot tell them
-// apart. The walk over it is the walk `fieldPathsFor` makes over the response, and has to stay so: a
-// path composed differently on the two sides matches nothing and drops nothing.
+// Compare Payload anonymous grants with explicit entity and field declarations, including stale exceptions.
 import { isArray, readKey } from './json-shapes.js'
 import {
   COLLECTION_OPERATIONS,

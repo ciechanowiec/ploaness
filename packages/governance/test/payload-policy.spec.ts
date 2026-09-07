@@ -62,12 +62,15 @@ describe('no-unbounded-find', () => {
     ])
   })
 
-  it('stays silent when the argument is a variable it cannot read', () => {
-    expect(rulesOf('await payload.find(options)')).toEqual([])
+  it('reports options hidden in a variable', () => {
+    expect(rulesOf('await payload.find(options)')).toEqual(['require-explicit-payload-options'])
   })
 
-  it('stays silent when the argument object is spread', () => {
-    expect(rulesOf("await payload.find({ ...base, collection: 'posts' })")).toEqual([])
+  it('requires explicit protected properties after a spread', () => {
+    expect(rulesOf("await payload.find({ ...base, collection: 'posts' })")).toEqual([
+      'no-unbounded-find',
+      'require-user-access-control',
+    ])
   })
 })
 
@@ -161,9 +164,14 @@ describe('what no-unthreaded-req leaves alone', () => {
     ])
   })
 
-  it('stays silent when the options are spread or unreadable', () => {
-    expect(rulesOf('await req.payload.create(options)')).toEqual([])
-    expect(rulesOf("await req.payload.create({ ...base, collection: 'a' })")).toEqual([])
+  it('requires readable options and effective request threading', () => {
+    expect(rulesOf('await req.payload.create(options)')).toEqual([
+      'require-explicit-payload-options',
+    ])
+    expect(rulesOf("await req.payload.create({ ...base, collection: 'a' })")).toEqual([
+      'no-unthreaded-req',
+      'require-user-access-control',
+    ])
   })
 
   it('reports the bound and the transaction separately when a call breaks both', () => {
@@ -506,11 +514,11 @@ describe('require-endpoint-access', () => {
     expect(endpointRulesOf(ENDPOINT, source)).toEqual([])
   })
 
-  // A shorthand carries no colon, and it is still a decision the author wrote down.
-  it('accepts the property in shorthand form', () => {
+  // A variable can carry true, so only an explicit false establishes access enforcement.
+  it('refuses an access value hidden in shorthand', () => {
     const source: string =
       "await req.payload.find({ collection: 'media', depth: 0, limit: 10, overrideAccess })"
-    expect(endpointRulesOf(ENDPOINT, source)).toEqual([])
+    expect(endpointRulesOf(ENDPOINT, source)).toEqual(['require-endpoint-access'])
   })
 
   it('names the operation and the value that repairs it', () => {
@@ -528,10 +536,10 @@ describe('require-endpoint-access, where it stays silent', () => {
     expect(endpointRulesOf('src/hooks/media.ts', source)).toEqual([])
   })
 
-  // A spread may supply the property from another object, so the omission cannot be proven here.
-  it('stays silent when a top-level spread could carry the property', () => {
+  // A spread can also replace the access decision with a privileged one.
+  it('refuses to infer access control from a spread', () => {
     const source: string = "await payload.find({ collection: 'media', depth: 0, ...options })"
-    expect(endpointRulesOf(ENDPOINT, source)).toEqual([])
+    expect(endpointRulesOf(ENDPOINT, source)).toEqual(['require-endpoint-access'])
   })
 
   it('ignores a find that is not a Local API call', () => {

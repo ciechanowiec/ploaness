@@ -1,15 +1,4 @@
-// The determinism rule that a test reaches no network beyond the machine it runs on, expressed as a
-// decision rather than as prose in the agent guide.
-//
-// The rule was checkable all along: a test that leaves the machine has to go through a socket, a
-// resolver, or fetch, and each of those hands the destination to the runtime before anything is sent.
-// What was missing was somewhere to put the verdict. This module is that place, and it performs no I/O -
-// the caller reads `os.networkInterfaces()` and intercepts the entry points, then asks here.
-//
-// The decision is host-shaped rather than allowlist-shaped on purpose. There is no setting that widens
-// it, because "the database this suite needs happens to live elsewhere" is the exact case the rule
-// exists to reject: a service that exists only outside the machine is exercised through a local
-// component that implements its protocol.
+// Decide whether an intercepted connection or DNS lookup stays on the test machine.
 import { isRecord } from './json-shapes.js'
 
 /** The sentence of the governing standard this module decides, quoted back in every refusal. */

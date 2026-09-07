@@ -1,15 +1,4 @@
-// Reading source text without parsing it: comment stripping, balanced-delimiter scanning, and the
-// depth-aware key lookups that tell a literal's own key from a nested one.
-//
-// It is the generic half of what was `payload-policy.ts`, extracted when that file reached the size cap
-// and then again when a second layer needed it. Three readers share it now: the Payload rules in
-// `payload-source.ts`, and the JSONC reader in `json-shapes.ts` - a tsconfig legally carries comments,
-// so the rule that judges one has to strip them the same way, and a second stripper is a second set of
-// edge cases about string literals nobody would keep in step.
-//
-// The walk is deliberately conservative. A reader returns undefined wherever the answer is not
-// statically decidable, because a false positive in a build-failing gate costs far more than a dynamic
-// construct a reviewer would catch anyway.
+// Scan comments, literals, and balanced delimiters while preserving source offsets for diagnostics.
 import { escapeForRegex } from './text-escapes.js'
 
 const OPENERS: ReadonlySet<string> = new Set(['(', '[', '{'])
@@ -189,7 +178,12 @@ const commentAt = (source: string, index: number): Skipped | undefined => {
 
 // A string literal is kept because its contents are the only place a banned construct can legitimately
 // appear as data. Everything else here is erased, so prose naming a construct is never read as one.
-const constructAt = (source: string, index: number, output: string): Skipped | undefined => {
+const constructAt = (
+  source: string,
+  index: number,
+  output: string,
+  shouldKeepRegex: boolean,
+): Skipped | undefined => {
   const comment: Skipped | undefined = commentAt(source, index)
   if (comment !== undefined) {
     return comment
@@ -199,7 +193,7 @@ const constructAt = (source: string, index: number, output: string): Skipped | u
     return { stop: endOfStringLiteral(source, index), erased: false }
   }
   if (character === '/' && VALUE_POSITION.has(lastMeaningful(output))) {
-    return { stop: endOfRegexLiteral(source, index), erased: true }
+    return { stop: endOfRegexLiteral(source, index), erased: !shouldKeepRegex }
   }
   return undefined
 }
@@ -214,14 +208,18 @@ const replacementFor = (text: string, skipped: Skipped, isStringMasked: boolean)
   return isStringMasked ? fill(text, STRING_FILLER) : text
 }
 
-const strip = (source: string, isStringMasked: boolean): string => {
+const strip = (
+  source: string,
+  isStringMasked: boolean,
+  shouldKeepRegex: boolean = false,
+): string => {
   /* eslint-disable functional/no-let -- a whole source file is walked here, so recursion would risk
      the stack; the cursor and the output it builds are confined to this loop and escape as a value */
   let output: string = ''
   let index: number = 0
   /* eslint-enable functional/no-let -- the walk above is the only place this file mutates */
   while (index < source.length) {
-    const skipped: Skipped | undefined = constructAt(source, index, output)
+    const skipped: Skipped | undefined = constructAt(source, index, output, shouldKeepRegex)
     if (skipped === undefined) {
       output += source[index] ?? ''
       index += 1
@@ -243,6 +241,9 @@ const strip = (source: string, isStringMasked: boolean): string => {
  * @returns the source with comments and regex literals replaced by spaces of equal length.
  */
 export const stripComments = (source: string): string => strip(source, false)
+
+/** Remove comments while retaining route patterns written as regular expressions. */
+export const withoutComments = (source: string): string => strip(source, false, true)
 
 /**
  * The source with every string literal replaced by filler of equal length, on top of what

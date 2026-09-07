@@ -1,22 +1,5 @@
-// The container images the gates run their analyzers in.
-//
-// Pinned by digest rather than by tag. A tag - `latest` most obviously, but a version tag too - is a
-// mutable reference: the registry can repoint it at new bytes, and the same repository would then reach
-// a different verdict on a different day. A digest names the bytes, so it is the only form that makes
-// "an upstream release cannot change a verdict while the repository does not change" literally true.
-//
-// The tag is written too, and it is not decoration. A digest alone says nothing about which release it
-// is, so the version used to live in a comment beside it - unreadable to anything but a person, which
-// is why nothing reported when a newer image existed. `<repo>:<tag>@sha256:<digest>` states both: docker
-// resolves the digest and ignores the tag, and the freshness check reads the tag to ask the registry
-// what is newer. A bare tag is still rejected; the spec requires both halves.
-//
-// To move a pin, read the new digest with `docker buildx imagetools inspect <repo>:<tag>`.
-//
-// Two of the four tags below are not the versions their comments used to claim. The hadolint pin was
-// commented `2.14.0` and is the bytes of `v2.15.1`; the actionlint pin was commented `1.7.7` and is
-// `1.7.12`. Nothing could have caught that while the version was prose, which is the whole argument for
-// writing it where a check can read it.
+// Analyzer image tags support freshness reporting; immutable digests identify the bytes executed.
+// Update both with docker buildx imagetools inspect <repository>:<tag>.
 
 /** An analyzer ploaness runs in a container rather than installing from the registry. */
 export type ContainerTool = 'gitleaks' | 'hadolint' | 'actionlint' | 'shellcheck'

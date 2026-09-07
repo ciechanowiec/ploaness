@@ -110,7 +110,7 @@ jobs:
       - name: 'Install an npm that can publish with OIDC'
         run: |
           set -eu
-          npm install --global npm@latest
+          npm install --global npm@11.19.0
           npm --version
 
       - name: 'Install dependencies'

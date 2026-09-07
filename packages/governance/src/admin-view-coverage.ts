@@ -1,20 +1,4 @@
-// Custom admin views, and the accessibility hole they sit in.
-//
-// The pinned sweep skips `/admin` unconditionally, and correctly: the panel is Payload's markup rather
-// than the project's, and the crawl carries no credential to sign in with. A CUSTOM admin view is the
-// one thing inside that exemption the project wrote itself, and nothing else in the harness will ever
-// look at it. `jsx-a11y` reads the source, so it cannot see contrast, focus order, or a landmark whose
-// role depends on where the framework's template put the markup - and that last one is not
-// hypothetical: a bare `header` in a custom view becomes a second `banner` beside the panel's own,
-// which is invisible until something renders it.
-//
-// ploaness cannot do the scanning. It cannot sign in, it does not know which container belongs to the
-// project rather than to Payload, and a scan of the whole panel would report defects in components
-// nobody working in that project can repair. What it can do is refuse to let the view go unlooked at.
-// The configuration says a custom view exists; a spec has to say something scans it.
-//
-// This is the same shape as the anonymous-grant rule: the framework will happily leave a decision
-// unmade, so the project is required to have made it somewhere a check can see.
+// Require static test evidence for authored admin views excluded from the anonymous crawl.
 import { containsRoute, reachesAxe, type SpecSource } from './axe-coverage.js'
 import type { PayloadViolation } from './payload-source.js'
 import { balancedArguments, lineOf, stripComments } from './source-text.js'

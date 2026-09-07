@@ -1,11 +1,4 @@
-// File roles: the categories a repository can determine from a file itself and uses to include or
-// exclude it from a check.
-//
-// The typography ban used to carry its own allowlist of ten extensions, which is the wrong shape for a
-// rule that reaches "every tracked file the repository does not exclude by role": a `.css`, a `.adoc`,
-// a shell script, or a Dockerfile went unscanned, and every new text format arrived unscanned until
-// someone remembered to extend the list. A role predicate is default-safe in the opposite direction -
-// a new format is covered by construction, and exclusion is the thing that must be stated.
+// Identify source, generated, binary, and prose roles so exclusions follow file meaning rather than tool defaults.
 
 /** How much of a file is inspected before deciding it is text. Enough to reach any real header. */
 const BINARY_PROBE_BYTES: number = 8192
@@ -44,14 +37,27 @@ export const isBinary = (bytes: Uint8Array): boolean =>
 export const hasExtension = (filePath: string, extensions: readonly string[]): boolean =>
   extensions.some((extension: string): boolean => filePath.endsWith(extension))
 
+/** A role regex evaluated either at the repository root or inside its declaring member. */
+export type RolePattern = string | { readonly memberPath: string; readonly pattern: string }
+
+const matchesPattern = (filePath: string, pattern: RolePattern): boolean => {
+  if (typeof pattern === 'string') {
+    return new RegExp(pattern).test(filePath)
+  }
+  const prefix: string = `${pattern.memberPath}/`
+  return (
+    filePath.startsWith(prefix) && new RegExp(pattern.pattern).test(filePath.slice(prefix.length))
+  )
+}
+
 /**
  * Decide whether a path is excluded by a declared role pattern.
  * @param filePath the repo-relative path.
  * @param patterns the declared exclusion patterns.
  * @returns true when any pattern matches.
  */
-export const matchesRole = (filePath: string, patterns: readonly string[]): boolean =>
-  patterns.some((pattern: string): boolean => new RegExp(pattern).test(filePath))
+export const matchesRole = (filePath: string, patterns: readonly RolePattern[]): boolean =>
+  patterns.some((pattern: RolePattern): boolean => matchesPattern(filePath, pattern))
 
 // The glob dialect the coverage settings are written in, which is not the regex dialect `matchesRole`
 // reads. `**/` crosses directory boundaries and `*` does not, which is the whole distinction between
@@ -95,5 +101,5 @@ export const matchesGlob = (pattern: string, filePath: string): boolean =>
  * @param excluded the declared generated-role patterns.
  * @returns true when the file is code and no declared role excludes it.
  */
-export const isGovernedCode = (filePath: string, excluded: readonly string[]): boolean =>
+export const isGovernedCode = (filePath: string, excluded: readonly RolePattern[]): boolean =>
   hasExtension(filePath, CODE_EXTENSIONS) && !matchesRole(filePath, excluded)

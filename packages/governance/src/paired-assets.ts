@@ -1,14 +1,4 @@
-// Paired-asset policy. Seven files exist twice in this repository: once at the root, where git, the
-// editors, and the agents that work on ploaness itself read them, and once as an `.asset` body under
-// `packages/assets/files/`, which is what a consumer receives. Nothing but discipline kept the two
-// copies equal, and discipline lost: the guideline body was written at the first commit and never
-// touched again while the root file was rewritten twice, so every consumer was pinned to a stale
-// contract that no gate could see.
-//
-// The pairing is DERIVED from the manifest rather than restated beside it. Every PINNED or SEED entry
-// is paired by default, and a path ploaness authors directly as an asset must say so here. Adding a
-// managed dotfile therefore joins the pairing automatically; forgetting to pair it is the failure this
-// module exists to prevent, so it cannot be the default.
+// Derive root-to-asset pairs from the managed catalogue and detect stale shipped copies.
 import type { ManagedAsset } from './asset-policy.js'
 
 /** Where an `.asset` body lives inside the assets package, relative to that package's root. */
