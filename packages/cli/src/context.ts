@@ -378,7 +378,10 @@ const createMember = ({
   return {
     root: projectPath === ROOT_MEMBER_PATH ? root : path.join(root, projectPath),
     packageJson,
-    settings: readMemberSettings(repositoryBlock, ploanessBlock(packageJson)),
+    settings:
+      projectPath === ROOT_MEMBER_PATH
+        ? readSettings(packageJson)
+        : readMemberSettings(repositoryBlock, ploanessBlock(packageJson)),
     isEnforced,
     path: projectPath,
     isPayload: isPayloadProject(packageJson),

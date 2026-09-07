@@ -116,3 +116,14 @@ describe('what init scaffolds is what wiring requires', () => {
     },
   )
 })
+
+describe('generated roles in Biome wiring', () => {
+  it('uses directory exclusions that formatting preserves while retaining individual file exclusions', () => {
+    const files: Readonly<Record<string, unknown>> = requiredBiomeFiles(['src'], 'payload', [
+      'src/generated/**',
+      'src/schema.ts',
+    ])
+    expect(files['includes']).toEqual(expect.arrayContaining(['!src/generated', '!src/schema.ts']))
+    expect(files['includes']).not.toContain('!src/generated/**')
+  })
+})

@@ -112,6 +112,12 @@ export const REQUIRED_TSCONFIG_EXTENDS: string = 'ploaness/tsconfig.json'
  */
 export const PROJECT_SETUP_FILE: string = 'vitest.setup.ts'
 
+const DIRECTORY_CONTENTS: string = '/**'
+
+// Biome excludes directories by their path; its formatter removes a trailing recursive wildcard.
+const biomeGeneratedExclusion = (artefact: string): string =>
+  `!${artefact.endsWith(DIRECTORY_CONTENTS) ? artefact.slice(0, -DIRECTORY_CONTENTS.length) : artefact}`
+
 /**
  * The `files` block a consumer's biome.json must carry verbatim.
  *
@@ -143,7 +149,7 @@ export const requiredBiomeFiles = (
     // Only a Payload member has these. Negating them elsewhere would name paths that cannot exist,
     // which `config-refs` reports as a carve-out reaching nothing.
     ...(kind === 'payload'
-      ? generatedArtefacts.map((artefact: string): string => `!${artefact}`)
+      ? generatedArtefacts.map((artefact: string): string => biomeGeneratedExclusion(artefact))
       : []),
     '!**/.next',
     '!**/node_modules',

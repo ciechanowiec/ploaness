@@ -1332,6 +1332,33 @@ printf 'export const authored = 1\n' > "$scratch/scoped-member-exclusion/package
 expect scoped-member-exclusion conventions FAIL 'packages/ui/generated-code.js'
 
 
+# A root member has no ancestor settings to inherit. Its declaration must be rendered once.
+new_case pass-single-root-declaration
+commit_case pass-single-root-declaration 'test(fixture): establish root setting ownership' "$CONFORMING_BODY"
+node "$lib/edit-json.ts" "$scratch/pass-single-root-declaration/package.json" \
+    ploaness.generatedArtefacts '[{"pattern":"src/generated/**","reason":"generated schema"}]'
+mkdir -p "$scratch/pass-single-root-declaration/src/generated"
+printf 'export interface Schema { readonly id: string }\n' \
+    > "$scratch/pass-single-root-declaration/src/generated/schema.ts"
+rm "$scratch/pass-single-root-declaration/biome.json"
+expect_command pass-single-root-declaration PASS 'biome.json: written' \
+    "$scratch/pass-single-root-declaration/node_modules/.bin/ploaness" init
+root_declarations="$(grep -Fc '!src/generated' "$scratch/pass-single-root-declaration/biome.json")"
+if [ "$root_declarations" -ne 1 ]; then
+    echo "FAILED root settings: one declaration produced $root_declarations generated exclusions" >&2
+    failures=$((failures + 1))
+fi
+expect pass-single-root-declaration wiring PASS
+generated_before="$(git hash-object "$scratch/pass-single-root-declaration/src/generated/schema.ts")"
+expect_command pass-single-root-declaration PASS 'Formatting applied' \
+    "$scratch/pass-single-root-declaration/node_modules/.bin/ploaness" format
+if [ "$generated_before" != "$(git hash-object "$scratch/pass-single-root-declaration/src/generated/schema.ts")" ]; then
+    echo 'FAILED generated role: formatting rewrote generator-owned source' >&2
+    failures=$((failures + 1))
+fi
+expect pass-single-root-declaration wiring PASS
+
+
 echo
 if [ "$failures" -eq 0 ]; then
     echo 'ploaness integration suite passed.'
