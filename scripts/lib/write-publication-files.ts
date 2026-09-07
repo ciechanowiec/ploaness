@@ -41,11 +41,15 @@ const readFields = (directory: string): PackageFields => {
   }
 }
 
-// The one page a person lands on deliberately, so it carries the three commands that get them started.
-// The internal four say plainly that they are not the thing to install, which is the only sentence a
-// reader of `@ploaness/governance` on npm actually needs.
-const opening = (fields: PackageFields): readonly string[] =>
-  fields.name.startsWith(HARNESS_SCOPE)
+// Application helpers have a production install path; analyzer packages are reached through the harness.
+const opening = (fields: PackageFields): readonly string[] => {
+  if (fields.name === '@ploaness/runtime') {
+    return [
+      'Applications declare `@ploaness/runtime` in `dependencies` at the same version as their ' +
+        '`ploaness` devDependency. Import production helpers from `@ploaness/runtime`.',
+    ]
+  }
+  return fields.name.startsWith(HARNESS_SCOPE)
     ? [
         'This package is published as part of `ploaness` and is not meant to be depended on ' +
           'directly. Install `ploaness`, which re-exports what a project needs.',
@@ -59,6 +63,7 @@ const opening = (fields: PackageFields): readonly string[] =>
         'pnpm ploaness verify',
         '```',
       ]
+}
 
 const render = (fields: PackageFields): string =>
   [

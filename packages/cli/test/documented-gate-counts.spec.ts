@@ -31,7 +31,24 @@ const gateRows = (heading: string): readonly (readonly string[])[] =>
 const expectedRows = (gates: readonly Gate[]): readonly (readonly string[])[] =>
   gates.map((gate: Gate): readonly string[] => [gate.id, gate.scope])
 
-const statedCount = (source: string, pattern: RegExp): number => Number(pattern.exec(source)?.[1])
+const COUNT_WORDS: readonly string[] = [
+  'zero',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+]
+
+const statedCount = (source: string, pattern: RegExp): number => {
+  const value: string = pattern.exec(source)?.[1] ?? ''
+  const index: number = COUNT_WORDS.indexOf(value)
+  return index === -1 ? Number(value) : index
+}
 const extended: readonly Gate[] = ALL_GATES.filter((gate: Gate): boolean => gate.isExtended)
 
 describe('the installed gate reference', () => {
@@ -40,7 +57,7 @@ describe('the installed gate reference', () => {
       expect(statedCount(source, /Default verification runs (\d+) gates/)).toBe(
         gatesFor(false).length,
       )
-      expect(statedCount(source, /Extended verification adds (\d+) gates/)).toBe(extended.length)
+      expect(statedCount(source, /Extended verification adds (\w+)/)).toBe(extended.length)
     }
   })
 
