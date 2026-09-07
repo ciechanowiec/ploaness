@@ -54,8 +54,21 @@ mkdir -p "$template"
 tar cf - -C "$here/project" . | tar xf - -C "$template"
 sed "s#__TARBALLS__#$tarballs#g" "$here/project/pnpm-workspace.yaml" > "$template/pnpm-workspace.yaml"
 
+# Temporary fixtures generate their lockfiles from the scenario's manifest. Exercise CI install
+# defaults locally too, and allow only these disposable lockfiles to change when a scenario adds a
+# dependency. Retain installer diagnostics so a setup failure explains why the gate was never reached.
+install_case() {
+    directory="$1"
+    if (cd "$directory" && CI=true pnpm install --no-frozen-lockfile > "$scratch/install.log" 2>&1); then
+        return 0
+    fi
+    echo "FAILED fixture installation in $directory" >&2
+    cat "$scratch/install.log" >&2
+    return 1
+}
+
 echo "installing the packed harness into the fixture template"
-(cd "$template" && pnpm install --silent >/dev/null)
+install_case "$template"
 # `init` writes the wiring the wiring gate then requires, so the pass case doubles as the regression
 # test that the scaffolder and the rule it is judged by still agree.
 (cd "$template" && ./node_modules/.bin/ploaness init >/dev/null)
@@ -408,7 +421,7 @@ new_case fail-retired-jsx-analyzer
 edit_json "$scratch/fail-retired-jsx-analyzer/package.json" devDependencies.retired-jsx-checker \
     '"npm:eslint-plugin-jsx-a11y@6.10.2"'
 rm "$scratch/fail-retired-jsx-analyzer/node_modules"
-(cd "$scratch/fail-retired-jsx-analyzer" && pnpm install --silent >/dev/null)
+install_case "$scratch/fail-retired-jsx-analyzer"
 commit_case fail-retired-jsx-analyzer 'test(fixture): install the retired JSX analyzer through an alias' "$CONFORMING_BODY"
 expect fail-retired-jsx-analyzer blocklist FAIL 'retired JSX accessibility analyzer'
 
