@@ -1,10 +1,10 @@
-// The checkov checks this harness enables, the reason each one is on the list, and the standing of
-// every provider a tree may declare.
+// The checkov checks this harness enables, the rubric every one is held to, and the standing of every
+// provider a tree may declare. The per-cloud tables beside this file list the ids and their reasons.
 //
 // Specific validated rules at error severity, never a whole category. A category enables checks nobody
-// read, and a rule count is not coverage - so each id here names a defect a governed project must not
-// ship, with the reason it is refused written beside it. Consumers get no per-check opt-out, so every
-// id is held to one rubric and fails it on the first miss:
+// read, and a rule count is not coverage - so each id names a defect a governed project must not ship,
+// with the reason it is refused written beside it. Consumers get no per-check opt-out, so every id is
+// held to one rubric and fails it on the first miss:
 //
 // - R1 A defect in every environment: wrong in dev, stage, prod and an ephemeral preview alike. That
 //   excludes logging, backups, retention, deletion protection, high availability, tags and "latest
@@ -23,131 +23,15 @@
 // disable a rule while the run still passed. The digest pin is what keeps the audit durable, because
 // the catalogue cannot change underneath it - which also means the audit is redone when the pin moves.
 //
-// Three AWS checks passed every criterion but R1, and are the first of a policy tranche should the
-// fleet ever adopt an operational baseline: `CKV_AWS_133` (backup retention) and `CKV_AWS_139` /
-// `CKV_AWS_293` (deletion protection on a cluster and on an instance). A deliberately ephemeral stage
-// environment fails all three on its first day.
-
-/** A provider this harness has curated checks for. Widened as each cloud's audit lands. */
-export type CuratedProviderName = 'aws'
-
-/** One enabled check: the identifier checkov knows it by, its provider, and why the finding is refused. */
-export interface CheckovCheck {
-  readonly id: string
-  readonly provider: CuratedProviderName
-  readonly reason: string
-}
+// Checks that passed every criterion but R1 form a policy tranche, should the fleet ever adopt an
+// operational baseline: deletion protection (`CKV_AWS_139`, `CKV_AWS_293`), backups (`CKV_AWS_133`),
+// versioning, access logging and edge hardening. A deliberately ephemeral stage environment fails
+// them on its first day, which is why they are a decision to take on its own merits.
+import type { CheckovCheck } from './checkov-check.js'
+import { AWS_CHECKS } from './checkov-checks-aws.js'
 
 /** The checks enabled at error severity, each confirmed present in the pinned image. */
-export const CHECKOV_CHECKS: readonly CheckovCheck[] = [
-  {
-    id: 'CKV_AWS_274',
-    provider: 'aws',
-    reason:
-      'a role, user or group carries AdministratorAccess, so one environment can destroy another',
-  },
-  {
-    id: 'CKV_AWS_275',
-    provider: 'aws',
-    reason: 'the same administrator policy reached through a data source rather than an attachment',
-  },
-  {
-    id: 'CKV_AWS_1',
-    provider: 'aws',
-    reason: 'a policy document grants every action on every resource',
-  },
-  {
-    id: 'CKV_AWS_49',
-    provider: 'aws',
-    reason: 'a policy document names "*" as a statement action',
-  },
-  {
-    id: 'CKV_AWS_62',
-    provider: 'aws',
-    reason: 'the same administrative grant written as an inline policy',
-  },
-  {
-    id: 'CKV_AWS_63',
-    provider: 'aws',
-    reason: 'the same wildcard action written as an inline policy',
-  },
-  {
-    id: 'CKV_AWS_41',
-    provider: 'aws',
-    reason: 'a long-lived access key is written into a provider block',
-  },
-  {
-    id: 'CKV_AWS_17',
-    provider: 'aws',
-    reason: 'the database is reachable from the public internet',
-  },
-  {
-    id: 'CKV_AWS_16',
-    provider: 'aws',
-    reason: 'the database instance stores its content unencrypted',
-  },
-  {
-    id: 'CKV_AWS_96',
-    provider: 'aws',
-    reason: 'the database cluster stores its content unencrypted',
-  },
-  {
-    id: 'CKV_AWS_20',
-    provider: 'aws',
-    reason: 'a bucket ACL grants public read, which serves unpublished media to anybody',
-  },
-  {
-    id: 'CKV_AWS_57',
-    provider: 'aws',
-    reason: 'a bucket ACL grants public write, which is arbitrary upload to the site own origin',
-  },
-  {
-    id: 'CKV_AWS_70',
-    provider: 'aws',
-    reason:
-      'a bucket policy names any principal, which is the policy spelling of the same exposure',
-  },
-  {
-    id: 'CKV_AWS_19',
-    provider: 'aws',
-    reason: 'the bucket stores uploads unencrypted',
-  },
-  {
-    id: 'CKV_AWS_53',
-    provider: 'aws',
-    reason: 'the bucket does not block public ACLs',
-  },
-  {
-    id: 'CKV_AWS_54',
-    provider: 'aws',
-    reason: 'the bucket does not block a public policy',
-  },
-  {
-    id: 'CKV_AWS_55',
-    provider: 'aws',
-    reason: 'the bucket does not ignore public ACLs already set',
-  },
-  {
-    id: 'CKV_AWS_56',
-    provider: 'aws',
-    reason: 'the bucket does not restrict public access at the account boundary',
-  },
-  {
-    id: 'CKV_AWS_24',
-    provider: 'aws',
-    reason: 'a security group admits SSH from the whole internet',
-  },
-  {
-    id: 'CKV_AWS_25',
-    provider: 'aws',
-    reason: 'a security group admits RDP from the whole internet',
-  },
-  {
-    id: 'CKV_AWS_79',
-    provider: 'aws',
-    reason: 'instance metadata v1 is enabled, so any request forgery becomes credential theft',
-  },
-]
+export const CHECKOV_CHECKS: readonly CheckovCheck[] = [...AWS_CHECKS]
 
 /**
  * The value of checkov's `--check` flag.

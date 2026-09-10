@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import type { CheckovCheck, CuratedProviderName } from '../src/checkov-check.js'
 import {
   CHECKOV_CHECKS,
-  type CheckovCheck,
-  type CuratedProviderName,
   checkovCheckList,
   checksFor,
   classifyProviders,
@@ -45,10 +44,21 @@ describe('CHECKOV_CHECKS', () => {
     expect(unexplained).toEqual([])
   })
 
-  // The three left off deliberately: each states a policy about how an environment is run rather than a
-  // defect in how it is written, and a deliberately ephemeral environment fails all three on day one.
+  // Left off deliberately: each states a policy about how an environment is run rather than a defect in
+  // how it is written, and a deliberately ephemeral environment fails all three on day one.
   it.each(['CKV_AWS_133', 'CKV_AWS_139', 'CKV_AWS_293'])(
     'leaves %s off, because it is a policy choice rather than a defect',
+    (id: string) => {
+      expect(CHECKOV_CHECKS.map((check: CheckovCheck): string => check.id)).not.toContain(id)
+    },
+  )
+
+  // Left off because a fixture against the pinned image showed each failing a correct configuration:
+  // a security-group rule that references another group, an absent argument whose default is already
+  // TLS 1.2, and a load balancer behind a CDN. With no per-check opt-out, a check that blocks the
+  // correct form is worse than none.
+  it.each(['CKV_AWS_24', 'CKV_AWS_25', 'CKV_AWS_206', 'CKV_AWS_2', 'CKV_AWS_103'])(
+    'leaves %s off, because it fails a correct configuration at this pin',
     (id: string) => {
       expect(CHECKOV_CHECKS.map((check: CheckovCheck): string => check.id)).not.toContain(id)
     },

@@ -833,6 +833,206 @@ commit_case pass-infra-declarations-only 'feat(fixture): declare variables and a
     "$CONFORMING_BODY"
 expect pass-infra-declarations-only infra PASS 'no resource'
 
+# Every port from the whole internet, in the inline block the analyzer's check reads. The SSH and RDP
+# checks read a rule referencing another security group as unrestricted and blocked the correct form,
+# so this check is what remains of theirs in the analyzer; the standalone rule resource it does not
+# read is the pattern rules' business.
+new_case fail-infra-open-ports
+mkdir -p "$scratch/fail-infra-open-ports/infra"
+cat > "$scratch/fail-infra-open-ports/infra/network.tf" <<'FIXTURE'
+resource "aws_security_group" "tasks" {
+  name = "tasks"
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+FIXTURE
+commit_case fail-infra-open-ports 'feat(fixture): admit every port from the whole internet' \
+    "$CONFORMING_BODY"
+expect fail-infra-open-ports infra FAIL CKV_AWS_277
+
+# A correct configuration in the current provider's idiom, touching the resource types whose checks
+# decide on an ABSENT argument, so that an addition which fails the correct form is caught here rather
+# than in a consumer. With no per-check opt-out, this fixture is the guard the whole AWS list rests on.
+new_case pass-infra-aws-modern
+mkdir -p "$scratch/pass-infra-aws-modern/infra"
+cat > "$scratch/pass-infra-aws-modern/infra/platform.tf" <<'FIXTURE'
+variable "vpc_id" {
+  type = string
+}
+
+variable "github_repository" {
+  type = string
+}
+
+variable "certificate_arn" {
+  type = string
+}
+
+resource "aws_security_group" "bastion" {
+  name   = "bastion"
+  vpc_id = var.vpc_id
+}
+
+resource "aws_security_group" "alb" {
+  name   = "alb"
+  vpc_id = var.vpc_id
+}
+
+resource "aws_security_group" "tasks" {
+  name   = "tasks"
+  vpc_id = var.vpc_id
+}
+
+resource "aws_vpc_security_group_ingress_rule" "ssh_from_bastion" {
+  security_group_id            = aws_security_group.tasks.id
+  referenced_security_group_id = aws_security_group.bastion.id
+  from_port                    = 22
+  to_port                      = 22
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "all_tcp_from_alb" {
+  security_group_id            = aws_security_group.tasks.id
+  referenced_security_group_id = aws_security_group.alb.id
+  from_port                    = 0
+  to_port                      = 65535
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "all" {
+  security_group_id = aws_security_group.tasks.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
+}
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
+}
+
+resource "aws_iam_role" "deploy" {
+  name = "deploy"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
+      Condition = {
+        StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
+        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:*" }
+      }
+    }]
+  })
+}
+
+resource "aws_api_gateway_domain_name" "api" {
+  domain_name              = "api.example.com"
+  regional_certificate_arn = var.certificate_arn
+  endpoint_configuration {
+    types = ["REGIONAL"]
+  }
+}
+
+resource "aws_s3_bucket" "media" {
+  bucket = "site-media"
+}
+
+resource "aws_s3_bucket_public_access_block" "media" {
+  bucket                  = aws_s3_bucket.media.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "media" {
+  bucket = aws_s3_bucket.media.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_instance" "worker" {
+  ami           = "ami-0123456789abcdef0"
+  instance_type = "t3.small"
+  root_block_device {
+    encrypted = true
+  }
+  metadata_options {
+    http_tokens = "required"
+  }
+}
+
+resource "aws_db_instance" "postgres" {
+  identifier          = "site"
+  engine              = "postgres"
+  instance_class      = "db.t4g.micro"
+  allocated_storage   = 20
+  storage_encrypted   = true
+  publicly_accessible = false
+  username            = "site"
+  manage_master_user_password = true
+}
+
+resource "aws_elasticache_replication_group" "cache" {
+  replication_group_id       = "site"
+  description                = "site cache"
+  node_type                  = "cache.t4g.micro"
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+}
+
+resource "aws_lb" "site" {
+  name               = "site"
+  load_balancer_type = "application"
+}
+
+resource "aws_cloudfront_distribution" "site" {
+  enabled = true
+  origin {
+    domain_name = aws_lb.site.dns_name
+    origin_id   = "alb"
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+  default_cache_behavior {
+    target_origin_id       = "alb"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+  }
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+}
+FIXTURE
+commit_case pass-infra-aws-modern 'feat(fixture): declare a correct platform in the current idiom' \
+    "$CONFORMING_BODY"
+expect pass-infra-aws-modern infra PASS 'curated check'
+
 new_case fail-sensitive-log
 cat > "$scratch/fail-sensitive-log/src/lib/credential-log.ts" <<'FIXTURE'
 type Credential = Readonly<Record<'token', string>>

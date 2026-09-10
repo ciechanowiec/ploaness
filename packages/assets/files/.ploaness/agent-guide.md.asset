@@ -157,7 +157,11 @@ headers and judges only what it can see: resources inside external modules are n
 provider with curated checks is analysed. A utility provider such as `random` is ignored. A provider
 Checkov ships no check for passes on the pattern rules, and the summary says so. A provider the harness
 has not classified fails until Ploaness classifies it. The enabled checks refuse defects only, never
-operational policy, and there is no per-check opt-out.
+operational policy, and there is no per-check opt-out; which checks are enabled, and why each one is,
+is recorded in Ploaness beside its identifier. Two AWS checks are deliberately left off because they
+also refuse the correct form: the plain-HTTP listener check fails a load balancer behind a CDN, and the
+SSH and RDP checks read a rule that names another security group as its source as open to the world.
+Every port from the world is still refused.
 
 ## Consumer Settings
 
