@@ -1534,6 +1534,39 @@ commit_case pass-infra-small-clouds 'feat(fixture): declare a correct edge on tw
     "$CONFORMING_BODY"
 expect pass-infra-small-clouds infra PASS 'linode curated check'
 
+# The Google Cloud spelling of AdministratorAccess. Every analyzer check for it also flags `viewer`
+# or a documented deploy role, which is why the pattern rules own it.
+new_case fail-infra-administrative-role
+mkdir -p "$scratch/fail-infra-administrative-role/infra"
+cat > "$scratch/fail-infra-administrative-role/infra/iam.tf" <<'FIXTURE'
+resource "google_project_iam_member" "deploy" {
+  project = "site"
+  role    = "roles/owner"
+  member  = "serviceAccount:deploy@site.iam.gserviceaccount.com"
+}
+FIXTURE
+commit_case fail-infra-administrative-role 'feat(fixture): grant a deploy identity ownership of the project' \
+    "$CONFORMING_BODY"
+expect fail-infra-administrative-role infra FAIL no-administrative-role-grant
+
+# Plaintext storage transport under the argument name azurerm 4 introduced, which the analyzer's
+# check does not read.
+new_case fail-infra-unencrypted-transport
+mkdir -p "$scratch/fail-infra-unencrypted-transport/infra"
+cat > "$scratch/fail-infra-unencrypted-transport/infra/storage.tf" <<'FIXTURE'
+resource "azurerm_storage_account" "media" {
+  name                       = "sitemedia"
+  resource_group_name        = "site"
+  location                   = "westeurope"
+  account_tier               = "Standard"
+  account_replication_type   = "LRS"
+  https_traffic_only_enabled = false
+}
+FIXTURE
+commit_case fail-infra-unencrypted-transport 'feat(fixture): serve storage over plain HTTP' \
+    "$CONFORMING_BODY"
+expect fail-infra-unencrypted-transport infra FAIL no-unencrypted-transport
+
 new_case fail-sensitive-log
 cat > "$scratch/fail-sensitive-log/src/lib/credential-log.ts" <<'FIXTURE'
 type Credential = Readonly<Record<'token', string>>

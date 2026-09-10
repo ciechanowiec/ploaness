@@ -163,7 +163,9 @@ also refuse the correct form: the plain-HTTP listener check fails a load balance
 SSH and RDP checks read a rule that names another security group as its source as open to the world.
 Every port from the world is still refused by the analyzer, and a standalone
 `aws_vpc_security_group_ingress_rule` that admits every port, SSH or RDP from every address is refused
-by a pattern rule, which reads that one resource because its type names its direction.
+by a pattern rule, which reads that one resource because its type names its direction. Two more
+pattern rules close what the analyzer leaves open on every cloud: an outright administrative grant
+(`roles/owner`, `roles/editor`, `Owner`) and an explicit plaintext-transport setting.
 
 ## Consumer Settings
 

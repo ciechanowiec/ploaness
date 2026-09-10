@@ -41,6 +41,65 @@ describe('no-skipped-final-snapshot', () => {
   })
 })
 
+describe('no-administrative-role-grant', () => {
+  // The Google Cloud and Azure spellings of AdministratorAccess, including the Owner definition
+  // named by its tenant-independent id.
+  it.each([
+    '  role = "roles/owner"',
+    '  role = "roles/editor"',
+    '  role_definition_name = "Owner"',
+    '  role_definition_id   = "/subscriptions/x/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635"',
+  ])('reports %s', (line: string) => {
+    expect(rulesOf(line)).toEqual(['no-administrative-role-grant'])
+  })
+
+  it('accepts a specific role', () => {
+    expect(rulesOf('  role = "roles/run.invoker"')).toEqual([])
+  })
+
+  // Scoped to a resource group, the documented deploy-identity role; not wrong in every environment.
+  it('accepts Contributor', () => {
+    expect(rulesOf('  role_definition_name = "Contributor"')).toEqual([])
+  })
+
+  it('accepts a role supplied from a variable', () => {
+    expect(rulesOf('  role = var.deploy_role')).toEqual([])
+  })
+
+  // `roles/ownerx` is not `roles/owner`; the value ends where the literal does.
+  it('does not read a longer value as the administrative one', () => {
+    expect(rulesOf('  role = "roles/ownership.viewer"')).toEqual([])
+  })
+})
+
+describe('no-unencrypted-transport', () => {
+  // Every spelling of "plaintext is fine" across the three clouds, including the argument names
+  // azurerm retired, which the analyzer's checks are blind to under the current ones.
+  it.each([
+    '  ssl_mode = "ALLOW_UNENCRYPTED_AND_ENCRYPTED"',
+    '  require_ssl = false',
+    '  https_traffic_only_enabled = false',
+    '  enable_https_traffic_only = false',
+    '  non_ssl_port_enabled = true',
+    '  enable_non_ssl_port = true',
+  ])('reports %s', (line: string) => {
+    expect(rulesOf(line)).toEqual(['no-unencrypted-transport'])
+  })
+
+  // The correct setting for a client without a certificate, which the analyzer's own check rejects.
+  it('accepts encrypted-only transport', () => {
+    expect(rulesOf('  ssl_mode = "ENCRYPTED_ONLY"')).toEqual([])
+  })
+
+  it('accepts HTTPS-only storage', () => {
+    expect(rulesOf('  https_traffic_only_enabled = true')).toEqual([])
+  })
+
+  it('accepts a value supplied from a variable', () => {
+    expect(rulesOf('  require_ssl = var.require_ssl')).toEqual([])
+  })
+})
+
 describe('no-placeholder-secret', () => {
   it.each(['"REPLACE-ME"', '"CHANGEME"', '"TODO"', '"<your-password>"'])(
     'reports a credential left as %s',

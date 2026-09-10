@@ -24,23 +24,34 @@ export interface TerraformViolation {
 
 const FIRST_LINE: number = 1
 
-// An argument assigned `true`, bare or quoted, on its own line. Terraform accepts both spellings.
-const assignedTrue = (attribute: string): RegExp =>
-  new RegExp(String.raw`^[ \t]*${attribute}[ \t]*=[ \t]*"?true"?`)
+// An argument assigned one literal value, bare or quoted, on its own line. Terraform accepts both
+// spellings of a boolean, and a quoted string is what the other values are.
+const assigned = (attribute: string, value: string): RegExp =>
+  new RegExp(String.raw`^[ \t]*${attribute}[ \t]*=[ \t]*"?${value}"?(?:[ \t]|$)`)
 
-/** One argument that destroys data by being switched on. */
+// The Owner definition has one id in every Azure tenant, and a role assignment may name it by id
+// rather than by name.
+const AZURE_OWNER_DEFINITION: string = '8e3af657-a8ff-443c-a75c-2fe8c4bcb635'
+
+/** One defect written as a literal argument, in every spelling a provider gives it. */
 interface FlagRule {
-  readonly pattern: RegExp
+  readonly patterns: readonly RegExp[]
   readonly rule: string
   readonly reason: string
 }
 
-// Both arguments exist only where they destroy data, and checkov ships no check for either - which is
-// what makes them this file's business rather than the analyzer's. The patterns are built once here
-// rather than per line, so the scan is one pass over the text.
+// Each rule refuses an explicit literal and never an absence, which is what keeps every one of them
+// free of false positives: a value that arrives through a variable or a reference never matches. The
+// first two arguments exist only where they destroy data, and checkov ships no check for either. The
+// last two stand in for checks that fail the rubric - `CKV_GCP_6` rejects the correct
+// `ENCRYPTED_ONLY`, `CKV_AZURE_3` and `CKV_AZURE_91` read only the argument names azurerm retired,
+// and every project-role check on Google Cloud also flags `viewer` or a documented deploy role,
+// while Azure has no check for an Owner assignment at all. A checkov check that fails the rubric
+// returns its question to text. The patterns are built once here rather than per line, so the scan
+// is one pass over the text.
 const FLAG_RULES: readonly FlagRule[] = [
   {
-    pattern: assignedTrue('force_destroy'),
+    patterns: [assigned('force_destroy', 'true')],
     rule: 'no-force-destroy',
     reason:
       'force_destroy lets a destroy remove a bucket or repository that still holds objects, so a ' +
@@ -48,12 +59,40 @@ const FLAG_RULES: readonly FlagRule[] = [
       'store deliberately when it is genuinely meant to go',
   },
   {
-    pattern: assignedTrue('skip_final_snapshot'),
+    patterns: [assigned('skip_final_snapshot', 'true')],
     rule: 'no-skipped-final-snapshot',
     reason:
       'skip_final_snapshot leaves a deleted database with nothing to restore from, and a destroy ' +
       'that was never meant to reach production is exactly when that snapshot is wanted - remove it ' +
       'and let the final snapshot be taken',
+  },
+  {
+    patterns: [
+      assigned('role', 'roles/owner'),
+      assigned('role', 'roles/editor'),
+      assigned('role_definition_name', 'Owner'),
+      new RegExp(
+        String.raw`^[ \t]*role_definition_id[ \t]*=[ \t]*"[^"]*${AZURE_OWNER_DEFINITION}"`,
+      ),
+    ],
+    rule: 'no-administrative-role-grant',
+    reason:
+      'an administrative role is granted outright, which is every permission on everything in its ' +
+      'scope - grant the specific roles the principal needs, and no more',
+  },
+  {
+    patterns: [
+      assigned('ssl_mode', 'ALLOW_UNENCRYPTED_AND_ENCRYPTED'),
+      assigned('require_ssl', 'false'),
+      assigned('https_traffic_only_enabled', 'false'),
+      assigned('enable_https_traffic_only', 'false'),
+      assigned('non_ssl_port_enabled', 'true'),
+      assigned('enable_non_ssl_port', 'true'),
+    ],
+    rule: 'no-unencrypted-transport',
+    reason:
+      'the service explicitly accepts unencrypted connections - remove the argument or set its ' +
+      'encrypted-only value; every client the harness governs speaks TLS',
   },
 ]
 
@@ -127,7 +166,9 @@ const ANALYZER_SUPPRESSION: RegExp = /#[ \t]*(?<analyzer>checkov:skip=|tfsec:ign
 
 const flagViolations = (code: string): readonly TerraformViolation[] =>
   code.split('\n').flatMap((line: string, index: number): readonly TerraformViolation[] =>
-    FLAG_RULES.filter((flag: FlagRule): boolean => flag.pattern.test(line)).map(
+    FLAG_RULES.filter((flag: FlagRule): boolean =>
+      flag.patterns.some((pattern: RegExp): boolean => pattern.test(line)),
+    ).map(
       (flag: FlagRule): TerraformViolation => ({
         line: index + FIRST_LINE,
         rule: flag.rule,
