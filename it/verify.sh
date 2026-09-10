@@ -457,6 +457,7 @@ fi
 # passed - neither tells you the gate is wired to the scaffold at all.
 for gate in preflight wiring assets conventions editorconfig suppressions generated-denial \
             payload-rules payload-defaults config-refs environment install-scripts release-age blocklist arch \
+            shell \
             require-full-history \
             commit-history linear-history; do
     expect pass "$gate" PASS
@@ -647,6 +648,64 @@ printf '\nexport const cmsUrl: string = process.env.NEXT_PUBLIC_CMS_URL ?? ""\n'
 commit_case pass-environment-build-arg 'feat(fixture): declare the build argument the image inlines' \
     "$CONFORMING_BODY"
 expect pass-environment-build-arg environment PASS
+
+# An unquoted expansion, which is the defect shellcheck is best known for and the one an operational
+# script is most likely to carry. Written through a QUOTED heredoc, so the expansions reach the fixture
+# rather than this script - the same reason every other case here quotes its delimiter.
+new_case fail-shell
+mkdir -p "$scratch/fail-shell/scripts"
+cat > "$scratch/fail-shell/scripts/release.sh" <<'FIXTURE'
+#!/bin/sh
+set -eu
+target=$1
+cp $target /tmp/backup
+FIXTURE
+commit_case fail-shell 'feat(fixture): leave an expansion unquoted in a release script' \
+    "$CONFORMING_BODY"
+expect fail-shell shell FAIL SC2086
+
+# The same script with the code named. A per-code directive is the legitimate form and shellcheck offers
+# no flag to refuse one, so the gate must not either - this is what proves it does not.
+new_case pass-shell-directive
+mkdir -p "$scratch/pass-shell-directive/scripts"
+cat > "$scratch/pass-shell-directive/scripts/release.sh" <<'FIXTURE'
+#!/bin/sh
+set -eu
+target=$1
+# shellcheck disable=SC2086
+cp $target /tmp/backup
+FIXTURE
+commit_case pass-shell-directive 'feat(fixture): suppress one shellcheck code by name' \
+    "$CONFORMING_BODY"
+expect pass-shell-directive shell PASS
+
+# The in-file equivalent of an rc file. `--norc` removes the project-wide spelling; this case is what
+# removes the per-file one.
+new_case fail-shell-blanket
+mkdir -p "$scratch/fail-shell-blanket/scripts"
+cat > "$scratch/fail-shell-blanket/scripts/release.sh" <<'FIXTURE'
+#!/bin/sh
+# shellcheck disable=all
+set -eu
+target=$1
+cp $target /tmp/backup
+FIXTURE
+commit_case fail-shell-blanket 'feat(fixture): disable shellcheck wholesale in a script' \
+    "$CONFORMING_BODY"
+expect fail-shell-blanket shell FAIL 'disable=all'
+
+# No extension at all, which is how a hook is written. An extension-only rule would read nothing here,
+# so this case fails the moment shebang discovery is lost.
+new_case fail-shell-shebang
+mkdir -p "$scratch/fail-shell-shebang/hooks"
+cat > "$scratch/fail-shell-shebang/hooks/pre-commit" <<'FIXTURE'
+#!/bin/sh
+set -eu
+target=$1
+cp $target /tmp/backup
+FIXTURE
+commit_case fail-shell-shebang 'feat(fixture): ship a hook that quotes nothing' "$CONFORMING_BODY"
+expect fail-shell-shebang shell FAIL SC2086
 
 new_case fail-sensitive-log
 cat > "$scratch/fail-sensitive-log/src/lib/credential-log.ts" <<'FIXTURE'

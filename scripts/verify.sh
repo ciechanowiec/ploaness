@@ -87,22 +87,6 @@ step arch "$cli_bin/depcruise" packages scripts \
     --config packages/config/dependency-cruiser-repo.json
 step knip "$cli_bin/knip" --config packages/config/knip-repo.json
 
-# The standard makes a check a repository implements itself into its source code, held to the same rules
-# as everything else - and these scripts were read by nothing. The image is pinned by digest beside the
-# other containerised analyzers, and the run is at shellcheck's own default severity: an `info` finding
-# is a finding, because a check has two verdicts and neither of them is a warning.
-shellcheck_image="$(node --input-type=module -e \
-    "import { CONTAINER_IMAGES } from '$root/packages/governance/dist/index.js'
-     process.stdout.write(CONTAINER_IMAGES.shellcheck)")"
-shellcheck_targets="$(mktemp)"
-node --input-type=module -e '
-    import { workingTreeFiles } from "./packages/cli/src/working-tree.ts"
-    const scripts = workingTreeFiles(process.cwd()).filter(file => file.endsWith(".sh"))
-    process.stdout.write(scripts.map(file => file + "\0").join(""))
-' > "$shellcheck_targets"
-step shellcheck xargs -0 docker run --rm -v "$root:/mnt" "$shellcheck_image" < "$shellcheck_targets"
-rm -f "$shellcheck_targets"
-
 # The specs are exempt for the reason AGENTS.md records: `--strict` counts every type assertion as
 # uncovered, and a spec exists to construct inputs the production types cannot express. Reaching 100%
 # there would mean building objects nobody reads. Everything else is measured, and clearing it removed
@@ -166,6 +150,11 @@ gate release-age
 gate blocklist
 gate deps
 gate actions
+# The scripts this repository implements its own checks into, read by the gate a consumer gets rather
+# than by a block written here. It replaced exactly that block: the same pinned image at the same
+# default severity, plus `--norc` and the scripts a shebang names rather than only those an extension
+# does. The run moved later as a consequence, into the gate block where it belongs.
+gate shell
 # Run rather than declared inapplicable, which is what the guide asks for wherever a gate CAN answer:
 # with no Dockerfile and no compose file it passes over an empty set without starting a container, and
 # the day somebody adds one it is already linted rather than newly unlinted.

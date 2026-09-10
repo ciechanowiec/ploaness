@@ -14,9 +14,9 @@ describe('CONTAINER_IMAGES', () => {
     expect(findUnpinnedImages(CONTAINER_IMAGES)).toEqual([])
   })
 
-  // shellcheck is here without a gate of its own: no governed project is required to ship a shell
-  // script, so there is nothing for a gate to run. What runs it is the ploaness verification command,
-  // over the scripts that implement ploaness's own checks - which the standard makes source code.
+  // Every analyzer named here has a gate that runs it. A project shipping no shell script is not
+  // exempt from the shell gate: it passes over an empty set without starting a container, which is the
+  // shape every container gate takes rather than a special case made for this one.
   it('declares an image for every containerised analyzer', () => {
     expect(
       Object.keys(CONTAINER_IMAGES).toSorted((left: string, right: string): number =>
