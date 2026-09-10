@@ -1294,6 +1294,246 @@ commit_case pass-infra-azure-modern 'feat(fixture): declare a correct azure plat
     "$CONFORMING_BODY"
 expect pass-infra-azure-modern infra PASS 'azurerm curated check'
 
+# The Google Cloud partition reaches the container.
+new_case fail-infra-google-open-database
+mkdir -p "$scratch/fail-infra-google-open-database/infra"
+cat > "$scratch/fail-infra-google-open-database/infra/database.tf" <<'FIXTURE'
+resource "google_sql_database_instance" "postgres" {
+  name             = "site"
+  database_version = "POSTGRES_16"
+  region           = "europe-west1"
+
+  settings {
+    tier = "db-f1-micro"
+
+    ip_configuration {
+      ipv4_enabled = true
+      ssl_mode     = "ENCRYPTED_ONLY"
+
+      authorized_networks {
+        name  = "everyone"
+        value = "0.0.0.0/0"
+      }
+    }
+  }
+}
+FIXTURE
+commit_case fail-infra-google-open-database 'feat(fixture): admit every address to the database' \
+    "$CONFORMING_BODY"
+expect fail-infra-google-open-database infra FAIL CKV_GCP_11
+
+# A correct configuration on the current google provider, touching every enabled check's resource
+# type and carrying the forms the audit found the analyzer's other checks refuse: `ssl_mode` set to
+# encrypted-only, a public database address with an empty authorised list, a private-endpoint cluster
+# with no authorised-networks block, OS Login as an unquoted boolean, a firewall source that arrives
+# through a variable, and the public invoker a site is served through.
+new_case pass-infra-google-modern
+mkdir -p "$scratch/pass-infra-google-modern/infra"
+cat > "$scratch/pass-infra-google-modern/infra/platform.tf" <<'FIXTURE'
+variable "project" {
+  type = string
+}
+
+variable "region" {
+  type = string
+}
+
+variable "office_cidr" {
+  type = string
+}
+
+resource "google_project" "site" {
+  name                = "site"
+  project_id          = var.project
+  auto_create_network = false
+}
+
+resource "google_service_account" "runtime" {
+  account_id = "site-runtime"
+  project    = var.project
+}
+
+resource "google_project_iam_member" "runtime_sql" {
+  project = var.project
+  role    = "roles/cloudsql.client"
+  member  = "serviceAccount:${google_service_account.runtime.email}"
+}
+
+resource "google_sql_database_instance" "postgres" {
+  name             = "site"
+  database_version = "POSTGRES_16"
+  region           = var.region
+
+  settings {
+    tier = "db-f1-micro"
+
+    ip_configuration {
+      ipv4_enabled = true
+      ssl_mode     = "ENCRYPTED_ONLY"
+    }
+  }
+}
+
+resource "google_redis_instance" "cache" {
+  name           = "site"
+  region         = var.region
+  memory_size_gb = 1
+  auth_enabled   = true
+}
+
+resource "google_storage_bucket" "media" {
+  name                        = "site-media"
+  location                    = "EU"
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+}
+
+resource "google_storage_bucket_iam_member" "runtime" {
+  bucket = google_storage_bucket.media.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.runtime.email}"
+}
+
+resource "google_compute_network" "site" {
+  name                    = "site"
+  auto_create_subnetworks = false
+}
+
+resource "google_compute_firewall" "https" {
+  name    = "https"
+  network = google_compute_network.site.name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["443"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+}
+
+resource "google_compute_firewall" "ssh_from_office" {
+  name    = "ssh-from-office"
+  network = google_compute_network.site.name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
+  }
+
+  source_ranges = [var.office_cidr]
+}
+
+resource "google_compute_instance" "worker" {
+  name         = "worker"
+  machine_type = "e2-small"
+  zone         = "${var.region}-b"
+
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-12"
+    }
+  }
+
+  network_interface {
+    network = google_compute_network.site.name
+  }
+
+  service_account {
+    email  = google_service_account.runtime.email
+    scopes = ["cloud-platform"]
+  }
+
+  metadata = {
+    "enable-oslogin" = true
+  }
+}
+
+resource "google_container_cluster" "site" {
+  name                     = "site"
+  location                 = var.region
+  remove_default_node_pool = true
+  initial_node_count       = 1
+
+  private_cluster_config {
+    enable_private_nodes    = true
+    enable_private_endpoint = true
+    master_ipv4_cidr_block  = "172.16.0.0/28"
+  }
+}
+
+resource "google_cloud_run_v2_service" "site" {
+  name     = "site"
+  location = var.region
+
+  template {
+    containers {
+      image = "europe-docker.pkg.dev/site/images/site:1"
+    }
+  }
+}
+
+resource "google_cloud_run_v2_service_iam_member" "public" {
+  name     = google_cloud_run_v2_service.site.name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
+resource "google_compute_ssl_policy" "edge" {
+  name            = "edge"
+  profile         = "MODERN"
+  min_tls_version = "TLS_1_2"
+}
+
+resource "google_dns_managed_zone" "site" {
+  name     = "site"
+  dns_name = "example.com."
+
+  dnssec_config {
+    state = "on"
+  }
+}
+FIXTURE
+commit_case pass-infra-google-modern 'feat(fixture): declare a correct google platform on the current provider' \
+    "$CONFORMING_BODY"
+expect pass-infra-google-modern infra PASS 'google curated check'
+
+# The two smallest partitions reach the container and pass a correct file: a private Spaces bucket, a
+# default-deny inbound firewall that opens 443 explicitly, and a provider token from a variable.
+new_case pass-infra-small-clouds
+mkdir -p "$scratch/pass-infra-small-clouds/infra"
+cat > "$scratch/pass-infra-small-clouds/infra/edge.tf" <<'FIXTURE'
+variable "linode_token" {
+  type = string
+}
+
+provider "linode" {
+  token = var.linode_token
+}
+
+resource "digitalocean_spaces_bucket" "media" {
+  name   = "site-media"
+  region = "ams3"
+}
+
+resource "linode_firewall" "web" {
+  label           = "web"
+  inbound_policy  = "DROP"
+  outbound_policy = "ACCEPT"
+
+  inbound {
+    label    = "https"
+    action   = "ACCEPT"
+    protocol = "TCP"
+    ports    = "443"
+    ipv4     = ["0.0.0.0/0"]
+  }
+}
+FIXTURE
+commit_case pass-infra-small-clouds 'feat(fixture): declare a correct edge on two small clouds' \
+    "$CONFORMING_BODY"
+expect pass-infra-small-clouds infra PASS 'linode curated check'
+
 new_case fail-sensitive-log
 cat > "$scratch/fail-sensitive-log/src/lib/credential-log.ts" <<'FIXTURE'
 type Credential = Readonly<Record<'token', string>>

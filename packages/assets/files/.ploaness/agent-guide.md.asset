@@ -144,7 +144,7 @@ Extended verification adds 8 gates before the final tree check.
 | Gate | Scope | What it verifies |
 | --- | --- | --- |
 | `shell` | repository | ShellCheck over every tracked shell script, found by extension and by shebang. |
-| `infra` | repository | Forbidden patterns over `.tf` and `.tfvars`, plus curated Checkov checks for the providers the tree declares; a provider the harness has not classified fails. |
+| `infra` | repository | Forbidden patterns over `.tf` and `.tfvars`, plus curated Checkov checks for AWS, Azure, Google Cloud, DigitalOcean and Linode; a provider the harness has not classified fails. |
 | `require-full-history` | repository | The clone carries the whole history. |
 | `commit-history` | repository | Every commit message in the history. |
 | `linear-history` | repository | No merge commit anywhere in the history. |

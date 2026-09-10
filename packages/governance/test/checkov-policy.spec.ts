@@ -13,7 +13,13 @@ import {
 
 // The token checkov puts in an id for each provider. A check filed under the wrong cloud would be sent
 // to the analyzer all the same, but counted against the wrong provider in the summary.
-const FAMILY_OF: Readonly<Record<CuratedProviderName, string>> = { aws: 'AWS', azurerm: 'AZURE' }
+const FAMILY_OF: Readonly<Record<CuratedProviderName, string>> = {
+  aws: 'AWS',
+  azurerm: 'AZURE',
+  google: 'GCP',
+  digitalocean: 'DIO',
+  linode: 'LIN',
+}
 
 describe('CHECKOV_CHECKS', () => {
   // An empty catalogue would render an empty `--check`, and checkov reads that as every check rather
@@ -77,6 +83,26 @@ describe('CHECKOV_CHECKS', () => {
     'CKV_AZURE_91',
   ])(
     'leaves %s off, because it fails a correct file on the current azurerm provider',
+    (id: string) => {
+      expect(CHECKOV_CHECKS.map((check: CheckovCheck): string => check.id)).not.toContain(id)
+    },
+  )
+
+  // Left off because each refuses a correct Google Cloud configuration: a public Cloud SQL address
+  // whose repair is not one argument, a private-endpoint cluster with no authorised-networks block,
+  // OS Login spelled as an unquoted boolean, `ssl_mode = "ENCRYPTED_ONLY"`, an argument the GA
+  // provider never had, and the public invoker a Cloud Run site is served through.
+  it.each([
+    'CKV_GCP_60',
+    'CKV_GCP_20',
+    'CKV_GCP_33',
+    'CKV_GCP_6',
+    'CKV_GCP_24',
+    'CKV_GCP_102',
+    'CKV_GCP_113',
+    'CKV_DIO_4',
+  ])(
+    'leaves %s off, because it refuses a correct Google Cloud or small-cloud file',
     (id: string) => {
       expect(CHECKOV_CHECKS.map((check: CheckovCheck): string => check.id)).not.toContain(id)
     },

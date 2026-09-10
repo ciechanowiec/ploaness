@@ -30,9 +30,15 @@
 import type { CheckovCheck } from './checkov-check.js'
 import { AWS_CHECKS } from './checkov-checks-aws.js'
 import { AZURE_CHECKS } from './checkov-checks-azure.js'
+import { GOOGLE_CHECKS, SMALL_CLOUD_CHECKS } from './checkov-checks-google.js'
 
 /** The checks enabled at error severity, each confirmed present in the pinned image. */
-export const CHECKOV_CHECKS: readonly CheckovCheck[] = [...AWS_CHECKS, ...AZURE_CHECKS]
+export const CHECKOV_CHECKS: readonly CheckovCheck[] = [
+  ...AWS_CHECKS,
+  ...AZURE_CHECKS,
+  ...GOOGLE_CHECKS,
+  ...SMALL_CLOUD_CHECKS,
+]
 
 /**
  * The value of checkov's `--check` flag.
