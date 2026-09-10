@@ -48,7 +48,8 @@ describe('no-administrative-role-grant', () => {
     '  role = "roles/owner"',
     '  role = "roles/editor"',
     '  role_definition_name = "Owner"',
-    '  role_definition_id   = "/subscriptions/x/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635"',
+    '  role_definition_id   = "/providers/Microsoft.Authorization/roleDefinitions/' +
+      '8e3af657-a8ff-443c-a75c-2fe8c4bcb635"',
   ])('reports %s', (line: string) => {
     expect(rulesOf(line)).toEqual(['no-administrative-role-grant'])
   })
@@ -214,9 +215,17 @@ describe('no-open-ingress', () => {
 
   // The span ends at the next top-level block, so a following egress rule cannot lend its address.
   it('does not read a following block into an ingress rule', () => {
-    const two: string =
-      'resource "aws_vpc_security_group_ingress_rule" "web" {\n  referenced_security_group_id = "sg-alb"\n  ip_protocol = "-1"\n}\n' +
-      'resource "aws_vpc_security_group_egress_rule" "all" {\n  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "-1"\n}\n'
+    const two: string = [
+      'resource "aws_vpc_security_group_ingress_rule" "web" {',
+      '  referenced_security_group_id = "sg-alb"',
+      '  ip_protocol = "-1"',
+      '}',
+      'resource "aws_vpc_security_group_egress_rule" "all" {',
+      '  cidr_ipv4   = "0.0.0.0/0"',
+      '  ip_protocol = "-1"',
+      '}',
+      '',
+    ].join('\n')
     expect(rulesOf(two)).toEqual([])
   })
 })
