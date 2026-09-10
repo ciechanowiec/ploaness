@@ -15,3 +15,9 @@ minimumReleaseAgeStrict: true
 
 overrides:
   deepmerge-ts: '^8.0.2'
+  # GHSA-2883-xcg3-v3hh: below 4.3.2, js-yaml does not bound the CPU an empty merge source can cost.
+  # Nothing in this workspace declares js-yaml, so the advisory reaches the tree through a dependent
+  # that has not released a fix above it - the one case an override is for. The upper bound is the
+  # load-bearing half: written as a bare `>=4.3.2` floor this resolves to the newest release in
+  # existence, which is a different package once the major moves.
+  js-yaml: '>=4.3.2 <5'
