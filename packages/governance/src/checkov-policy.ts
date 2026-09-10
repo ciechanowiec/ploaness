@@ -160,6 +160,21 @@ export const CHECKOV_CHECKS: readonly CheckovCheck[] = [
 export const checkovCheckList = (): string =>
   CHECKOV_CHECKS.map((check: CheckovCheck): string => check.id).join(',')
 
+// The tally checkov prints after a scan. Its compact output spends several lines on each failed check
+// and a few on headers, so counting lines would report defects that are not there.
+const FAILED_CHECKS: RegExp = /Failed checks: (?<count>\d+)/
+
+/**
+ * How many checks checkov reports as failed.
+ * @param output the analyzer's output for a scan that found at least one resource.
+ * @returns the tally, or undefined when the output carries none - which a caller treats as a run that
+ * did not complete rather than as a clean one.
+ */
+export const failedCheckCount = (output: string): number | undefined => {
+  const count: string | undefined = FAILED_CHECKS.exec(output)?.groups?.['count']
+  return count === undefined ? undefined : Number(count)
+}
+
 /**
  * The checks that can apply to a set of providers.
  * @param providers provider names as the resource types spell them.

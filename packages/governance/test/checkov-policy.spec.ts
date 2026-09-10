@@ -7,6 +7,7 @@ import {
   checksFor,
   classifyProviders,
   curatedProviders,
+  failedCheckCount,
   PROVIDERS_WITHOUT_CHECKS,
   type ProviderClassification,
 } from '../src/checkov-policy.js'
@@ -65,6 +66,25 @@ describe('checkovCheckList', () => {
 
   it('renders no whitespace, which the flag would carry into the argument', () => {
     expect(checkovCheckList()).not.toMatch(/\s/)
+  })
+})
+
+describe('failedCheckCount', () => {
+  it('reads the tally off the scan summary', () => {
+    expect(
+      failedCheckCount(
+        'terraform scan results:\nPassed checks: 83, Failed checks: 1, Skipped checks: 0\n',
+      ),
+    ).toBe(1)
+  })
+
+  it('reads a tally of none', () => {
+    expect(failedCheckCount('Passed checks: 9, Failed checks: 0, Skipped checks: 0\n')).toBe(0)
+  })
+
+  // Output with no tally is a run that stopped before deciding, and must not read as a clean one.
+  it('reports no tally for output that carries none', () => {
+    expect(failedCheckCount('Traceback (most recent call last):\n')).toBeUndefined()
   })
 })
 

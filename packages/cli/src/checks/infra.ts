@@ -17,6 +17,7 @@ import {
   checkovConfigsIn,
   checksFor,
   classifyProviders,
+  failedCheckCount,
   findTerraformViolations,
   type ProviderClassification,
   type ProviderDeclaration,
@@ -171,6 +172,11 @@ const withPatternFindings = (unavailable: GateResult, patterns: readonly string[
 // The whole catalogue is sent, not the subset for the providers found. A check never fires on a
 // resource type it does not bind to, so the verdict is the same either way - and a detection miss
 // then costs a wrong count in the summary rather than a check that silently did not run.
+//
+// `--skip-download` keeps the run off the network. Without it checkov fetches guideline mappings from
+// its vendor on every run, and when that fetch fails the traceback lands in the output this gate
+// reads line by line as findings. The checks themselves ship in the image; nothing judged depends on
+// the download.
 const runCheckov = (context: Context): RunResult =>
   run(
     'docker',
@@ -188,6 +194,7 @@ const runCheckov = (context: Context): RunResult =>
       'terraform',
       '--check',
       checkovCheckList(),
+      '--skip-download',
       '--compact',
       '--quiet',
       '--output',
@@ -211,16 +218,28 @@ const analyze = (
   if (faulted !== undefined) {
     return faulted
   }
-  const findings: readonly string[] = [
+  return withOutput(analyzerVerdict(result, patterns, passSummary), result.output)
+}
+
+// The summary counts defects, not lines. checkov's output is reported in full beneath, but it spends
+// several lines on each failed check, so the count comes from the tally it prints. Exit 1 with no
+// tally is output this gate cannot read, and is failed as such rather than counted.
+const analyzerVerdict = (
+  result: RunResult,
+  patterns: readonly string[],
+  passSummary: string,
+): GateResult => {
+  if (result.code !== CHECKOV_FINDINGS) {
+    return patternVerdict(patterns, passSummary)
+  }
+  const failures: number | undefined = failedCheckCount(result.output)
+  if (failures === undefined) {
+    return failed(`${INFRA_GATE} could not read the analyzer's summary`, asFindings(result.output))
+  }
+  return failed(`${String(patterns.length + failures)} infrastructure defect(s)`, [
     ...patterns,
-    ...(result.code === CHECKOV_FINDINGS ? asFindings(result.output) : []),
-  ]
-  return withOutput(
-    findings.length === 0
-      ? passed(passSummary)
-      : failed(`${String(findings.length)} infrastructure defect(s)`, findings),
-    result.output,
-  )
+    ...asFindings(result.output),
+  ])
 }
 
 // What the tree declares decides whether the analyzer runs at all. A tree of variables and modules
