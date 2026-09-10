@@ -9,7 +9,6 @@ import {
   CONTAINER_IMAGES,
   type ComposeProject,
   classifyContainerExit,
-  classifyImageFailure,
   composeProjectsIn,
   type DockerFailure,
   dockerfilesIn,
@@ -26,52 +25,13 @@ import {
   run,
 } from '../exec.js'
 import { mirrorSecretCandidates } from '../secret-mirror.js'
+import { acquireImage, describeFailure, dockerFault } from './container-run.js'
 
 // Pinned by digest in the governance layer, where a spec rejects a mutable reference. These were three
 // `:latest` literals, which let an upstream release change a verdict without the repository changing.
 const GITLEAKS_IMAGE: string = CONTAINER_IMAGES.gitleaks
 const HADOLINT_IMAGE: string = CONTAINER_IMAGES.hadolint
 const ACTIONLINT_IMAGE: string = CONTAINER_IMAGES.actionlint
-
-const describeFailure = (failure: DockerFailure): GateResult =>
-  failed(failure.summary, failure.remedies)
-
-// The image is acquired as a step of its own, BEFORE any analyzer runs, and that ordering is the repair
-// rather than an optimisation. It puts "the analyzer could not be obtained" on a command whose output
-// docker wrote in full, so the failure can be read honestly; leaving the pull implicit in `docker run`
-// left one exit code carrying two questions, and a rate-limited pull answered the wrong one - the secret
-// scan reported a secret in the git history because gitleaks had never started.
-//
-// `docker image inspect` is local and costs nothing on a machine that has already pulled, which is every
-// machine after the first run.
-const acquireImage = (context: Context, image: string, gate: string): GateResult | undefined => {
-  const present: RunResult = run('docker', ['image', 'inspect', '--format', '{{.Id}}', image], {
-    cwd: context.root,
-  })
-  if (present.code === 0) {
-    return undefined
-  }
-  const pulled: RunResult = run('docker', ['pull', image], { cwd: context.root })
-  const failure: DockerFailure | undefined = classifyImageFailure(gate, pulled)
-  return failure === undefined ? undefined : describeFailure(failure)
-}
-
-// Asked only when a run failed, and answered by docker rather than by the analyzer's output. The reserved
-// exit codes settle it outright; otherwise the question is whether docker is STILL well, which closes the
-// narrow window where the daemon dies between the pull and the run without letting a commit message the
-// scanner quoted decide whether a finding is real.
-const dockerFault = (
-  context: Context,
-  image: string,
-  gate: string,
-  result: RunResult,
-): GateResult | undefined => {
-  if (result.code === 0) {
-    return undefined
-  }
-  const reserved: DockerFailure | undefined = classifyContainerExit(gate, result)
-  return reserved === undefined ? acquireImage(context, image, gate) : describeFailure(reserved)
-}
 
 // The scanner's configuration is rendered outside the working tree and mounted read-only. A copy in the
 // tree is a forbidden path, because it could shadow or weaken the tool's own rules; rendering it here
