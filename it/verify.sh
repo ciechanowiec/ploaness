@@ -741,7 +741,7 @@ mkdir -p "$scratch/fail-infra-placeholder-secret/infra"
 cat > "$scratch/fail-infra-placeholder-secret/infra/secrets.tf" <<'FIXTURE'
 resource "aws_secretsmanager_secret_version" "preview" {
   secret_id     = "preview-auth"
-  db_password   = "REPLACE-ME"
+  secret_string = "REPLACE-ME"
 }
 FIXTURE
 commit_case fail-infra-placeholder-secret 'feat(fixture): guard a secret with a placeholder value' \

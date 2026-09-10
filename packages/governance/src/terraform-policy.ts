@@ -82,14 +82,22 @@ const QUALIFIED_KEYS: ReadonlySet<string> = new Set([
   'encryption',
 ])
 
+// A secret's CONTENT argument is named the other way round: `secret_string`, `secret_data` and
+// `secret_binary` are what a secret-store version holds, so the first segment carries the meaning and
+// the last says what shape the content takes. `secret_id` and `secret_arn` name a secret rather than
+// hold one, and stay outside.
+const SECRET_CONTENT: ReadonlySet<string> = new Set(['string', 'data', 'binary', 'value'])
+
 const PENULTIMATE: number = -2
 
 const isCredentialName = (name: string): boolean => {
   const segments: readonly string[] = name.toLowerCase().split('_')
+  const first: string = segments.at(0) ?? ''
   const last: string = segments.at(-1) ?? ''
-  return last === 'key'
-    ? QUALIFIED_KEYS.has(segments.at(PENULTIMATE) ?? '')
-    : CREDENTIAL_WORDS.has(last)
+  if (last === 'key') {
+    return QUALIFIED_KEYS.has(segments.at(PENULTIMATE) ?? '')
+  }
+  return CREDENTIAL_WORDS.has(last) || (first === 'secret' && SECRET_CONTENT.has(last))
 }
 
 // What a placeholder looks like once punctuation and case stop mattering. An angle-bracketed value is

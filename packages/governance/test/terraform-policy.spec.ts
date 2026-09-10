@@ -69,6 +69,23 @@ describe('no-placeholder-secret', () => {
   it('does not read an object key as a credential', () => {
     expect(rulesOf('  key = "uploads/logo.png"')).toEqual([])
   })
+
+  // The argument a secret-store version actually holds its value in, which is where a real consumer's
+  // placeholder sat. The credential word comes first here rather than last.
+  it.each(['secret_string', 'secret_data', 'secret_binary'])(
+    'reports a placeholder in %s, the content of a stored secret',
+    (attribute: string) => {
+      expect(rulesOf(`  ${attribute} = "REPLACE-ME"`)).toEqual(['no-placeholder-secret'])
+    },
+  )
+
+  // These name a secret rather than hold one; a placeholder there guards nothing.
+  it.each(['secret_id', 'secret_arn', 'secret_name'])(
+    'does not read %s as a credential',
+    (attribute: string) => {
+      expect(rulesOf(`  ${attribute} = "REPLACE-ME"`)).toEqual([])
+    },
+  )
 })
 
 describe('no-analyzer-suppression', () => {
