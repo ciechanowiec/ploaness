@@ -1,14 +1,19 @@
-// The environment-coherence gate. It reads four kinds of file and calls one pure function; every
+// The environment-coherence gate. It reads five kinds of file and calls one pure function; every
 // decision is in packages/governance/src/environment-coherence.ts.
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 import {
+  BUILD_CONFIGURATION_FILES,
   type ComposeProject,
   composeProjectsIn,
+  type DockerfileSource,
+  dockerfilesBuilding,
+  dockerfilesIn,
   ENVIRONMENT_EXAMPLE_FILES,
   type EnvironmentViolation,
   findEnvironmentViolations,
+  type ImageBuild,
   VALIDATED_ENVIRONMENT_MODULE,
   type WorkflowFile,
   workflowsIn,
@@ -56,15 +61,47 @@ const workflows = (repository: Repo): readonly WorkflowFile[] =>
     }),
   )
 
+// Discovered by the same rule the container gate reads Dockerfiles by, for the same reason.
+const dockerfileSources = (repository: Repo): readonly DockerfileSource[] =>
+  dockerfilesIn(workingTreeFiles(repository.root)).map(
+    (file: string): DockerfileSource => ({
+      file,
+      content: readFileSync(path.join(repository.root, file), 'utf8'),
+    }),
+  )
+
+// The files whose reads a build inlines: the validated module, and the framework configuration at the
+// member's own root. Per member, because an image is built per member - what one member's build inlines
+// says nothing about the arguments a sibling's image declares.
+const BUILD_SOURCE_FILES: readonly string[] = [
+  VALIDATED_ENVIRONMENT_MODULE,
+  ...BUILD_CONFIGURATION_FILES,
+]
+
+const builds = (repository: Repo): readonly ImageBuild[] => {
+  const dockerfiles: readonly DockerfileSource[] = dockerfileSources(repository)
+  const memberPaths: readonly string[] = repository.members.map(
+    (member: Member): string => member.path,
+  )
+  return repository.members.map(
+    (member: Member): ImageBuild => ({
+      sources: BUILD_SOURCE_FILES.map((relative: string): string | undefined =>
+        readIfPresent(repository.root, path.join(member.path, relative)),
+      ).filter(isPresent),
+      dockerfiles: dockerfilesBuilding(member.path, memberPaths, dockerfiles),
+    }),
+  )
+}
+
 const describe = (violation: EnvironmentViolation): string =>
   `${violation.name}: ${violation.reason}`
 
 /**
  * Every environment variable the repository declares in one place reaches the others it has to.
  *
- * A repository that reads no variable, ships no compose file, and runs no verifying workflow passes over
- * an empty set rather than being declared inapplicable - the same shape the container gate takes, and
- * for the same reason: the day one of those appears it is already checked.
+ * A repository that reads no variable, ships no compose file, builds no image, and runs no verifying
+ * workflow passes over an empty set rather than being declared inapplicable - the same shape the
+ * container gate takes, and for the same reason: the day one of those appears it is already checked.
  * @param repository the repository being judged, and the members whose modules it holds.
  * @returns the gate result.
  */
@@ -74,6 +111,7 @@ export const environment = (repository: Repo): GateResult => {
     example: exampleFile(repository),
     composeSources: composeSources(repository),
     workflows: workflows(repository),
+    builds: builds(repository),
   })
   return violations.length > 0
     ? failed(

@@ -1,7 +1,9 @@
-// Require environment reads, example declarations, compose interpolation, and verifying workflows to agree.
+// Require environment reads, example declarations, compose interpolation, verifying workflows, and the
+// build arguments an image declares to agree.
+import { logicalLines } from './container-images.js'
 
 /** Where a variable was declared, for a message that names the two places rather than one. */
-export type EnvironmentOrigin = 'application' | 'compose'
+export type EnvironmentOrigin = 'application' | 'compose' | 'dockerfile'
 
 /** An environment variable declared in one place and absent from another it has to reach. */
 export interface EnvironmentViolation {
@@ -16,6 +18,20 @@ export interface WorkflowFile {
   readonly content: string
 }
 
+/** A Dockerfile, as the rule needs it: what to call it in a finding, and what it declares. */
+export interface DockerfileSource {
+  readonly file: string
+  readonly content: string
+}
+
+/** One member's image build: the files whose reads it inlines, and the Dockerfiles that build it. */
+export interface ImageBuild {
+  /** Contents of the validated module and the framework configuration, where the member has them. */
+  readonly sources: readonly string[]
+  /** Every Dockerfile that builds this member. Empty when the member ships no image. */
+  readonly dockerfiles: readonly DockerfileSource[]
+}
+
 /** Inputs for {@link findEnvironmentViolations}, already read so the core stays pure. */
 export interface EnvironmentInputs {
   /** The contents of every validated environment module the repository holds, one per member. */
@@ -26,6 +42,8 @@ export interface EnvironmentInputs {
   readonly composeSources: readonly string[]
   /** Every workflow the repository ships. Only the verifying ones are judged. */
   readonly workflows: readonly WorkflowFile[]
+  /** One entry per member: what its build inlines, and the images that must declare it. */
+  readonly builds: readonly ImageBuild[]
 }
 
 /**
@@ -59,6 +77,20 @@ export const ENVIRONMENT_EXAMPLE_FILES: readonly string[] = [
   '.env.template',
 ]
 
+/**
+ * The framework configuration a member may hold at its own root.
+ *
+ * It is evaluated during the image build, so a variable it reads is one the build has to be given - and
+ * it sits outside `sourceRoots`, which is why the `process.env` ban never reached it and why this rule
+ * has to. Every spelling present is read, unlike the example files above, because a project ships one
+ * and reading all of them cannot produce two answers that disagree.
+ */
+export const BUILD_CONFIGURATION_FILES: readonly string[] = [
+  'next.config.ts',
+  'next.config.mjs',
+  'next.config.js',
+]
+
 // BRACKET ACCESS ONLY, and that is the rule rather than a shortcut. `process.env` is an index
 // signature, so a variable this project invented can only be read with brackets; a variable node or the
 // framework DECLARES - `NODE_ENV` above all - is a known property and is read with a dot. The two forms
@@ -75,6 +107,26 @@ const EXAMPLE_ASSIGNMENT: RegExp = /^[ \t]*(?:export[ \t]+)?(?<name>[A-Za-z_]\w*
 // gate's business. The braced form alone is read: `$NAME` is legal in compose and rare in practice, and
 // telling it apart from a `$$` escape or a shell fragment inside a `command:` is guesswork.
 const COMPOSE_INTERPOLATION: RegExp = /\$\{(?<name>[A-Z_]\w*)\}/gi
+
+// BOTH ACCESS FORMS, and the PREFIX is what makes that sound rather than a relaxation of the rule
+// above. `NEXT_PUBLIC_` is reserved by the framework for values the project invents; no runtime declares
+// one, so a dotted read of a prefixed name cannot be naming an ambient variable the way
+// `process.env.NODE_ENV` does. It is also the ONLY form the bundler substitutes, because the
+// substitution is textual - so the dotted read is not merely admissible here, it is the read that makes
+// the value a build input at all. A name read through a plain record parameter is not matched: nothing
+// is inlined there, and the value arrives from whoever built the record.
+const INLINED_DOTTED_READ: RegExp = /process\.env\.(?<name>NEXT_PUBLIC_\w+)/g
+const INLINED_BRACKETED_READ: RegExp =
+  /process\.env\[\s*(?<quote>['"])(?<name>NEXT_PUBLIC_\w+)\k<quote>\s*\]/g
+
+// A build-argument DECLARATION, with or without a default. The compose analogue above puts
+// `${NAME:-5432}` out of scope because a default SUPPLIES the value and the claim was that something
+// must supply it. This containment runs the other way - the Dockerfile is the side that must DECLARE -
+// and `ARG NAME=x` declares NAME just as `ARG NAME` does: `--build-arg NAME=...` is honoured either way
+// and the read resolves. What this rule is about is a name the file never mentions.
+const ARG_DECLARATION: RegExp = /^[ \t]*ARG[ \t]+(?<names>\S.*)$/i
+const ARGUMENT_SEPARATOR: RegExp = /[ \t]+/
+const DEFAULT_SEPARATOR: string = '='
 
 // A name a workflow supplies: a mapping key in SCREAMING_SNAKE, or a reference to a secret, a variable,
 // or the job environment. The key form is matched at any indentation, for the reason the header states.
@@ -126,6 +178,40 @@ export const interpolatedEnvironmentNames = (compose: string): readonly string[]
   uniqueSorted(namesMatching(compose, COMPOSE_INTERPOLATION))
 
 /**
+ * The variables a file's reads inline into the image at build time.
+ * @param source the contents of a validated environment module or a framework configuration.
+ * @returns each name once, sorted.
+ */
+export const inlinedEnvironmentNames = (source: string): readonly string[] =>
+  uniqueSorted([
+    ...namesMatching(source, INLINED_DOTTED_READ),
+    ...namesMatching(source, INLINED_BRACKETED_READ),
+  ])
+
+const argumentNamesIn = (declaration: string): readonly string[] =>
+  declaration
+    .split(ARGUMENT_SEPARATOR)
+    .map((token: string): string => token.split(DEFAULT_SEPARATOR)[0] ?? '')
+    .filter((name: string): boolean => name.length > 0)
+
+/**
+ * The build arguments a Dockerfile declares, in every stage and under either spelling.
+ *
+ * Every stage, because `ARG` scope is per stage and which stage runs the build is not a fact this text
+ * can establish. Reading the file as one namespace can only ACCEPT a declaration that sits in the wrong
+ * stage; resolving stages by guessing which `RUN` is the build would REJECT correct files.
+ * @param dockerfile the Dockerfile body.
+ * @returns each name once, sorted.
+ */
+export const declaredBuildArguments = (dockerfile: string): readonly string[] =>
+  uniqueSorted(
+    logicalLines(dockerfile).flatMap((line: string): readonly string[] => {
+      const names: string | undefined = ARG_DECLARATION.exec(line)?.groups?.['names']
+      return names === undefined ? [] : argumentNamesIn(names)
+    }),
+  )
+
+/**
  * The variables a workflow supplies, by any means and at any nesting depth.
  * @param workflow the contents of the workflow file.
  * @returns each name once, sorted.
@@ -143,6 +229,36 @@ export const workflowSuppliedNames = (workflow: string): readonly string[] =>
  */
 export const isVerifyingWorkflow = (workflow: string): boolean =>
   VERIFYING_COMMANDS.some((command: string): boolean => workflow.includes(command))
+
+const ROOT_MEMBER: string = '.'
+
+// The member a path belongs to: the deepest one whose directory contains it, the same rule a working
+// directory is resolved by, so a nested member keeps its own image instead of inheriting its parent's.
+const ownerOf = (file: string, everyMemberPath: readonly string[]): string =>
+  [...everyMemberPath]
+    .filter(
+      (candidate: string): boolean => candidate !== ROOT_MEMBER && file.startsWith(`${candidate}/`),
+    )
+    .toSorted((left: string, right: string): number => right.length - left.length)
+    .at(0) ?? ROOT_MEMBER
+
+/**
+ * The Dockerfiles that build one member: those inside its own directory, and - for the member at the
+ * repository root - those no other member owns.
+ * @param memberPath the member's repo-relative path, `.` at the repository root.
+ * @param everyMemberPath every governed member's path.
+ * @param dockerfiles every Dockerfile the repository tracks.
+ * @returns the Dockerfiles that build this member, in the order given.
+ */
+export const dockerfilesBuilding = (
+  memberPath: string,
+  everyMemberPath: readonly string[],
+  dockerfiles: readonly DockerfileSource[],
+): readonly DockerfileSource[] =>
+  dockerfiles.filter(
+    (dockerfile: DockerfileSource): boolean =>
+      ownerOf(dockerfile.file, everyMemberPath) === memberPath,
+  )
 
 const undocumented = (
   names: readonly string[],
@@ -173,15 +289,51 @@ const missingFromWorkflow = (
     )
 }
 
+const missingBuildArguments = (build: ImageBuild): readonly EnvironmentViolation[] => {
+  // A member that ships no image owes no build argument. One-directional, like every rule above.
+  if (build.dockerfiles.length === 0) {
+    return []
+  }
+  const declared: ReadonlySet<string> = new Set(
+    build.dockerfiles.flatMap((dockerfile: DockerfileSource): readonly string[] =>
+      declaredBuildArguments(dockerfile.content),
+    ),
+  )
+  const files: string = build.dockerfiles
+    .map((dockerfile: DockerfileSource): string => dockerfile.file)
+    .join(', ')
+  return uniqueSorted(
+    build.sources.flatMap((source: string): readonly string[] => inlinedEnvironmentNames(source)),
+  )
+    .filter((name: string): boolean => !declared.has(name))
+    .map(
+      (name: string): EnvironmentViolation => ({
+        name,
+        origin: 'dockerfile',
+        reason: [
+          `inlined into the image at build time but declared by no ARG in ${files},`,
+          'so docker discards the --build-arg that supplies it and warns rather than failing:',
+          `add "ARG ${name}" to the stage that runs the build`,
+        ].join(' '),
+      }),
+    )
+}
+
 /**
  * Every environment variable declared in one place and absent from another it has to reach.
  *
- * Three containments, each one-directional. What the application reads must be documented. What a
+ * Four containments, each one-directional. What the application reads must be documented. What a
  * compose file interpolates must be documented, because `docker compose config` reads the example file
- * a developer copied. And what a compose file interpolates must be supplied by every workflow that
- * verifies, because a workflow has no copied file to interpolate from.
+ * a developer copied. What a compose file interpolates must be supplied by every workflow that
+ * verifies, because a workflow has no copied file to interpolate from. And what a build inlines must be
+ * declared as an `ARG`, because docker discards a `--build-arg` the Dockerfile never named and warns
+ * rather than failing - so the value is absent from the image and nothing says so.
+ *
+ * The inlined names feed the Dockerfile containment ALONE. Joining them to the example-file rule would
+ * report a member that documents its public variables in its own example file rather than the
+ * repository's, which is where they belong and where this reader does not look.
  * @param inputs the files, already read.
- * @returns the violations, sorted by name within each rule. An empty array means the four places agree.
+ * @returns the violations, sorted by name within each rule. An empty array means the five places agree.
  */
 export const findEnvironmentViolations = (
   inputs: EnvironmentInputs,
@@ -217,6 +369,9 @@ export const findEnvironmentViolations = (
     ),
     ...verifying.flatMap((workflow: WorkflowFile): readonly EnvironmentViolation[] =>
       missingFromWorkflow(interpolated, workflow),
+    ),
+    ...inputs.builds.flatMap((build: ImageBuild): readonly EnvironmentViolation[] =>
+      missingBuildArguments(build),
     ),
   ]
 }

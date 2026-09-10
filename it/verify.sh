@@ -625,6 +625,29 @@ replace_text "$scratch/fail-boot-time-writes/src/payload.config.ts" "  globals: 
 commit_case fail-boot-time-writes 'feat(fixture): seed content on every boot' "$CONFORMING_BODY"
 expect fail-boot-time-writes payload-rules FAIL no-boot-time-writes
 
+# Docker WARNS on a --build-arg the Dockerfile never declared and builds anyway, so an image can ship
+# with a build-time value silently absent while every smoke test still passes. The read is what the rule
+# sees; the missing ARG is what it reports.
+new_case fail-environment-build-arg
+printf 'FROM node:26-alpine\nWORKDIR /app\nRUN echo build\n' \
+    > "$scratch/fail-environment-build-arg/Dockerfile"
+printf '\nexport const cmsUrl: string = process.env.NEXT_PUBLIC_CMS_URL ?? ""\n' \
+    >> "$scratch/fail-environment-build-arg/src/lib/environment.ts"
+commit_case fail-environment-build-arg 'feat(fixture): inline a variable the image never declares' \
+    "$CONFORMING_BODY"
+expect fail-environment-build-arg environment FAIL NEXT_PUBLIC_CMS_URL
+
+# The same read with the declaration present, which is what stops the case above from passing for the
+# wrong reason - a gate that reported any project holding a Dockerfile would satisfy it too.
+new_case pass-environment-build-arg
+printf 'FROM node:26-alpine\nARG NEXT_PUBLIC_CMS_URL\nWORKDIR /app\nRUN echo build\n' \
+    > "$scratch/pass-environment-build-arg/Dockerfile"
+printf '\nexport const cmsUrl: string = process.env.NEXT_PUBLIC_CMS_URL ?? ""\n' \
+    >> "$scratch/pass-environment-build-arg/src/lib/environment.ts"
+commit_case pass-environment-build-arg 'feat(fixture): declare the build argument the image inlines' \
+    "$CONFORMING_BODY"
+expect pass-environment-build-arg environment PASS
+
 new_case fail-sensitive-log
 cat > "$scratch/fail-sensitive-log/src/lib/credential-log.ts" <<'FIXTURE'
 type Credential = Readonly<Record<'token', string>>
