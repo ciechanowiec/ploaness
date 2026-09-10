@@ -88,6 +88,80 @@ describe('no-placeholder-secret', () => {
   )
 })
 
+const ingressRule = (attributes: string): string =>
+  `resource "aws_vpc_security_group_ingress_rule" "web" {\n  security_group_id = "sg-1"\n${attributes}\n}\n`
+
+describe('no-open-ingress', () => {
+  // The idiomatic spelling of "everything from everywhere" in the rule resource the provider
+  // recommends, which the analyzer's own check does not read.
+  it('reports every protocol from every address', () => {
+    expect(rulesOf(ingressRule('  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "-1"'))).toEqual([
+      'no-open-ingress',
+    ])
+  })
+
+  it('reports every port from every address', () => {
+    expect(
+      rulesOf(
+        ingressRule(
+          '  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "tcp"\n  from_port   = 0\n  to_port     = 65535',
+        ),
+      ),
+    ).toEqual(['no-open-ingress'])
+  })
+
+  it('reports SSH from every address, and says so', () => {
+    const found: readonly TerraformViolation[] = findTerraformViolations(
+      ingressRule(
+        '  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "tcp"\n  from_port   = 22\n  to_port     = 22',
+      ),
+    )
+    expect(found[0]?.reason).toContain('SSH')
+  })
+
+  it('reports the IPv6 spelling of every address', () => {
+    expect(rulesOf(ingressRule('  cidr_ipv6   = "::/0"\n  ip_protocol = "-1"'))).toEqual([
+      'no-open-ingress',
+    ])
+  })
+
+  // The ports a public site opens to the world.
+  it('accepts HTTPS from every address', () => {
+    expect(
+      rulesOf(
+        ingressRule(
+          '  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "tcp"\n  from_port   = 443\n  to_port     = 443',
+        ),
+      ),
+    ).toEqual([])
+  })
+
+  // The correct form the analyzer's SSH check refused: the source is another group, not an address.
+  it('accepts SSH from another security group', () => {
+    expect(
+      rulesOf(
+        ingressRule(
+          '  referenced_security_group_id = "sg-bastion"\n  ip_protocol = "tcp"\n  from_port = 22\n  to_port = 22',
+        ),
+      ),
+    ).toEqual([])
+  })
+
+  it('accepts the same attributes on an egress rule, whose type names its direction', () => {
+    const egress: string =
+      'resource "aws_vpc_security_group_egress_rule" "all" {\n  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "-1"\n}\n'
+    expect(rulesOf(egress)).toEqual([])
+  })
+
+  // The span ends at the next top-level block, so a following egress rule cannot lend its address.
+  it('does not read a following block into an ingress rule', () => {
+    const two: string =
+      'resource "aws_vpc_security_group_ingress_rule" "web" {\n  referenced_security_group_id = "sg-alb"\n  ip_protocol = "-1"\n}\n' +
+      'resource "aws_vpc_security_group_egress_rule" "all" {\n  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "-1"\n}\n'
+    expect(rulesOf(two)).toEqual([])
+  })
+})
+
 describe('no-analyzer-suppression', () => {
   it.each([
     '#checkov:skip=CKV_AWS_274:temporary',

@@ -161,7 +161,9 @@ operational policy, and there is no per-check opt-out; which checks are enabled,
 is recorded in Ploaness beside its identifier. Two AWS checks are deliberately left off because they
 also refuse the correct form: the plain-HTTP listener check fails a load balancer behind a CDN, and the
 SSH and RDP checks read a rule that names another security group as its source as open to the world.
-Every port from the world is still refused.
+Every port from the world is still refused by the analyzer, and a standalone
+`aws_vpc_security_group_ingress_rule` that admits every port, SSH or RDP from every address is refused
+by a pattern rule, which reads that one resource because its type names its direction.
 
 ## Consumer Settings
 

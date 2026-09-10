@@ -855,6 +855,25 @@ commit_case fail-infra-open-ports 'feat(fixture): admit every port from the whol
     "$CONFORMING_BODY"
 expect fail-infra-open-ports infra FAIL CKV_AWS_277
 
+# The same defect in the standalone rule resource, in its idiomatic spelling, which the analyzer's
+# check does not read. The resource type names its direction, which is what lets a text rule own it.
+new_case fail-infra-open-ingress-rule
+mkdir -p "$scratch/fail-infra-open-ingress-rule/infra"
+cat > "$scratch/fail-infra-open-ingress-rule/infra/network.tf" <<'FIXTURE'
+resource "aws_security_group" "tasks" {
+  name = "tasks"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "everything" {
+  security_group_id = aws_security_group.tasks.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
+}
+FIXTURE
+commit_case fail-infra-open-ingress-rule 'feat(fixture): admit every port through a standalone rule' \
+    "$CONFORMING_BODY"
+expect fail-infra-open-ingress-rule infra FAIL no-open-ingress
+
 # A correct configuration in the current provider's idiom, touching the resource types whose checks
 # decide on an ABSENT argument, so that an addition which fails the correct form is caught here rather
 # than in a consumer. With no per-check opt-out, this fixture is the guard the whole AWS list rests on.

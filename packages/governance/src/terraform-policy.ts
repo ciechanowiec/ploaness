@@ -6,13 +6,13 @@
 // publicly reachable database are absent from this file deliberately - they are enabled as curated
 // checks instead, where the resource graph is understood rather than guessed at from one line.
 //
-// `0.0.0.0/0` is absent for a stronger reason: text cannot decide it. The same address is correct on
-// egress and fatal on ingress, and modern HCL spells ingress three ways - an `ingress` block, an
-// `aws_security_group_rule` with `type = "ingress"`, and `aws_vpc_security_group_ingress_rule` - plus
-// `dynamic` blocks and rules whose CIDR arrives in a variable. A reader handling the first form and
-// missing the rest would pass a project it had not read; one matching the address anywhere would report
-// nearly every conforming module for its egress. The curated checks cover the two cases that are never
-// legitimate, SSH and RDP, using a tool that knows which side of the rule it is looking at.
+// `0.0.0.0/0` is read in exactly one place: the standalone ingress rule resource, whose TYPE names its
+// direction. Everywhere else text cannot decide it. The same address is correct on egress and fatal on
+// ingress, and an `ingress` block or an `aws_security_group_rule` carries its direction in a nested
+// block or a sibling attribute that a line reader cannot tie to the address - so those forms stay
+// with the analyzer, which knows which side of the rule it is looking at. The standalone resource is
+// this file's because the analyzer does not read its idiomatic spelling at all, and its own SSH and RDP
+// checks read a rule naming another security group as its source as open to the world.
 import { stripComments } from './source-text.js'
 
 /** An infrastructure defect found in a project's own configuration. */
@@ -184,6 +184,98 @@ const suppressionViolations = (source: string): readonly TerraformViolation[] =>
         ]
   })
 
+// The rule resource is read from its header to the next line that closes or opens a top-level block.
+// Formatted HCL closes a resource at column 0; unformatted HCL over-reads at worst the blank lines
+// before the next block, never the next block's attributes.
+const INGRESS_RULE_HEADER: RegExp = /^[ \t]*resource[ \t]+"aws_vpc_security_group_ingress_rule"/
+const BLOCK_BOUNDARY: RegExp =
+  /^(?:\}|(?:resource|data|module|variable|output|locals|provider|terraform)\b)/
+const ANY_ADDRESS: RegExp = /^[ \t]*cidr_ipv[46][ \t]*=[ \t]*"(?:0\.0\.0\.0\/0|::\/0)"/
+const EVERY_PROTOCOL: RegExp = /^[ \t]*ip_protocol[ \t]*=[ \t]*"?-1"?/
+const PORT_EDGE: RegExp = /^[ \t]*(?<edge>from_port|to_port)[ \t]*=[ \t]*(?<port>\d+)/
+
+const SSH_PORT: number = 22
+const RDP_PORT: number = 3389
+const LAST_PORT: number = 65_535
+
+interface IngressRule {
+  readonly line: number
+  readonly body: readonly string[]
+}
+
+interface PortRange {
+  readonly from: number
+  readonly to: number
+}
+
+const ingressRulesIn = (lines: readonly string[]): readonly IngressRule[] =>
+  lines.flatMap((line: string, index: number): readonly IngressRule[] => {
+    if (!INGRESS_RULE_HEADER.test(line)) {
+      return []
+    }
+    const rest: readonly string[] = lines.slice(index + 1)
+    const end: number = rest.findIndex((candidate: string): boolean =>
+      BLOCK_BOUNDARY.test(candidate),
+    )
+    return [{ line: index + FIRST_LINE, body: end === -1 ? rest : rest.slice(0, end) }]
+  })
+
+const portRangeOf = (body: readonly string[]): PortRange | undefined => {
+  const edges: ReadonlyMap<string, number> = new Map(
+    body.flatMap((line: string): readonly (readonly [string, number])[] => {
+      const found: RegExpExecArray | null = PORT_EDGE.exec(line)
+      return found === null
+        ? []
+        : [[found.groups?.['edge'] ?? '', Number(found.groups?.['port'] ?? '')]]
+    }),
+  )
+  const from: number | undefined = edges.get('from_port')
+  const to: number | undefined = edges.get('to_port')
+  return from === undefined || to === undefined ? undefined : { from, to }
+}
+
+const coversPort = (range: PortRange, port: number): boolean =>
+  range.from <= port && port <= range.to
+
+// What a port range exposes when its source is every address, or nothing when its ports are ones a
+// public site legitimately opens.
+const exposureOfRange = (range: PortRange): string | undefined => {
+  if (range.from === 0 && range.to === LAST_PORT) {
+    return 'every port'
+  }
+  if (coversPort(range, SSH_PORT)) {
+    return 'SSH'
+  }
+  return coversPort(range, RDP_PORT) ? 'RDP' : undefined
+}
+
+const exposureOf = (body: readonly string[]): string | undefined => {
+  if (!body.some((line: string): boolean => ANY_ADDRESS.test(line))) {
+    return undefined
+  }
+  if (body.some((line: string): boolean => EVERY_PROTOCOL.test(line))) {
+    return 'every port'
+  }
+  const range: PortRange | undefined = portRangeOf(body)
+  return range === undefined ? undefined : exposureOfRange(range)
+}
+
+const openIngressViolations = (code: string): readonly TerraformViolation[] =>
+  ingressRulesIn(code.split('\n')).flatMap((rule: IngressRule): readonly TerraformViolation[] => {
+    const exposure: string | undefined = exposureOf(rule.body)
+    return exposure === undefined
+      ? []
+      : [
+          {
+            line: rule.line,
+            rule: 'no-open-ingress',
+            reason:
+              `an ingress rule admits ${exposure} from the whole internet - name the security ` +
+              'group or address range that needs it as the source',
+          },
+        ]
+  })
+
 /**
  * Report every infrastructure defect a text reader can decide.
  * @param source the file's text, as tracked.
@@ -198,6 +290,7 @@ export const findTerraformViolations = (source: string): readonly TerraformViola
   return [
     ...flagViolations(code),
     ...placeholderViolations(code),
+    ...openIngressViolations(code),
     ...suppressionViolations(source),
   ].toSorted(
     (left: TerraformViolation, right: TerraformViolation): number => left.line - right.line,
