@@ -139,11 +139,12 @@ invocations of a package gate. `tree-verify` runs after all other gates in eithe
 
 ### Extended Verification Gates
 
-Extended verification adds 7 gates before the final tree check.
+Extended verification adds 8 gates before the final tree check.
 
 | Gate | Scope | What it verifies |
 | --- | --- | --- |
 | `shell` | repository | ShellCheck over every tracked shell script, found by extension and by shebang. |
+| `infra` | repository | Forbidden patterns over `.tf` and `.tfvars`, plus a curated set of Checkov checks. |
 | `require-full-history` | repository | The clone carries the whole history. |
 | `commit-history` | repository | Every commit message in the history. |
 | `linear-history` | repository | No merge commit anywhere in the history. |

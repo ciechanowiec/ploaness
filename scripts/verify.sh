@@ -155,6 +155,10 @@ gate actions
 # default severity, plus `--norc` and the scripts a shebang names rather than only those an extension
 # does. The run moved later as a consequence, into the gate block where it belongs.
 gate shell
+# Run for the reason the container gate below is: this repository ships no `.tf`, so the gate passes
+# over an empty set without starting a container, and the day somebody adds infrastructure it is
+# already judged rather than newly unjudged.
+gate infra
 # Run rather than declared inapplicable, which is what the guide asks for wherever a gate CAN answer:
 # with no Dockerfile and no compose file it passes over an empty set without starting a container, and
 # the day somebody adds one it is already linted rather than newly unlinted.

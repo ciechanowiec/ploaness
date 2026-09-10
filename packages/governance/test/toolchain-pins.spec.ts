@@ -22,7 +22,7 @@ describe('CONTAINER_IMAGES', () => {
       Object.keys(CONTAINER_IMAGES).toSorted((left: string, right: string): number =>
         left.localeCompare(right),
       ),
-    ).toEqual(['actionlint', 'gitleaks', 'hadolint', 'shellcheck'])
+    ).toEqual(['actionlint', 'checkov', 'gitleaks', 'hadolint', 'shellcheck'])
   })
 })
 

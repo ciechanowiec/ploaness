@@ -457,7 +457,7 @@ fi
 # passed - neither tells you the gate is wired to the scaffold at all.
 for gate in preflight wiring assets conventions editorconfig suppressions generated-denial \
             payload-rules payload-defaults config-refs environment install-scripts release-age blocklist arch \
-            shell \
+            shell infra \
             require-full-history \
             commit-history linear-history; do
     expect pass "$gate" PASS
@@ -706,6 +706,81 @@ cp $target /tmp/backup
 FIXTURE
 commit_case fail-shell-shebang 'feat(fixture): ship a hook that quotes nothing' "$CONFORMING_BODY"
 expect fail-shell-shebang shell FAIL SC2086
+
+# The defect a real consumer shipped: both deploy roles carried AdministratorAccess, so the stage
+# pipeline could drop the production database. It is asserted by check id, which is what proves the
+# curated list actually reaches the container rather than the run passing on an empty selection.
+new_case fail-infra-admin-policy
+mkdir -p "$scratch/fail-infra-admin-policy/infra"
+cat > "$scratch/fail-infra-admin-policy/infra/iam.tf" <<'FIXTURE'
+resource "aws_iam_role_policy_attachment" "deploy" {
+  role       = "deploy"
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+FIXTURE
+commit_case fail-infra-admin-policy 'feat(fixture): attach administrator access to a deploy role' \
+    "$CONFORMING_BODY"
+expect fail-infra-admin-policy infra FAIL CKV_AWS_274
+
+# The pattern rules, one case each. checkov ships no check for either argument, which is what makes
+# them this harness's business rather than the analyzer's.
+new_case fail-infra-force-destroy
+mkdir -p "$scratch/fail-infra-force-destroy/infra"
+cat > "$scratch/fail-infra-force-destroy/infra/media.tf" <<'FIXTURE'
+resource "aws_s3_bucket" "media" {
+  bucket        = "eoc-media"
+  force_destroy = true
+}
+FIXTURE
+commit_case fail-infra-force-destroy 'feat(fixture): let a destroy remove a bucket that holds objects' \
+    "$CONFORMING_BODY"
+expect fail-infra-force-destroy infra FAIL no-force-destroy
+
+new_case fail-infra-placeholder-secret
+mkdir -p "$scratch/fail-infra-placeholder-secret/infra"
+cat > "$scratch/fail-infra-placeholder-secret/infra/secrets.tf" <<'FIXTURE'
+resource "aws_secretsmanager_secret_version" "preview" {
+  secret_id     = "preview-auth"
+  db_password   = "REPLACE-ME"
+}
+FIXTURE
+commit_case fail-infra-placeholder-secret 'feat(fixture): guard a secret with a placeholder value' \
+    "$CONFORMING_BODY"
+expect fail-infra-placeholder-secret infra FAIL no-placeholder-secret
+
+# Without this the curated checks are advisory: one comment turns the flagship check off and the run
+# still passes.
+new_case fail-infra-suppression
+mkdir -p "$scratch/fail-infra-suppression/infra"
+cat > "$scratch/fail-infra-suppression/infra/iam.tf" <<'FIXTURE'
+#checkov:skip=CKV_AWS_274:temporary
+resource "aws_iam_role" "deploy" {
+  name = "deploy"
+}
+FIXTURE
+commit_case fail-infra-suppression 'feat(fixture): skip an enabled check from inside the file' \
+    "$CONFORMING_BODY"
+expect fail-infra-suppression infra FAIL no-analyzer-suppression
+
+# The guard the whole `0.0.0.0/0` decision rests on. The same address is correct on egress, and a
+# reader that matched it anywhere would report nearly every conforming module.
+new_case pass-infra-egress
+mkdir -p "$scratch/pass-infra-egress/infra"
+cat > "$scratch/pass-infra-egress/infra/network.tf" <<'FIXTURE'
+resource "aws_security_group" "tasks" {
+  name = "tasks"
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+FIXTURE
+commit_case pass-infra-egress 'feat(fixture): allow outbound traffic from the task security group' \
+    "$CONFORMING_BODY"
+expect pass-infra-egress infra PASS
 
 new_case fail-sensitive-log
 cat > "$scratch/fail-sensitive-log/src/lib/credential-log.ts" <<'FIXTURE'

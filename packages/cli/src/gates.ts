@@ -15,6 +15,7 @@ import { editorconfig } from './checks/editorconfig.js'
 import { environment } from './checks/environment.js'
 import { generatedDenial } from './checks/generated.js'
 import { commitHistory, linearHistory, requireFullHistory } from './checks/history.js'
+import { infrastructure } from './checks/infra.js'
 import { installScripts, releaseAge } from './checks/install.js'
 import { bundle, imageAssets } from './checks/integrity.js'
 import { oxlint } from './checks/oxlint.js'
@@ -319,12 +320,22 @@ const DEFAULT_GATES: readonly Gate[] = [
   { id: 'tests', scope: 'package', title: 'suite and coverage', isExtended: false, run: tests },
 ]
 
-/** Extended verification adds the shell scripts, history, build, bundle, and end-to-end checks. */
+/**
+ * Extended verification adds the shell scripts, the infrastructure definitions, history, build, bundle,
+ * and end-to-end checks.
+ */
 const EXTENDED_GATES: readonly Gate[] = [
   // First in the tier because it is the cheapest thing in it: a static read of the tracked scripts,
   // ahead of a production build that takes minutes. A broken deployment script should be reported
   // before the time is spent, not after.
   { id: 'shell', scope: 'repository', title: 'shell scripts', isExtended: true, run: shell },
+  {
+    id: 'infra',
+    scope: 'repository',
+    title: 'infrastructure definitions',
+    isExtended: true,
+    run: infrastructure,
+  },
   {
     id: 'require-full-history',
     scope: 'repository',

@@ -2,7 +2,7 @@
 // Update both with docker buildx imagetools inspect <repository>:<tag>.
 
 /** An analyzer ploaness runs in a container rather than installing from the registry. */
-export type ContainerTool = 'gitleaks' | 'hadolint' | 'actionlint' | 'shellcheck'
+export type ContainerTool = 'gitleaks' | 'hadolint' | 'actionlint' | 'shellcheck' | 'checkov'
 
 /** The exact image each containerised analyzer runs, by digest. */
 export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
@@ -17,6 +17,12 @@ export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
   // gate reads both: a consumer's scripts, and the ones this verification command is written in.
   shellcheck:
     'koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d',
+  // The infrastructure gate enables named checks rather than a category, and a `--check` id that does
+  // not exist matches nothing and raises no error. The digest is what makes that audit durable: the
+  // catalogue cannot change underneath it, so the enabled ids stay the ones somebody confirmed with
+  // `--list`. Re-confirm them whenever this pin moves.
+  checkov:
+    'bridgecrew/checkov:3.3.17@sha256:41c4701c6a56d8952e5aba7a420f871c8b70b57da94eb4f142dcdf7295bb0be3',
 }
 
 /** Matches a reference that names image bytes AND the release they are, and only such a reference. */
