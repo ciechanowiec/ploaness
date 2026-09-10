@@ -2,7 +2,7 @@
 // that reads them so that neither imports the other.
 
 /** A provider this harness has curated checks for. Widened as each cloud's audit lands. */
-export type CuratedProviderName = 'aws'
+export type CuratedProviderName = 'aws' | 'azurerm'
 
 /** One enabled check: the identifier checkov knows it by, its provider, and why the finding is refused. */
 export interface CheckovCheck {

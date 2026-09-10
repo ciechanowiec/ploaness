@@ -29,9 +29,10 @@
 // them on its first day, which is why they are a decision to take on its own merits.
 import type { CheckovCheck } from './checkov-check.js'
 import { AWS_CHECKS } from './checkov-checks-aws.js'
+import { AZURE_CHECKS } from './checkov-checks-azure.js'
 
 /** The checks enabled at error severity, each confirmed present in the pinned image. */
-export const CHECKOV_CHECKS: readonly CheckovCheck[] = [...AWS_CHECKS]
+export const CHECKOV_CHECKS: readonly CheckovCheck[] = [...AWS_CHECKS, ...AZURE_CHECKS]
 
 /**
  * The value of checkov's `--check` flag.
@@ -111,6 +112,11 @@ export const PROVIDERS_WITHOUT_CHECKS: ReadonlyMap<string, ProviderStanding> = n
   ['mongodbatlas', 'unsupported'],
   ['neon', 'unsupported'],
   ['helm', 'unsupported'],
+  // Azure's sibling providers. `azapi` binds no check at all. `azuread` binds exactly one,
+  // `CKV_AZURE_249`, whose regular expression over an OIDC subject rejects a value that arrives through
+  // a variable - so it failed the rubric, and nothing is enabled for the provider.
+  ['azapi', 'unsupported'],
+  ['azuread', 'audited'],
 ])
 
 /** The providers a tree declares, sorted into what the gate does about each. */

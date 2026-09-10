@@ -13,7 +13,7 @@ import {
 
 // The token checkov puts in an id for each provider. A check filed under the wrong cloud would be sent
 // to the analyzer all the same, but counted against the wrong provider in the summary.
-const FAMILY_OF: Readonly<Record<CuratedProviderName, string>> = { aws: 'AWS' }
+const FAMILY_OF: Readonly<Record<CuratedProviderName, string>> = { aws: 'AWS', azurerm: 'AZURE' }
 
 describe('CHECKOV_CHECKS', () => {
   // An empty catalogue would render an empty `--check`, and checkov reads that as every check rather
@@ -59,6 +59,24 @@ describe('CHECKOV_CHECKS', () => {
   // correct form is worse than none.
   it.each(['CKV_AWS_24', 'CKV_AWS_25', 'CKV_AWS_206', 'CKV_AWS_2', 'CKV_AWS_103'])(
     'leaves %s off, because it fails a correct configuration at this pin',
+    (id: string) => {
+      expect(CHECKOV_CHECKS.map((check: CheckovCheck): string => check.id)).not.toContain(id)
+    },
+  )
+
+  // Left off because each fails an ABSENT argument whose default on the current azurerm provider is
+  // already the only accepted value (a TLS floor of 1.2, FTPS disabled, no public nested items), or
+  // reads only the argument name the provider retired in 4.0.
+  it.each([
+    'CKV_AZURE_44',
+    'CKV_AZURE_52',
+    'CKV_AZURE_148',
+    'CKV_AZURE_78',
+    'CKV_AZURE_190',
+    'CKV_AZURE_3',
+    'CKV_AZURE_91',
+  ])(
+    'leaves %s off, because it fails a correct file on the current azurerm provider',
     (id: string) => {
       expect(CHECKOV_CHECKS.map((check: CheckovCheck): string => check.id)).not.toContain(id)
     },
@@ -126,6 +144,12 @@ describe('classifyProviders', () => {
 
   it('files a provider the analyzer ships no check for as unsupported', () => {
     expect(classifyProviders(['hcloud']).unsupported).toEqual(['hcloud'])
+  })
+
+  // A provider the analyzer does cover, whose every check failed the rubric: nothing runs for it, and
+  // the summary says that rather than counting checks that were never enabled.
+  it('files a provider whose checks all failed the rubric as audited', () => {
+    expect(classifyProviders(['azuread']).audited).toEqual(['azuread'])
   })
 
   // The case the gate refuses: a cloud the analyzer does cover, that nobody here has audited. Passing it

@@ -1052,6 +1052,248 @@ commit_case pass-infra-aws-modern 'feat(fixture): declare a correct platform in 
     "$CONFORMING_BODY"
 expect pass-infra-aws-modern infra PASS 'curated check'
 
+# The Azure partition reaches the container, and the one check that fails on ABSENCE does so on
+# purpose: a web app's provider default is plain HTTP.
+new_case fail-infra-azure-plain-http
+mkdir -p "$scratch/fail-infra-azure-plain-http/infra"
+cat > "$scratch/fail-infra-azure-plain-http/infra/web.tf" <<'FIXTURE'
+resource "azurerm_service_plan" "site" {
+  name                = "site"
+  resource_group_name = "site"
+  location            = "westeurope"
+  os_type             = "Linux"
+  sku_name            = "B1"
+}
+
+resource "azurerm_linux_web_app" "site" {
+  name                = "site"
+  resource_group_name = "site"
+  location            = "westeurope"
+  service_plan_id     = azurerm_service_plan.site.id
+
+  site_config {}
+}
+FIXTURE
+commit_case fail-infra-azure-plain-http 'feat(fixture): serve a web app over plain HTTP' \
+    "$CONFORMING_BODY"
+expect fail-infra-azure-plain-http infra FAIL CKV_AZURE_14
+
+# A correct configuration on azurerm 5, touching every enabled Azure check's resource type. The
+# arguments the audit found the analyzer misjudges when ABSENT - `min_tls_version`, `ftps_state`,
+# `allow_nested_items_to_be_public` - are left absent here on purpose, and a deploy identity holds
+# Contributor. With no per-check opt-out, this fixture is the guard the whole Azure list rests on.
+new_case pass-infra-azure-modern
+mkdir -p "$scratch/pass-infra-azure-modern/infra"
+cat > "$scratch/pass-infra-azure-modern/infra/platform.tf" <<'FIXTURE'
+variable "deploy_principal_id" {
+  type = string
+}
+
+variable "postgres_server_id" {
+  type = string
+}
+
+variable "sql_server_id" {
+  type = string
+}
+
+variable "ssh_public_key" {
+  type = string
+}
+
+variable "nic_id" {
+  type = string
+}
+
+resource "azurerm_resource_group" "site" {
+  name     = "site"
+  location = "westeurope"
+}
+
+resource "azurerm_role_definition" "deployer" {
+  name  = "site-deployer"
+  scope = azurerm_resource_group.site.id
+
+  permissions {
+    actions     = ["Microsoft.Web/sites/*", "Microsoft.ContainerRegistry/registries/pull/read"]
+    not_actions = []
+  }
+
+  assignable_scopes = [azurerm_resource_group.site.id]
+}
+
+resource "azurerm_role_assignment" "deploy" {
+  scope                = azurerm_resource_group.site.id
+  role_definition_name = "Contributor"
+  principal_id         = var.deploy_principal_id
+}
+
+resource "azurerm_container_registry" "images" {
+  name                = "siteimages"
+  resource_group_name = azurerm_resource_group.site.name
+  location            = azurerm_resource_group.site.location
+  sku                 = "Standard"
+  admin_enabled       = false
+}
+
+resource "azurerm_container_registry_webhook" "deploy" {
+  name                = "deploy"
+  resource_group_name = azurerm_resource_group.site.name
+  registry_name       = azurerm_container_registry.images.name
+  location            = azurerm_resource_group.site.location
+  service_uri         = "https://deploy.example.com/hook"
+  actions             = ["push"]
+}
+
+resource "azurerm_storage_account" "media" {
+  name                     = "sitemedia"
+  resource_group_name      = azurerm_resource_group.site.name
+  location                 = azurerm_resource_group.site.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+resource "azurerm_storage_container" "media" {
+  name                  = "media"
+  storage_account_id    = azurerm_storage_account.media.id
+  container_access_type = "private"
+}
+
+resource "azurerm_postgresql_flexible_server_firewall_rule" "office" {
+  name             = "office"
+  server_id        = var.postgres_server_id
+  start_ip_address = "203.0.113.10"
+  end_ip_address   = "203.0.113.20"
+}
+
+resource "azurerm_mssql_firewall_rule" "office" {
+  name             = "office"
+  server_id        = var.sql_server_id
+  start_ip_address = "203.0.113.10"
+  end_ip_address   = "203.0.113.20"
+}
+
+resource "azurerm_mssql_database" "site" {
+  name      = "site"
+  server_id = var.sql_server_id
+  sku_name  = "Basic"
+}
+
+resource "azurerm_network_security_group" "web" {
+  name                = "web"
+  resource_group_name = azurerm_resource_group.site.name
+  location            = azurerm_resource_group.site.location
+
+  security_rule {
+    name                       = "https"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "ssh-from-office"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "203.0.113.0/24"
+    destination_address_prefix = "*"
+  }
+}
+
+resource "azurerm_linux_virtual_machine" "worker" {
+  name                  = "worker"
+  resource_group_name   = azurerm_resource_group.site.name
+  location              = azurerm_resource_group.site.location
+  size                  = "Standard_B2s"
+  admin_username        = "site"
+  network_interface_ids = [var.nic_id]
+
+  admin_ssh_key {
+    username   = "site"
+    public_key = var.ssh_public_key
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "ubuntu-24_04-lts"
+    sku       = "server"
+    version   = "latest"
+  }
+}
+
+resource "azurerm_kubernetes_cluster" "site" {
+  name                = "site"
+  resource_group_name = azurerm_resource_group.site.name
+  location            = azurerm_resource_group.site.location
+  dns_prefix          = "site"
+
+  default_node_pool {
+    name       = "default"
+    node_count = 1
+    vm_size    = "Standard_B2s"
+  }
+
+  identity {
+    type = "SystemAssigned"
+  }
+}
+
+resource "azurerm_service_plan" "site" {
+  name                = "site"
+  resource_group_name = azurerm_resource_group.site.name
+  location            = azurerm_resource_group.site.location
+  os_type             = "Linux"
+  sku_name            = "B1"
+}
+
+resource "azurerm_linux_web_app" "site" {
+  name                = "site"
+  resource_group_name = azurerm_resource_group.site.name
+  location            = azurerm_resource_group.site.location
+  service_plan_id     = azurerm_service_plan.site.id
+  https_only          = true
+
+  site_config {}
+}
+
+resource "azurerm_linux_web_app_slot" "staging" {
+  name           = "staging"
+  app_service_id = azurerm_linux_web_app.site.id
+  https_only     = true
+
+  site_config {}
+}
+
+resource "azurerm_linux_function_app" "hooks" {
+  name                       = "hooks"
+  resource_group_name        = azurerm_resource_group.site.name
+  location                   = azurerm_resource_group.site.location
+  service_plan_id            = azurerm_service_plan.site.id
+  storage_account_name       = azurerm_storage_account.media.name
+  storage_account_access_key = azurerm_storage_account.media.primary_access_key
+  https_only                 = true
+
+  site_config {}
+}
+FIXTURE
+commit_case pass-infra-azure-modern 'feat(fixture): declare a correct azure platform on the current provider' \
+    "$CONFORMING_BODY"
+expect pass-infra-azure-modern infra PASS 'azurerm curated check'
+
 new_case fail-sensitive-log
 cat > "$scratch/fail-sensitive-log/src/lib/credential-log.ts" <<'FIXTURE'
 type Credential = Readonly<Record<'token', string>>
