@@ -51,8 +51,14 @@ const BOUNDED_CALLS: readonly BoundedCallRule[] = [
   },
 ]
 
-// Recognized Payload receivers exclude unrelated collection methods such as array.find().
-const PAYLOAD_RECEIVER: RegExp = /(?:^|[^\w$.])(?:payload|(?:[\w$]+\.)*req\.payload|this\.payload)$/
+/**
+ * Recognized Payload receivers, which exclude unrelated collection methods such as array.find().
+ *
+ * Exported so a rule about WHERE a Local API call runs derives the receiver from here rather than
+ * restating it. Two spellings of "this is Payload" would be two rules disagreeing about what Payload is.
+ */
+export const PAYLOAD_RECEIVER: RegExp =
+  /(?:^|[^\w$.])(?:payload|(?:[\w$]+\.)*req\.payload|this\.payload)$/
 
 // A property boundary keeps a value such as request: req from being read as a req property.
 const declaresProperty = (topLevel: string, key: string): boolean =>
@@ -110,7 +116,7 @@ const findUnboundedCalls = (source: string): readonly PayloadViolation[] =>
 // One catalogue feeds both rules below: adding a Payload operation to one contract and not the other
 // would leave a call either outside its transaction or running as an administrator with a decorative
 // user value.
-const LOCAL_API_CALLS: readonly string[] = [
+export const LOCAL_API_CALLS: readonly string[] = [
   '.count(',
   '.create(',
   '.delete(',

@@ -6,6 +6,7 @@ import {
   type DeclaredAdminView,
   declaredMigrationDirectoryIn,
   declaresPushingAdapter,
+  findBootstrapWrites,
   findDeclaredAdminViews,
   findEndpointViolations,
   findGeneratedDrift,
@@ -268,8 +269,8 @@ const reported = (file: string, violation: PayloadViolation): string =>
 // it happens to be judged from.
 const crossFileFindings = (context: Member, files: readonly SpecSource[]): readonly string[] =>
   context.isPayload
-    ? findUnguardedRelationships(files).map((located: LocatedViolation): string =>
-        reported(located.path, located.violation),
+    ? [...findUnguardedRelationships(files), ...findBootstrapWrites(files)].map(
+        (located: LocatedViolation): string => reported(located.path, located.violation),
       )
     : []
 

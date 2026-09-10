@@ -596,6 +596,35 @@ commit_case fail-missing-migrations 'feat(fixture): drop the recorded schema mig
     "$CONFORMING_BODY"
 expect fail-missing-migrations payload-rules FAIL require-recorded-migrations
 
+# The shape a real configuration shipped: the hook itself performs no Local API call at all, it calls a
+# seed that writes in its own body. A rule that read only the hook would find nothing and pass, so this
+# case is what keeps the one-hop resolution honest - it fails the moment that hop is lost.
+new_case fail-boot-time-writes
+mkdir -p "$scratch/fail-boot-time-writes/src/seed"
+cat > "$scratch/fail-boot-time-writes/src/seed/seed.ts" <<'FIXTURE'
+import type { Payload } from 'payload'
+
+/**
+ * Write the published content a fresh database needs.
+ * @param payload - the instance to write through.
+ * @returns nothing; the globals are written in place.
+ */
+export const seedContent = async (payload: Payload): Promise<void> => {
+  await payload.updateGlobal({ slug: 'header', data: {}, overrideAccess: false })
+}
+FIXTURE
+replace_text "$scratch/fail-boot-time-writes/src/payload.config.ts" \
+    "import { buildConfig } from 'payload'" \
+    "import { buildConfig } from 'payload'
+import { seedContent } from '@/seed/seed'"
+replace_text "$scratch/fail-boot-time-writes/src/payload.config.ts" "  globals: [Header]," \
+    "  globals: [Header],
+  onInit: async (payload) => {
+    await seedContent(payload)
+  },"
+commit_case fail-boot-time-writes 'feat(fixture): seed content on every boot' "$CONFORMING_BODY"
+expect fail-boot-time-writes payload-rules FAIL no-boot-time-writes
+
 new_case fail-sensitive-log
 cat > "$scratch/fail-sensitive-log/src/lib/credential-log.ts" <<'FIXTURE'
 type Credential = Readonly<Record<'token', string>>

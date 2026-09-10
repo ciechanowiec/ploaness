@@ -117,7 +117,7 @@ invocations of a package gate. `tree-verify` runs after all other gates in eithe
 | `payload-generated` | payload | The generated Payload types and admin import map are current. |
 | `payload-defaults` | payload | Explicit access decisions in the built Payload configuration, including framework/plugin collections, and anonymous draft-read protection. |
 | `generated-denial` | repository | The agent runtime is denied write access to every generated artefact. |
-| `payload-rules` | package | Source policy, including explicit Payload options, access control, request threading, drafts, upload restrictions, and reviewable schema migrations. |
+| `payload-rules` | package | Source policy, including explicit Payload options, access control, request threading, drafts, upload restrictions, reviewable schema migrations, and boot-time writes. |
 | `admin-views` | payload | Static evidence that custom admin views have project-owned accessibility specs; the browser suite establishes execution. |
 | `config-refs` | package | No analyzer setting carves out a path that no longer exists or matches nothing. |
 | `secrets` | repository | gitleaks over the git history, plus the declared `secretAllowlist`. |
