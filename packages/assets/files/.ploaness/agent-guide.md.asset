@@ -144,13 +144,20 @@ Extended verification adds 8 gates before the final tree check.
 | Gate | Scope | What it verifies |
 | --- | --- | --- |
 | `shell` | repository | ShellCheck over every tracked shell script, found by extension and by shebang. |
-| `infra` | repository | Forbidden patterns over `.tf` and `.tfvars`, plus a curated set of Checkov checks. |
+| `infra` | repository | Forbidden patterns over `.tf` and `.tfvars`, plus curated Checkov checks for the providers the tree declares; a provider the harness has not classified fails. |
 | `require-full-history` | repository | The clone carries the whole history. |
 | `commit-history` | repository | Every commit message in the history. |
 | `linear-history` | repository | No merge commit anywhere in the history. |
 | `build` | package | The production build. |
 | `bundle` | package | The gzipped client JavaScript stays under the bundle budget. |
 | `e2e` | package | The end-to-end suite, including the three sweeps ploaness ships into it. |
+
+The `infra` gate reads the providers a tree declares from its `resource`, `data` and `provider`
+headers and judges only what it can see: resources inside external modules are not downloaded. A
+provider with curated checks is analysed. A utility provider such as `random` is ignored. A provider
+Checkov ships no check for passes on the pattern rules, and the summary says so. A provider the harness
+has not classified fails until Ploaness classifies it. The enabled checks refuse defects only, never
+operational policy, and there is no per-check opt-out.
 
 ## Consumer Settings
 

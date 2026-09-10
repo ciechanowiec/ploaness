@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { CHECKOV_CHECKS, type CheckovCheck, checkovCheckList } from '../src/checkov-policy.js'
+import {
+  CHECKOV_CHECKS,
+  type CheckovCheck,
+  type CuratedProviderName,
+  checkovCheckList,
+  checksFor,
+  classifyProviders,
+  curatedProviders,
+  PROVIDERS_WITHOUT_CHECKS,
+  type ProviderClassification,
+} from '../src/checkov-policy.js'
 
-const CHECK_ID: RegExp = /^CKV_AWS_\d+$/
+// The token checkov puts in an id for each provider. A check filed under the wrong cloud would be sent
+// to the analyzer all the same, but counted against the wrong provider in the summary.
+const FAMILY_OF: Readonly<Record<CuratedProviderName, string>> = { aws: 'AWS' }
 
 describe('CHECKOV_CHECKS', () => {
   // An empty catalogue would render an empty `--check`, and checkov reads that as every check rather
@@ -10,11 +22,12 @@ describe('CHECKOV_CHECKS', () => {
     expect(CHECKOV_CHECKS.length).toBeGreaterThan(0)
   })
 
-  it('names every check by an identifier checkov would recognise', () => {
-    const malformed: readonly CheckovCheck[] = CHECKOV_CHECKS.filter(
-      (check: CheckovCheck): boolean => !CHECK_ID.test(check.id),
+  it('names every check by an identifier of the cloud it is filed under', () => {
+    const misfiled: readonly CheckovCheck[] = CHECKOV_CHECKS.filter(
+      (check: CheckovCheck): boolean =>
+        !new RegExp(String.raw`^CKV2?_${FAMILY_OF[check.provider]}_\d+$`).test(check.id),
     )
-    expect(malformed).toEqual([])
+    expect(misfiled).toEqual([])
   })
 
   // A repeated id is not an error checkov reports; it is a list somebody edited twice.
@@ -52,5 +65,79 @@ describe('checkovCheckList', () => {
 
   it('renders no whitespace, which the flag would carry into the argument', () => {
     expect(checkovCheckList()).not.toMatch(/\s/)
+  })
+})
+
+describe('checksFor', () => {
+  it('returns the whole catalogue for every curated provider together', () => {
+    expect(checksFor([...curatedProviders()])).toEqual(CHECKOV_CHECKS)
+  })
+
+  it('returns only the checks bound to the providers asked for', () => {
+    const [first] = CHECKOV_CHECKS
+    const returned: readonly CheckovCheck[] = checksFor(first === undefined ? [] : [first.provider])
+    expect(returned.length).toBeGreaterThan(0)
+    expect(returned.length).toBeLessThanOrEqual(CHECKOV_CHECKS.length)
+  })
+
+  it('returns nothing for a provider with no enabled check', () => {
+    expect(checksFor(['random', 'hcloud'])).toEqual([])
+  })
+})
+
+describe('classifyProviders', () => {
+  it('files a provider with enabled checks as curated', () => {
+    expect(classifyProviders(['aws']).curated).toEqual(['aws'])
+  })
+
+  it('files a provider that declares no cloud resource as utility', () => {
+    expect(classifyProviders(['random']).utility).toEqual(['random'])
+  })
+
+  it('files a provider the analyzer ships no check for as unsupported', () => {
+    expect(classifyProviders(['hcloud']).unsupported).toEqual(['hcloud'])
+  })
+
+  // The case the gate refuses: a cloud the analyzer does cover, that nobody here has audited. Passing it
+  // would report curated checks that never ran.
+  it('files a provider on no list as unclassified', () => {
+    expect(classifyProviders(['alicloud']).unclassified).toEqual(['alicloud'])
+  })
+
+  it('names each provider once, ordered, in one standing each', () => {
+    const standing: ProviderClassification = classifyProviders([
+      'random',
+      'aws',
+      'random',
+      'hcloud',
+      'aws',
+    ])
+    expect(standing).toEqual({
+      curated: ['aws'],
+      utility: ['random'],
+      unsupported: ['hcloud'],
+      audited: [],
+      unclassified: [],
+    })
+  })
+
+  it('classifies nothing for no providers', () => {
+    expect(classifyProviders([])).toEqual({
+      curated: [],
+      utility: [],
+      unsupported: [],
+      audited: [],
+      unclassified: [],
+    })
+  })
+})
+
+describe('the provider standings', () => {
+  // A provider listed as having no checks while the catalogue enables one would be reported two ways.
+  it('never list a curated provider as being without checks', () => {
+    const contradictory: readonly string[] = [...PROVIDERS_WITHOUT_CHECKS.keys()].filter(
+      (provider: string): boolean => curatedProviders().has(provider),
+    )
+    expect(contradictory).toEqual([])
   })
 })

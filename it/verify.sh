@@ -782,6 +782,57 @@ commit_case pass-infra-egress 'feat(fixture): allow outbound traffic from the ta
     "$CONFORMING_BODY"
 expect pass-infra-egress infra PASS
 
+# The gate used to pass a project on a cloud it had no check for: a `--check` id bound to nothing
+# matches nothing and raises no error, so the analyzer exited 0 and the summary claimed checks that
+# never ran. A provider nobody classified is refused rather than guessed at.
+new_case fail-infra-unclassified-provider
+mkdir -p "$scratch/fail-infra-unclassified-provider/infra"
+cat > "$scratch/fail-infra-unclassified-provider/infra/compute.tf" <<'FIXTURE'
+resource "alicloud_instance" "web" {
+  instance_name = "web"
+}
+FIXTURE
+commit_case fail-infra-unclassified-provider 'feat(fixture): declare a server on an unclassified cloud' \
+    "$CONFORMING_BODY"
+expect fail-infra-unclassified-provider infra FAIL 'not classified'
+
+# A cloud the analyzer ships no check for passes on the pattern rules alone, and the summary says so
+# rather than claiming checks that could not have run. No image is pulled for it.
+new_case pass-infra-unsupported-provider
+mkdir -p "$scratch/pass-infra-unsupported-provider/infra"
+cat > "$scratch/pass-infra-unsupported-provider/infra/compute.tf" <<'FIXTURE'
+resource "hcloud_server" "web" {
+  name        = "web"
+  server_type = "cx22"
+  image       = "debian-12"
+}
+FIXTURE
+commit_case pass-infra-unsupported-provider 'feat(fixture): declare a server on a cloud without checks' \
+    "$CONFORMING_BODY"
+expect pass-infra-unsupported-provider infra PASS 'ships no check for hcloud'
+
+# Variables, outputs and a module reference declare nothing the analyzer can judge, and the summary
+# says that too rather than counting checks over an empty set.
+new_case pass-infra-declarations-only
+mkdir -p "$scratch/pass-infra-declarations-only/infra"
+cat > "$scratch/pass-infra-declarations-only/infra/main.tf" <<'FIXTURE'
+variable "region" {
+  type = string
+}
+
+module "network" {
+  source = "./modules/network"
+  region = var.region
+}
+
+output "region" {
+  value = var.region
+}
+FIXTURE
+commit_case pass-infra-declarations-only 'feat(fixture): declare variables and a module and no resource' \
+    "$CONFORMING_BODY"
+expect pass-infra-declarations-only infra PASS 'no resource'
+
 new_case fail-sensitive-log
 cat > "$scratch/fail-sensitive-log/src/lib/credential-log.ts" <<'FIXTURE'
 type Credential = Readonly<Record<'token', string>>

@@ -20,7 +20,8 @@ export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
   // The infrastructure gate enables named checks rather than a category, and a `--check` id that does
   // not exist matches nothing and raises no error. The digest is what makes that audit durable: the
   // catalogue cannot change underneath it, so the enabled ids stay the ones somebody confirmed with
-  // `--list`. Re-confirm them whenever this pin moves.
+  // `--list`. The provider standings beside the catalogue rest on the same listing: which providers
+  // the image has no check for at all. Re-confirm both whenever this pin moves.
   checkov:
     'bridgecrew/checkov:3.3.17@sha256:41c4701c6a56d8952e5aba7a420f871c8b70b57da94eb4f142dcdf7295bb0be3',
 }
