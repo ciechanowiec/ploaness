@@ -10,7 +10,7 @@ import {
 } from './payload-access.js'
 import { findUnprotectedPrivilegedFields } from './payload-field-access.js'
 import type { PayloadViolation } from './payload-source.js'
-import { findFailOpenSecretGuards } from './source-security.js'
+import { findAbsentSecretAcceptances, findFailOpenSecretGuards } from './source-security.js'
 import {
   balancedArguments,
   lineOf,
@@ -330,6 +330,7 @@ const findDeepRelativeImports = (source: string): readonly PayloadViolation[] =>
 export const findSourceViolations = (source: string): readonly PayloadViolation[] => [
   ...findDeepRelativeImports(stripComments(source)),
   ...findFailOpenSecretGuards(source),
+  ...findAbsentSecretAcceptances(source),
 ]
 
 /**

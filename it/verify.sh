@@ -553,6 +553,32 @@ commit_case fail-open-secret-guard 'feat(fixture): leave a cron guard open witho
     "$CONFORMING_BODY"
 expect fail-open-secret-guard payload-rules FAIL no-fail-open-secret-guard
 
+# The mirror of the guard above, and the shape a real project shipped: the absence is tested and the
+# answer to it is admission, so the endpoint is open exactly when the credential is unset. Neither rule
+# can see the other's spelling - one requires a top-level `&&` in the condition, the other refuses one -
+# which is why the two cases stand side by side.
+new_case fail-absent-secret-acceptance
+cat > "$scratch/fail-absent-secret-acceptance/src/lib/webhook-auth.ts" <<'FIXTURE'
+/**
+ * Decide whether a supplied webhook credential is accepted.
+ * @param expectedSecret - the configured credential.
+ * @param providedSecret - the credential the caller supplied.
+ * @returns whether the caller is admitted.
+ */
+export const acceptsWebhook = (
+  expectedSecret: string | undefined,
+  providedSecret: string,
+): boolean => {
+  if (expectedSecret === undefined || expectedSecret.length === 0) {
+    return true
+  }
+  return providedSecret === expectedSecret
+}
+FIXTURE
+commit_case fail-absent-secret-acceptance 'feat(fixture): admit a caller when the secret is unset' \
+    "$CONFORMING_BODY"
+expect fail-absent-secret-acceptance payload-rules FAIL no-absent-secret-acceptance
+
 new_case fail-sensitive-log
 cat > "$scratch/fail-sensitive-log/src/lib/credential-log.ts" <<'FIXTURE'
 type Credential = Readonly<Record<'token', string>>
