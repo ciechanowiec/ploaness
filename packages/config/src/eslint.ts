@@ -143,6 +143,25 @@ export default compose(
     },
   },
 
+  // ── Recorded schema migrations ───────────────────────────────────────────────────────────────
+  // `payload migrate:create` writes `<date>_<time>_<name>.ts`, which is snake case and none of the
+  // three spellings the filename rule admits. Without this the harness would demand a migration and
+  // then reject the name its own generator produces - a project could satisfy neither rule.
+  //
+  // Widened rather than disabled, and scoped to the directory the generator writes to, so the rule
+  // still holds everywhere else. The full set is restated because a block that sets this rule REPLACES
+  // its options rather than adding to them. A project that declares another `migrationDir` sits outside
+  // this path and keeps the general rule.
+  {
+    files: ['src/migrations/**/*.ts'],
+    rules: {
+      'unicorn/filename-case': [
+        'error',
+        { cases: { camelCase: true, pascalCase: true, kebabCase: true, snakeCase: true } },
+      ],
+    },
+  },
+
   // ── React components: return-type/boundary annotations add noise, not safety ─────────────────
   {
     files: ['**/*.tsx'],

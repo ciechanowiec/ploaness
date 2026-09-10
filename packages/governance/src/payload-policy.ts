@@ -8,6 +8,7 @@ import {
   findUnlockableAuth,
   findUnrestrictedUploads,
 } from './payload-access.js'
+import { findUnreviewedSchemaPush } from './payload-database.js'
 import { findUnprotectedPrivilegedFields } from './payload-field-access.js'
 import type { PayloadViolation } from './payload-source.js'
 import { findAbsentSecretAcceptances, findFailOpenSecretGuards } from './source-security.js'
@@ -356,6 +357,7 @@ export const findPayloadViolations = (source: string): readonly PayloadViolation
     ...findUnrestrictedUploads(code),
     ...findUndecidedSvgHeaders(code),
     ...findUnprotectedPrivilegedFields(code),
+    ...findUnreviewedSchemaPush(code),
   ]
 }
 

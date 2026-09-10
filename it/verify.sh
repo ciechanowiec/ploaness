@@ -579,6 +579,23 @@ commit_case fail-absent-secret-acceptance 'feat(fixture): admit a caller when th
     "$CONFORMING_BODY"
 expect fail-absent-secret-acceptance payload-rules FAIL no-absent-secret-acceptance
 
+# A schema applied by push rather than by a migration. Nothing is written down, so there is no artefact
+# to review before it runs and none to roll back after - and the template's own `push: false` is what
+# this case removes.
+new_case fail-schema-push
+replace_text "$scratch/fail-schema-push/src/payload.config.ts" 'push: false' 'push: true'
+commit_case fail-schema-push 'feat(fixture): push the schema instead of recording it' \
+    "$CONFORMING_BODY"
+expect fail-schema-push payload-rules FAIL no-unreviewed-schema-push
+
+# The other half of the same guarantee: an adapter that does not push needs a migration to state the
+# schema, because push is skipped where NODE_ENV is production and nothing else would create it.
+new_case fail-missing-migrations
+rm -r "$scratch/fail-missing-migrations/src/migrations"
+commit_case fail-missing-migrations 'feat(fixture): drop the recorded schema migrations' \
+    "$CONFORMING_BODY"
+expect fail-missing-migrations payload-rules FAIL require-recorded-migrations
+
 new_case fail-sensitive-log
 cat > "$scratch/fail-sensitive-log/src/lib/credential-log.ts" <<'FIXTURE'
 type Credential = Readonly<Record<'token', string>>

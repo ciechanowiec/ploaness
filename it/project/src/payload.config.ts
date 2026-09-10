@@ -18,6 +18,6 @@ export default buildConfig({
   collections: [Users, Media, Posts, Articles],
   globals: [Header],
   folders: { collectionOverrides: [foldersAccess] },
-  db: postgresAdapter({ pool: { connectionString: databaseUrl } }),
+  db: postgresAdapter({ pool: { connectionString: databaseUrl }, push: false }),
   secret: payloadSecret,
 })

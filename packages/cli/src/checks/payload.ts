@@ -1,13 +1,16 @@
 // The Payload-specific gates: the generated artefacts must match the configuration that produces them,
 // and the Local API must be used in a way that neither over-fetches nor skips access control.
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   type DeclaredAdminView,
+  declaredMigrationDirectoryIn,
+  declaresPushingAdapter,
   findDeclaredAdminViews,
   findEndpointViolations,
   findGeneratedDrift,
   findInheritedAccess,
+  findMissingMigrations,
   findPayloadViolations,
   findSourceViolations,
   findUnconstrainedDraftReads,
@@ -15,11 +18,15 @@ import {
   findUnscannedAdminViews,
   type InheritedAccessReport,
   type LocatedViolation,
+  type MigrationDirectory,
+  type MigrationEvidence,
+  migrationDirectoriesFor,
   type PayloadViolation,
   parseInheritedAccessReport,
   payloadConfigPathOf,
   type RegeneratedArtefact,
   type SpecSource,
+  stripComments,
 } from '@ploaness/governance'
 import {
   type Context,
@@ -266,6 +273,38 @@ const crossFileFindings = (context: Member, files: readonly SpecSource[]): reado
       )
     : []
 
+// Only the files that declare a configuration are read for one, so a member's whole source is not
+// stripped twice to answer a question about its database.
+const configSources = (files: readonly SpecSource[]): readonly string[] =>
+  files
+    .filter((file: SpecSource): boolean => file.source.includes('buildConfig('))
+    .map((file: SpecSource): string => stripComments(file.source))
+
+// The filesystem half of the migration rule. WHICH directories to read is decided by governance, from
+// the configuration; what they hold is the only thing this reads, and what it means is decided there
+// too - so a schema recorded under a directory the project named is found the same way as a default one.
+const migrationEvidenceOf = (context: Member, files: readonly SpecSource[]): MigrationEvidence => {
+  const configs: readonly string[] = configSources(files)
+  const declaresPush: boolean = configs.some((code: string): boolean =>
+    declaresPushingAdapter(code),
+  )
+  const declared: string | undefined = configs
+    .map((code: string): string | undefined => declaredMigrationDirectoryIn(code))
+    .find((found: string | undefined): found is string => found !== undefined)
+  return {
+    declaresPushingAdapter: declaresPush,
+    directories: migrationDirectoriesFor(declared).flatMap(
+      (relative: string): readonly MigrationDirectory[] => {
+        const directory: string = path.join(context.root, relative)
+        return existsSync(directory) ? [{ path: relative, names: readdirSync(directory) }] : []
+      },
+    ),
+  }
+}
+
+const migrationFindings = (context: Member, files: readonly SpecSource[]): readonly string[] =>
+  context.isPayload ? findMissingMigrations(migrationEvidenceOf(context, files)) : []
+
 /** Apply the source rules to every TypeScript file under the declared source roots. */
 export const payloadRules = (context: Member): GateResult => {
   const candidates: readonly string[] = sourceCandidates(context)
@@ -282,6 +321,7 @@ export const payloadRules = (context: Member): GateResult => {
       ),
     ),
     ...crossFileFindings(context, files),
+    ...migrationFindings(context, files),
   ]
   return findings.length > 0
     ? failed(`${String(findings.length)} source usage violation(s)`, findings)
