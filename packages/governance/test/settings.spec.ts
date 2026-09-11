@@ -182,6 +182,22 @@ describe('vulnerability settings', () => {
     ).toEqual([])
   })
 
+  // The base image list is read by the same rule, so the same typo re-exposes the same finding.
+  it('reads a fully recorded base image exception', () => {
+    expect(
+      readSettings({ ploaness: { imageVulnerabilityAllowlist: [entry] } })
+        .imageVulnerabilityAllowlist,
+    ).toEqual([entry])
+  })
+
+  it('drops a base image exception with no reason', () => {
+    const { reason: _reason, ...rest } = entry
+    expect(
+      readSettings({ ploaness: { imageVulnerabilityAllowlist: [rest] } })
+        .imageVulnerabilityAllowlist,
+    ).toEqual([])
+  })
+
   it('reads a declared severity', () => {
     expect(readSettings({ ploaness: { vulnerabilitySeverity: 'low' } }).vulnerabilitySeverity).toBe(
       'low',

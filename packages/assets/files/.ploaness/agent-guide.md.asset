@@ -194,6 +194,7 @@ prefixes name URLs and are not checked against filesystem paths.
 | `maxSuppressions` | earned ceiling | Nonnegative integer setting a stricter ceiling; zero permits none. |
 | `vulnerabilitySeverity` | `moderate` | Only a stricter severity is honored. Vulnerability checking is repository-scoped. |
 | `vulnerabilityAllowlist` | empty | Entries with `advisory`, `reason`, and `addedOn`; use only when no upgrade repairs the issue. Unused entries fail. |
+| `imageVulnerabilityAllowlist` | empty | Entries with `advisory`, `reason`, and `addedOn` for a base image advisory no published image yet repairs. An entry no scanned image needs fails. |
 | `secretAllowlist` | empty | Entries with `path` and `reason` for committed fake credentials. |
 | `serverUrl` | `http://localhost:3000` | Origin of the member's application under test. |
 | `auxiliaryServers` | empty | Entries with `command`, `url`, and optional member-relative `cwd`; starts additional application dependencies for browser tests. |

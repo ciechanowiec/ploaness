@@ -145,6 +145,8 @@ export interface Settings {
   readonly vulnerabilitySeverity: string | undefined
   /** Recorded exceptions for advisories the project cannot reach. */
   readonly vulnerabilityAllowlist: readonly VulnerabilityException[]
+  /** Recorded exceptions for base image advisories no published image yet repairs. */
+  readonly imageVulnerabilityAllowlist: readonly VulnerabilityException[]
   /** Committed fake credentials the secret scan excuses, each with the reason it is committed. */
   readonly secretAllowlist: readonly SecretException[]
   /** Anonymous permissions the project grants deliberately, each with the reason it does. */
@@ -507,6 +509,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     vulnerabilitySeverity:
       typeof raw['vulnerabilitySeverity'] === 'string' ? raw['vulnerabilitySeverity'] : undefined,
     vulnerabilityAllowlist: asVulnerabilityAllowlist(raw['vulnerabilityAllowlist']),
+    imageVulnerabilityAllowlist: asVulnerabilityAllowlist(raw['imageVulnerabilityAllowlist']),
     secretAllowlist: asSecretAllowlist(raw['secretAllowlist']),
     publicAccess: asPublicAccess(raw['publicAccess']),
     pretest: asStringArray(raw['pretest'], []),
