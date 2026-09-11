@@ -14,7 +14,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { editorconfig } from '../src/checks/editorconfig.js'
-import { type Context, createContext } from '../src/context.js'
+import { type Context, createContext, createRepository, type Repository } from '../src/context.js'
 import type { GateResult } from '../src/exec.js'
 
 const SPEC_DIRECTORY: string = path.dirname(fileURLToPath(import.meta.url))
@@ -93,6 +93,65 @@ describe('the editorconfig gate on a declared-generated path', () => {
       (result: GateResult): void => {
         expect(result.ok).toBe(false)
         expect(result.findings.join('\n')).toContain('trailing whitespace')
+      },
+    )
+  })
+})
+
+// A member declares its generated paths relative to itself, while this gate walks the tree once from
+// the root. The declaration has to be rebased onto the repository, or the member's migration is held
+// to a cap the root never declared it free of - the reach a root-only context cannot exercise.
+const MEMBER: string = 'cms'
+const MEMBER_FILES: number = 5
+
+const withWorkspace = (fill: (root: string) => void, use: (result: GateResult) => void): void => {
+  const root: string = mkdtempSync(PREFIX)
+  try {
+    copyFileSync(EDITORCONFIG, path.join(root, '.editorconfig'))
+    write(root, 'pnpm-workspace.yaml', `packages:\n  - ${MEMBER}\n`)
+    write(root, 'package.json', `${JSON.stringify({ name: 'subject-root' })}\n`)
+    write(
+      root,
+      path.join(MEMBER, 'package.json'),
+      `${JSON.stringify({
+        name: 'subject-member',
+        devDependencies: { ploaness: '0.0.0' },
+        ploaness: {
+          generatedArtefacts: [
+            { pattern: 'src/migrations/**', reason: 'written by payload migrate:create' },
+          ],
+        },
+      })}\n`,
+    )
+    fill(root)
+    const repository: Repository = createRepository(root, true)
+    use(editorconfig(repository))
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
+
+describe('the editorconfig gate on a path a workspace member declares generated', () => {
+  it('withholds the cap from the member-relative declaration, rebased onto the repository', () => {
+    withWorkspace(
+      (root: string): void => {
+        write(root, path.join(MEMBER, GENERATED), longLine)
+      },
+      (result: GateResult): void => {
+        expect(result.findings).toEqual([])
+        expect(result.summary).toContain(`${String(MEMBER_FILES)} working-tree file(s)`)
+      },
+    )
+  })
+
+  it('still reports the same long line in a file the member authored', () => {
+    withWorkspace(
+      (root: string): void => {
+        write(root, path.join(MEMBER, AUTHORED), longLine)
+      },
+      (result: GateResult): void => {
+        expect(result.ok).toBe(false)
+        expect(result.findings.join('\n')).toContain(`${MEMBER}/${AUTHORED}:1 line is`)
       },
     )
   })

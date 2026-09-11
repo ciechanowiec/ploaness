@@ -452,10 +452,22 @@ const withMemberExclusions = (base: Settings, members: readonly Member[]): Setti
             ? entry.pattern
             : { memberPath: entry.memberPath, pattern: entry.pattern },
       )
+  // Globs only, so the rebased pattern is the plain repository-relative string the line cap matches.
+  const globsFor = (setting: string): readonly string[] =>
+    rebased
+      .filter(
+        (entry: DeclaredExclusion): boolean =>
+          entry.setting === setting &&
+          entry.kind === 'glob' &&
+          entry.reason.length > 0 &&
+          entry.pattern.length > 0,
+      )
+      .map((entry: DeclaredExclusion): string => entry.pattern)
   return {
     ...base,
     typographyExclusions: [...base.typographyExclusions, ...patternsFor('typographyExclusions')],
     javascriptAllowlist: [...base.javascriptAllowlist, ...patternsFor('javascriptAllowlist')],
+    generatedArtefacts: [...base.generatedArtefacts, ...globsFor('generatedArtefacts')],
   }
 }
 
