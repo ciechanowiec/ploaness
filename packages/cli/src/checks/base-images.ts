@@ -8,7 +8,7 @@
 // configuration is refused before any scan. Trust follows the host's: the certificate authority an
 // intercepting proxy needs, declared through NODE_EXTRA_CA_CERTS, is handed to the analyzer, and a
 // certificate failure is reported as analysis that did not happen rather than as a clean image.
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import {
@@ -49,11 +49,17 @@ const END_OF_LIFE_EXIT: number = 3
 const REPORT_EXITS: ReadonlySet<number> = new Set([0, FINDINGS_EXIT, END_OF_LIFE_EXIT])
 
 const MAX_REPORTED_LINES: number = 5
-const CACHE_MOUNT: string = '/var/cache/trivy'
+
+// The analyzer's cache lives INSIDE the container and is never mounted from the host. The analyzer
+// runs as root, and a Linux daemon bind-mounts with ownership intact, so a mounted cache left files
+// on the host that the user running the gate could not remove - the workspace's cleanup failed with
+// EACCES on a CI runner, and the gate with it. A macOS daemon maps ownership to the host user, which
+// is why no local run showed it. The price is one database fetch per distinct image rather than one
+// per run; the gain is that nothing root-owned ever lands on the host.
+const CACHE_DIRECTORY: string = '/var/cache/trivy'
 const CERTIFICATE_MOUNT: string = '/etc/ssl/ploaness-ca.pem'
 
 interface Workspace {
-  readonly cacheDirectory: string
   readonly certificateFile: string | undefined
 }
 
@@ -71,19 +77,18 @@ const declaredCertificateBundle = (): string | undefined => {
 // Rendered under the home directory for the reason the secrets gate records: a macOS Docker daemon
 // shares the home directory and need not share /tmp, and an unshared source mounts as an empty
 // directory rather than as an error. The bundle is COPIED in rather than mounted from where it lives,
-// for the same reason. One cache serves every image in the run, so the database is fetched once.
+// for the same reason. The workspace holds that copy and nothing else, so its cleanup only ever
+// removes a file this process wrote.
 const withWorkspace = <Value>(use: (workspace: Workspace) => Value): Value => {
   const directory: string = mkdtempSync(path.join(homedir(), '.ploaness-base-images-'))
-  const cacheDirectory: string = path.join(directory, 'cache')
   try {
-    mkdirSync(cacheDirectory)
     const bundle: string | undefined = declaredCertificateBundle()
     const certificateFile: string | undefined =
       bundle === undefined ? undefined : path.join(directory, 'ca.pem')
     if (bundle !== undefined && certificateFile !== undefined) {
       copyFileSync(bundle, certificateFile)
     }
-    return use({ cacheDirectory, certificateFile })
+    return use({ certificateFile })
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
@@ -95,16 +100,14 @@ const withWorkspace = <Value>(use: (workspace: Workspace) => Value): Value => {
 // not intercept. The script is a constant; the analyzer's arguments reach it positionally through
 // `"$@"` and are never interpolated into it, which is the discipline the other gates keep with argv.
 const ANALYZER_ROOTS: string = '/etc/ssl/certs/ca-certificates.crt'
-const MERGED_BUNDLE: string = `${CACHE_MOUNT}/ca.pem`
+const MERGED_BUNDLE: string = `${CACHE_DIRECTORY}/ca.pem`
 const TRUSTING_ENTRYPOINT: string =
-  `cat ${ANALYZER_ROOTS} ${CERTIFICATE_MOUNT} > ${MERGED_BUNDLE} && ` +
+  `mkdir -p ${CACHE_DIRECTORY} && cat ${ANALYZER_ROOTS} ${CERTIFICATE_MOUNT} > ${MERGED_BUNDLE} && ` +
   `SSL_CERT_FILE=${MERGED_BUNDLE} exec trivy "$@"`
 
 const dockerArguments = (workspace: Workspace): readonly string[] => [
   'run',
   '--rm',
-  '-v',
-  `${workspace.cacheDirectory}:${CACHE_MOUNT}`,
   ...(workspace.certificateFile === undefined
     ? []
     : ['-v', `${workspace.certificateFile}:${CERTIFICATE_MOUNT}:ro`, '--entrypoint', 'sh']),
@@ -138,7 +141,7 @@ const scanArguments = (workspace: Workspace, reference: string): readonly string
   '--quiet',
   '--no-progress',
   '--cache-dir',
-  CACHE_MOUNT,
+  CACHE_DIRECTORY,
   reference,
 ]
 
