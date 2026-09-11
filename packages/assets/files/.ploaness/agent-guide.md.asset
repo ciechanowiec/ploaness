@@ -139,13 +139,12 @@ invocations of a package gate. `tree-verify` runs after all other gates in eithe
 
 ### Extended Verification Gates
 
-Extended verification adds 9 gates before the final tree check.
+Extended verification adds 8 gates before the final tree check.
 
 | Gate | Scope | What it verifies |
 | --- | --- | --- |
 | `shell` | repository | ShellCheck over every tracked shell script, found by extension and by shebang. |
 | `infra` | repository | Forbidden patterns over `.tf` and `.tfvars`, plus curated Checkov checks for AWS, Azure, Google Cloud, DigitalOcean and Linode; a provider the harness has not classified fails. |
-| `base-images` | repository | Every base image the Dockerfiles build FROM, pinned by digest, carries no fixable HIGH or CRITICAL operating-system package vulnerability and runs a supported operating system. |
 | `require-full-history` | repository | The clone carries the whole history. |
 | `commit-history` | repository | Every commit message in the history. |
 | `linear-history` | repository | No merge commit anywhere in the history. |
@@ -167,32 +166,6 @@ Every port from the world is still refused by the analyzer, and a standalone
 by a pattern rule, which reads that one resource because its type names its direction. Two more
 pattern rules close what the analyzer leaves open on every cloud: an outright administrative grant
 (`roles/owner`, `roles/editor`, `Owner`) and an explicit plaintext-transport setting.
-
-The `base-images` gate scans each distinct image a Dockerfile's `FROM` names, and only those: a
-`FROM` must be pinned by digest, because a tag names bytes that can change under the pin and the
-verdict is about the bytes the build will pull. It reads operating-system packages only - the
-libraries an image vendor bundles beside its runtime, and the runtime binary itself, are outside what
-the analyzer reads, so a green verdict says nothing about them. A finding is a fixable HIGH or
-CRITICAL vulnerability, or an operating system past end of life; the repair is a newer base image, and
-`imageVulnerabilityAllowlist` records an advisory no published image yet repairs. The analyzer
-reaches the image's registry and its own vulnerability database, so the gate needs the network; behind
-an intercepting proxy, set `SSL_CERT_FILE` to the proxy's certificate authority and the gate hands it
-to the analyzer. A private registry, a rate-limited pull, or an image whose operating system the
-analyzer cannot identify is reported as analysis that did not happen, never as a pass. A committed
-`trivy.yaml` or `.trivyignore` is refused.
-
-Behind an intercepting proxy the analyzer cannot verify its registry or its database, and the gate
-says so rather than passing. The repair is a fact about the machine, set in the environment of the
-verification command and never a file committed to the repository: point `NODE_EXTRA_CA_CERTS` at a
-PEM holding the proxy's certificate authority. Node adds that file to its own roots, so every tool in
-the same environment keeps working, and the gate appends it to the analyzer's roots the same way, so
-the file need hold nothing else. On Linux the system bundle already holds what was installed:
-`export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt`. On macOS export the keychain that
-holds it once: `security find-certificate -a -p /Library/Keychains/System.keychain > ~/.ploaness-ca.pem`
-and point the variable at that file. `SSL_CERT_FILE` is honoured too, but Node reads it as a
-replacement for its roots rather than an addition, so it must then name a full bundle. To move a base
-image forward, resolve the current digest with `docker buildx imagetools inspect <repository>:<tag>`
-and write it into `FROM`.
 
 ## Consumer Settings
 
@@ -221,7 +194,6 @@ prefixes name URLs and are not checked against filesystem paths.
 | `maxSuppressions` | earned ceiling | Nonnegative integer setting a stricter ceiling; zero permits none. |
 | `vulnerabilitySeverity` | `moderate` | Only a stricter severity is honored. Vulnerability checking is repository-scoped. |
 | `vulnerabilityAllowlist` | empty | Entries with `advisory`, `reason`, and `addedOn`; use only when no upgrade repairs the issue. Unused entries fail. |
-| `imageVulnerabilityAllowlist` | empty | Entries with `advisory`, `reason`, and `addedOn` for a base image advisory no published image yet repairs. An entry no scanned image needs fails. |
 | `secretAllowlist` | empty | Entries with `path` and `reason` for committed fake credentials. |
 | `serverUrl` | `http://localhost:3000` | Origin of the member's application under test. |
 | `auxiliaryServers` | empty | Entries with `command`, `url`, and optional member-relative `cwd`; starts additional application dependencies for browser tests. |

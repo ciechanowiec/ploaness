@@ -159,9 +159,6 @@ gate shell
 # over an empty set without starting a container, and the day somebody adds infrastructure it is
 # already judged rather than newly unjudged.
 gate infra
-# The same reason again: no Dockerfile, so no image to scan and no container started; the day one is
-# added, its base image is judged from the start.
-gate base-images
 # Run rather than declared inapplicable, which is what the guide asks for wherever a gate CAN answer:
 # with no Dockerfile and no compose file it passes over an empty set without starting a container, and
 # the day somebody adds one it is already linted rather than newly unlinted.

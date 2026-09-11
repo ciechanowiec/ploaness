@@ -10,7 +10,6 @@ const ADDITIVE: ReadonlySet<string> = new Set<string>([
   'javascriptAllowlist',
   'coverageExclude',
   'vulnerabilityAllowlist',
-  'imageVulnerabilityAllowlist',
   'secretAllowlist',
   'publicAccess',
   'auxiliaryServers',

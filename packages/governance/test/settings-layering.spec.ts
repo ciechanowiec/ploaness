@@ -25,20 +25,6 @@ describe('layerSettingBlocks', () => {
     ])
   })
 
-  it('adds a member base image exception to the repository ones', () => {
-    const root: Record<string, unknown> = { advisory: 'CVE-1', reason: 'r', addedOn: '2026-09-11' }
-    const member: Record<string, unknown> = {
-      advisory: 'CVE-2',
-      reason: 'r',
-      addedOn: '2026-09-11',
-    }
-    expect(
-      layered({ imageVulnerabilityAllowlist: [root] }, { imageVulnerabilityAllowlist: [member] })[
-        'imageVulnerabilityAllowlist'
-      ],
-    ).toEqual([root, member])
-  })
-
   it('carries a repository exclusion down to a member that declares none', () => {
     const merged: Record<string, unknown> = layered(
       { typographyExclusions: [{ pattern: '^generated/', reason: 'generated' }] },
