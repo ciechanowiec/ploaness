@@ -14,6 +14,14 @@ out="$root/dist-tarballs"
 mkdir -p "$out"
 rm -f "$out"/*.tgz
 
+# A build emits what its sources describe and removes nothing, so the output of a source deleted since
+# the last build stays in `dist` and would be packed as if it were still published. Every package is
+# therefore built from nothing: its emitted directory and the compiler's incremental record go first.
+for manifest in "$root"/packages/*/package.json; do
+  package_dir=$(dirname "$manifest")
+  rm -rf "$package_dir/dist" "$package_dir"/*.tsbuildinfo
+done
+
 pnpm -r --filter './packages/**' run build
 
 # Discovered from the workspace rather than named. The list was a second copy of what `packages/`
