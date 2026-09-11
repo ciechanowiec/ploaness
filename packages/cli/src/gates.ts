@@ -7,6 +7,7 @@ import {
   planSteps,
 } from '@ploaness/governance'
 import { assets } from './checks/assets.js'
+import { baseImages } from './checks/base-images.js'
 import { blocklist } from './checks/blocklist.js'
 import { actions, containers, secrets } from './checks/containers.js'
 import { conventions } from './checks/conventions.js'
@@ -321,8 +322,8 @@ const DEFAULT_GATES: readonly Gate[] = [
 ]
 
 /**
- * Extended verification adds the shell scripts, the infrastructure definitions, history, build, bundle,
- * and end-to-end checks.
+ * Extended verification adds the shell scripts, the infrastructure definitions, the base images,
+ * history, build, bundle, and end-to-end checks.
  */
 const EXTENDED_GATES: readonly Gate[] = [
   // First in the tier because it is the cheapest thing in it: a static read of the tracked scripts,
@@ -335,6 +336,16 @@ const EXTENDED_GATES: readonly Gate[] = [
     title: 'infrastructure definitions',
     isExtended: true,
     run: infrastructure,
+  },
+  // After the infrastructure gate and before the history gates: it reaches the network and pulls an
+  // image per distinct base, which is minutes, and a stale base image should be reported before the
+  // production build spends its own.
+  {
+    id: 'base-images',
+    scope: 'repository',
+    title: 'base image vulnerabilities',
+    isExtended: true,
+    run: baseImages,
   },
   {
     id: 'require-full-history',

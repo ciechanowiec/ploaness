@@ -2,7 +2,13 @@
 // Update both with docker buildx imagetools inspect <repository>:<tag>.
 
 /** An analyzer ploaness runs in a container rather than installing from the registry. */
-export type ContainerTool = 'gitleaks' | 'hadolint' | 'actionlint' | 'shellcheck' | 'checkov'
+export type ContainerTool =
+  | 'gitleaks'
+  | 'hadolint'
+  | 'actionlint'
+  | 'shellcheck'
+  | 'checkov'
+  | 'trivy'
 
 /** The exact image each containerised analyzer runs, by digest. */
 export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
@@ -24,6 +30,13 @@ export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
   // the image has no check for at all. Re-confirm both whenever this pin moves.
   checkov:
     'bridgecrew/checkov:3.3.17@sha256:41c4701c6a56d8952e5aba7a420f871c8b70b57da94eb4f142dcdf7295bb0be3',
+  // The base image gate runs this against each image a Dockerfile builds on. The analyzer pulls the
+  // image from its registry itself, fetches its vulnerability database on every run - a cached one is
+  // never refused for being stale - and reads no configuration from the tree, because none is mounted.
+  // The digest pins the analyzer; what it judges against is whatever the database says that day, which
+  // is what a vulnerability scan is for.
+  trivy:
+    'aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969',
 }
 
 /** Matches a reference that names image bytes AND the release they are, and only such a reference. */

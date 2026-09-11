@@ -457,7 +457,7 @@ fi
 # passed - neither tells you the gate is wired to the scaffold at all.
 for gate in preflight wiring assets conventions editorconfig suppressions generated-denial \
             payload-rules payload-defaults config-refs environment install-scripts release-age blocklist arch \
-            shell infra \
+            shell infra base-images \
             require-full-history \
             commit-history linear-history; do
     expect pass "$gate" PASS
@@ -1566,6 +1566,51 @@ FIXTURE
 commit_case fail-infra-unencrypted-transport 'feat(fixture): serve storage over plain HTTP' \
     "$CONFORMING_BODY"
 expect fail-infra-unencrypted-transport infra FAIL no-unencrypted-transport
+
+# The one base image case that starts a container: the analyzer is acquired, the host's declared
+# certificate authority is handed to it, its database is fetched, and an operating system past end of
+# life exits with the code reserved for it while the report also carries fixable findings. The needle
+# never reverts, which a vulnerability count on a live database would.
+new_case fail-base-image-eol
+cat > "$scratch/fail-base-image-eol/Dockerfile" <<'FIXTURE'
+FROM alpine:3.18.0@sha256:02bb6f428431fbc2809c5d1b41eab5a68350194fb508869a33cb1af4444c9b11
+CMD ["sh"]
+FIXTURE
+commit_case fail-base-image-eol 'feat(fixture): build on an operating system past end of life' \
+    "$CONFORMING_BODY"
+expect fail-base-image-eol base-images FAIL 'end of life'
+
+# A per-advisory ignore file is exactly the suppression this gate refuses, and it is refused before
+# any scan starts.
+new_case fail-base-image-ignorefile
+cat > "$scratch/fail-base-image-ignorefile/Dockerfile" <<'FIXTURE'
+FROM alpine:3.18.0@sha256:02bb6f428431fbc2809c5d1b41eab5a68350194fb508869a33cb1af4444c9b11
+CMD ["sh"]
+FIXTURE
+printf 'CVE-2026-14456\n' > "$scratch/fail-base-image-ignorefile/.trivyignore"
+commit_case fail-base-image-ignorefile 'feat(fixture): ignore an advisory from inside the tree' \
+    "$CONFORMING_BODY"
+expect fail-base-image-ignorefile base-images FAIL 'configures the analyzer'
+
+# A tag names bytes that can change under the pin; nothing is scanned and the repair is printed.
+new_case fail-base-image-tag-only
+cat > "$scratch/fail-base-image-tag-only/Dockerfile" <<'FIXTURE'
+FROM node:22-alpine
+CMD ["node"]
+FIXTURE
+commit_case fail-base-image-tag-only 'feat(fixture): build on an image pinned by tag alone' \
+    "$CONFORMING_BODY"
+expect fail-base-image-tag-only base-images FAIL 'not pinned by digest'
+
+new_case fail-base-image-variable
+cat > "$scratch/fail-base-image-variable/Dockerfile" <<'FIXTURE'
+ARG BASE
+FROM $BASE
+CMD ["node"]
+FIXTURE
+commit_case fail-base-image-variable 'feat(fixture): build on an image named by an unset argument' \
+    "$CONFORMING_BODY"
+expect fail-base-image-variable base-images FAIL 'nothing substituted'
 
 new_case fail-sensitive-log
 cat > "$scratch/fail-sensitive-log/src/lib/credential-log.ts" <<'FIXTURE'

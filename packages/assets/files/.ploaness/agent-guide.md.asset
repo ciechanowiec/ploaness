@@ -139,12 +139,13 @@ invocations of a package gate. `tree-verify` runs after all other gates in eithe
 
 ### Extended Verification Gates
 
-Extended verification adds 8 gates before the final tree check.
+Extended verification adds 9 gates before the final tree check.
 
 | Gate | Scope | What it verifies |
 | --- | --- | --- |
 | `shell` | repository | ShellCheck over every tracked shell script, found by extension and by shebang. |
 | `infra` | repository | Forbidden patterns over `.tf` and `.tfvars`, plus curated Checkov checks for AWS, Azure, Google Cloud, DigitalOcean and Linode; a provider the harness has not classified fails. |
+| `base-images` | repository | Every base image the Dockerfiles build FROM, pinned by digest, carries no fixable HIGH or CRITICAL operating-system package vulnerability and runs a supported operating system. |
 | `require-full-history` | repository | The clone carries the whole history. |
 | `commit-history` | repository | Every commit message in the history. |
 | `linear-history` | repository | No merge commit anywhere in the history. |
@@ -166,6 +167,19 @@ Every port from the world is still refused by the analyzer, and a standalone
 by a pattern rule, which reads that one resource because its type names its direction. Two more
 pattern rules close what the analyzer leaves open on every cloud: an outright administrative grant
 (`roles/owner`, `roles/editor`, `Owner`) and an explicit plaintext-transport setting.
+
+The `base-images` gate scans each distinct image a Dockerfile's `FROM` names, and only those: a
+`FROM` must be pinned by digest, because a tag names bytes that can change under the pin and the
+verdict is about the bytes the build will pull. It reads operating-system packages only - the
+libraries an image vendor bundles beside its runtime, and the runtime binary itself, are outside what
+the analyzer reads, so a green verdict says nothing about them. A finding is a fixable HIGH or
+CRITICAL vulnerability, or an operating system past end of life; the repair is a newer base image, and
+`imageVulnerabilityAllowlist` records an advisory no published image yet repairs. The analyzer
+reaches the image's registry and its own vulnerability database, so the gate needs the network; behind
+an intercepting proxy, set `SSL_CERT_FILE` to the proxy's certificate authority and the gate hands it
+to the analyzer. A private registry, a rate-limited pull, or an image whose operating system the
+analyzer cannot identify is reported as analysis that did not happen, never as a pass. A committed
+`trivy.yaml` or `.trivyignore` is refused.
 
 ## Consumer Settings
 
