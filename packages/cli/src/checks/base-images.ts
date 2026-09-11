@@ -6,7 +6,7 @@
 // last month's advisories. No repository is mounted, because an image scan needs none and the analyzer
 // reads `trivy.yaml` and `.trivyignore` from wherever it runs - so it runs at `/`, and a committed
 // configuration is refused before any scan. Trust follows the host's: the certificate authority an
-// intercepting proxy needs, declared through SSL_CERT_FILE, is handed to the analyzer, and a
+// intercepting proxy needs, declared through NODE_EXTRA_CA_CERTS, is handed to the analyzer, and a
 // certificate failure is reported as analysis that did not happen rather than as a clean image.
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -59,10 +59,12 @@ interface Workspace {
 
 // The bundle the host declares, and only that: a Go binary in a container cannot see the keychain a
 // daemon trusts, so an intercepting proxy is invisible to it unless the host says where the authority
-// is. Both names are what the ecosystems in play already use for exactly this.
+// is. NODE_EXTRA_CA_CERTS first, because Node ADDS that file to its roots and reads SSL_CERT_FILE as
+// a replacement for them - so the first is the one a host can set to the proxy's authority alone
+// without breaking every other tool in the same environment, and the one the guide asks for.
 const declaredCertificateBundle = (): string | undefined => {
   const bundle: string | undefined =
-    process.env['SSL_CERT_FILE'] ?? process.env['NODE_EXTRA_CA_CERTS']
+    process.env['NODE_EXTRA_CA_CERTS'] ?? process.env['SSL_CERT_FILE']
   return bundle !== undefined && bundle.length > 0 && existsSync(bundle) ? bundle : undefined
 }
 
@@ -87,24 +89,35 @@ const withWorkspace = <Value>(use: (workspace: Workspace) => Value): Value => {
   }
 }
 
-// Every policy flag is on the argv, so a configuration the analyzer somehow loaded could not override
-// one. `--image-src remote` pulls from the registry alone rather than probing three daemons first.
-const scanArguments = (workspace: Workspace, reference: string): readonly string[] => [
+// The host's bundle is APPENDED to the analyzer's own roots rather than handed to it as SSL_CERT_FILE,
+// which the analyzer would read as a replacement: a bundle holding only an intercepting proxy's
+// authority - the shape NODE_EXTRA_CA_CERTS usually takes - would then fail every host the proxy does
+// not intercept. The script is a constant; the analyzer's arguments reach it positionally through
+// `"$@"` and are never interpolated into it, which is the discipline the other gates keep with argv.
+const ANALYZER_ROOTS: string = '/etc/ssl/certs/ca-certificates.crt'
+const MERGED_BUNDLE: string = `${CACHE_MOUNT}/ca.pem`
+const TRUSTING_ENTRYPOINT: string =
+  `cat ${ANALYZER_ROOTS} ${CERTIFICATE_MOUNT} > ${MERGED_BUNDLE} && ` +
+  `SSL_CERT_FILE=${MERGED_BUNDLE} exec trivy "$@"`
+
+const dockerArguments = (workspace: Workspace): readonly string[] => [
   'run',
   '--rm',
   '-v',
   `${workspace.cacheDirectory}:${CACHE_MOUNT}`,
   ...(workspace.certificateFile === undefined
     ? []
-    : [
-        '-v',
-        `${workspace.certificateFile}:${CERTIFICATE_MOUNT}:ro`,
-        '-e',
-        `SSL_CERT_FILE=${CERTIFICATE_MOUNT}`,
-      ]),
+    : ['-v', `${workspace.certificateFile}:${CERTIFICATE_MOUNT}:ro`, '--entrypoint', 'sh']),
   '--workdir',
   '/',
   TRIVY_IMAGE,
+  ...(workspace.certificateFile === undefined ? [] : ['-c', TRUSTING_ENTRYPOINT, 'sh']),
+]
+
+// Every policy flag is on the argv, so a configuration the analyzer somehow loaded could not override
+// one. `--image-src remote` pulls from the registry alone rather than probing three daemons first.
+const scanArguments = (workspace: Workspace, reference: string): readonly string[] => [
+  ...dockerArguments(workspace),
   'image',
   '--image-src',
   'remote',
@@ -140,7 +153,8 @@ const repairFor = (output: string): readonly string[] => {
   if (/x509|certificate signed by unknown authority/.test(output)) {
     return [
       'an intercepting proxy is in the path: export its certificate authority as a PEM file and set ' +
-        'SSL_CERT_FILE to it, and this gate hands it to the analyzer',
+        'NODE_EXTRA_CA_CERTS to it in the environment of the verification command, never in the ' +
+        'repository; the procedure is in the base-images section of .ploaness/agent-guide.md',
     ]
   }
   if (output.includes('toomanyrequests')) {
