@@ -102,6 +102,8 @@ const suiteProject = (suite: Suite): Record<string, unknown> => ({
 // declaration file either way.
 const declared: ReturnType<typeof defineConfig> = defineConfig({
   test: {
+    // Vitest resolves the seed and cross-project file order from the root configuration.
+    sequence: DETERMINISTIC_SEQUENCE,
     projects: SUITES.map((suite: Suite): Record<string, unknown> => suiteProject(suite)),
     // Root-only, like coverage below: a reporter reports on the run rather than on one suite.
     reporters: [...testReporters()],

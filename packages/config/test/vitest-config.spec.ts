@@ -110,6 +110,10 @@ describe('the harness setup file', () => {
 })
 
 describe('the sequence block', () => {
+  it('pins the root sequence that Vitest passes to every project worker', () => {
+    expect(SHIPPED.test?.sequence).toBe(DETERMINISTIC_SEQUENCE)
+  })
+
   it('is the shared one in every shipped suite, not a second statement of it', () => {
     const suites: readonly Suite[] = shippedSuites()
     expect(suites.length).toBeGreaterThan(0)

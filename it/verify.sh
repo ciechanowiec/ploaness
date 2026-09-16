@@ -2328,7 +2328,8 @@ it('checks the resolved value', async () => {
   await expect(Promise.resolve('ready')).resolves.toBe('ready')
 })
 ASSERTION
-expect_command pass-awaited-assertion PASS '1 passed' \
+test_seed="$(node "$lib/print-test-seed.ts")"
+expect_command pass-awaited-assertion PASS "$test_seed" \
     ./node_modules/.bin/vitest run tests/int/assertion.int.spec.ts
 
 # A small uncovered module must fail even beside a larger, fully covered module. Keeping it
