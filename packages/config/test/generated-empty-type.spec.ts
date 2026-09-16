@@ -12,6 +12,11 @@ const workspaceRoot: string = path.resolve(path.dirname(fileURLToPath(import.met
 const workspaceModule: unknown = await import(
   pathToFileURL(path.join(workspaceRoot, 'eslint.config.mjs')).href
 )
+const CONFIGURATIONS: Readonly<Record<string, readonly Linter.Config[]>> = {
+  payload: payloadConfig,
+  library: libraryConfig,
+  workspace: (workspaceModule as { readonly default: readonly Linter.Config[] }).default,
+}
 const directory: string = mkdtempSync(path.join(tmpdir(), 'ploaness-empty-type-'))
 const sourceDirectory: string = path.join(directory, 'src')
 mkdirSync(sourceDirectory)
@@ -31,8 +36,12 @@ const SOURCES: Readonly<Record<string, string>> = {
   needless: `// eslint-disable-next-line ${RULE} -- exercises the unused exception\n${VALID}`,
   descriptionless: `// eslint-disable-next-line ${RULE}\n${INVALID}`,
 }
-for (const [name, source] of Object.entries(SOURCES)) {
-  writeFileSync(path.join(sourceDirectory, `${name}.ts`), source)
+// CI's parser treats repeated parses of one path as autofix passes with isolated type information.
+// Each kind therefore receives its own files and measures a complete first lint pass.
+for (const kind of Object.keys(CONFIGURATIONS)) {
+  for (const [name, source] of Object.entries(SOURCES)) {
+    writeFileSync(path.join(sourceDirectory, `${kind}-${name}.ts`), source)
+  }
 }
 afterAll(() => {
   rmSync(directory, { recursive: true, force: true })
@@ -68,39 +77,38 @@ const lint = async (
   return messages
 }
 
-describe.each([
-  ['application', payloadConfig],
-  ['library', libraryConfig],
-  ['workspace', (workspaceModule as { readonly default: readonly Linter.Config[] }).default],
-] as const)('%s generated empty types', (_name: string, config: readonly Linter.Config[]) => {
-  it('rejects a utility type that loses its properties at error severity', async () => {
-    const messages: readonly Linter.LintMessage[] = await lint(config, 'invalid')
-    expect(
-      messages.filter((message: Linter.LintMessage): boolean => message.ruleId === RULE),
-    ).toEqual([expect.objectContaining({ severity: 2 })])
-  })
+describe.each(Object.entries(CONFIGURATIONS))(
+  '%s generated empty types',
+  (kind: string, config: readonly Linter.Config[]) => {
+    it('rejects a utility type that loses its properties at error severity', async () => {
+      const messages: readonly Linter.LintMessage[] = await lint(config, `${kind}-invalid`)
+      expect(
+        messages.filter((message: Linter.LintMessage): boolean => message.ruleId === RULE),
+      ).toEqual([expect.objectContaining({ severity: 2 })])
+    })
 
-  it('accepts a utility type that retains the intended properties', async () => {
-    expect(await lint(config, 'valid')).toEqual([])
-  })
+    it('accepts a utility type that retains the intended properties', async () => {
+      expect(await lint(config, `${kind}-valid`)).toEqual([])
+    })
 
-  it('accepts a justified suppression on the affected line', async () => {
-    expect(await lint(config, 'suppressed')).toEqual([])
-  })
+    it('accepts a justified suppression on the affected line', async () => {
+      expect(await lint(config, `${kind}-suppressed`)).toEqual([])
+    })
 
-  it('rejects an exception that no longer suppresses a finding', async () => {
-    const messages: readonly Linter.LintMessage[] = await lint(config, 'needless')
-    expect(
-      messages.some((message: Linter.LintMessage): boolean =>
-        message.message.includes('Unused eslint-disable directive'),
-      ),
-    ).toBe(true)
-  })
+    it('rejects an exception that no longer suppresses a finding', async () => {
+      const messages: readonly Linter.LintMessage[] = await lint(config, `${kind}-needless`)
+      expect(
+        messages.some((message: Linter.LintMessage): boolean =>
+          message.message.includes('Unused eslint-disable directive'),
+        ),
+      ).toBe(true)
+    })
 
-  it('rejects an exception without its justification', async () => {
-    const messages: readonly Linter.LintMessage[] = await lint(config, 'descriptionless')
-    expect(messages.map((message: Linter.LintMessage): string | null => message.ruleId)).toContain(
-      '@eslint-community/eslint-comments/require-description',
-    )
-  })
-})
+    it('rejects an exception without its justification', async () => {
+      const messages: readonly Linter.LintMessage[] = await lint(config, `${kind}-descriptionless`)
+      expect(
+        messages.map((message: Linter.LintMessage): string | null => message.ruleId),
+      ).toContain('@eslint-community/eslint-comments/require-description')
+    })
+  },
+)
