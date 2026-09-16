@@ -12,7 +12,7 @@
       "requiredFor": ["payload"],
       "why": "The Payload application itself, and the two packages Payload declares as peers. Only a member that IS a Payload application needs any of them; a frontend reading that application over HTTP needs none.",
       "versions": {
-        "payload": "3.88.0",
+        "payload": "3.89.0",
         "sharp": "0.35.4",
         "graphql": "16.14.2"
       }
@@ -22,11 +22,11 @@
       "requiredFor": ["payload", "application"],
       "why": "What any Next application renders with, whether or not Payload is mounted inside it. A public frontend has the same build, the same client bundle and the same React version to agree about.",
       "versions": {
-        "next": "16.3.4",
-        "react": "19.2.8",
-        "react-dom": "19.2.8",
-        "@types/react": "19.2.18",
-        "@types/react-dom": "19.2.5"
+        "next": "16.3.5",
+        "react": "19.3.0",
+        "react-dom": "19.3.0",
+        "@types/react": "19.3.0",
+        "@types/react-dom": "19.3.0"
       }
     },
     {

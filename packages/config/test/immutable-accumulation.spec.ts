@@ -154,3 +154,22 @@ describe('the two spread rules, which cannot both decide the string case', () =>
     expect(await onInEveryConfig(NO_MISUSED_SPREAD)).toStrictEqual(everyConfig(true))
   })
 })
+
+interface BiomeRules {
+  readonly linter: { readonly rules: { readonly nursery: Readonly<Record<string, unknown>> } }
+}
+
+// Equivalent checks keep their existing owner when a Biome preset gains a new rule.
+describe('math rule ownership across the composed analyzers', () => {
+  it.each([
+    ['useFlatMathMinMax', 'unicorn/prefer-flat-math-min-max'],
+    ['useModernMathApis', 'unicorn/prefer-modern-math-apis'],
+    ['noXorAsExponentiation', 'unicorn/no-xor-as-exponentiation'],
+  ])('keeps %s with its existing ESLint owner', async (biomeRule: string, eslintRule: string) => {
+    const shared: BiomeRules = JSON.parse(
+      readFileSync(path.join(packageRoot, 'biome-core.json'), 'utf8'),
+    ) as BiomeRules
+    expect(shared.linter.rules.nursery[biomeRule]).toBe('off')
+    expect(await onInEveryConfig(eslintRule)).toStrictEqual(everyConfig(true))
+  })
+})

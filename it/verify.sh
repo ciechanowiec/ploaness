@@ -1988,12 +1988,23 @@ commit_case pass-override-call-argument \
     'feat(fixture): build the folder collection through its override' "$CONFORMING_BODY"
 expect pass-override-call-argument payload-rules PASS
 
-# The job queue is the other collection the framework builds, and it declares no access at all.
+# The framework's denied job-collection access is safe; an override can still discard it.
+new_case pass-jobs-default-access
+replace_text "$scratch/pass-jobs-default-access/src/payload.config.ts" "  globals: [Header]," \
+    "  globals: [Header],
+  jobs: { tasks: [{ slug: 'noop', handler: async () => ({ output: {} }) }] },"
+commit_case pass-jobs-default-access 'feat(fixture): retain the denied default for the job queue' \
+    "$CONFORMING_BODY"
+expect pass-jobs-default-access payload-defaults PASS
+
 new_case fail-jobs-default-access
 replace_text "$scratch/fail-jobs-default-access/src/payload.config.ts" "  globals: [Header]," \
     "  globals: [Header],
-  jobs: { tasks: [{ slug: 'noop', handler: async () => ({ output: {} }) }] },"
-commit_case fail-jobs-default-access 'feat(fixture): queue a task and leave the queue to the default' \
+  jobs: {
+    tasks: [{ slug: 'noop', handler: async () => ({ output: {} }) }],
+    jobsCollectionOverrides: ({ defaultJobsCollection }) => ({ ...defaultJobsCollection, access: {} }),
+  },"
+commit_case fail-jobs-default-access 'feat(fixture): discard the explicit access of the job queue' \
     "$CONFORMING_BODY"
 expect fail-jobs-default-access payload-defaults FAIL payload-jobs
 
@@ -2065,7 +2076,7 @@ expect format-converges oxlint PASS
 # A range on a package a gate depends on lets an upstream release change a verdict while the project
 # stays unchanged, which is what pinning the toolchain exists to prevent.
 new_case fail-ranged-toolchain
-edit_json "$scratch/fail-ranged-toolchain/package.json" devDependencies.vitest '^4.1.11'
+edit_json "$scratch/fail-ranged-toolchain/package.json" devDependencies.vitest '^5.0.1'
 commit_case fail-ranged-toolchain 'feat(fixture): loosen a pinned toolchain version' "$CONFORMING_BODY"
 expect fail-ranged-toolchain wiring FAIL 'ploaness pins it'
 
@@ -2161,7 +2172,7 @@ expect fail-missing-runtime wiring FAIL '@ploaness/runtime'
 # Changing the version is not the only way to change what a version installs. A patch keeps the version
 # and swaps the code, which is the quietest of the three and invisible in the dependency block.
 new_case fail-patched-pin
-edit_json "$scratch/fail-patched-pin/package.json" 'pnpm.patchedDependencies.vitest@4.1.11' \
+edit_json "$scratch/fail-patched-pin/package.json" 'pnpm.patchedDependencies.vitest@5.0.1' \
     'patches/vitest.patch'
 commit_case fail-patched-pin 'feat(fixture): patch a package ploaness pins' "$CONFORMING_BODY"
 expect fail-patched-pin wiring FAIL 'changes what a version ploaness pins installs'
@@ -2294,6 +2305,95 @@ it('reaches a host beyond this machine', async () => {
 })
 REMOTE
 expect_suite fail-guard-blocks-remote FAIL 'no network beyond the machine'
+
+# The installed runner must fail an asynchronous assertion that the test never awaits.
+new_case fail-unawaited-assertion
+mkdir -p "$scratch/fail-unawaited-assertion/tests/int"
+cat > "$scratch/fail-unawaited-assertion/tests/int/assertion.int.spec.ts" <<'ASSERTION'
+import { expect, it } from 'vitest'
+
+it('checks the resolved value', () => {
+  expect(Promise.resolve('ready')).resolves.toBe('ready')
+})
+ASSERTION
+expect_command fail-unawaited-assertion FAIL 'was not awaited' \
+    ./node_modules/.bin/vitest run tests/int/assertion.int.spec.ts
+
+new_case pass-awaited-assertion
+mkdir -p "$scratch/pass-awaited-assertion/tests/int"
+cat > "$scratch/pass-awaited-assertion/tests/int/assertion.int.spec.ts" <<'ASSERTION'
+import { expect, it } from 'vitest'
+
+it('checks the resolved value', async () => {
+  await expect(Promise.resolve('ready')).resolves.toBe('ready')
+})
+ASSERTION
+expect_command pass-awaited-assertion PASS '1 passed' \
+    ./node_modules/.bin/vitest run tests/int/assertion.int.spec.ts
+
+# A small uncovered module must fail even beside a larger, fully covered module. Keeping it
+# unimported also proves that coverage includes authored files the suite never executes.
+new_case fail-unimported-coverage
+rm -rf "$scratch/fail-unimported-coverage/src"
+mkdir -p "$scratch/fail-unimported-coverage/src/lib" "$scratch/fail-unimported-coverage/tests/int"
+cat > "$scratch/fail-unimported-coverage/src/lib/covered.ts" <<'COVERED'
+const trim = (value: string): string => value.trim()
+const lower = (value: string): string => value.toLowerCase()
+const unicode = (value: string): string => value.normalize()
+const underscores = (value: string): string => value.replaceAll('_', '-')
+const spaces = (value: string): string => value.replaceAll(' ', '-')
+export const normalize = (value: string): string => spaces(underscores(unicode(lower(trim(value)))))
+COVERED
+cat > "$scratch/fail-unimported-coverage/src/lib/uncovered.ts" <<'UNCOVERED'
+export const increment = (value: number): number => value + 1
+UNCOVERED
+cat > "$scratch/fail-unimported-coverage/tests/int/coverage.int.spec.ts" <<'COVERAGE'
+import { expect, it } from 'vitest'
+import { normalize } from '../../src/lib/covered.js'
+
+it('normalizes an identifier', () => {
+  expect(normalize(' Ready_NOW ')).toBe('ready-now')
+})
+COVERAGE
+commit_case fail-unimported-coverage 'test(fixture): retain unimported source in coverage' "$CONFORMING_BODY"
+expect fail-unimported-coverage tests FAIL 'Coverage for lines.*threshold.*uncovered.ts'
+
+new_case pass-complete-coverage
+rm -rf "$scratch/pass-complete-coverage/src"
+cp -R "$scratch/fail-unimported-coverage/src" "$scratch/pass-complete-coverage/src"
+mkdir -p "$scratch/pass-complete-coverage/tests/int"
+cp "$scratch/fail-unimported-coverage/tests/int/coverage.int.spec.ts" \
+    "$scratch/pass-complete-coverage/tests/int/coverage.int.spec.ts"
+cat > "$scratch/pass-complete-coverage/tests/int/increment.int.spec.ts" <<'COVERAGE'
+import { expect, it } from 'vitest'
+import { increment } from '../../src/lib/uncovered.js'
+
+it('increments its input', () => {
+  expect(increment(1)).toBe(2)
+})
+COVERAGE
+commit_case pass-complete-coverage 'test(fixture): cover every authored source file' "$CONFORMING_BODY"
+expect pass-complete-coverage tests PASS
+
+new_case fail-unmatchable-css
+printf '%s\n' 'label:enabled { color: #000; }' > "$scratch/fail-unmatchable-css/src/selector.css"
+commit_case fail-unmatchable-css 'test(fixture): reject an impossible CSS selector' "$CONFORMING_BODY"
+expect fail-unmatchable-css css FAIL 'selector-no-unmatchable'
+new_case pass-matchable-css
+printf '%s\n' 'input:enabled { color: #000; }' > "$scratch/pass-matchable-css/src/selector.css"
+commit_case pass-matchable-css 'test(fixture): accept a possible CSS selector' "$CONFORMING_BODY"
+expect pass-matchable-css css PASS
+
+new_case fail-generated-empty-type
+printf '%s\n' "/** The resulting shape. */ export type Value = Omit<null | { name: string; value: number }, 'name'>" \
+    > "$scratch/fail-generated-empty-type/src/lib/generated-empty.ts"
+commit_case fail-generated-empty-type 'test(fixture): reject a utility type losing its properties' "$CONFORMING_BODY"
+expect fail-generated-empty-type eslint FAIL '@typescript-eslint/no-generated-empty-object-type'
+new_case pass-retained-type-properties
+printf '%s\n' "/** The resulting shape. */ export type Value = Omit<NonNullable<null | { name: string; value: number }>, 'name'>" \
+    > "$scratch/pass-retained-type-properties/src/lib/retained.ts"
+commit_case pass-retained-type-properties 'test(fixture): accept a utility type retaining properties' "$CONFORMING_BODY"
+expect pass-retained-type-properties eslint PASS
 
 
 # ── Workspace cases ─────────────────────────────────────────────────────────────────────────────────

@@ -79,3 +79,41 @@ describe('the shipped Stylelint configuration and Tailwind v4', () => {
     )
   })
 })
+
+describe('selectors that cannot match', () => {
+  it.each(['label:enabled', ':any-link:checked', '::before:first-child', ':is(::before)'])(
+    'rejects %s at error severity',
+    async (selector: string) => {
+      const warnings: readonly Warning[] = await lint(`${selector} { color: #000; }`)
+      expect(warnings).toContainEqual(
+        expect.objectContaining({ rule: 'selector-no-unmatchable', severity: 'error' }),
+      )
+    },
+  )
+
+  it.each([
+    'input:checked { color: #000; }',
+    '.card { &:hover { color: #000; } }',
+    ':global(.card) { color: #000; }',
+    ':local(.card) { color: #000; }',
+  ])('accepts the valid selector in %s', async (source: string) => {
+    expect(await lint(source)).toEqual([])
+  })
+
+  it('accepts a justified exception scoped to the affected line', async () => {
+    const source: string =
+      '/* stylelint-disable-next-line selector-no-unmatchable -- exercises the named exception */\n' +
+      'label:enabled { color: #000; }'
+    expect(await lint(source)).toEqual([])
+  })
+
+  it('rejects a needless exception', async () => {
+    const source: string =
+      '/* stylelint-disable-next-line selector-no-unmatchable -- exercises the unused exception */\n' +
+      'input:enabled { color: #000; }'
+    const warnings: readonly Warning[] = await lint(source)
+    expect(warnings.map((warning: Warning): string => warning.text).join('\n')).toContain(
+      'Needless disable',
+    )
+  })
+})

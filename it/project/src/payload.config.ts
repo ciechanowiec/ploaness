@@ -10,7 +10,7 @@ import { foldersAccess } from '@/lib/folders'
 
 // The configuration Payload boots, and the one the payload-defaults gate imports: the collections it
 // builds for the project arrive here, and the folder override is the template's answer to that gate.
-// The fail-folders-default-access case removes the override; fail-jobs-default-access adds a task.
+// Framework collection access is exercised with both safe defaults and incomplete overrides.
 const { payloadSecret, databaseUrl }: Environment = loadEnvironment()
 
 export default buildConfig({

@@ -62,10 +62,10 @@ const SUITES: readonly Suite[] = [
   },
 ]
 
-// Every suite carries the guards, because a project gets its own Vite server and inherits nothing from
-// the root unless it says so. The plugin is constructed per suite rather than shared: two servers
-// holding one plugin instance would share whatever state it keeps.
+// Each suite owns its setup and plugin instances. Disable implicit root inheritance so merging
+// project arrays cannot duplicate setup files or change the order that installs the network guard.
 const suiteProject = (suite: Suite): Record<string, unknown> => ({
+  extends: false,
   plugins: [react()],
   // Vite resolves the project's path aliases from tsconfig natively, so no extra plugin is needed.
   resolve: { tsconfigPaths: true },

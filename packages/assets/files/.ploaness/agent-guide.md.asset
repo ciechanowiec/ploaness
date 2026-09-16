@@ -134,7 +134,7 @@ invocations of a package gate. `tree-verify` runs after all other gates in eithe
 | `docker` | repository | hadolint over every Dockerfile, and `docker compose config`. |
 | `actions` | repository | actionlint over every workflow. |
 | `knip` | package | Dead code, unused files, and unused dependencies. |
-| `tests` | package | The suite and its per-file coverage floors, under the network guard and the shuffle. |
+| `tests` | package | The suite and its per-file coverage floors, under the network guard and the shuffle. Asynchronous assertions must be awaited. |
 | `tree-verify` | repository | The working tree is unchanged since `tree-snapshot` ran. |
 
 ### Extended Verification Gates
