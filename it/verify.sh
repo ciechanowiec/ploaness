@@ -479,6 +479,66 @@ expect pass eslint PASS
 # boundary to fail or stay out of scope.
 expect pass secrets PASS
 
+# The workflow gate must read a private checkout through its disposable mirror while retaining
+# project context: a local action outside .github and a reusable workflow both constrain inputs.
+new_case pass-actions-private
+mkdir -p "$scratch/pass-actions-private/.github/workflows" "$scratch/pass-actions-private/automation/greet"
+cat > "$scratch/pass-actions-private/.github/workflows/check.yml" <<'FIXTURE'
+name: Check
+on: push
+jobs:
+  greet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./automation/greet
+        with:
+          message: hello
+  reuse:
+    uses: ./.github/workflows/reusable.yml
+    with:
+      enabled: true
+FIXTURE
+cat > "$scratch/pass-actions-private/.github/workflows/reusable.yml" <<'FIXTURE'
+name: Reusable
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        type: boolean
+        required: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "checked"
+FIXTURE
+cat > "$scratch/pass-actions-private/automation/greet/action.yml" <<'FIXTURE'
+name: Greet
+description: Validate a local action input
+inputs:
+  message:
+    description: Greeting
+    required: true
+runs:
+  using: node24
+  main: index.js
+FIXTURE
+printf 'console.log("hello")\n' > "$scratch/pass-actions-private/automation/greet/index.js"
+commit_case pass-actions-private 'feat(fixture): check workflows in a private checkout' "$CONFORMING_BODY"
+chmod 700 "$scratch/pass-actions-private/.github/workflows"
+expect pass-actions-private actions PASS 'workflows pass actionlint'
+
+replace_text "$scratch/pass-actions-private/.github/workflows/check.yml" 'message: hello' 'unknown: hello'
+expect pass-actions-private actions FAIL 'input "unknown" is not defined'
+replace_text "$scratch/pass-actions-private/.github/workflows/check.yml" 'unknown: hello' 'message: hello'
+replace_text "$scratch/pass-actions-private/.github/workflows/check.yml" 'enabled: true' 'unknown: true'
+expect pass-actions-private actions FAIL 'input "unknown" is not defined'
+replace_text "$scratch/pass-actions-private/.github/workflows/check.yml" 'unknown: true' 'enabled: true'
+
+# The file is new and untracked: the mirror must reflect the working tree, not a Git archive of HEAD.
+printf 'name: [\n' > "$scratch/pass-actions-private/.github/workflows/untracked.yml"
+expect pass-actions-private actions FAIL 'untracked.yml'
+
 # The two history modes are options of `commit-message`, not global CLI flags. A global allowlist once
 # rejected both documented forms before their handler could read them.
 expect_command pass PASS 'commit message(s) conform' \

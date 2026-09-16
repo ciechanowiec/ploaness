@@ -25,6 +25,7 @@ import {
   run,
 } from '../exec.js'
 import { mirrorSecretCandidates } from '../secret-mirror.js'
+import { withWorkflowMirror } from '../workflow-mirror.js'
 import { acquireImage, describeFailure, dockerFault } from './container-run.js'
 
 // Pinned by digest in the governance layer, where a spec rejects a mutable reference. These were three
@@ -291,10 +292,15 @@ export const actions = (context: Context): GateResult => {
   if (unavailable !== undefined) {
     return unavailable
   }
-  const result: RunResult = run(
-    'docker',
-    ['run', '--rm', '-v', `${context.root}:/repo`, '--workdir', '/repo', ACTIONLINT_IMAGE],
-    { cwd: context.root },
+  const result: RunResult = withWorkflowMirror(
+    context.root,
+    workingTreeFiles(context.root),
+    (mirror: string): RunResult =>
+      run(
+        'docker',
+        ['run', '--rm', '-v', `${mirror}:/repo:ro`, '--workdir', '/repo', ACTIONLINT_IMAGE],
+        { cwd: context.root },
+      ),
   )
   return (
     dockerFault(context, ACTIONLINT_IMAGE, 'the workflow gate', result) ??
