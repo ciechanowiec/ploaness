@@ -214,13 +214,11 @@ const isExactVersion = (specifier: string): boolean => {
     const at: number = aliased.lastIndexOf('@')
     return at > 0 && isExactVersion(aliased.slice(at + 1))
   }
-  if (NON_REGISTRY.test(specifier)) {
-    return true
-  }
-  if (RANGE_OPERATOR.test(specifier) || RANGE_UNION.test(specifier)) {
-    return false
-  }
-  return EXACT_VERSION.test(specifier)
+  return (
+    NON_REGISTRY.test(specifier) ||
+    (!(RANGE_OPERATOR.test(specifier) || RANGE_UNION.test(specifier)) &&
+      EXACT_VERSION.test(specifier))
+  )
 }
 
 const checkExactVersions = (packageJson: Record<string, unknown>): readonly WiringViolation[] =>

@@ -264,13 +264,10 @@ const describeDraftRead = (entry: DraftReadEntry): string | undefined => {
       'access rule is a pure decision over the caller it is handed, so the harness can read it'
     )
   }
-  if (read.kind === 'filtered' && !requiresPublishedStatus(read.where)) {
-    return (
-      `${subject} filters its anonymous read without constraining ${STATUS_FIELD}, so an ` +
-      `unapproved document is served to anyone the filter admits; ${DRAFT_READ_REPAIR}`
-    )
-  }
-  return undefined
+  return read.kind === 'filtered' && !requiresPublishedStatus(read.where)
+    ? `${subject} filters its anonymous read without constraining ${STATUS_FIELD}, so an ` +
+        `unapproved document is served to anyone the filter admits; ${DRAFT_READ_REPAIR}`
+    : undefined
 }
 
 /**
@@ -384,10 +381,9 @@ export const parseInheritedAccessReport = (text: string): InheritedAccessReport 
   const draftReads: readonly DraftReadEntry[] | undefined = asDraftReads(
     readKey(parsed, 'draftReads'),
   )
-  if (collections === undefined || globals === undefined || draftReads === undefined) {
-    return undefined
-  }
-  return { collections, draftReads, globals }
+  return collections === undefined || globals === undefined || draftReads === undefined
+    ? undefined
+    : { collections, draftReads, globals }
 }
 
 /** Where a Payload member keeps its configuration when its tsconfig says nothing else. */

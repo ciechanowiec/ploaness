@@ -200,10 +200,9 @@ const matchesSegments = (pattern: readonly string[], actual: readonly string[]):
   if (isCatchAll(head)) {
     return actual.length > 0
   }
-  if (isDynamicSegment(head)) {
-    return actual.length > 0 && matchesSegments(rest, actual.slice(1))
-  }
-  return actual[0] === head && matchesSegments(rest, actual.slice(1))
+  return isDynamicSegment(head)
+    ? actual.length > 0 && matchesSegments(rest, actual.slice(1))
+    : actual[0] === head && matchesSegments(rest, actual.slice(1))
 }
 
 /**

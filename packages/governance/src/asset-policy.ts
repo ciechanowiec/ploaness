@@ -366,10 +366,7 @@ export const syncAction = (asset: ManagedAsset, isPresent: boolean): SyncAction 
   }
   // A SECTION file is never overwritten, even when absent: the project text below the block is the
   // project's, and creating the file wholesale would be ploaness writing that text on its behalf.
-  if (asset.disposition === 'SECTION') {
-    return 'splice'
-  }
-  return 'write'
+  return asset.disposition === 'SECTION' ? 'splice' : 'write'
 }
 
 /** What a member can hold a managed file for, derived from its kind. */
@@ -402,11 +399,9 @@ export const memberAssets = (
   host: AssetHost,
 ): readonly ManagedAsset[] =>
   assets.filter((asset: ManagedAsset): boolean => {
-    if (asset.scope === 'EVERYWHERE') {
-      return true
-    }
-    if (host.isPayload && asset.scope === 'PAYLOAD') {
-      return true
-    }
-    return host.hasRuntime && asset.scope === 'APPLICATION'
+    return (
+      asset.scope === 'EVERYWHERE' ||
+      (host.isPayload && asset.scope === 'PAYLOAD') ||
+      (host.hasRuntime && asset.scope === 'APPLICATION')
+    )
   })

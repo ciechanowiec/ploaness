@@ -144,8 +144,7 @@ export const oxlint = (member: Member): GateResult => {
       suppressionProblems(member, group),
     ),
   ]
-  if (problems.length > 0) {
-    return failed('Oxlint wiring or suppression policy is violated', problems)
-  }
-  return analyzeGroups(member, groups)
+  return problems.length > 0
+    ? failed('Oxlint wiring or suppression policy is violated', problems)
+    : analyzeGroups(member, groups)
 }

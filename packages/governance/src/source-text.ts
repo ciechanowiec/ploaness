@@ -107,10 +107,7 @@ const endOfStringLiteral = (source: string, index: number): number => {
 // Its end depends on escapes, newlines, and character-class nesting at once; splitting the three apart
 // would hide the single cursor they share behind three functions that each need the others' state.
 const isInClassAfter = (character: string, isInClass: boolean): boolean => {
-  if (character === '[') {
-    return true
-  }
-  return character === ']' ? false : isInClass
+  return character === '[' || (character !== ']' && isInClass)
 }
 
 /** Where a regex scan stands: the next offset to read, and whether it has ended there. */
@@ -192,10 +189,9 @@ const constructAt = (
   if (QUOTES.has(character)) {
     return { stop: endOfStringLiteral(source, index), erased: false }
   }
-  if (character === '/' && VALUE_POSITION.has(lastMeaningful(output))) {
-    return { stop: endOfRegexLiteral(source, index), erased: !shouldKeepRegex }
-  }
-  return undefined
+  return character === '/' && VALUE_POSITION.has(lastMeaningful(output))
+    ? { stop: endOfRegexLiteral(source, index), erased: !shouldKeepRegex }
+    : undefined
 }
 
 // One walk, two callers. A string is the only construct the two disagree about, so the difference is a
@@ -350,10 +346,11 @@ export const topLevelSlice = (argumentText: string): string =>
         // a nested one contributes nothing, which is what elides the structure beneath it.
         return { state: collected + (step.depth === 1 ? ' ' : ''), stop: false }
       }
-      if (!CLOSERS.has(step.character) && step.depth === 1) {
-        return { state: collected + step.character, stop: false }
+      return {
+        state:
+          !CLOSERS.has(step.character) && step.depth === 1 ? collected + step.character : collected,
+        stop: false,
       }
-      return { state: collected, stop: false }
     },
     '',
   )
@@ -384,12 +381,11 @@ export const topLevelKeys = (source: string, index: number): readonly string[] =
     return []
   }
   const body: string | undefined = balancedArguments(source, open)
-  if (body === undefined) {
-    return []
-  }
-  return [...topLevelSlice(`{${body}}`).matchAll(TOP_LEVEL_KEY)].map(
-    (match: RegExpExecArray): string => match[1] ?? '',
-  )
+  return body === undefined
+    ? []
+    : [...topLevelSlice(`{${body}}`).matchAll(TOP_LEVEL_KEY)].map(
+        (match: RegExpExecArray): string => match[1] ?? '',
+      )
 }
 
 // The open braces still standing at a given point of the walk, and the innermost one at the offset
@@ -414,9 +410,11 @@ const enclose = (state: Enclosure, step: ScanStep, target: number): Folded<Enclo
   if (step.character === '{') {
     return { state: { ...state, opens: [...state.opens, step.index] }, stop: false }
   }
-  return step.character === '}'
-    ? { state: { ...state, opens: state.opens.slice(0, LAST_CHARACTER) }, stop: false }
-    : { state, stop: false }
+  return {
+    state:
+      step.character === '}' ? { ...state, opens: state.opens.slice(0, LAST_CHARACTER) } : state,
+    stop: false,
+  }
 }
 
 /**

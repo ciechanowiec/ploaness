@@ -277,10 +277,11 @@ const coversField = (entry: PublicAccess, field: string): boolean =>
 
 const isDeclared = (granted: Granted, declared: readonly PublicAccess[]): boolean =>
   declared.some((entry: PublicAccess): boolean => {
-    if (entry.entity !== granted.entity || entry.operation !== granted.operation) {
-      return false
-    }
-    return granted.field === undefined ? true : coversField(entry, granted.field)
+    return (
+      entry.entity === granted.entity &&
+      entry.operation === granted.operation &&
+      (granted.field === undefined || coversField(entry, granted.field))
+    )
   })
 
 /**

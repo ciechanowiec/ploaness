@@ -131,15 +131,14 @@ const PUBLISH_ORDER: RegExp = /^[ \t]*PUBLISH_ORDER: '([^']*)'/m
 const workflowFindings = (manifests: readonly Manifest[]): readonly string[] => {
   const file: string = '.github/workflows/release.yaml'
   const order: string | undefined = PUBLISH_ORDER.exec(readText(file))?.[1]
-  if (order === undefined) {
-    return [`${file} carries no publish order to check`]
-  }
-  return rosterFindings(
-    file,
-    order.split(/\s+/).filter((name: string): boolean => name.length > 0),
-    manifests.map((manifest: Manifest): string => tarballName(manifest.name)),
-    'publish',
-  )
+  return order === undefined
+    ? [`${file} carries no publish order to check`]
+    : rosterFindings(
+        file,
+        order.split(/\s+/).filter((name: string): boolean => name.length > 0),
+        manifests.map((manifest: Manifest): string => tarballName(manifest.name)),
+        'publish',
+      )
 }
 
 // knip is run against this repository with that configuration, so a package absent from its workspaces

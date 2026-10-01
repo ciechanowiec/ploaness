@@ -599,12 +599,11 @@ const asAdvisory = (key: string, raw: AuditAdvisory): Advisory => ({
 const parseAudit = (output: string): readonly Advisory[] | undefined => {
   try {
     const parsed: unknown = JSON.parse(output)
-    if (!(isRecord(parsed) && isRecord(parsed['metadata']))) {
-      return undefined
-    }
-    return Object.entries(asRecord(parsed['advisories'])).map(
-      ([key, raw]: readonly [string, unknown]): Advisory => asAdvisory(key, asRecord(raw)),
-    )
+    return isRecord(parsed) && isRecord(parsed['metadata'])
+      ? Object.entries(asRecord(parsed['advisories'])).map(
+          ([key, raw]: readonly [string, unknown]): Advisory => asAdvisory(key, asRecord(raw)),
+        )
+      : undefined
   } catch {
     return undefined
   }

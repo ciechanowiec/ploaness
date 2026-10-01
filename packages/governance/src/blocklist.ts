@@ -121,10 +121,13 @@ const reachesFloor = (version: string | undefined, floor: string): boolean => {
   const parsed: ParsedVersion | undefined =
     version === undefined ? undefined : parseVersion(version)
   const floorParsed: ParsedVersion | undefined = parseVersion(floor)
-  if (version === undefined || parsed === undefined || floorParsed === undefined) {
-    return true
-  }
-  return componentCount(version) < componentCount(floor) || compareCore(parsed, floorParsed) >= 0
+  return (
+    version === undefined ||
+    parsed === undefined ||
+    floorParsed === undefined ||
+    componentCount(version) < componentCount(floor) ||
+    compareCore(parsed, floorParsed) >= 0
+  )
 }
 
 const isAllowedTag = (entry: BlockedImage, tag: string | undefined): boolean =>

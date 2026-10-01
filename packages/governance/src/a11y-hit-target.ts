@@ -69,10 +69,13 @@ const isEmptyInset = (argument: string): boolean => {
       .map((token: string): number => asPercentage(token)),
   )
   const [top, right, bottom, left]: readonly (number | undefined)[] = values
-  if (top === undefined || right === undefined || bottom === undefined || left === undefined) {
-    return false
-  }
-  return top + bottom >= FULL_EXTENT || left + right >= FULL_EXTENT
+  return (
+    top !== undefined &&
+    right !== undefined &&
+    bottom !== undefined &&
+    left !== undefined &&
+    (top + bottom >= FULL_EXTENT || left + right >= FULL_EXTENT)
+  )
 }
 
 // A circle or ellipse of no radius clips everything away. Only an explicit zero counts: a keyword

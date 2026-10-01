@@ -72,10 +72,10 @@ export const declaresInstallScriptAllowlist = (
   workspaceFile: string,
   packageJson: unknown,
 ): boolean => {
-  if (declaresTopLevelKey(workspaceFile, ALLOWLIST_KEY)) {
-    return true
-  }
-  return Array.isArray(readKey(readKey(packageJson, 'pnpm'), ALLOWLIST_KEY))
+  return (
+    declaresTopLevelKey(workspaceFile, ALLOWLIST_KEY) ||
+    Array.isArray(readKey(readKey(packageJson, 'pnpm'), ALLOWLIST_KEY))
+  )
 }
 
 /**

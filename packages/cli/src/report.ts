@@ -56,13 +56,11 @@ const COLOURS: Readonly<Record<string, string>> = {
 // NO_COLOR and FORCE_COLOR are the conventions every other tool in the pipeline already honours, so a
 // project that has set one does not have to set a ploaness-specific variable as well.
 const hasRichOutput = (): boolean => {
-  if (process.env['NO_COLOR'] !== undefined) {
-    return false
-  }
-  if (process.env['FORCE_COLOR'] !== undefined) {
-    return true
-  }
-  return process.env['TERM'] !== 'dumb' && process.stdout.isTTY
+  return (
+    process.env['NO_COLOR'] === undefined &&
+    (process.env['FORCE_COLOR'] !== undefined ||
+      (process.env['TERM'] !== 'dumb' && process.stdout.isTTY))
+  )
 }
 
 const IS_RICH: boolean = hasRichOutput()
@@ -133,10 +131,9 @@ const COLUMN_GAP: number = 2
 const spread = (left: string, right: string, decoratedLeft: string): string => {
   const columns: number = process.stdout.columns
   const gap: number = columns - left.length - right.length
-  if (!IS_RICH || columns < MINIMUM_COLUMNS || gap < COLUMN_GAP) {
-    return `${decoratedLeft}${' '.repeat(COLUMN_GAP)}${paint(right, DIM)}`
-  }
-  return `${decoratedLeft}${' '.repeat(gap)}${paint(right, DIM)}`
+  return !IS_RICH || columns < MINIMUM_COLUMNS || gap < COLUMN_GAP
+    ? `${decoratedLeft}${' '.repeat(COLUMN_GAP)}${paint(right, DIM)}`
+    : `${decoratedLeft}${' '.repeat(gap)}${paint(right, DIM)}`
 }
 
 /** Print the run header naming the mode and how many gates it covers. */

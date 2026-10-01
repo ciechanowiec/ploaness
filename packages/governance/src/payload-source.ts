@@ -94,9 +94,10 @@ const moduleLiterals = (source: string): readonly LiteralSpan[] =>
       if (step.character === '{' && step.depth === 1) {
         return { state: [...spans, { open: step.index, close: NOT_FOUND }], stop: false }
       }
-      return step.character === '}' && step.depth === 0
-        ? { state: withClose(spans, step.index), stop: false }
-        : { state: spans, stop: false }
+      return {
+        state: step.character === '}' && step.depth === 0 ? withClose(spans, step.index) : spans,
+        stop: false,
+      }
     },
     [],
   )

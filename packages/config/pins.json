@@ -1,7 +1,7 @@
 {
   "$comment": "Everything ploaness pins that it cannot pin by declaring a dependency. A pinned analyzer is a real dependency of a ploaness package, so its version has exactly one source; nothing here can be, because ploaness imports none of it and declaring it would install a second Payload, Next, React, or set of type definitions into a project that already has one - and two copies of @types/react in a single tree is not merely waste, it is a class of type error that reads as the project's fault. This file is that one source instead. It is data rather than code: a group carries the rule that applies to it, so adding one needs no change anywhere else.",
   "$required": "A group states the member KINDS that must declare it. A kind is derived from what a package declares - Payload, or Next, or neither - never from what it says about itself. The split matters because a workspace holds packages that are not all applications: requiring a shared library to declare Payload would manufacture a dependency the dead-code gate then rightly reports as unused, and requiring a Next frontend to declare Payload would make ploaness dictate an architecture rather than a version. A group required by no kind is matched when a package declares it and forced on nobody, which is how ploaness owns the version of a Postgres driver without deciding that every governed project uses Postgres.",
-  "packageManager": "pnpm@11.9.0",
+  "packageManager": "pnpm@12.8.1",
   "$engines": "Only `node` is stated here. The pnpm entry is derived from `packageManager` above, because Corepack reads one field and an installer reads the other and two literals for one version will not stay equal - these two had already stopped agreeing in meaning, an exact `pnpm@11.9.0` beside a `>=11` floor.",
   "engines": {
     "node": ">=26"
@@ -12,8 +12,8 @@
       "requiredFor": ["payload"],
       "why": "The Payload application itself, and the two packages Payload declares as peers. Only a member that IS a Payload application needs any of them; a frontend reading that application over HTTP needs none.",
       "versions": {
-        "payload": "3.89.0",
-        "sharp": "0.35.4",
+        "payload": "3.90.2",
+        "sharp": "0.35.5",
         "graphql": "16.14.2"
       }
     },
@@ -34,7 +34,7 @@
       "requiredFor": ["payload", "application", "library"],
       "why": "The definitions describing the runtime every governed package compiles against. Pinned for the toolchain's reason rather than the framework's: a type package is an input to tsc, so a patch release changes what type-checks while the project stays unchanged.",
       "versions": {
-        "@types/node": "26.4.1"
+        "@types/node": "26.6.3"
       }
     },
     {
@@ -43,9 +43,9 @@
       "versions": {
         "pg": "8.23.0",
         "@types/pg": "8.23.1",
-        "dotenv": "17.4.2",
+        "dotenv": "18.0.4",
         "cross-env": "10.1.0",
-        "vite": "8.2.2"
+        "vite": "8.3.1"
       }
     }
   ]

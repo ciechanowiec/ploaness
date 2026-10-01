@@ -472,12 +472,16 @@ export const guidelineRules: RuleTable = {
     },
   ],
   'sonarjs/no-unused-vars': 'off', // the typed rule above decides this, with the project's options.
+  // SonarJS owns ignored built-in results with type information; Unicorn overlaps on array methods.
+  'unicorn/no-unused-builtin-method-return': 'off',
   // ploaness exists to invoke analyzers, and it invokes them by name so the project's own installed
   // version is the one that runs. Resolving each to an absolute path would pin the harness to one
   // layout and defeat that. The governing standard says nothing about PATH.
   'sonarjs/no-os-command-from-path': 'off',
   'unicorn/no-array-reduce': 'off',
   'unicorn/prefer-iterator-to-array': 'off',
+  // Iterator.zip is absent from Node 26 and the ES2022 library this contract compiles against.
+  'unicorn/prefer-iterator-zip': 'off',
   'unicorn/no-array-sort': 'off',
   'unicorn/prefer-set-methods': 'off',
   'unicorn/no-null': 'off', // React and Payload use `null` deliberately.

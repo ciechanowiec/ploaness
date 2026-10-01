@@ -329,10 +329,10 @@ const arrayElements = (inner: string): readonly string[] => {
   const commas: readonly number[] = scanDelimited<readonly number[]>(
     inner,
     0,
-    (found: readonly number[], step: ScanStep): Folded<readonly number[]> =>
-      step.character === ',' && step.depth === 0
-        ? { state: [...found, step.index], stop: false }
-        : { state: found, stop: false },
+    (found: readonly number[], step: ScanStep): Folded<readonly number[]> => ({
+      state: step.character === ',' && step.depth === 0 ? [...found, step.index] : found,
+      stop: false,
+    }),
     [],
   )
   const bounds: readonly number[] = [-1, ...commas, inner.length]
@@ -369,9 +369,11 @@ const svgAdmissionOf = (raw: string): SvgAdmission => {
   if (admitting !== undefined) {
     return { verdict: 'admitted', entry: admitting }
   }
-  return literals.every((literal: string | undefined): boolean => literal !== undefined)
-    ? { verdict: 'excluded' }
-    : { verdict: 'unreadable' }
+  return {
+    verdict: literals.every((literal: string | undefined): boolean => literal !== undefined)
+      ? 'excluded'
+      : 'unreadable',
+  }
 }
 
 const SVG_REPAIR: string =

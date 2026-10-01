@@ -59,8 +59,5 @@ export const commitMessage = (
   if (mode === '--all') {
     return checkHistory(context, OWNED_HISTORY_REVISIONS)
   }
-  if (mode === '--range') {
-    return checkHistory(context, [value ?? 'HEAD'])
-  }
-  return checkPending(context, mode)
+  return mode === '--range' ? checkHistory(context, [value ?? 'HEAD']) : checkPending(context, mode)
 }

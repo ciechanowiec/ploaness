@@ -93,13 +93,10 @@ const unboundedCallAt = (
   found: number,
 ): PayloadViolation | undefined => {
   const topLevel: string | undefined = topLevelOptionsAt(source, rule.call, found, PAYLOAD_RECEIVER)
-  if (
-    topLevel === undefined ||
+  return topLevel === undefined ||
     rule.required.some((key: string): boolean => hasEffectiveProperty(topLevel, key))
-  ) {
-    return undefined
-  }
-  return { line: lineOf(source, found), rule: rule.rule, reason: rule.reason }
+    ? undefined
+    : { line: lineOf(source, found), rule: rule.rule, reason: rule.reason }
 }
 
 const findUnboundedCalls = (source: string): readonly PayloadViolation[] =>

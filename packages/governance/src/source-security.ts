@@ -142,12 +142,11 @@ const acceptedAbsence = (condition: string): string | undefined => {
   const names: readonly (string | undefined)[] = splitTopLevel(condition, '||').map(
     (disjunct: string): string | undefined => absentNameIn(disjunct),
   )
-  if (names.includes(undefined)) {
-    return undefined
-  }
-  return names.find(
-    (name: string | undefined): name is string => name !== undefined && isCredential(name),
-  )
+  return names.includes(undefined)
+    ? undefined
+    : names.find(
+        (name: string | undefined): name is string => name !== undefined && isCredential(name),
+      )
 }
 
 // The returned VALUE decides, not the presence of a return: `if (!secret) { return unauthorized() }`
@@ -157,10 +156,7 @@ const ACCEPTANCE: RegExp = /\breturn\s+true\b/
 
 const hasAcceptanceAfter = (masked: string, close: number): boolean => {
   const statementStart: number = masked.slice(close + 1).search(/\S/)
-  if (statementStart < 0) {
-    return false
-  }
-  return ACCEPTANCE.test(statementAt(masked, close + 1 + statementStart))
+  return statementStart >= 0 && ACCEPTANCE.test(statementAt(masked, close + 1 + statementStart))
 }
 
 /**

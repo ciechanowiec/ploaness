@@ -4,32 +4,32 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@payloadcms/db-postgres": "3.89.0",
+    "@payloadcms/db-postgres": "3.90.2",
     "@ploaness/runtime": "1.4.0",
     "graphql": "16.14.2",
     "nanoid": "6.0.1",
     "next": "16.3.7",
-    "payload": "3.89.0",
+    "payload": "3.90.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "sharp": "0.35.4"
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.63.0",
-    "@types/node": "26.4.1",
+    "@types/node": "26.6.3",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@vitest/coverage-v8": "5.0.1",
+    "@vitest/coverage-v8": "5.0.3",
     "pg": "8.23.0",
     "ploaness": "1.4.0",
-    "tsx": "4.23.13",
+    "tsx": "4.23.15",
     "typescript": "6.0.3",
-    "vitest": "5.0.1"
+    "vitest": "5.0.3"
   },
-  "packageManager": "pnpm@11.9.0",
+  "packageManager": "pnpm@12.8.1",
   "engines": {
     "node": ">=26",
-    "pnpm": "11.9.0"
+    "pnpm": "12.8.1"
   }
 }

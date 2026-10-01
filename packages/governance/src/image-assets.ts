@@ -81,10 +81,7 @@ const validatePng = (bytes: Uint8Array): string | null => {
   if (walk.error !== null) {
     return walk.error
   }
-  if (walk.parts.length === 0) {
-    return 'invalid PNG (no IDAT image data)'
-  }
-  return inflatePng(walk.parts)
+  return walk.parts.length === 0 ? 'invalid PNG (no IDAT image data)' : inflatePng(walk.parts)
 }
 
 // JPEG brackets its data with a start-of-image and an end-of-image marker, each two bytes.
@@ -107,13 +104,10 @@ const validateJpeg = (bytes: Uint8Array): string | null => {
   ) {
     return 'not a valid JPEG (bad SOI marker)'
   }
-  if (
-    bytes.at(SECOND_TO_LAST_BYTE) !== JPEG_MARKER_PREFIX ||
+  return bytes.at(SECOND_TO_LAST_BYTE) !== JPEG_MARKER_PREFIX ||
     bytes.at(LAST_BYTE) !== JPEG_END_OF_IMAGE
-  ) {
-    return 'truncated JPEG (missing EOI marker)'
-  }
-  return null
+    ? 'truncated JPEG (missing EOI marker)'
+    : null
 }
 
 const GIF_HEADER_BYTES: number = 6
@@ -124,10 +118,7 @@ const validateGif = (bytes: Uint8Array): string | null => {
   if (header !== 'GIF87a' && header !== 'GIF89a') {
     return 'not a valid GIF (bad header)'
   }
-  if (bytes.at(LAST_BYTE) !== GIF_TRAILER) {
-    return 'truncated GIF (missing trailer byte)'
-  }
-  return null
+  return bytes.at(LAST_BYTE) === GIF_TRAILER ? null : 'truncated GIF (missing trailer byte)'
 }
 
 // A WebP file is a RIFF container: the tag, a 32-bit size, then the form type.
@@ -148,10 +139,7 @@ const validateWebp = (bytes: Uint8Array): string | null => {
   }
   const declaredLength: number =
     dataView(bytes).getUint32(RIFF_SIZE_OFFSET, true) + RIFF_SIZE_EXCLUDES_BYTES
-  if (declaredLength > bytes.length) {
-    return 'truncated WebP (RIFF size exceeds file length)'
-  }
-  return null
+  return declaredLength > bytes.length ? 'truncated WebP (RIFF size exceeds file length)' : null
 }
 
 const ICO_HEADER_BYTES: number = 6
@@ -194,10 +182,7 @@ const validateIco = (bytes: Uint8Array): string | null => {
     return 'not a valid ICO (bad header)'
   }
   const count: number = view.getUint16(ICO_COUNT_OFFSET, true)
-  if (count === 0) {
-    return 'invalid ICO (no image entries)'
-  }
-  return validateIcoEntries(bytes, view, count)
+  return count === 0 ? 'invalid ICO (no image entries)' : validateIcoEntries(bytes, view, count)
 }
 
 // The image extensions this gate understands, each mapped to its byte validator. A tracked file with any
@@ -237,8 +222,5 @@ export const validateImageBytes = (filePath: string, bytes: Uint8Array): string 
   if (validator === undefined) {
     return null
   }
-  if (bytes.length === 0) {
-    return 'empty file'
-  }
-  return validator(bytes)
+  return bytes.length === 0 ? 'empty file' : validator(bytes)
 }

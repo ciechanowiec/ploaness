@@ -138,10 +138,9 @@ const afterFieldDelimiter = (
   if (opensDirectField(step)) {
     return { state: [...spans, { open: step.index, close: NOT_FOUND }], stop: false }
   }
-  if (endsDirectField(step)) {
-    return { state: closeLastSpan(spans, step.index), stop: false }
-  }
-  return { state: spans, stop: endsFieldArray(step) }
+  return endsDirectField(step)
+    ? { state: closeLastSpan(spans, step.index), stop: false }
+    : { state: spans, stop: endsFieldArray(step) }
 }
 
 // Starting on the array opener puts its direct object elements at depth two. A nested object opens at

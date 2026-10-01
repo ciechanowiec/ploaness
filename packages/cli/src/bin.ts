@@ -120,10 +120,9 @@ const isCommitMessageArguments = (rest: readonly string[]): boolean => {
   if (mode === '--all') {
     return rest.length === 1
   }
-  if (mode === '--range') {
-    return rest.length === RANGE_ARGUMENT_COUNT && value !== undefined && !value.startsWith('-')
-  }
-  return rest.length === 1 && mode !== undefined && !mode.startsWith('-')
+  return mode === '--range'
+    ? rest.length === RANGE_ARGUMENT_COUNT && value !== undefined && !value.startsWith('-')
+    : rest.length === 1 && mode !== undefined && !mode.startsWith('-')
 }
 
 const acceptsArguments: Readonly<Record<string, (rest: readonly string[]) => boolean>> = {

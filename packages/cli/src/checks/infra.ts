@@ -215,10 +215,7 @@ const analyze = (
   const result: RunResult = runCheckov(context)
   const faulted: GateResult | undefined =
     dockerFault(context, CHECKOV_IMAGE, INFRA_GATE, result) ?? checkovFault(result)
-  if (faulted !== undefined) {
-    return faulted
-  }
-  return withOutput(analyzerVerdict(result, patterns, passSummary), result.output)
+  return faulted ?? withOutput(analyzerVerdict(result, patterns, passSummary), result.output)
 }
 
 // The summary counts defects, not lines. checkov's output is reported in full beneath, but it spends
@@ -263,15 +260,14 @@ const judge = (
       `${files} declare no resource this harness can judge; the pattern rules pass`,
     )
   }
-  if (standing.curated.length === 0) {
-    return patternVerdict(patterns, `${files} pass the pattern rules; ${standingClause(standing)}`)
-  }
-  return analyze(
-    context,
-    patterns,
-    `${files} declaring ${String(resources)} resource(s) pass ` +
-      `${checkClause(standing.curated)} and the pattern rules`,
-  )
+  return standing.curated.length === 0
+    ? patternVerdict(patterns, `${files} pass the pattern rules; ${standingClause(standing)}`)
+    : analyze(
+        context,
+        patterns,
+        `${files} declaring ${String(resources)} resource(s) pass ` +
+          `${checkClause(standing.curated)} and the pattern rules`,
+      )
 }
 
 /** Judge every OpenTofu and Terraform source the repository tracks. */

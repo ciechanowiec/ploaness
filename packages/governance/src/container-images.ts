@@ -124,15 +124,14 @@ export const imageReferencesInDockerfile = (text: string): readonly string[] =>
 
 const packagesInCommand = (command: string): readonly string[] => {
   const verb: RegExpExecArray | null = INSTALL_VERB.exec(command)
-  if (verb === null) {
-    return []
-  }
-  return command
-    .slice(verb.index + verb[0].length)
-    .trim()
-    .split(/[ \t]+/)
-    .filter((token: string): boolean => token.length > 0 && !token.startsWith(OPTION_PREFIX))
-    .map((token: string): string => token.split(PACKAGE_NAME_END)[0] ?? '')
+  return verb === null
+    ? []
+    : command
+        .slice(verb.index + verb[0].length)
+        .trim()
+        .split(/[ \t]+/)
+        .filter((token: string): boolean => token.length > 0 && !token.startsWith(OPTION_PREFIX))
+        .map((token: string): string => token.split(PACKAGE_NAME_END)[0] ?? '')
 }
 
 /**

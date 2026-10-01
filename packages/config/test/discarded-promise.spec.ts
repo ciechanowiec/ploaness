@@ -117,15 +117,12 @@ const voidFindingsInEveryConfig = async (
 // Searched for the KEY wherever it sits rather than at a path in the schema, so moving the rule between
 // Biome's groups cannot make this spec quietly stop looking. A ban re-added anywhere fails it.
 const containsVoidBan = (value: unknown): boolean => {
-  if (Array.isArray(value)) {
-    return value.some((entry: unknown): boolean => containsVoidBan(entry))
-  }
-  if (!isRecord(value)) {
-    return false
-  }
-  return Object.entries(value).some(([key, nested]: [string, unknown]): boolean =>
-    key === 'noVoid' ? isOn(nested) : containsVoidBan(nested),
-  )
+  return Array.isArray(value)
+    ? value.some((entry: unknown): boolean => containsVoidBan(entry))
+    : isRecord(value) &&
+        Object.entries(value).some(([key, nested]: [string, unknown]): boolean =>
+          key === 'noVoid' ? isOn(nested) : containsVoidBan(nested),
+        )
 }
 
 describe('a promise a synchronous callback cannot await', () => {

@@ -89,13 +89,10 @@ const opensWith = (line: string, token: string): boolean =>
 const BARE_TOKENS: readonly string[] = [`gitleaks:${ALLOW}`]
 
 const tokenOnLine = (line: string): string | undefined => {
-  if (CLOSING_TOKENS.some((closing: string): boolean => opensWith(line, closing))) {
-    return undefined
-  }
-  return (
-    SUPPRESSION_TOKENS.find((token: string): boolean => opensWith(line, token)) ??
-    BARE_TOKENS.find((token: string): boolean => line.includes(token))
-  )
+  return CLOSING_TOKENS.some((closing: string): boolean => opensWith(line, closing))
+    ? undefined
+    : (SUPPRESSION_TOKENS.find((token: string): boolean => opensWith(line, token)) ??
+        BARE_TOKENS.find((token: string): boolean => line.includes(token)))
 }
 
 /**

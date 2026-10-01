@@ -102,15 +102,12 @@ const everyConfig = <Value>(value: Value): Readonly<Record<string, Value>> =>
 // Searched for the KEY wherever it sits rather than at a path in the schema, so moving the rule between
 // Biome's groups cannot make this spec quietly stop looking. A ban re-added anywhere fails it.
 const containsAccumulatingSpreadBan = (value: unknown): boolean => {
-  if (Array.isArray(value)) {
-    return value.some((entry: unknown): boolean => containsAccumulatingSpreadBan(entry))
-  }
-  if (!isRecord(value)) {
-    return false
-  }
-  return Object.entries(value).some(([key, nested]: [string, unknown]): boolean =>
-    key === 'noAccumulatingSpread' ? isOn(nested) : containsAccumulatingSpreadBan(nested),
-  )
+  return Array.isArray(value)
+    ? value.some((entry: unknown): boolean => containsAccumulatingSpreadBan(entry))
+    : isRecord(value) &&
+        Object.entries(value).some(([key, nested]: [string, unknown]): boolean =>
+          key === 'noAccumulatingSpread' ? isOn(nested) : containsAccumulatingSpreadBan(nested),
+        )
 }
 
 describe('the two spellings a scan does not have', () => {

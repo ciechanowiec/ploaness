@@ -30,10 +30,7 @@ import {
 // cannot know. The project declares it; the thresholds and the gate itself stay ploaness's.
 const runPretest = (context: Context): RunResult | undefined => {
   const [command, ...rest] = context.settings.pretest
-  if (command === undefined) {
-    return undefined
-  }
-  return run(command, rest, { cwd: context.root })
+  return command === undefined ? undefined : run(command, rest, { cwd: context.root })
 }
 
 interface Invocation {
@@ -54,10 +51,9 @@ const wrapped = (context: Context, interpreterArguments: readonly string[]): Inv
 
 const withPretest = (context: Context, gate: () => GateResult): GateResult => {
   const pretest: RunResult | undefined = runPretest(context)
-  if (pretest !== undefined && pretest.code !== 0) {
-    return failed('the declared pretest command failed', asFindings(pretest.output))
-  }
-  return gate()
+  return pretest !== undefined && pretest.code !== 0
+    ? failed('the declared pretest command failed', asFindings(pretest.output))
+    : gate()
 }
 
 // Resolution failure is an answer, not an exception to catch three times over.

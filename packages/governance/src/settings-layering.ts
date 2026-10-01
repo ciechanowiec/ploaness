@@ -105,10 +105,9 @@ export const rebaseExclusion = (
   if (entry.kind === 'route') {
     return entry
   }
-  if (entry.kind === 'glob') {
-    return { ...entry, pattern: `${memberPath}/${entry.pattern}` }
-  }
-  return { ...entry, memberPath }
+  return entry.kind === 'glob'
+    ? { ...entry, pattern: `${memberPath}/${entry.pattern}` }
+    : { ...entry, memberPath }
 }
 
 /**

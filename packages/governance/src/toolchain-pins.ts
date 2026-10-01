@@ -23,7 +23,7 @@ export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
   // `--list`. The provider standings beside the catalogue rest on the same listing: which providers
   // the image has no check for at all. Re-confirm both whenever this pin moves.
   checkov:
-    'bridgecrew/checkov:3.3.17@sha256:41c4701c6a56d8952e5aba7a420f871c8b70b57da94eb4f142dcdf7295bb0be3',
+    'bridgecrew/checkov:3.3.22@sha256:617c76e3f9b1f7907ebca9abb6b9d746844edcb48e9bd775e4692c69c1c6ac47',
 }
 
 /** Matches a reference that names image bytes AND the release they are, and only such a reference. */

@@ -179,10 +179,9 @@ export const isLicenseAllowed = (expression: string): boolean => {
     return alternatives.some((part: string): boolean => isLicenseAllowed(part))
   }
   const conjuncts: readonly string[] = splitOutside(clean, AND)
-  if (conjuncts.length > 1) {
-    return conjuncts.every((part: string): boolean => isLicenseAllowed(part))
-  }
-  return isAllowedId(clean)
+  return conjuncts.length > 1
+    ? conjuncts.every((part: string): boolean => isLicenseAllowed(part))
+    : isAllowedId(clean)
 }
 
 export interface LicensedPackage {

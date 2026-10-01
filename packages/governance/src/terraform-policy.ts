@@ -133,10 +133,9 @@ const isCredentialName = (name: string): boolean => {
   const segments: readonly string[] = name.toLowerCase().split('_')
   const first: string = segments.at(0) ?? ''
   const last: string = segments.at(-1) ?? ''
-  if (last === 'key') {
-    return QUALIFIED_KEYS.has(segments.at(PENULTIMATE) ?? '')
-  }
-  return CREDENTIAL_WORDS.has(last) || (first === 'secret' && SECRET_CONTENT.has(last))
+  return last === 'key'
+    ? QUALIFIED_KEYS.has(segments.at(PENULTIMATE) ?? '')
+    : CREDENTIAL_WORDS.has(last) || (first === 'secret' && SECRET_CONTENT.has(last))
 }
 
 // What a placeholder looks like once punctuation and case stop mattering. An angle-bracketed value is
@@ -153,10 +152,10 @@ const PLACEHOLDER_VALUES: ReadonlySet<string> = new Set([
 ])
 
 const isPlaceholder = (value: string): boolean => {
-  if (value.startsWith('<') && value.endsWith('>')) {
-    return true
-  }
-  return PLACEHOLDER_VALUES.has(value.toUpperCase().replaceAll(/[^A-Z0-9]/g, ''))
+  return (
+    (value.startsWith('<') && value.endsWith('>')) ||
+    PLACEHOLDER_VALUES.has(value.toUpperCase().replaceAll(/[^A-Z0-9]/g, ''))
+  )
 }
 
 // An analyzer's own inline skip. Without this the curated checks are advisory: one comment turns the
