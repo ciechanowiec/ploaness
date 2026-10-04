@@ -5,85 +5,24 @@ import {
   type LayoutViewport,
   layoutViewportsWith,
 } from '../src/layout-defects.js'
+import { isVisibleColor, keyOf, type LayoutNode, type LayoutSnapshot } from '../src/layout-snapshot.js'
 import {
-  isVisibleColor,
-  keyOf,
-  type LayoutBorder,
-  type LayoutNode,
-  type LayoutRect,
-  type LayoutSnapshot,
-} from '../src/layout-snapshot.js'
+  BODY,
+  defectsOf,
+  GREEN_BORDER,
+  NO_BORDER,
+  nodeOf,
+  RED,
+  rect,
+  snapshotOf,
+  TINT,
+  TRANSPARENT,
+  WHITE,
+} from './layout-fixture.js'
 
 // The rules judge a page as the browser reported it, so every case here is the numbers a real page
 // produces: whole CSS pixels and computed style strings. The first case is the page that escaped
 // every other gate - a confirmation notice and the button after it, rendered with no gap at all.
-
-const TRANSPARENT: string = 'rgba(0, 0, 0, 0)'
-const WHITE: string = 'rgb(255, 255, 255)'
-const TINT: string = 'rgb(236, 253, 245)'
-const RED: string = 'rgb(220, 38, 38)'
-
-const NO_BORDER: LayoutBorder = { width: 0, style: 'none', color: 'rgb(0, 0, 0)' }
-const GREEN_BORDER: LayoutBorder = { width: 4, style: 'solid', color: 'rgb(22, 163, 74)' }
-
-const rect = (left: number, top: number, right: number, bottom: number): LayoutRect => ({
-  left,
-  top,
-  right,
-  bottom,
-})
-
-const nodeOf = (fields: Partial<LayoutNode> & Pick<LayoutNode, 'index' | 'parent'>): LayoutNode => ({
-  label: `div#n${String(fields.index)}`,
-  tag: 'div',
-  rects: [],
-  textRects: [],
-  lineHeight: 0,
-  text: '',
-  display: 'block',
-  visibility: 'visible',
-  position: 'static',
-  backgroundColor: TRANSPARENT,
-  backgroundImage: 'none',
-  boxShadow: 'none',
-  borders: { top: NO_BORDER, right: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER },
-  isAriaHidden: false,
-  isClipped: false,
-  overflowX: 'visible',
-  overflowY: 'visible',
-  textOverflow: 'clip',
-  lineClamp: 'none',
-  scrollWidth: 0,
-  clientWidth: 0,
-  scrollHeight: 0,
-  clientHeight: 0,
-  title: '',
-  ariaLabel: '',
-  exemption: undefined,
-  exemptionReason: '',
-  ...fields,
-})
-
-const PHONE: LayoutViewport = { width: 390, height: 844 }
-
-const snapshotOf = (nodes: readonly LayoutNode[], viewport: LayoutViewport = PHONE): LayoutSnapshot => ({
-  route: '/en/account/verify',
-  viewportWidth: viewport.width,
-  viewportHeight: viewport.height,
-  scrollWidth: viewport.width,
-  rootBackground: WHITE,
-  nodes,
-})
-
-const defectsOf = (nodes: readonly LayoutNode[], minimumGap: number = LAYOUT_MINIMUM_GAP): readonly string[] =>
-  findLayoutDefects([snapshotOf(nodes)], minimumGap)
-
-const BODY: LayoutNode = nodeOf({
-  index: 0,
-  parent: -1,
-  tag: 'body',
-  rects: [rect(0, 0, 390, 300)],
-})
 
 // `<div class="page">` holding a heading, the notice, and `<p class="inline-actions"><a class="button">`.
 // The paragraph paints nothing, so the button is the notice's real neighbour. `actionsTop` is where the

@@ -43,6 +43,17 @@ import {
 } from '../context.js'
 import { asFindings, failed, type GateResult, passed, type RunResult, runNode, withOutput } from '../exec.js'
 
+// The environment of a gate that imports the project's configuration without running the application:
+// the `analysisEnv` placeholders, then the project's own environment over them, then the one option
+// ploaness owns, so a `.env` cannot silence the deprecation flag. A configuration that validates
+// `process.env` on import therefore loads in a checkout with no `.env`, and loads with the project's
+// real values where it has one.
+const analysisEnvironment = (context: Context): Readonly<Record<string, string>> => ({
+  ...context.settings.analysisEnv,
+  ...runEnvironment(context),
+  NODE_OPTIONS: '--no-deprecation',
+})
+
 // Resolution failure is an answer rather than an exception the caller must catch.
 const resolveProjectToolOrUndefined = (context: Context, tool: string): string | undefined => {
   try {
@@ -94,9 +105,7 @@ export const payloadGenerated = (context: Context): GateResult => {
   for (const target of ['generate:types', 'generate:importmap']) {
     const result: RunResult = runNode(payloadCli, [target], {
       cwd: context.root,
-      // The project's own environment first, then the one option ploaness owns - so a `.env` cannot
-      // silence the deprecation flag, and every other variable the configuration reads is present.
-      env: { ...runEnvironment(context), NODE_OPTIONS: '--no-deprecation' },
+      env: analysisEnvironment(context),
     })
     if (result.code !== 0) {
       return failed(`payload ${target} failed`, asFindings(result.output))
@@ -197,14 +206,7 @@ export const payloadDefaults = (context: Member): GateResult => {
     ['--tsconfig', tsconfig, path.join(cliDirectory(), ...PROBE_FILE), configFile, defaultAccessFile],
     {
       cwd: context.root,
-      // The placeholders every analyzer that imports the project receives, then the project's own
-      // environment, then the one option ploaness owns: the same layering the knip and generated gates
-      // use, so a configuration that validates `process.env` on import survives here as it does there.
-      env: {
-        ...context.settings.analysisEnv,
-        ...runEnvironment(context),
-        NODE_OPTIONS: '--no-deprecation',
-      },
+      env: analysisEnvironment(context),
       timeoutMs: PROBE_TIMEOUT_MS,
     },
   )

@@ -228,6 +228,15 @@ The architecture floor is `src/access` and `src/lib`, plus declared `pureLogicRo
 must not import higher application layers. `src/app` composes those layers. Collection, global, field,
 and block definitions are declarative: import access rules, hooks, and validators by reference.
 
+A collection declares access for create, read, update, and delete. A literal that copies a configuration,
+such as `{ ...collection, fields }`, keeps that configuration's access when `collection` is declared in
+the same file as a `CollectionConfig` and the copy writes no `access` of its own.
+
+A plugin can add a field after the collection is defined and replace any declaration of it, as a storage
+adapter does with the object key it stores. Access written on the collection does not reach that field.
+Close it with a plugin listed after the one that adds it, which sets the field's `access` on the finished
+configuration. The access boundary sweep reports such a field when an anonymous caller can read it.
+
 At recognized Payload Local API call sites, use an explicit options object. A read states the depth or
 limit its rule requires; a request-scoped call passes `req` to join the request's transaction. Calls
 carrying `user`, calls composed with top-level spreads, and calls in endpoint modules or authored Next.js
@@ -294,6 +303,9 @@ await expectSweptPage(page)
 `expectNoLayoutDefects(page)` runs the layout scan alone, beside a project's own axe scan. Both scans
 judge the page in the state the spec left it, so drive it into the state worth judging first.
 
+Every Playwright test asserts. `expect`, the three `ploaness/a11y` helpers, and a project helper named
+`expect` followed by a capital letter count as assertions; name an asserting helper that way.
+
 Static route/test matching recognizes route literals, regular expressions, dynamic URL templates, and
 axe and layout evidence through one relative helper import. It does not prove the spec executes those
 scans. A route scanned with axe alone fails as `route-unmeasured`. Keep navigation and scans clear, run
@@ -315,10 +327,12 @@ compare screenshots and does not judge taste. It fails on:
 
 - touching or overlapping boxed siblings: a boxed element has a background unlike the one beneath it,
   a shadow, or a border on the side facing its neighbor. Siblings closer than the minimum gap, 4 CSS
-  pixels by default, fail. Wrappers that paint nothing and hold no text of their own are looked
-  through, so `<p><a class="button">` beside a notice compares the button with the notice. Zero-size,
-  hidden, `aria-hidden`, absolutely or fixed positioned elements, and two inline elements in one run of
-  text are not compared;
+  pixels by default, fail. A neighbor that draws nothing toward the box is measured by its content - its
+  own text and what its children draw - so its padding is space rather than contact. Wrappers that paint
+  nothing and hold no text of their own are looked through, so `<p><a class="button">` beside a notice
+  compares the button with the notice. Two sections that each span the full width of the page and are
+  stacked, such as a header above a hero, are not compared. Zero-size, hidden, `aria-hidden`, absolutely
+  or fixed positioned elements, and two inline elements in one run of text are not compared;
 - overlapping text: two elements whose own text shares more than one pixel row, unless one contains the
   other;
 - horizontal overflow: a document wider than the viewport, naming the outermost element past its edge;

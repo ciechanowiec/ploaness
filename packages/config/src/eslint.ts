@@ -18,6 +18,7 @@ import { APPLICATION_JSX_IGNORES, ENVIRONMENT_READ_EXEMPTIONS, REEXPORT_CONFIG_F
 // discipline, the mock ban - lives in ./eslint-core.js and is shared with the ploaness repository's own
 // lint run. What stays here is what is genuinely about Payload and Next: the generated mount, the
 // collection configs, the environment module, the a11y layer, and the test-integrity block.
+import playwright from 'eslint-plugin-playwright'
 import testingLibrary from 'eslint-plugin-testing-library'
 import {
   baseLayers,
@@ -44,6 +45,13 @@ import { projectSettings as settings } from './project-settings.js'
 
 // Where a Payload project writes its hooks, and therefore the one place `req.context` is written.
 const PAYLOAD_HOOK_FILES: readonly string[] = ['src/hooks/**']
+
+/** The assertion helpers `ploaness/a11y` ships, each of which fails the test it runs in on a finding. */
+export const E2E_ASSERTION_HELPERS: readonly string[] = [
+  'expectSweptPage',
+  'expectNoLayoutDefects',
+  'expectNoAxeDefects',
+]
 
 const NO_INLINE_CONFIG_FUNCTIONS_SELECTOR: string = 'ArrowFunctionExpression, FunctionExpression'
 const NO_INLINE_CONFIG_FUNCTIONS_MESSAGE: string =
@@ -359,10 +367,25 @@ export default compose(
   // Playwright has its own runner, but a spec body can still create an unguarded Node transport before
   // it asks the browser to do anything. The Vitest-specific integrity rules do not fit here; the network
   // escape ban does, and carries the same selectors rather than a second list.
+  //
+  // Every test must still assert. `sonarjs/assertions-in-tests` decided that by reading the body of the
+  // function a test calls, and ploaness ships its sweep helpers as declarations with no body, so a test
+  // whose one check is `expectSweptPage(page)` - the form the guide teaches - was reported as asserting
+  // nothing. Playwright's own rule takes the helpers by name instead: the three this harness ships, and a
+  // project's own helper named `expect` followed by a capital, the convention those three follow.
   {
     files: ['tests/e2e/**/*.ts', 'tests/e2e/**/*.tsx'],
+    plugins: { playwright },
     rules: {
       'no-restricted-syntax': [...NO_INHERITANCE, ...SECURITY_RESTRICTIONS, ...NO_NETWORK_GUARD_ESCAPE],
+      'sonarjs/assertions-in-tests': 'off',
+      'playwright/expect-expect': [
+        'error',
+        {
+          assertFunctionNames: [...E2E_ASSERTION_HELPERS],
+          assertFunctionPatterns: ['^expect[A-Z]'],
+        },
+      ],
     },
   },
 

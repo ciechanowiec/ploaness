@@ -8,7 +8,16 @@
 
 import { type FoundPayloadConfig, type PayloadConfigKind, payloadConfigsIn } from './payload-configs.js'
 import { configBody, depthOneBlockKeys, depthOneValue, type PayloadViolation } from './payload-source.js'
-import { balancedArguments, type Folded, NOT_FOUND, type ScanStep, scanDelimited, topLevelKeys } from './source-text.js'
+import {
+  balancedArguments,
+  type Folded,
+  NOT_FOUND,
+  type ScanStep,
+  scanDelimited,
+  topLevelKeys,
+  topLevelSlice,
+} from './source-text.js'
+import { escapeForRegex } from './text-escapes.js'
 
 const eachConfig = (
   source: string,
@@ -16,12 +25,34 @@ const eachConfig = (
 ): readonly PayloadViolation[] =>
   payloadConfigsIn(source).flatMap((found: FoundPayloadConfig): readonly PayloadViolation[] => judge(found.kind, found))
 
+const DEPTH_ONE_SPREAD: RegExp = /\.\.\.\s*([a-z_$][\w$]*)/giu
+
+const spreadNamesOf = (found: FoundPayloadConfig): readonly string[] =>
+  [...topLevelSlice(found.body).matchAll(DEPTH_ONE_SPREAD)].map((match: RegExpExecArray): string => match[1] ?? '')
+
+// A literal that spreads another config and writes no `access` of its own carries that config's access
+// unchanged - a plugin that only replaces `fields` is the usual case. When the spread value is declared in
+// this file as the same kind of config, its own literal is where the access was decided and judged, so the
+// copy is not reported again. A spread of anything else stays unreadable and is judged as missing access.
+const carriesCopiedAccess = (source: string, kind: PayloadConfigKind, found: FoundPayloadConfig): boolean => {
+  const names: readonly string[] = spreadNamesOf(found)
+  return (
+    depthOneValue(found.body, 'access') === undefined &&
+    names.some((name: string): boolean =>
+      new RegExp(String.raw`\b${escapeForRegex(name)}\s*:\s*${kind.label}\b`, 'u').test(source),
+    )
+  )
+}
+
 // Payload fills the missing operations in during sanitisation, so a partial access block is invisible
 // the moment the app boots - and its default admits every signed-in user to every operation. Checking
 // that the word `access` appears somewhere in the file, which is what this rule used to do, accepted a
 // block that declared one operation out of four.
 export const findUndeclaredAccess = (source: string): readonly PayloadViolation[] =>
   eachConfig(source, (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] => {
+    if (carriesCopiedAccess(source, kind, found)) {
+      return []
+    }
     const declared: readonly string[] = depthOneBlockKeys(found.body, 'access')
     const missing: readonly string[] = kind.operations.filter(
       (operation: string): boolean => !declared.includes(operation),

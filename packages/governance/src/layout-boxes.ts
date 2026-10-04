@@ -98,14 +98,33 @@ const gapOf = (separation: Separation): number => Math.max(separation.horizontal
 
 const isOverlapping = (separation: Separation): boolean => separation.horizontal < 0 && separation.vertical < 0
 
-const separationsOf = (first: LayoutNode, second: LayoutNode): readonly Separation[] =>
-  first.rects
-    .filter((rect: LayoutRect): boolean => hasArea(rect))
-    .flatMap((left: LayoutRect): readonly Separation[] =>
-      second.rects
-        .filter((rect: LayoutRect): boolean => hasArea(rect))
-        .map((right: LayoutRect): Separation => separationOf(left, right)),
-    )
+const areaRects = (rects: readonly LayoutRect[]): readonly LayoutRect[] =>
+  rects.filter((rect: LayoutRect): boolean => hasArea(rect))
+
+const separationsOf = (first: readonly LayoutRect[], second: readonly LayoutRect[]): readonly Separation[] =>
+  areaRects(first).flatMap((left: LayoutRect): readonly Separation[] =>
+    areaRects(second).map((right: LayoutRect): Separation => separationOf(left, right)),
+  )
+
+const isDrawnChild = (child: LayoutNode): boolean =>
+  !(child.isAriaHidden || OUT_OF_FLOW.has(child.position) || HIDDEN_VISIBILITY.has(child.visibility))
+
+// What an element shows a reader of its content: its own text and what each child shows, where a child
+// that paints a box is seen whole. An element with no text and no children is a leaf such as an image, and
+// is seen whole too. Padding around content is part of a box only when the box is drawn.
+const contentRects = (snapshot: LayoutSnapshot, node: LayoutNode): readonly LayoutRect[] => {
+  const children: readonly LayoutNode[] = childrenOf(snapshot, node).filter((child: LayoutNode): boolean =>
+    isDrawnChild(child),
+  )
+  return children.length === 0 && !hasOwnText(node)
+    ? areaRects(node.rects)
+    : [
+        ...areaRects(node.textRects),
+        ...children.flatMap((child: LayoutNode): readonly LayoutRect[] =>
+          hasPaintedBox(snapshot, child) ? areaRects(child.rects) : contentRects(snapshot, child),
+        ),
+      ]
+}
 
 // The side of `node` that faces `other`, judged on their outer boxes: the axis with the larger gap is
 // the one they are separated along.
@@ -138,19 +157,57 @@ const isBoxedToward = (snapshot: LayoutSnapshot, node: LayoutNode, other: Layout
 
 const isAttached = (node: LayoutNode): boolean => node.exemption === ATTACHED_EXEMPTION
 
+// Two bands that each span the full width of the page and sit one above the other are the page's
+// sections - a header above a hero, the two tones of a footer - so their shared edge is the page's own
+// structure. A gap between them would draw a stripe of the canvas across the page rather than separate
+// two shapes. Boxes inside a column do not span the page, so a notice and a button stay judged.
+const isFullWidth = (snapshot: LayoutSnapshot, node: LayoutNode): boolean => {
+  const page: LayoutNode | undefined = snapshot.nodes.find((candidate: LayoutNode): boolean => candidate.parent < 0)
+  if (page === undefined || areaRects(page.rects).length === 0) {
+    return false
+  }
+  const pageBox: LayoutRect = outerBox(page)
+  const box: LayoutRect = outerBox(node)
+  return box.left <= pageBox.left && box.right >= pageBox.right
+}
+
+const isStackedBandPair = (snapshot: LayoutSnapshot, pair: readonly [LayoutNode, LayoutNode]): boolean =>
+  pair.every((node: LayoutNode): boolean => isFullWidth(snapshot, node))
+
+interface MeasuredPair {
+  readonly separations: readonly Separation[]
+  readonly isBoxed: boolean
+}
+
+// Each side is measured by what it shows the other: its box where it is drawn toward it, its content
+// where it is not, so a heading's padding is not read as the heading touching the chips below it.
+const measurePair = (snapshot: LayoutSnapshot, first: LayoutNode, second: LayoutNode): MeasuredPair => {
+  const isBoxOverlap: boolean = separationsOf(first.rects, second.rects).some((separation: Separation): boolean =>
+    isOverlapping(separation),
+  )
+  const isFirstBoxed: boolean = isBoxedToward(snapshot, first, second, isBoxOverlap)
+  const isSecondBoxed: boolean = isBoxedToward(snapshot, second, first, isBoxOverlap)
+  return {
+    separations: separationsOf(
+      isFirstBoxed ? first.rects : contentRects(snapshot, first),
+      isSecondBoxed ? second.rects : contentRects(snapshot, second),
+    ),
+    isBoxed: isFirstBoxed || isSecondBoxed,
+  }
+}
+
 const judgePair = (
   snapshot: LayoutSnapshot,
   pair: readonly [LayoutNode, LayoutNode],
   minimumGap: number,
 ): readonly BoxFinding[] => {
   const [first, second] = pair
-  const separations: readonly Separation[] = separationsOf(first, second)
+  const { separations, isBoxed }: MeasuredPair = measurePair(snapshot, first, second)
   const isOverlap: boolean = separations.some((separation: Separation): boolean => isOverlapping(separation))
   const gap: number = Math.min(...separations.map((separation: Separation): number => gapOf(separation)))
   const isClose: boolean = separations.length > 0 && (isOverlap || gap < minimumGap)
-  const isBoxed: boolean =
-    isBoxedToward(snapshot, first, second, isOverlap) || isBoxedToward(snapshot, second, first, isOverlap)
-  return isClose && isBoxed
+  const isBand: boolean = !isOverlap && isStackedBandPair(snapshot, pair)
+  return isBoxed && isClose && !isBand
     ? [
         {
           first,

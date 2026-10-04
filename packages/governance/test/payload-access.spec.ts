@@ -190,6 +190,25 @@ describe('require-complete-access', () => {
     const source: string = `const A: CollectionConfig = { slug: 'a', fields: [${field}] }`
     expect(rulesOf(source)).toEqual(['require-complete-access'])
   })
+
+  // A plugin step that replaces only the fields of every collection: the access it carries is the one the
+  // collection's own literal declared, and that literal is judged where it is written.
+  it('accepts a copy of a config this file declares as one, which keeps that config access', () => {
+    const source: string =
+      'const restrict = (collection: CollectionConfig): CollectionConfig => ({ ...collection, fields: [] })'
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it('reports a copy that writes an access block of its own and leaves part of it out', () => {
+    const source: string =
+      'const open = (collection: CollectionConfig): CollectionConfig => ({ ...collection, access: { read: anyone } })'
+    expect(rulesOf(source)).toEqual(['require-complete-access'])
+  })
+
+  it('reports a spread of a value nothing declares as a config, whose access it cannot read', () => {
+    const source: string = "const A: CollectionConfig = { ...defaults, slug: 'a' }"
+    expect(rulesOf(source)).toEqual(['require-complete-access'])
+  })
 })
 
 describe('no-anonymous-draft-reads', () => {

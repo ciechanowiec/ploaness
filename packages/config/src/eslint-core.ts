@@ -548,6 +548,19 @@ export const guidelineRules: RuleTable = {
   // carries both spellings, and Biome's own rules still hold the markup.
   'unicorn/prefer-dom-node-append': 'off',
   'unicorn/prefer-dom-node-remove': 'off',
+  // Two more fixers that write what another gate then rejects, so `ploaness format` left a project
+  // failing on code it had just produced.
+  //
+  // `prefer-ternary` folds `if (allowed) { return true } return rule(user)` into
+  // `allowed ? true : rule(user)`, which `prefer-logical-operator-over-ternary` reports and cannot fix.
+  // The guard clause it started from is the clearer spelling of an access decision, and the logical
+  // form stays required wherever a ternary is written by hand.
+  //
+  // `no-useless-concat` joins two literals once Biome has placed them on one line. Biome does that
+  // whenever the halves fit, and then cannot break the joined template literal, so a string an author
+  // split to stay inside the line cap became one line past it, which the `editorconfig` gate rejects.
+  'unicorn/prefer-ternary': 'off',
+  'unicorn/no-useless-concat': 'off',
   // New in unicorn 73. It would expand every concise one-line `/** ... */` export doc into a
   // three-line block, and would also rewrite the `GENERATED AUTOMATICALLY BY PAYLOAD` /
   // `DO NOT MODIFY` headers that Payload writes into the `src/app/(payload)` scaffolding.
