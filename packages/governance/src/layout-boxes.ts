@@ -174,6 +174,22 @@ const isFullWidth = (snapshot: LayoutSnapshot, node: LayoutNode): boolean => {
 const isStackedBandPair = (snapshot: LayoutSnapshot, pair: readonly [LayoutNode, LayoutNode]): boolean =>
   pair.every((node: LayoutNode): boolean => isFullWidth(snapshot, node))
 
+const intersectionOf = (rect: LayoutRect, bounds: LayoutRect): LayoutRect => ({
+  left: Math.max(rect.left, bounds.left),
+  top: Math.max(rect.top, bounds.top),
+  right: Math.min(rect.right, bounds.right),
+  bottom: Math.min(rect.bottom, bounds.bottom),
+})
+
+// The content, kept inside the element's own box. A line of text reports the full height of its line box,
+// which a tight `line-height` pushes past the element's edges into empty space above and below the glyphs,
+// so content is never measured as reaching farther than the box it sits in: the measure can only shrink
+// from the box's, never grow past it.
+const visibleContentRects = (snapshot: LayoutSnapshot, node: LayoutNode): readonly LayoutRect[] => {
+  const bounds: LayoutRect = outerBox(node)
+  return areaRects(contentRects(snapshot, node).map((rect: LayoutRect): LayoutRect => intersectionOf(rect, bounds)))
+}
+
 interface MeasuredPair {
   readonly separations: readonly Separation[]
   readonly isBoxed: boolean
@@ -189,8 +205,8 @@ const measurePair = (snapshot: LayoutSnapshot, first: LayoutNode, second: Layout
   const isSecondBoxed: boolean = isBoxedToward(snapshot, second, first, isBoxOverlap)
   return {
     separations: separationsOf(
-      isFirstBoxed ? first.rects : contentRects(snapshot, first),
-      isSecondBoxed ? second.rects : contentRects(snapshot, second),
+      isFirstBoxed ? first.rects : visibleContentRects(snapshot, first),
+      isSecondBoxed ? second.rects : visibleContentRects(snapshot, second),
     ),
     isBoxed: isFirstBoxed || isSecondBoxed,
   }

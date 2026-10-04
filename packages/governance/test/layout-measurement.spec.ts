@@ -33,7 +33,26 @@ const dividerRows = (textBottom: number): readonly LayoutNode[] => {
   ]
 }
 
+// A heading set with a tight line-height under a tinted line: its text reports a line box taller than the
+// heading itself, reaching 6px above the heading's top edge, which sits 8px below the tinted line.
+const tightHeading: readonly LayoutNode[] = [
+  BODY,
+  nodeOf({ index: 1, parent: 0, tag: 'p', label: 'p.season', rects: [rect(0, 0, 200, 20)], backgroundColor: TINT }),
+  nodeOf({
+    index: 2,
+    parent: 0,
+    tag: 'h1',
+    label: 'h1.club',
+    rects: [rect(0, 28, 200, 60)],
+    textRects: [rect(0, 22, 120, 66)],
+  }),
+]
+
 describe('a neighbour that draws nothing toward the other box', () => {
+  it('is never measured as reaching past its own box, however tall its line box is', () => {
+    expect(defectsOf(tightHeading)).toEqual([])
+  })
+
   it('is measured by its text, so the padding under a heading is space rather than contact', () => {
     expect([defectsOf(headingAboveChip(40)), defectsOf(headingAboveChip(50))]).toEqual([
       [],
