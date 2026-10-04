@@ -73,10 +73,7 @@ const LAST_CALENDAR_YEAR: number = 2099
  * @param reference the `repository:tag@sha256:digest` reference.
  * @returns the parts, or undefined when the reference is not pinned in that form.
  */
-export const parseContainerReference = (
-  tool: string,
-  reference: string,
-): ContainerReference | undefined => {
+export const parseContainerReference = (tool: string, reference: string): ContainerReference | undefined => {
   const found: RegExpExecArray | null = PINNED_REFERENCE.exec(reference)
   if (found?.groups === undefined) {
     return undefined
@@ -96,10 +93,7 @@ export const parseContainerReference = (
 }
 
 const isCalendarLead = (lead: number | undefined): boolean =>
-  lead !== undefined &&
-  String(lead).length === YEAR_LENGTH &&
-  lead >= FIRST_CALENDAR_YEAR &&
-  lead <= LAST_CALENDAR_YEAR
+  lead !== undefined && String(lead).length === YEAR_LENGTH && lead >= FIRST_CALENDAR_YEAR && lead <= LAST_CALENDAR_YEAR
 
 /**
  * Read a tag as a stable version, or refuse it.
@@ -127,9 +121,7 @@ export const parseContainerTag = (raw: string): ContainerTag | undefined => {
  * @returns true when the prefix, the component count, and the calendar shape all agree.
  */
 export const matchesTagScheme = (one: ContainerTag, other: ContainerTag): boolean =>
-  one.prefix === other.prefix &&
-  one.parts.length === other.parts.length &&
-  one.isCalendar === other.isCalendar
+  one.prefix === other.prefix && one.parts.length === other.parts.length && one.isCalendar === other.isCalendar
 
 /**
  * Order two tags by version.
@@ -146,17 +138,13 @@ export const compareContainerTags = (one: ContainerTag, other: ContainerTag): nu
  * @param available every tag the registry lists.
  * @returns the newest comparable tag, which is `current` itself when nothing newer is published.
  */
-export const latestOfScheme = (
-  current: ContainerTag,
-  available: readonly string[],
-): ContainerTag => {
+export const latestOfScheme = (current: ContainerTag, available: readonly string[]): ContainerTag => {
   const comparable: readonly ContainerTag[] = available
     .map((raw: string): ContainerTag | undefined => parseContainerTag(raw))
     .filter((tag: ContainerTag | undefined): tag is ContainerTag => tag !== undefined)
     .filter((tag: ContainerTag): boolean => matchesTagScheme(current, tag))
   return comparable.reduce(
-    (newest: ContainerTag, tag: ContainerTag): ContainerTag =>
-      compareContainerTags(tag, newest) > 0 ? tag : newest,
+    (newest: ContainerTag, tag: ContainerTag): ContainerTag => (compareContainerTags(tag, newest) > 0 ? tag : newest),
     current,
   )
 }
@@ -193,9 +181,7 @@ export const judgeContainer = (inspection: ContainerInspection): ContainerVerdic
   return {
     reference: inspection.reference,
     newer:
-      newest === undefined || current === undefined || compareContainerTags(newest, current) <= 0
-        ? undefined
-        : newest,
+      newest === undefined || current === undefined || compareContainerTags(newest, current) <= 0 ? undefined : newest,
     hasDrifted: inspection.currentDigest !== inspection.reference.digest,
     currentDigest: inspection.currentDigest,
   }
@@ -222,9 +208,6 @@ export const describeContainerUpdate = (
  * @param currentDigest the digest the tag resolves to now.
  * @returns one line naming the declaring property and both digests.
  */
-export const describeContainerDrift = (
-  reference: ContainerReference,
-  currentDigest: string,
-): string =>
+export const describeContainerDrift = (reference: ContainerReference, currentDigest: string): string =>
   `note ${reference.tool} ${reference.name}:${reference.tag} is pinned to ${reference.digest} ` +
   `but that tag now resolves to ${currentDigest}; the pin still names the bytes it always did`

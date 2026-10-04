@@ -19,9 +19,7 @@ describe('extractLiteralSourcePaths', () => {
   })
 
   it('strips a leading `!` negation (Biome)', () => {
-    expect(extractLiteralSourcePaths("'!src/payload-generated-schema.ts'")).toEqual([
-      'src/payload-generated-schema.ts',
-    ])
+    expect(extractLiteralSourcePaths("'!src/payload-generated-schema.ts'")).toEqual(['src/payload-generated-schema.ts'])
   })
 
   it('accepts single, double, and backtick quotes', () => {
@@ -50,8 +48,7 @@ describe('extractLiteralSourcePaths', () => {
   })
 
   it('extracts the real-world carve-out that motivated the gate', () => {
-    const biomeIncludes: string =
-      '["src/**/*", "!src/payload-types.ts", "!src/payload-generated-schema.ts"]'
+    const biomeIncludes: string = '["src/**/*", "!src/payload-types.ts", "!src/payload-generated-schema.ts"]'
     expect(extractLiteralSourcePaths(biomeIncludes)).toEqual([
       'src/payload-generated-schema.ts',
       'src/payload-types.ts',
@@ -73,8 +70,6 @@ describe('findMissingConfigReferences', () => {
       ['src/present.ts', 'src/gone.ts'],
       exists(['src/present.ts']),
     )
-    expect(found).toEqual([
-      { path: 'src/gone.ts', reason: 'carved out of a tool config but the file does not exist' },
-    ])
+    expect(found).toEqual([{ path: 'src/gone.ts', reason: 'carved out of a tool config but the file does not exist' }])
   })
 })

@@ -28,10 +28,7 @@ const TRAILING_COMMA: RegExp = /,(?=\s*[\]}])/g
 const withoutTrailingCommas = (text: string): string =>
   [...maskLiterals(text).matchAll(TRAILING_COMMA)]
     .map((match: RegExpExecArray): number => match.index)
-    .reduceRight(
-      (current: string, at: number): string => current.slice(0, at) + current.slice(at + 1),
-      text,
-    )
+    .reduceRight((current: string, at: number): string => current.slice(0, at) + current.slice(at + 1), text)
 
 /**
  * Parse JSON that may carry comments and trailing commas.
@@ -60,8 +57,7 @@ export const parseJsonc = (text: string): ParsedJson => {
  * @param raw the value to narrow, typically a fragment of a parsed manifest.
  * @returns whether it is a non-null object.
  */
-export const isRecord = (raw: unknown): raw is Record<string, unknown> =>
-  typeof raw === 'object' && raw !== null
+export const isRecord = (raw: unknown): raw is Record<string, unknown> => typeof raw === 'object' && raw !== null
 
 /**
  * Read a parsed value as an object, or as an empty one when it is not.
@@ -74,8 +70,7 @@ export const isRecord = (raw: unknown): raw is Record<string, unknown> =>
  */
 export const asRecord = (raw: unknown): Record<string, unknown> => (isRecord(raw) ? raw : {})
 
-const isStringEntry = (entry: [string, unknown]): entry is [string, string] =>
-  typeof entry[1] === 'string'
+const isStringEntry = (entry: [string, unknown]): entry is [string, string] => typeof entry[1] === 'string'
 
 /**
  * Read a parsed value as an object of strings, dropping every key whose value is not one.
@@ -113,8 +108,7 @@ export const asText = (raw: unknown): string => (typeof raw === 'string' ? raw :
  * @param raw the value to read.
  * @returns the string, or undefined.
  */
-export const asOptionalText = (raw: unknown): string | undefined =>
-  typeof raw === 'string' ? raw : undefined
+export const asOptionalText = (raw: unknown): string | undefined => (typeof raw === 'string' ? raw : undefined)
 
 /**
  * Read one key of a parsed value.

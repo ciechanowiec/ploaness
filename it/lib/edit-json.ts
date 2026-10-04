@@ -23,15 +23,13 @@ const keys: readonly string[] = pointer.split('.')
 // Creates a missing parent rather than crashing: a case that sets `ploaness.maxSuppressions` on a
 // fixture that declares no `ploaness` key is setting it for the first time, which is the point.
 const parentOf = (root: Record<string, unknown>): Record<string, unknown> =>
-  keys
-    .slice(0, LAST_KEY)
-    .reduce((cursor: Record<string, unknown>, key: string): Record<string, unknown> => {
-      const existing: unknown = cursor[key]
-      if (typeof existing !== 'object' || existing === null) {
-        cursor[key] = {}
-      }
-      return asRecord(cursor[key])
-    }, root)
+  keys.slice(0, LAST_KEY).reduce((cursor: Record<string, unknown>, key: string): Record<string, unknown> => {
+    const existing: unknown = cursor[key]
+    if (typeof existing !== 'object' || existing === null) {
+      cursor[key] = {}
+    }
+    return asRecord(cursor[key])
+  }, root)
 
 // argv is text. A value that parses as JSON is stored as JSON, so a numeric ceiling of 0 is written as
 // 0 and not as "0", which the settings reader would drop as malformed.

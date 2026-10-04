@@ -94,10 +94,7 @@ describe('readWorkspacePackages', () => {
 
 describe('selectProjects', () => {
   it('selects the repository root even when no pattern names it', () => {
-    expect(selectProjects(['apps/*'], [ROOT_MEMBER_PATH, 'apps/web'])).toEqual([
-      ROOT_MEMBER_PATH,
-      'apps/web',
-    ])
+    expect(selectProjects(['apps/*'], [ROOT_MEMBER_PATH, 'apps/web'])).toEqual([ROOT_MEMBER_PATH, 'apps/web'])
   })
 
   it('selects the root alone when the workspace declares no packages', () => {
@@ -126,15 +123,11 @@ describe('findGovernedMembers', () => {
   })
 
   it('leaves a project that does not declare the harness ungoverned', () => {
-    expect(findGovernedMembers([governed(ROOT_MEMBER_PATH), plain('apps/web')])).toEqual([
-      ROOT_MEMBER_PATH,
-    ])
+    expect(findGovernedMembers([governed(ROOT_MEMBER_PATH), plain('apps/web')])).toEqual([ROOT_MEMBER_PATH])
   })
 
   it('falls back to the root when nothing declares the harness', () => {
-    expect(findGovernedMembers([plain(ROOT_MEMBER_PATH), plain('packages/cli')])).toEqual([
-      ROOT_MEMBER_PATH,
-    ])
+    expect(findGovernedMembers([plain(ROOT_MEMBER_PATH), plain('packages/cli')])).toEqual([ROOT_MEMBER_PATH])
   })
 })
 
@@ -159,10 +152,7 @@ describe('findUngovernedProjects', () => {
 
   it('resolves a source root against the member that declared it', () => {
     expect(
-      findUngovernedProjects(
-        [governed('apps/web'), plain('apps/web/tests/fixture')],
-        [member('apps/web')],
-      ),
+      findUngovernedProjects([governed('apps/web'), plain('apps/web/tests/fixture')], [member('apps/web')]),
     ).toEqual([])
   })
 
@@ -178,9 +168,7 @@ describe('findUngovernedProjects', () => {
 
 describe('findPayloadMemberViolations', () => {
   it('accepts a repository where one member declares payload', () => {
-    expect(
-      findPayloadMemberViolations([member(ROOT_MEMBER_PATH), member('apps/web', true)]),
-    ).toEqual([])
+    expect(findPayloadMemberViolations([member(ROOT_MEMBER_PATH), member('apps/web', true)])).toEqual([])
   })
 
   it('refuses a repository where no member declares payload', () => {
@@ -251,9 +239,7 @@ describe('hasRuntime', () => {
 // Asserted through the matcher the analyzers use rather than against the literal, because the string is
 // not the promise: what each of them is handed is a glob, and what matters is which files it covers.
 const coversFile = (siblingPaths: readonly string[], file: string): boolean =>
-  analysisBoundaries(siblingPaths).some((pattern: string): boolean =>
-    path.matchesGlob(file, pattern),
-  )
+  analysisBoundaries(siblingPaths).some((pattern: string): boolean => path.matchesGlob(file, pattern))
 
 describe('analysisBoundaries', () => {
   it('stops the analysis at every depth inside a sibling, not at the sibling directory', () => {

@@ -59,8 +59,7 @@ const TEST_ORDER_SEED: number = 1_734_000_002
  * `@ploaness/config` at all, but this module knows where it itself lives.
  * @returns the path, for a Vitest `setupFiles` entry.
  */
-export const harnessSetupFile = (): string =>
-  fileURLToPath(new URL('vitest-setup.js', import.meta.url))
+export const harnessSetupFile = (): string => fileURLToPath(new URL('vitest-setup.js', import.meta.url))
 
 /**
  * The project's own setup file, listed only when the project wrote one.

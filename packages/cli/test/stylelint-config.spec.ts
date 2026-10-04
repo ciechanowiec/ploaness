@@ -51,32 +51,30 @@ const lint = async (code: string): Promise<readonly Warning[]> => {
     configFile: SHIPPED_CONFIG,
     codeFilename: 'src/app/styles.css',
   })
-  return result.results.flatMap(
-    (one: LinterResult['results'][number]): readonly Warning[] => one.warnings,
-  )
+  return result.results.flatMap((one: LinterResult['results'][number]): readonly Warning[] => one.warnings)
 }
 
+// Resolve the cold toolchain during module setup, as the other config specs do. The assertion judges
+// the real lint result without making configuration loading compete with the per-test deadline.
+const TAILWIND_WARNINGS: readonly Warning[] = await lint(TAILWIND_V4)
+
 describe('the shipped Stylelint configuration and Tailwind v4', () => {
-  it('accepts a stylesheet written in the dialect, at-rules and imports alike', async () => {
-    expect(await lint(TAILWIND_V4)).toEqual([])
+  it('accepts a stylesheet written in the dialect, at-rules and imports alike', () => {
+    expect(TAILWIND_WARNINGS).toEqual([])
   })
 
   // The list is an allowance for a dialect, not a hole in the rule. A project that misspells an at-rule
   // still hears about it, which is the property that would be lost by turning at-rule-no-unknown off.
   it('still rejects an at-rule that belongs to no dialect, so a typo is not silently accepted', async () => {
     const warnings: readonly Warning[] = await lint('@theem {\n  color: #000;\n}\n')
-    expect(warnings.map((warning: Warning): string | undefined => warning.rule)).toContain(
-      'at-rule-no-unknown',
-    )
+    expect(warnings.map((warning: Warning): string | undefined => warning.rule)).toContain('at-rule-no-unknown')
   })
 
   // `import-notation` is set rather than disabled: Tailwind mandates the string form, so the rule now
   // enforces the notation a project can actually write instead of the one it cannot.
   it('holds imports to one notation, which is the form Tailwind requires', async () => {
     const warnings: readonly Warning[] = await lint('@import url("tailwindcss");\n')
-    expect(warnings.map((warning: Warning): string | undefined => warning.rule)).toContain(
-      'import-notation',
-    )
+    expect(warnings.map((warning: Warning): string | undefined => warning.rule)).toContain('import-notation')
   })
 })
 
@@ -85,9 +83,7 @@ describe('selectors that cannot match', () => {
     'rejects %s at error severity',
     async (selector: string) => {
       const warnings: readonly Warning[] = await lint(`${selector} { color: #000; }`)
-      expect(warnings).toContainEqual(
-        expect.objectContaining({ rule: 'selector-no-unmatchable', severity: 'error' }),
-      )
+      expect(warnings).toContainEqual(expect.objectContaining({ rule: 'selector-no-unmatchable', severity: 'error' }))
     },
   )
 
@@ -112,8 +108,6 @@ describe('selectors that cannot match', () => {
       '/* stylelint-disable-next-line selector-no-unmatchable -- exercises the unused exception */\n' +
       'input:enabled { color: #000; }'
     const warnings: readonly Warning[] = await lint(source)
-    expect(warnings.map((warning: Warning): string => warning.text).join('\n')).toContain(
-      'Needless disable',
-    )
+    expect(warnings.map((warning: Warning): string => warning.text).join('\n')).toContain('Needless disable')
   })
 })

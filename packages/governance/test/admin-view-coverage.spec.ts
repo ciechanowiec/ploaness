@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  type DeclaredAdminView,
-  findDeclaredAdminViews,
-  findUnscannedAdminViews,
-} from '../src/admin-view-coverage.js'
+import { type DeclaredAdminView, findDeclaredAdminViews, findUnscannedAdminViews } from '../src/admin-view-coverage.js'
 import type { SpecSource } from '../src/axe-coverage.js'
 
 const CONFIG: string = `
@@ -26,8 +22,7 @@ const rulesOf = (
   views: readonly DeclaredAdminView[],
   specs: readonly SpecSource[],
   everyFile: readonly SpecSource[] = specs,
-): readonly string[] =>
-  findUnscannedAdminViews(views, specs, everyFile).map((violation) => violation.rule)
+): readonly string[] => findUnscannedAdminViews(views, specs, everyFile).map((violation) => violation.rule)
 
 const CALENDAR: readonly DeclaredAdminView[] = [{ path: '/calendar', line: 1 }]
 
@@ -94,9 +89,7 @@ describe('which declarations are read as a custom admin view', () => {
 describe('whether a declared view is scanned', () => {
   it('accepts a spec that drives the route and runs axe itself', () => {
     expect(
-      rulesOf(CALENDAR, [
-        { path: 'tests/e2e/calendar.e2e.spec.ts', source: "goto('/calendar'); new AxeBuilder()" },
-      ]),
+      rulesOf(CALENDAR, [{ path: 'tests/e2e/calendar.e2e.spec.ts', source: "goto('/calendar'); new AxeBuilder()" }]),
     ).toEqual([])
   })
 
@@ -117,18 +110,16 @@ describe('whether a declared view is scanned', () => {
 
 describe('what an unscanned view is reported as', () => {
   it('reports a view no test drives at all', () => {
-    expect(
-      rulesOf(CALENDAR, [{ path: 'tests/e2e/other.e2e.spec.ts', source: "goto('/admin')" }]),
-    ).toEqual(['admin-view-undriven'])
+    expect(rulesOf(CALENDAR, [{ path: 'tests/e2e/other.e2e.spec.ts', source: "goto('/admin')" }])).toEqual([
+      'admin-view-undriven',
+    ])
   })
 
   // The failure this whole rule exists for: the view is exercised, so it looks covered, and nothing
   // has ever measured its contrast or read its landmarks.
   it('reports a view a test drives but nothing scans', () => {
     expect(
-      rulesOf(CALENDAR, [
-        { path: 'tests/e2e/calendar.e2e.spec.ts', source: "goto('/calendar'); expect(1).toBe(1)" },
-      ]),
+      rulesOf(CALENDAR, [{ path: 'tests/e2e/calendar.e2e.spec.ts', source: "goto('/calendar'); expect(1).toBe(1)" }]),
     ).toEqual(['admin-view-unscanned'])
   })
 

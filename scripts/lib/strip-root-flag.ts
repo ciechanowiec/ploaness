@@ -18,7 +18,5 @@ if (source === undefined || destination === undefined) {
 // The indent every JSON file in this repository is written with.
 const JSON_INDENT: number = 2
 
-const { root: _root, ...config }: Record<string, unknown> = asRecord(
-  JSON.parse(readFileSync(source, 'utf8')),
-)
+const { root: _root, ...config }: Record<string, unknown> = asRecord(JSON.parse(readFileSync(source, 'utf8')))
 writeFileSync(destination, `${JSON.stringify(config, null, JSON_INDENT)}\n`)

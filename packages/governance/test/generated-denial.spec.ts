@@ -67,11 +67,7 @@ describe('findDenialViolations', () => {
 describe('applyDenyRules', () => {
   it('writes every required denial into empty settings', () => {
     expect(
-      findDenialViolations(
-        applyDenyRules(undefined, GENERATED_ARTEFACTS),
-        undefined,
-        GENERATED_ARTEFACTS,
-      ),
+      findDenialViolations(applyDenyRules(undefined, GENERATED_ARTEFACTS), undefined, GENERATED_ARTEFACTS),
     ).toEqual([])
   })
 
@@ -90,18 +86,14 @@ describe('applyDenyRules', () => {
 
   it('does not duplicate a denial the settings already carry', () => {
     const merged: Record<string, unknown> = applyDenyRules(complete, GENERATED_ARTEFACTS)
-    const deny: readonly string[] = (merged['permissions'] as Record<string, unknown>)[
-      'deny'
-    ] as readonly string[]
+    const deny: readonly string[] = (merged['permissions'] as Record<string, unknown>)['deny'] as readonly string[]
     expect(deny).toHaveLength(requiredDenyRules(GENERATED_ARTEFACTS).length)
   })
 
   it('keeps a denial the project added for itself', () => {
     const existing: Record<string, unknown> = { permissions: { deny: ['Write(secrets.env)'] } }
     const merged: Record<string, unknown> = applyDenyRules(existing, GENERATED_ARTEFACTS)
-    const deny: readonly string[] = (merged['permissions'] as Record<string, unknown>)[
-      'deny'
-    ] as readonly string[]
+    const deny: readonly string[] = (merged['permissions'] as Record<string, unknown>)['deny'] as readonly string[]
     expect(deny).toContain('Write(secrets.env)')
   })
 })
@@ -115,10 +107,7 @@ describe('deniedPathsFor', () => {
   })
 
   it('prefixes each artefact with the member that generates it', () => {
-    expect(deniedPathsFor(['apps/web'], Artefacts)).toEqual([
-      'apps/web/src/payload-types.ts',
-      'apps/web/src/schema.ts',
-    ])
+    expect(deniedPathsFor(['apps/web'], Artefacts)).toEqual(['apps/web/src/payload-types.ts', 'apps/web/src/schema.ts'])
   })
 
   it('covers every member that has generated files', () => {

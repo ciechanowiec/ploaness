@@ -180,8 +180,7 @@ export const resolveTool = (
   // compiler cannot check, and `type-coverage --strict` counts every one as untyped.
   const declaredBin: unknown = readKey(read.value, 'bin')
   const wanted: string = binName ?? packageName
-  const bin: string | undefined =
-    typeof declaredBin === 'string' ? declaredBin : asStringRecord(declaredBin)[wanted]
+  const bin: string | undefined = typeof declaredBin === 'string' ? declaredBin : asStringRecord(declaredBin)[wanted]
   if (bin === undefined) {
     throw new Error(`ploaness could not resolve the "${wanted}" executable from ${packageName}`)
   }
@@ -200,19 +199,14 @@ export const resolveTool = (
  * @param context the member to judge.
  * @returns true for a Payload or Next application, false for a library.
  */
-export const hasOwnRuntime = (context: Context): boolean =>
-  hasRuntime(memberKindOf(context.packageJson))
+export const hasOwnRuntime = (context: Context): boolean => hasRuntime(memberKindOf(context.packageJson))
 
 /**
  * Resolve a tool from the CONSUMER's install rather than the harness's. Vitest, Playwright, Next, and
  * the Payload CLI must be the project's own instance: the project's specs and config import those
  * packages directly, and a second copy would load a different module registry.
  */
-export const resolveProjectTool = (
-  context: Context,
-  packageName: string,
-  binName?: string,
-): string =>
+export const resolveProjectTool = (context: Context, packageName: string, binName?: string): string =>
   resolveTool(packageName, binName, createRequire(path.join(context.root, 'package.json')))
 
 /**
@@ -235,12 +229,10 @@ export const manifestPathFrom = (packageName: string, fromManifest: string): str
 }
 
 /** Locate a directory inside a package ploaness depends on, for shipped configs and assets. */
-export const shippedDirectory = (packageName: string): string =>
-  packageDirectory(packageName, nodeRequire)
+export const shippedDirectory = (packageName: string): string => packageDirectory(packageName, nodeRequire)
 
 /** Locate this module's own package directory, used to report the running harness version. */
-export const cliDirectory = (): string =>
-  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+export const cliDirectory = (): string => path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 /** Run a git command in the project and return its trimmed stdout. */
 export const git = (context: Context, commandArguments: readonly string[]): string =>
@@ -275,8 +267,7 @@ const ancestorsOf = (directory: string): readonly string[] => {
   return parent === directory ? [directory] : [directory, ...ancestorsOf(parent)]
 }
 
-const hasEntry = (directory: string, entry: string): boolean =>
-  existsSync(path.join(directory, entry))
+const hasEntry = (directory: string, entry: string): boolean => existsSync(path.join(directory, entry))
 
 // Candidate project directories come from the working tree rather than from a filesystem walk, so a
 // directory git IGNORES - a build output, a scratch copy, an uninstalled example - can never become a
@@ -338,8 +329,7 @@ const workingTreeManifestDirectories = (root: string): readonly string[] =>
       return directory === '' ? ROOT_MEMBER_PATH : directory
     })
 
-const readManifest = (root: string, projectPath: string): unknown =>
-  readJson(path.join(root, projectPath, MANIFEST))
+const readManifest = (root: string, projectPath: string): unknown => readJson(path.join(root, projectPath, MANIFEST))
 
 // A member's settings sit on top of the repository's rather than replacing them, so a fact declared
 // once at the root - a generated directory the typography ban must skip, a stricter bundle budget -
@@ -367,13 +357,7 @@ interface MemberInputs {
   readonly siblings?: readonly string[]
 }
 
-const createMember = ({
-  root,
-  projectPath,
-  isEnforced,
-  repositoryBlock = {},
-  siblings = [],
-}: MemberInputs): Member => {
+const createMember = ({ root, projectPath, isEnforced, repositoryBlock = {}, siblings = [] }: MemberInputs): Member => {
   const packageJson: unknown = readManifest(root, projectPath)
   return {
     root: projectPath === ROOT_MEMBER_PATH ? root : path.join(root, projectPath),
@@ -434,11 +418,10 @@ export const createRepository = (cwd: string, isEnforced: boolean): Repository =
 // relative to itself. Without this a generated directory a member correctly excused starts failing
 // them, because the pattern it wrote is anchored one directory above where the gate is looking.
 const withMemberExclusions = (base: Settings, members: readonly Member[]): Settings => {
-  const rebased: readonly DeclaredExclusion[] = members.flatMap(
-    (member: Member): readonly DeclaredExclusion[] =>
-      member.settings.declaredExclusions.map(
-        (entry: DeclaredExclusion): DeclaredExclusion => rebaseExclusion(member.path, entry),
-      ),
+  const rebased: readonly DeclaredExclusion[] = members.flatMap((member: Member): readonly DeclaredExclusion[] =>
+    member.settings.declaredExclusions.map(
+      (entry: DeclaredExclusion): DeclaredExclusion => rebaseExclusion(member.path, entry),
+    ),
   )
   const patternsFor = (setting: string): readonly RolePattern[] =>
     rebased
@@ -448,19 +431,14 @@ const withMemberExclusions = (base: Settings, members: readonly Member[]): Setti
       )
       .map(
         (entry: DeclaredExclusion): RolePattern =>
-          entry.memberPath === undefined
-            ? entry.pattern
-            : { memberPath: entry.memberPath, pattern: entry.pattern },
+          entry.memberPath === undefined ? entry.pattern : { memberPath: entry.memberPath, pattern: entry.pattern },
       )
   // Globs only, so the rebased pattern is the plain repository-relative string the line cap matches.
   const globsFor = (setting: string): readonly string[] =>
     rebased
       .filter(
         (entry: DeclaredExclusion): boolean =>
-          entry.setting === setting &&
-          entry.kind === 'glob' &&
-          entry.reason.length > 0 &&
-          entry.pattern.length > 0,
+          entry.setting === setting && entry.kind === 'glob' && entry.reason.length > 0 && entry.pattern.length > 0,
       )
       .map((entry: DeclaredExclusion): string => entry.pattern)
   return {
@@ -487,17 +465,13 @@ const withMemberExclusions = (base: Settings, members: readonly Member[]): Setti
 export const memberAt = (repository: Repository, cwd: string): Member | undefined => {
   const resolved: string = path.resolve(cwd)
   const containsCwd = (projectPath: string): boolean => {
-    const full: string =
-      projectPath === ROOT_MEMBER_PATH ? repository.root : path.join(repository.root, projectPath)
+    const full: string = projectPath === ROOT_MEMBER_PATH ? repository.root : path.join(repository.root, projectPath)
     return resolved === full || resolved.startsWith(`${full}${path.sep}`)
   }
   // The deepest match, so a nested project wins over the root that also contains it.
   const innermost: ProjectManifest | undefined = [...repository.projects]
     .filter((project: ProjectManifest): boolean => containsCwd(project.path))
-    .sort(
-      (left: ProjectManifest, right: ProjectManifest): number =>
-        right.path.length - left.path.length,
-    )[0]
+    .sort((left: ProjectManifest, right: ProjectManifest): number => right.path.length - left.path.length)[0]
   if (innermost === undefined) {
     return repository.members[0]
   }
@@ -530,9 +504,7 @@ export const memberAt = (repository: Repository, cwd: string): Member | undefine
 export const runEnvironment = (context: Context): Readonly<Record<string, string>> =>
   runEnvironmentOverrides(
     process.env,
-    runEnvironmentFiles((relativePath: string): boolean =>
-      existsSync(path.join(context.root, relativePath)),
-    ).map(
+    runEnvironmentFiles((relativePath: string): boolean => existsSync(path.join(context.root, relativePath))).map(
       (file: string): Readonly<Record<string, string | undefined>> =>
         parseEnv(readFileSync(path.join(context.root, file), 'utf8')),
     ),

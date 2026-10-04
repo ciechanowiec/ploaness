@@ -235,6 +235,10 @@ expect_suite() {
 # formatter, linter, or type checker read - the same blind spot the staged asset bodies exist to close.
 lib="$(cd "$(dirname "$0")" && pwd)/lib"
 
+# Browser checks inside this verification command require fresh servers, including direct runner calls.
+verification_variable="$(node "$lib/browser-server-config.ts" --environment)"
+export "$verification_variable=1"
+
 edit_json() {
     node "$lib/edit-json.ts" "$@"
 }
@@ -336,11 +340,31 @@ layout_contracts() {
         pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 }
 
+browser_server_contracts() {
+    new_case browser-servers
+    node "$lib/create-a11y-page.ts" "$scratch/browser-servers" valid
+    commit_case browser-servers 'test(fixture): require fresh browser servers' "$CONFORMING_BODY"
+    expect_command browser-servers PASS 'browser server ownership contracts passed' \
+        node --import=tsx/esm "$lib/browser-server-contracts.ts" \
+        "$scratch/browser-servers/node_modules/.bin/ploaness"
+}
+
 # A declared focused subset for iterating on the new analyzer; the default run remains complete.
 case "${1-}" in
-    ''|--jsx-only|--native-only|--layout-only) ;;
-    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only]' >&2; exit 1 ;;
+    ''|--jsx-only|--native-only|--layout-only|--browser-servers-only) ;;
+    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--browser-servers-only]' >&2; exit 1 ;;
 esac
+
+if [ "${1-}" = --browser-servers-only ]; then
+    (cd "$template" && pnpm exec playwright install chromium >/dev/null)
+    browser_server_contracts
+    if [ "$failures" -ne 0 ]; then
+        echo "$failures browser server fixture assertion(s) failed" >&2
+        exit 1
+    fi
+    echo 'browser server contracts passed; run pnpm run verify for the complete verdict'
+    exit 0
+fi
 
 # The pass case: the untouched scaffold must satisfy every gate that judges a project's own shape.
 new_case pass
@@ -349,6 +373,11 @@ commit_case pass 'feat(fixture): add the ploaness integration consumer' "$CONFOR
 expect pass preflight PASS
 expect pass wiring PASS
 expect pass assets PASS
+new_case managed-defaults
+commit_case managed-defaults 'test(fixture): enforce the upstream managed defaults' "$CONFORMING_BODY"
+expect_command managed-defaults PASS 'managed defaults install, upgrade, remain unchanged and reject drift' \
+    node "$lib/managed-default-contracts.ts" "$here/fixtures/managed-defaults.json" \
+    "$scratch/managed-defaults/node_modules/.bin/ploaness"
 expect pass oxlint PASS
 new_case native-contracts
 commit_case native-contracts 'test(fixture): establish native core conformance cases' "$CONFORMING_BODY"
@@ -533,6 +562,7 @@ if [ "${1-}" = --jsx-only ]; then
 fi
 
 layout_contracts
+browser_server_contracts
 
 # `install-scripts` is here because its only other fixture is a failure case, and this file's own
 # reasoning applies symmetrically: a rule that only ever failed proves as little as one that only ever

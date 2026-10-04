@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  containsBuiltRoute,
-  containsRoute,
-  reachesAxe,
-  type SpecSource,
-} from '../src/axe-coverage.js'
+import { containsBuiltRoute, containsRoute, reachesAxe, type SpecSource } from '../src/axe-coverage.js'
 
 // The helpers two coverage rules share. What is worth stating here is every way a specification can
 // look as though it drives a route without driving it: the false pass is the failure these rules

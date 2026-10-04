@@ -114,8 +114,7 @@ export const EXEMPT_PAYLOAD_SUBJECTS: readonly ExemptPayloadSubject[] = [
   {
     kind: 'collection',
     slug: 'payload-migrations',
-    reason:
-      'the migration ledger, with no endpoint and no GraphQL surface; only the framework writes it',
+    reason: 'the migration ledger, with no endpoint and no GraphQL surface; only the framework writes it',
   },
   {
     kind: 'global',
@@ -167,15 +166,9 @@ const describeInherited = (kind: PayloadSubjectKind, entry: InheritedAccessEntry
   )
 }
 
-const judge = (
-  kind: PayloadSubjectKind,
-  entries: readonly InheritedAccessEntry[],
-): readonly string[] =>
+const judge = (kind: PayloadSubjectKind, entries: readonly InheritedAccessEntry[]): readonly string[] =>
   entries
-    .filter(
-      (entry: InheritedAccessEntry): boolean =>
-        entry.inherited.length > 0 && !isExempt(kind, entry.slug),
-    )
+    .filter((entry: InheritedAccessEntry): boolean => entry.inherited.length > 0 && !isExempt(kind, entry.slug))
     .map((entry: InheritedAccessEntry): string => describeInherited(kind, entry))
 
 /**
@@ -231,10 +224,7 @@ export const requiresPublishedStatus = (where: unknown): boolean => {
     return true
   }
   const conjuncts: unknown = where['and']
-  if (
-    isArray(conjuncts) &&
-    conjuncts.some((one: unknown): boolean => requiresPublishedStatus(one))
-  ) {
+  if (isArray(conjuncts) && conjuncts.some((one: unknown): boolean => requiresPublishedStatus(one))) {
     return true
   }
   const disjuncts: unknown = where['or']
@@ -300,12 +290,8 @@ const asEntries = (raw: unknown): readonly InheritedAccessEntry[] | undefined =>
   if (!isArray(raw)) {
     return undefined
   }
-  const entries: readonly (InheritedAccessEntry | undefined)[] = raw.map((entry: unknown) =>
-    asEntry(entry),
-  )
-  return entries.every(
-    (entry: InheritedAccessEntry | undefined): entry is InheritedAccessEntry => entry !== undefined,
-  )
+  const entries: readonly (InheritedAccessEntry | undefined)[] = raw.map((entry: unknown) => asEntry(entry))
+  return entries.every((entry: InheritedAccessEntry | undefined): entry is InheritedAccessEntry => entry !== undefined)
     ? entries
     : undefined
 }
@@ -338,12 +324,8 @@ const asDraftReads = (raw: unknown): readonly DraftReadEntry[] | undefined => {
   if (!isArray(raw)) {
     return undefined
   }
-  const entries: readonly (DraftReadEntry | undefined)[] = raw.map((entry: unknown) =>
-    asDraftRead(entry),
-  )
-  return entries.every(
-    (entry: DraftReadEntry | undefined): entry is DraftReadEntry => entry !== undefined,
-  )
+  const entries: readonly (DraftReadEntry | undefined)[] = raw.map((entry: unknown) => asDraftRead(entry))
+  return entries.every((entry: DraftReadEntry | undefined): entry is DraftReadEntry => entry !== undefined)
     ? entries
     : undefined
 }
@@ -374,13 +356,9 @@ export const parseInheritedAccessReport = (text: string): InheritedAccessReport 
     return undefined
   }
   const parsed: unknown = parseJson(line.slice(INHERITED_ACCESS_REPORT_MARKER.length))
-  const collections: readonly InheritedAccessEntry[] | undefined = asEntries(
-    readKey(parsed, 'collections'),
-  )
+  const collections: readonly InheritedAccessEntry[] | undefined = asEntries(readKey(parsed, 'collections'))
   const globals: readonly InheritedAccessEntry[] | undefined = asEntries(readKey(parsed, 'globals'))
-  const draftReads: readonly DraftReadEntry[] | undefined = asDraftReads(
-    readKey(parsed, 'draftReads'),
-  )
+  const draftReads: readonly DraftReadEntry[] | undefined = asDraftReads(readKey(parsed, 'draftReads'))
   return collections === undefined || globals === undefined || draftReads === undefined
     ? undefined
     : { collections, draftReads, globals }
@@ -398,15 +376,11 @@ const CURRENT_DIRECTORY_PREFIX: string = './'
  * @returns the configured path relative to the member root, or the default path.
  */
 export const payloadConfigPathOf = (tsconfig: unknown): string => {
-  const paths: Record<string, unknown> = asRecord(
-    readKey(readKey(tsconfig, 'compilerOptions'), 'paths'),
-  )
+  const paths: Record<string, unknown> = asRecord(readKey(readKey(tsconfig, 'compilerOptions'), 'paths'))
   const alias: unknown = paths['@payload-config']
   const first: unknown = isArray(alias) ? alias[0] : undefined
   if (typeof first !== 'string' || first.length === 0) {
     return DEFAULT_PAYLOAD_CONFIG_PATH
   }
-  return first.startsWith(CURRENT_DIRECTORY_PREFIX)
-    ? first.slice(CURRENT_DIRECTORY_PREFIX.length)
-    : first
+  return first.startsWith(CURRENT_DIRECTORY_PREFIX) ? first.slice(CURRENT_DIRECTORY_PREFIX.length) : first
 }

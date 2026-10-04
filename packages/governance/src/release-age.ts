@@ -19,9 +19,7 @@ export interface ReleaseAge {
  * @returns the floored hours, or `undefined` when the publication instant is unknown.
  */
 export const hoursPublished = (age: ReleaseAge): number | undefined =>
-  age.publishedAt === undefined
-    ? undefined
-    : Math.floor((age.now - age.publishedAt) / MILLISECONDS_PER_HOUR)
+  age.publishedAt === undefined ? undefined : Math.floor((age.now - age.publishedAt) / MILLISECONDS_PER_HOUR)
 
 /**
  * Whether pnpm would refuse this release for being younger than the floor.

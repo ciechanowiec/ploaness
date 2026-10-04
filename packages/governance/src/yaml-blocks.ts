@@ -8,8 +8,7 @@
 // needs the same three predicates to read the `packages:` block. Two crude readers in one package would
 // not stay equal, and the one that drifted would be the one deciding which directories are governed.
 
-const isTopLevelKey = (line: string, key: string): boolean =>
-  new RegExp(String.raw`^${key}\s*:`).test(line)
+const isTopLevelKey = (line: string, key: string): boolean => new RegExp(String.raw`^${key}\s*:`).test(line)
 
 const isIndented = (line: string): boolean => /^\s+\S/.test(line)
 
@@ -39,9 +38,7 @@ export const topLevelBlockLines = (file: string, key: string): readonly string[]
     return []
   }
   const rest: readonly string[] = lines.slice(start + 1)
-  const end: number = rest.findIndex(
-    (line: string): boolean => line.trim().length > 0 && !isIndented(line),
-  )
+  const end: number = rest.findIndex((line: string): boolean => line.trim().length > 0 && !isIndented(line))
   return end === -1 ? rest : rest.slice(0, end)
 }
 
@@ -75,9 +72,7 @@ const withoutTrailingComment = (line: string): string => {
  * @returns the unquoted value, or undefined when the key is absent or carries no inline value.
  */
 export const topLevelScalar = (file: string, key: string): string | undefined => {
-  const line: string | undefined = file
-    .split('\n')
-    .find((candidate: string): boolean => isTopLevelKey(candidate, key))
+  const line: string | undefined = file.split('\n').find((candidate: string): boolean => isTopLevelKey(candidate, key))
   if (line === undefined) {
     return undefined
   }
@@ -108,21 +103,10 @@ export const topLevelListItems = (file: string, key: string): readonly string[] 
  * @param key the top-level key whose mapping to read.
  * @returns one `[name, value]` pair per entry, both unquoted.
  */
-export const topLevelMappingEntries = (
-  file: string,
-  key: string,
-): readonly (readonly [string, string])[] =>
-  contentLines(topLevelBlockLines(file, key)).flatMap(
-    (line: string): readonly (readonly [string, string])[] => {
-      const separator: number = line.indexOf(':')
-      if (separator === -1) {
-        return []
-      }
-      return [
-        [
-          withoutQuotes(line.slice(0, separator).trim()),
-          withoutQuotes(line.slice(separator + 1).trim()),
-        ],
-      ]
-    },
-  )
+export const topLevelMappingEntries = (file: string, key: string): readonly (readonly [string, string])[] =>
+  contentLines(topLevelBlockLines(file, key)).flatMap((line: string): readonly (readonly [string, string])[] => {
+    const separator: number = line.indexOf(':')
+    return separator === -1
+      ? []
+      : [[withoutQuotes(line.slice(0, separator).trim()), withoutQuotes(line.slice(separator + 1).trim())]]
+  })

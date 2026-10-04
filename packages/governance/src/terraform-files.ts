@@ -35,19 +35,14 @@ export const terraformFilesIn = (tracked: readonly string[]): readonly string[] 
 
 // The names checkov reads on its own. A project that commits one can turn off the curated checks from
 // inside the tree the gate judges, which is the shadowing the harness refuses for every other analyzer.
-const CHECKOV_CONFIG_BASENAMES: ReadonlySet<string> = new Set([
-  '.checkov.yaml',
-  '.checkov.yml',
-  '.checkov.json',
-])
+const CHECKOV_CONFIG_BASENAMES: ReadonlySet<string> = new Set(['.checkov.yaml', '.checkov.yml', '.checkov.json'])
 
 /**
  * Decide whether a path names a checkov configuration.
  * @param file a repo-relative path.
  * @returns true for a configuration checkov would read on its own, at any depth.
  */
-export const isCheckovConfigFile = (file: string): boolean =>
-  CHECKOV_CONFIG_BASENAMES.has(basenameOf(file))
+export const isCheckovConfigFile = (file: string): boolean => CHECKOV_CONFIG_BASENAMES.has(basenameOf(file))
 
 /**
  * Every checkov configuration the repository tracks.

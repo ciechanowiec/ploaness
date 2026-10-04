@@ -16,14 +16,12 @@ const rules = (overrides: Partial<EditorconfigRules> = {}): EditorconfigRules =>
   insertFinalNewline: true,
   trimTrailingWhitespace: true,
   indentStyle: 'space',
+  indentSize: 4,
+  maxLineLength: MAX_LINE_LENGTH,
   ...overrides,
 })
 
-const reasons = (
-  content: string,
-  config: EditorconfigRules = rules(),
-  isCapEnforced = false,
-): string[] =>
+const reasons = (content: string, config: EditorconfigRules = rules(), isCapEnforced = false): string[] =>
   findEditorconfigViolations(content, config, isCapEnforced).map((violation) => violation.reason)
 
 describe('parseEditorconfig', () => {
@@ -41,18 +39,64 @@ describe('parseEditorconfig', () => {
       insertFinalNewline: true,
       trimTrailingWhitespace: true,
       indentStyle: 'space',
+      indentSize: 4,
+      maxLineLength: 120,
     })
   })
 
   it('reads only the wildcard section, not a section for one file type', () => {
-    const parsed: EditorconfigRules = parseEditorconfig(
-      '[*]\nindent_style = space\n\n[*.md]\nindent_style = tab\n',
-    )
+    const parsed: EditorconfigRules = parseEditorconfig('[*]\nindent_style = space\n\n[*.md]\nindent_style = tab\n')
     expect(parsed.indentStyle).toBe('space')
   })
 
   it('ignores comments and blank lines', () => {
     expect(parseEditorconfig('[*]\n# a comment\n\nend_of_line = lf\n').endOfLine).toBe('lf')
+  })
+})
+
+describe('per-file EditorConfig settings', () => {
+  const config: string = readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '../../assets/files/.editorconfig.asset'),
+    'utf8',
+  )
+
+  it.each(['yml', 'yaml', 'ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs', 'json', 'jsonc'])(
+    'inherits width 120 and resolves two spaces for nested .%s files',
+    (extension: string) => {
+      expect(parseEditorconfig(config, `nested/.example.${extension}`)).toEqual({
+        endOfLine: 'lf',
+        insertFinalNewline: true,
+        trimTrailingWhitespace: true,
+        indentStyle: 'space',
+        indentSize: 2,
+        maxLineLength: 120,
+      })
+    },
+  )
+
+  it.each(['README.adoc', '.gitattributes', 'src/style.css', 'scripts/check.sh'])(
+    'keeps the general defaults for %s',
+    (file: string) => {
+      expect(parseEditorconfig(config, file).indentSize).toBe(4)
+      expect(parseEditorconfig(config, file).maxLineLength).toBe(120)
+    },
+  )
+
+  it('applies later matching sections without losing inherited properties', () => {
+    const parsed: EditorconfigRules = parseEditorconfig(
+      '[*]\nindent_size = 4\nmax_line_length = 120\n[*.{ts,js}]\nindent_size = 2\n' +
+        '[src/*.ts]\nmax_line_length = 90\n[tests/*.ts]\nindent_size = 8\n',
+      'src/example.ts',
+    )
+    expect(parsed.indentSize).toBe(2)
+    expect(parsed.maxLineLength).toBe(90)
+  })
+
+  it('ignores properties outside sections and keeps the hard cap when a value is invalid or looser', () => {
+    expect(parseEditorconfig('indent_size = 8\n').indentSize).toBeUndefined()
+    expect(parseEditorconfig('[*]\nindent_size = tab\nmax_line_length = off\n').maxLineLength).toBe(120)
+    expect(parseEditorconfig('[*]\nmax_line_length = 200\n').maxLineLength).toBe(120)
+    expect(parseEditorconfig('[*]\nindent_size = -1\n').indentSize).toBeUndefined()
   })
 })
 
@@ -86,11 +130,7 @@ describe('findEditorconfigViolations', () => {
   })
 
   it('reports the line, so the finding points at a real position', () => {
-    const found: readonly EditorconfigViolation[] = findEditorconfigViolations(
-      'ok\nbad   \n',
-      rules(),
-      false,
-    )
+    const found: readonly EditorconfigViolation[] = findEditorconfigViolations('ok\nbad   \n', rules(), false)
     expect(found[0]?.line).toBe(2)
   })
 
@@ -105,6 +145,10 @@ describe('findEditorconfigViolations', () => {
 
   it('accepts a line exactly at the cap', () => {
     expect(reasons(`${'x'.repeat(MAX_LINE_LENGTH)}\n`, rules(), true)).toEqual([])
+  })
+
+  it('enforces a stricter resolved file cap', () => {
+    expect(reasons(`${'x'.repeat(101)}\n`, rules({ maxLineLength: 100 }), true)[0]).toContain('the cap is 100')
   })
 
   it('leaves a long prose line alone, because the cap is a Code Rule', () => {
@@ -124,9 +168,7 @@ describe('isLineCapEnforced', () => {
   it('does not bind on code the project declares generated', () => {
     // The case that named this: a Payload migration renders each statement as one SQL string, so its
     // lines are the generator's and no formatter run or hand edit shortens them.
-    expect(isLineCapEnforced('src/migrations/20260101_initial.ts', ['src/migrations/**'])).toBe(
-      false,
-    )
+    expect(isLineCapEnforced('src/migrations/20260101_initial.ts', ['src/migrations/**'])).toBe(false)
   })
 
   it('still binds on code beside a generated path, so the exemption is not a blanket', () => {

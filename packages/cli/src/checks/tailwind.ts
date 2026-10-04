@@ -2,12 +2,7 @@
 // I/O: which files carry Tailwind classes, and what a finding reads like.
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import {
-  type ArbitraryValueViolation,
-  findArbitraryValues,
-  hasExtension,
-  matchesRole,
-} from '@ploaness/governance'
+import { type ArbitraryValueViolation, findArbitraryValues, hasExtension, matchesRole } from '@ploaness/governance'
 import { type Context, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
@@ -25,8 +20,8 @@ const isScanned = (context: Context, file: string): boolean =>
 
 /** Verify every visual value comes from the Tailwind theme rather than an arbitrary literal. */
 export const tailwindTokens = (context: Context): GateResult => {
-  const scanned: readonly string[] = workingTreeFiles(context.root).filter(
-    (file: string): boolean => isScanned(context, file),
+  const scanned: readonly string[] = workingTreeFiles(context.root).filter((file: string): boolean =>
+    isScanned(context, file),
   )
   const findings: readonly string[] = scanned.flatMap((file: string): readonly string[] => {
     const content: string = readFileSync(path.join(context.root, file), 'utf8')

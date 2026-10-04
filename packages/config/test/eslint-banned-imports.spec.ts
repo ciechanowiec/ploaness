@@ -34,10 +34,7 @@ const PERMITTED: readonly string[] = ['supertest']
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null
 
-const restrictedNames = async (
-  config: readonly Linter.Config[],
-  filePath: string,
-): Promise<readonly string[]> => {
+const restrictedNames = async (config: readonly Linter.Config[], filePath: string): Promise<readonly string[]> => {
   const eslint: ESLint = new ESLint({
     overrideConfigFile: true,
     baseConfig: [...config],

@@ -20,19 +20,13 @@ const literalRangesOf = (node: ts.Node, source: ts.SourceFile): readonly ts.Text
         },
       ]
     : []),
-  ...node
-    .getChildren(source)
-    .flatMap((child: ts.Node): readonly ts.TextRange[] => literalRangesOf(child, source)),
+  ...node.getChildren(source).flatMap((child: ts.Node): readonly ts.TextRange[] => literalRangesOf(child, source)),
 ]
 
 const rangesOf = (node: ts.Node, source: ts.SourceFile): readonly ts.CommentRange[] => [
-  ...(node.kind === ts.SyntaxKind.JsxText
-    ? []
-    : (ts.getLeadingCommentRanges(source.text, node.getFullStart()) ?? [])),
+  ...(node.kind === ts.SyntaxKind.JsxText ? [] : (ts.getLeadingCommentRanges(source.text, node.getFullStart()) ?? [])),
   ...(ts.getTrailingCommentRanges(source.text, node.end) ?? []),
-  ...node
-    .getChildren(source)
-    .flatMap((child: ts.Node): readonly ts.CommentRange[] => rangesOf(child, source)),
+  ...node.getChildren(source).flatMap((child: ts.Node): readonly ts.CommentRange[] => rangesOf(child, source)),
 ]
 
 /**
@@ -41,24 +35,16 @@ const rangesOf = (node: ts.Node, source: ts.SourceFile): readonly ts.CommentRang
  * @param file the filename, which determines whether angle brackets are types or JSX.
  * @returns comments once each, located at their original source lines.
  */
-export const sourceComments = (
-  text: string,
-  file: string = 'source.tsx',
-): readonly SourceComment[] => {
+export const sourceComments = (text: string, file: string = 'source.tsx'): readonly SourceComment[] => {
   const source: ts.SourceFile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
   const ranges: ReadonlyMap<number, ts.CommentRange> = new Map(
-    rangesOf(source, source).map((range: ts.CommentRange): readonly [number, ts.CommentRange] => [
-      range.pos,
-      range,
-    ]),
+    rangesOf(source, source).map((range: ts.CommentRange): readonly [number, ts.CommentRange] => [range.pos, range]),
   )
   const literals: readonly ts.TextRange[] = literalRangesOf(source, source)
   return [...ranges.values()]
     .filter(
       (range: ts.CommentRange): boolean =>
-        !literals.some(
-          (literal: ts.TextRange): boolean => range.pos >= literal.pos && range.pos < literal.end,
-        ),
+        !literals.some((literal: ts.TextRange): boolean => range.pos >= literal.pos && range.pos < literal.end),
     )
     .toSorted((left: ts.CommentRange, right: ts.CommentRange): number => left.pos - right.pos)
     .map(

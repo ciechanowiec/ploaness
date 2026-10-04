@@ -87,9 +87,7 @@ describe('describeSocketTarget', () => {
   })
 
   it('reads the options form', () => {
-    expect(describeSocketTarget([{ port: 5432, host: 'db.example.com' }]).host).toBe(
-      'db.example.com',
-    )
+    expect(describeSocketTarget([{ port: 5432, host: 'db.example.com' }]).host).toBe('db.example.com')
   })
 
   // A path is not a network: both ends are the same machine by construction, so refusing one would

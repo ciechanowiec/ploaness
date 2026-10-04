@@ -43,9 +43,7 @@ const withProject = (fill: (root: string) => void, use: (result: GateResult) => 
       `${JSON.stringify({
         name: 'subject',
         ploaness: {
-          generatedArtefacts: [
-            { pattern: 'src/migrations/**', reason: 'written by payload migrate:create' },
-          ],
+          generatedArtefacts: [{ pattern: 'src/migrations/**', reason: 'written by payload migrate:create' }],
         },
       })}\n`,
     )
@@ -117,9 +115,7 @@ const withWorkspace = (fill: (root: string) => void, use: (result: GateResult) =
         name: 'subject-member',
         devDependencies: { ploaness: '0.0.0' },
         ploaness: {
-          generatedArtefacts: [
-            { pattern: 'src/migrations/**', reason: 'written by payload migrate:create' },
-          ],
+          generatedArtefacts: [{ pattern: 'src/migrations/**', reason: 'written by payload migrate:create' }],
         },
       })}\n`,
     )

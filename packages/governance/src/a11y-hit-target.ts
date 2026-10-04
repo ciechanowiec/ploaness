@@ -84,8 +84,7 @@ const ZERO_RADIUS_SHAPE: RegExp = /^(?:circle|ellipse)\(\s*0(?:px|%|em|rem)?[\s,
 
 // `clip: rect(...)` with no extent, in the spellings browsers compute it to. The 1px form is the
 // classic `.sr-only` rule, which pairs a 1px box with a rect that keeps none of it.
-const EMPTY_CLIP: RegExp =
-  /^rect\(\s*[01](?:px)?[\s,]+[01](?:px)?[\s,]+[01](?:px)?[\s,]+[01](?:px)?\s*\)$/
+const EMPTY_CLIP: RegExp = /^rect\(\s*[01](?:px)?[\s,]+[01](?:px)?[\s,]+[01](?:px)?[\s,]+[01](?:px)?\s*\)$/
 
 const isEmptyClipPath = (clipPath: string): boolean => {
   const normalised: string = clipPath.trim().toLowerCase()

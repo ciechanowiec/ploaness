@@ -46,9 +46,7 @@ const formatMember = (member: Member, isSolo: boolean): number => {
  */
 export const format = (repository: Repository): number => {
   const isSolo: boolean = repository.members.length <= 1
-  const codes: readonly number[] = repository.members.map((member: Member): number =>
-    formatMember(member, isSolo),
-  )
+  const codes: readonly number[] = repository.members.map((member: Member): number => formatMember(member, isSolo))
   console.info('\nFormatting applied. Review the changes before committing them.')
   return codes.some((code: number): boolean => code !== 0) ? 1 : 0
 }

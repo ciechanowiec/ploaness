@@ -15,15 +15,7 @@ import {
   renderGitleaksConfig,
 } from '@ploaness/governance'
 import { type Context, workingTreeFiles } from '../context.js'
-import {
-  asFindings,
-  failed,
-  fromRun,
-  type GateResult,
-  passed,
-  type RunResult,
-  run,
-} from '../exec.js'
+import { asFindings, failed, fromRun, type GateResult, passed, type RunResult, run } from '../exec.js'
 import { mirrorSecretCandidates } from '../secret-mirror.js'
 import { withWorkflowMirror } from '../workflow-mirror.js'
 import { acquireImage, describeFailure, dockerFault } from './container-run.js'
@@ -46,32 +38,21 @@ interface SecretWorkspace {
   readonly mirrorDirectory: string
 }
 
-const withSecretWorkspace = <Value>(
-  context: Context,
-  use: (workspace: SecretWorkspace) => Value,
-): Value => {
+const withSecretWorkspace = <Value>(context: Context, use: (workspace: SecretWorkspace) => Value): Value => {
   const directory: string = mkdtempSync(path.join(homedir(), '.ploaness-secrets-'))
   const configDirectory: string = path.join(directory, 'config')
   const mirrorDirectory: string = path.join(directory, 'working-tree')
   try {
     mkdirSync(configDirectory)
     mkdirSync(mirrorDirectory)
-    writeFileSync(
-      path.join(configDirectory, 'gitleaks.toml'),
-      renderGitleaksConfig(context.settings.secretAllowlist),
-    )
+    writeFileSync(path.join(configDirectory, 'gitleaks.toml'), renderGitleaksConfig(context.settings.secretAllowlist))
     return use({ configDirectory, mirrorDirectory })
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
 }
 
-const scanSecrets = (
-  context: Context,
-  configDirectory: string,
-  repository: string,
-  target: string,
-): RunResult =>
+const scanSecrets = (context: Context, configDirectory: string, repository: string, target: string): RunResult =>
   run(
     'docker',
     [
@@ -92,12 +73,7 @@ const scanSecrets = (
     { cwd: context.root },
   )
 
-const scanFailure = (
-  context: Context,
-  result: RunResult,
-  clean: string,
-  finding: string,
-): GateResult | undefined =>
+const scanFailure = (context: Context, result: RunResult, clean: string, finding: string): GateResult | undefined =>
   dockerFault(context, GITLEAKS_IMAGE, 'the secret scan', result) ??
   (result.code === 0 ? undefined : fromRun(result, clean, finding))
 
@@ -107,12 +83,7 @@ const scanWorkingTree = (context: Context, workspace: SecretWorkspace): GateResu
     workspace.mirrorDirectory,
     workingTreeFiles(context.root),
   )
-  const result: RunResult = scanSecrets(
-    context,
-    workspace.configDirectory,
-    workspace.mirrorDirectory,
-    'dir',
-  )
+  const result: RunResult = scanSecrets(context, workspace.configDirectory, workspace.mirrorDirectory, 'dir')
   return (
     scanFailure(
       context,
@@ -146,8 +117,7 @@ export const secrets = (context: Context): GateResult =>
 // Both kinds are discovered from the working tree, by the rules in `governance`. The compose half used to
 // look at the repository root alone, so a project keeping its application - and its compose file - in a
 // member directory had that file validated by nothing, while the Dockerfile beside it was linted.
-const dockerfiles = (context: Context): readonly string[] =>
-  dockerfilesIn(workingTreeFiles(context.root))
+const dockerfiles = (context: Context): readonly string[] => dockerfilesIn(workingTreeFiles(context.root))
 
 const composeProjects = (context: Context): readonly ComposeProject[] =>
   composeProjectsIn(workingTreeFiles(context.root))
@@ -163,9 +133,7 @@ const validateCompose = (directory: string): RunResult => {
   const modern: RunResult = run('sh', ['-c', 'docker compose config > /dev/null'], {
     cwd: directory,
   })
-  return modern.code === 0
-    ? modern
-    : run('sh', ['-c', 'docker-compose config > /dev/null'], { cwd: directory })
+  return modern.code === 0 ? modern : run('sh', ['-c', 'docker-compose config > /dev/null'], { cwd: directory })
 }
 
 interface ValidatedCompose {
@@ -173,10 +141,7 @@ interface ValidatedCompose {
   readonly result: RunResult
 }
 
-const validateComposeProjects = (
-  context: Context,
-  projects: readonly ComposeProject[],
-): readonly ValidatedCompose[] =>
+const validateComposeProjects = (context: Context, projects: readonly ComposeProject[]): readonly ValidatedCompose[] =>
   projects.map(
     (project: ComposeProject): ValidatedCompose => ({
       project,
@@ -188,9 +153,7 @@ const CONTAINER_GATE: string = 'the container gate'
 
 const firstReserved = (results: readonly RunResult[]): GateResult | undefined => {
   const reserved: DockerFailure | undefined = results
-    .map((result: RunResult): DockerFailure | undefined =>
-      classifyContainerExit(CONTAINER_GATE, result),
-    )
+    .map((result: RunResult): DockerFailure | undefined => classifyContainerExit(CONTAINER_GATE, result))
     .find((entry: DockerFailure | undefined): boolean => entry !== undefined)
   return reserved === undefined ? undefined : describeFailure(reserved)
 }
@@ -222,10 +185,7 @@ const containerFault = (
   linted: readonly LintedDockerfile[],
   validated: readonly ValidatedCompose[],
 ): GateResult | undefined =>
-  firstReserved([
-    ...lintResults(linted),
-    ...validated.map((entry: ValidatedCompose): RunResult => entry.result),
-  ]) ??
+  firstReserved([...lintResults(linted), ...validated.map((entry: ValidatedCompose): RunResult => entry.result)]) ??
   (lintResults(linted).some((result: RunResult): boolean => result.code !== 0)
     ? acquireImage(context, HADOLINT_IMAGE, CONTAINER_GATE)
     : undefined)
@@ -237,9 +197,7 @@ const describeTargets = (dockerfileCount: number, composeCount: number): string 
     ...(dockerfileCount > 0 ? [`${String(dockerfileCount)} Dockerfile(s)`] : []),
     ...(composeCount > 0 ? [`${String(composeCount)} compose project(s)`] : []),
   ]
-  return parts.length === 0
-    ? 'the project ships no container definition'
-    : `${parts.join(' and ')} are valid`
+  return parts.length === 0 ? 'the project ships no container definition' : `${parts.join(' and ')} are valid`
 }
 
 /** Lint every Dockerfile and validate every compose project. */
@@ -284,11 +242,7 @@ export const actions = (context: Context): GateResult => {
   if (!existsSync(path.join(context.root, '.github', 'workflows'))) {
     return passed('the project ships no workflows')
   }
-  const unavailable: GateResult | undefined = acquireImage(
-    context,
-    ACTIONLINT_IMAGE,
-    'the workflow gate',
-  )
+  const unavailable: GateResult | undefined = acquireImage(context, ACTIONLINT_IMAGE, 'the workflow gate')
   if (unavailable !== undefined) {
     return unavailable
   }
@@ -296,11 +250,9 @@ export const actions = (context: Context): GateResult => {
     context.root,
     workingTreeFiles(context.root),
     (mirror: string): RunResult =>
-      run(
-        'docker',
-        ['run', '--rm', '-v', `${mirror}:/repo:ro`, '--workdir', '/repo', ACTIONLINT_IMAGE],
-        { cwd: context.root },
-      ),
+      run('docker', ['run', '--rm', '-v', `${mirror}:/repo:ro`, '--workdir', '/repo', ACTIONLINT_IMAGE], {
+        cwd: context.root,
+      }),
   )
   return (
     dockerFault(context, ACTIONLINT_IMAGE, 'the workflow gate', result) ??

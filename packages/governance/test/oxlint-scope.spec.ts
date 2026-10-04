@@ -35,26 +35,19 @@ describe('native source coverage', () => {
       'src/generated/api.ts',
       'cms/src/main.ts',
     ]
-    expect(
-      oxlintSourceFiles(
-        [...excluded, 'src/app/(payload)/layout.tsx'],
-        ['src/generated/**'],
-        ['cms'],
-      ),
-    ).toEqual(['src/app/(payload)/layout.tsx'])
+    expect(oxlintSourceFiles([...excluded, 'src/app/(payload)/layout.tsx'], ['src/generated/**'], ['cms'])).toEqual([
+      'src/app/(payload)/layout.tsx',
+    ])
   })
 
   it('partitions application source into disjoint two-rule and 33-rule groups', () => {
     const files: readonly string[] = ['src/main.ts', 'src/Card.tsx', '.storybook/preview.tsx']
     const groups: readonly OxlintGroup[] = oxlintGroups(files, true)
-    expect(groups.map((group) => group.files)).toEqual([
-      ['src/main.ts', '.storybook/preview.tsx'],
-      ['src/Card.tsx'],
-    ])
+    expect(groups.map((group) => group.files)).toEqual([['src/main.ts', '.storybook/preview.tsx'], ['src/Card.tsx']])
     expect(groups.map((group) => group.rules.length)).toEqual([2, 33])
-    expect(
-      groups.flatMap((group) => group.files).toSorted((left, right) => left.localeCompare(right)),
-    ).toEqual(files.toSorted((left, right) => left.localeCompare(right)))
+    expect(groups.flatMap((group) => group.files).toSorted((left, right) => left.localeCompare(right))).toEqual(
+      files.toSorted((left, right) => left.localeCompare(right)),
+    )
   })
 
   it('keeps library accessibility with Biome while adding core coverage', () => {
@@ -87,10 +80,7 @@ describe('explicit native ownership', () => {
 
   it('preserves the existing JSX semantic options beside the core rules', () => {
     const config: Readonly<Record<string, unknown>> = oxlintConfig(oxlintRules(true))
-    expect(config['rules']).toHaveProperty('jsx-a11y/no-redundant-roles', [
-      'error',
-      { td: ['gridcell'] },
-    ])
+    expect(config['rules']).toHaveProperty('jsx-a11y/no-redundant-roles', ['error', { td: ['gridcell'] }])
     expect(Object.keys(config['rules'] as Record<string, unknown>)).toHaveLength(33)
   })
 })

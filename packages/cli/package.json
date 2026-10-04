@@ -1,6 +1,6 @@
 {
   "name": "@ploaness/cli",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "The executable half of ploaness: the verification gates and the commands that run them.",
   "license": "MIT",
   "author": "Herman Ciechanowiec <herman@ciechanowiec.eu>",
@@ -35,9 +35,9 @@
   },
   "dependencies": {
     "@biomejs/biome": "2.5.15",
-    "@ploaness/assets": "1.5.0",
-    "@ploaness/config": "1.5.0",
-    "@ploaness/governance": "1.5.0",
+    "@ploaness/assets": "1.6.0",
+    "@ploaness/config": "1.6.0",
+    "@ploaness/governance": "1.6.0",
     "@vitest/coverage-v8": "5.0.3",
     "dependency-cruiser": "18.5.0",
     "eslint": "10.12.0",

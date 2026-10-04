@@ -1,28 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import {
-  type DeclaredExclusion,
-  readRawSettings,
-  readSettings,
-  type Settings,
-} from '../src/settings.js'
-import {
-  layerSettingBlocks,
-  readMemberSettings,
-  rebaseExclusion,
-} from '../src/settings-layering.js'
+import { type DeclaredExclusion, readRawSettings, readSettings, type Settings } from '../src/settings.js'
+import { layerSettingBlocks, readMemberSettings, rebaseExclusion } from '../src/settings-layering.js'
 
-const layered = (
-  base: Record<string, unknown>,
-  overlay: Record<string, unknown>,
-): Record<string, unknown> => layerSettingBlocks(base, overlay)
+const layered = (base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown> =>
+  layerSettingBlocks(base, overlay)
 
 describe('layerSettingBlocks', () => {
   it('adds a member root to the repository roots rather than replacing them', () => {
     // Replacing would let a member narrow the scope the harness refuses to narrow.
-    expect(layered({ sourceRoots: ['src'] }, { sourceRoots: ['domain'] })['sourceRoots']).toEqual([
-      'src',
-      'domain',
-    ])
+    expect(layered({ sourceRoots: ['src'] }, { sourceRoots: ['domain'] })['sourceRoots']).toEqual(['src', 'domain'])
   })
 
   it('carries a repository exclusion down to a member that declares none', () => {
@@ -34,12 +20,8 @@ describe('layerSettingBlocks', () => {
   })
 
   it('honours the smaller bundle budget whichever half declared it', () => {
-    expect(
-      layered({ bundleBudgetBytes: 900 }, { bundleBudgetBytes: 500 })['bundleBudgetBytes'],
-    ).toBe(500)
-    expect(
-      layered({ bundleBudgetBytes: 500 }, { bundleBudgetBytes: 900 })['bundleBudgetBytes'],
-    ).toBe(500)
+    expect(layered({ bundleBudgetBytes: 900 }, { bundleBudgetBytes: 500 })['bundleBudgetBytes']).toBe(500)
+    expect(layered({ bundleBudgetBytes: 500 }, { bundleBudgetBytes: 900 })['bundleBudgetBytes']).toBe(500)
   })
 
   it('keeps the repository budget for a member that declares none', () => {
@@ -48,24 +30,17 @@ describe('layerSettingBlocks', () => {
 
   it('replaces a command list rather than concatenating it', () => {
     // Concatenating two argv lists produces a command nobody wrote.
-    expect(
-      layered({ pretest: ['pnpm', 'run', 'db'] }, { pretest: ['echo', 'ok'] })['pretest'],
-    ).toEqual(['echo', 'ok'])
+    expect(layered({ pretest: ['pnpm', 'run', 'db'] }, { pretest: ['echo', 'ok'] })['pretest']).toEqual(['echo', 'ok'])
   })
 
   it('lets a member name its own origin', () => {
-    expect(
-      layered({ serverUrl: 'http://localhost:3000' }, { serverUrl: 'http://localhost:3100' })[
-        'serverUrl'
-      ],
-    ).toBe('http://localhost:3100')
+    expect(layered({ serverUrl: 'http://localhost:3000' }, { serverUrl: 'http://localhost:3100' })['serverUrl']).toBe(
+      'http://localhost:3100',
+    )
   })
 
   it('keeps both halves of an environment map', () => {
-    const merged: Record<string, unknown> = layered(
-      { analysisEnv: { SHARED: 'a' } },
-      { analysisEnv: { OWN: 'b' } },
-    )
+    const merged: Record<string, unknown> = layered({ analysisEnv: { SHARED: 'a' } }, { analysisEnv: { OWN: 'b' } })
     expect(merged['analysisEnv']).toEqual({ SHARED: 'a', OWN: 'b' })
   })
 })
@@ -75,9 +50,7 @@ describe('layering and the single-package read agree', () => {
     // The joint that keeps a single-package project unaffected: with nothing above it, a member's
     // settings are the settings that manifest always produced.
     const block: Record<string, unknown> = { sourceRoots: ['domain'], bundleBudgetBytes: 500 }
-    expect(readRawSettings(layerSettingBlocks({}, block))).toEqual(
-      readSettings({ ploaness: block }),
-    )
+    expect(readRawSettings(layerSettingBlocks({}, block))).toEqual(readSettings({ ploaness: block }))
   })
 
   it('agrees for a manifest declaring nothing at all', () => {
@@ -88,21 +61,15 @@ describe('layering and the single-package read agree', () => {
 describe('layering a malformed or partial declaration', () => {
   it('ignores a non-list where an additive list was expected', () => {
     // A typo can never widen a rule: the half that is not a list contributes nothing.
-    expect(layered({ sourceRoots: 'src' }, { sourceRoots: ['domain'] })['sourceRoots']).toEqual([
-      'domain',
-    ])
+    expect(layered({ sourceRoots: 'src' }, { sourceRoots: ['domain'] })['sourceRoots']).toEqual(['domain'])
   })
 
   it('keeps the member threshold when the repository declared a non-number', () => {
-    expect(
-      layered({ bundleBudgetBytes: 'small' }, { bundleBudgetBytes: 500 })['bundleBudgetBytes'],
-    ).toBe(500)
+    expect(layered({ bundleBudgetBytes: 'small' }, { bundleBudgetBytes: 500 })['bundleBudgetBytes']).toBe(500)
   })
 
   it('keeps the repository threshold when the member declared a non-number', () => {
-    expect(
-      layered({ bundleBudgetBytes: 500 }, { bundleBudgetBytes: 'small' })['bundleBudgetBytes'],
-    ).toBe(500)
+    expect(layered({ bundleBudgetBytes: 500 }, { bundleBudgetBytes: 'small' })['bundleBudgetBytes']).toBe(500)
   })
 
   it('falls back to the repository value when a replaced key is declared empty', () => {
@@ -163,9 +130,7 @@ describe('rebaseExclusion', () => {
 // no edit a member could make would have fixed it.
 describe('readMemberSettings', () => {
   const Repository: Record<string, unknown> = {
-    typographyExclusions: [
-      { pattern: String.raw`^\.vale/styles/`, reason: 'detector definitions' },
-    ],
+    typographyExclusions: [{ pattern: String.raw`^\.vale/styles/`, reason: 'detector definitions' }],
     sourceRoots: ['src'],
   }
   const Own: Record<string, unknown> = {
@@ -202,14 +167,10 @@ describe('readMemberSettings', () => {
 describe('layerSettingBlocks, the accessibility ceiling', () => {
   it('honours the smaller route budget whichever half declared it', () => {
     expect(
-      layered({ accessibilityRouteBudget: 200 }, { accessibilityRouteBudget: 40 })[
-        'accessibilityRouteBudget'
-      ],
+      layered({ accessibilityRouteBudget: 200 }, { accessibilityRouteBudget: 40 })['accessibilityRouteBudget'],
     ).toBe(40)
     expect(
-      layered({ accessibilityRouteBudget: 40 }, { accessibilityRouteBudget: 200 })[
-        'accessibilityRouteBudget'
-      ],
+      layered({ accessibilityRouteBudget: 40 }, { accessibilityRouteBudget: 200 })['accessibilityRouteBudget'],
     ).toBe(40)
   })
 })
@@ -223,17 +184,14 @@ describe('layering the layout sweep settings', () => {
   })
 
   it('keeps a valid root gap when the member declares a malformed one', () => {
-    expect(layered({ layoutMinimumGap: 8 }, { layoutMinimumGap: 'wide' })['layoutMinimumGap']).toBe(
-      8,
-    )
+    expect(layered({ layoutMinimumGap: 8 }, { layoutMinimumGap: 'wide' })['layoutMinimumGap']).toBe(8)
   })
 
   it('adds a member viewport to the repository viewports', () => {
     expect(
-      layered(
-        { layoutViewports: [{ width: 768, height: 1024 }] },
-        { layoutViewports: [{ width: 1440, height: 900 }] },
-      )['layoutViewports'],
+      layered({ layoutViewports: [{ width: 768, height: 1024 }] }, { layoutViewports: [{ width: 1440, height: 900 }] })[
+        'layoutViewports'
+      ],
     ).toEqual([
       { width: 768, height: 1024 },
       { width: 1440, height: 900 },

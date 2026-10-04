@@ -20,18 +20,14 @@ interface KnipConfig {
   readonly ignoreDependencies?: readonly string[]
 }
 
-const knip: KnipConfig = JSON.parse(
-  readFileSync(path.join(configPackage, 'knip.json'), 'utf8'),
-) as KnipConfig
+const knip: KnipConfig = JSON.parse(readFileSync(path.join(configPackage, 'knip.json'), 'utf8')) as KnipConfig
 
 const INTERNAL_SPECIFIER: RegExp = /from '(@ploaness\/[a-z-]+)/g
 
 // Read out of the entry shims rather than listed here, so a new one is covered by the rule that already
 // exists instead of by an entry somebody has to remember to add.
 const reExportedPackages = (): readonly string[] => {
-  const shims: readonly string[] = readdirSync(metaPackage).filter((file: string): boolean =>
-    file.endsWith('.ts'),
-  )
+  const shims: readonly string[] = readdirSync(metaPackage).filter((file: string): boolean => file.endsWith('.ts'))
   const found: readonly string[] = shims.flatMap((file: string): readonly string[] =>
     [...readFileSync(path.join(metaPackage, file), 'utf8').matchAll(INTERNAL_SPECIFIER)].map(
       (match: RegExpMatchArray): string => match[1] ?? '',
@@ -41,9 +37,7 @@ const reExportedPackages = (): readonly string[] => {
 }
 
 const isForgiven = (name: string): boolean =>
-  (knip.ignoreDependencies ?? []).some((pattern: string): boolean =>
-    new RegExp(`^${pattern}$`).test(name),
-  )
+  (knip.ignoreDependencies ?? []).some((pattern: string): boolean => new RegExp(`^${pattern}$`).test(name))
 
 describe('the knip config a consumer receives', () => {
   it('finds the entry shims it is meant to cover', () => {

@@ -39,9 +39,7 @@ describe('the native accessibility verdict', () => {
         },
       ],
     })
-    expect(oxlintReportProblems(output, 2, 31)).toEqual([
-      'src/Card.tsx jsx-a11y(alt-text): missing alt',
-    ])
+    expect(oxlintReportProblems(output, 2, 31)).toEqual(['src/Card.tsx jsx-a11y(alt-text): missing alt'])
   })
 
   it.each([null, {}, { message: 1 }])('refuses an unreadable diagnostic: %s', (diagnostic) => {
@@ -68,9 +66,7 @@ describe('the owned invocation', () => {
   })
 })
 
-const foreignDiagnostic = (
-  changes: Readonly<Record<string, unknown>> = {},
-): Record<string, unknown> => ({
+const foreignDiagnostic = (changes: Readonly<Record<string, unknown>> = {}): Record<string, unknown> => ({
   message: 'Unused eslint-disable directive (no problems were reported).',
   severity: 'error',
   filename: 'src/Typed.tsx',
@@ -78,9 +74,7 @@ const foreignDiagnostic = (
   ...changes,
 })
 
-const legacy: readonly { readonly file: string; readonly line: number }[] = [
-  { file: 'src/Typed.tsx', line: 7 },
-]
+const legacy: readonly { readonly file: string; readonly line: number }[] = [{ file: 'src/Typed.tsx', line: 7 }]
 
 describe('one owner for unused directives', () => {
   it('leaves only a parser-confirmed foreign directive to ESLint', () => {
@@ -120,15 +114,11 @@ describe('one owner for unused directives', () => {
         },
       ],
     })
-    expect(oxlintReportProblems(output, 2, 31, { exitCode: 1, legacy }).join(' ')).toContain(
-      'missing alt',
-    )
+    expect(oxlintReportProblems(output, 2, 31, { exitCode: 1, legacy }).join(' ')).toContain('missing alt')
   })
 
   it.each([1, 2, 124, 127])('refuses an unexplained nonzero process status: %s', (exitCode) => {
-    expect(oxlintReportProblems(report(), 2, 31, { exitCode, legacy }).join(' ')).toContain(
-      'exited with status',
-    )
+    expect(oxlintReportProblems(report(), 2, 31, { exitCode, legacy }).join(' ')).toContain('exited with status')
   })
 
   it('refuses a process failure even when a foreign diagnostic is present', () => {

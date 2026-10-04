@@ -22,8 +22,7 @@ if (directory === undefined) {
 
 const JSON_INDENT: number = 2
 
-const readJson = (file: string): Record<string, unknown> =>
-  asRecord(JSON.parse(readFileSync(file, 'utf8')))
+const readJson = (file: string): Record<string, unknown> => asRecord(JSON.parse(readFileSync(file, 'utf8')))
 
 const writeJson = (file: string, value: Record<string, unknown>): void => {
   mkdirSync(path.dirname(file), { recursive: true })
@@ -149,7 +148,4 @@ writeJson(at('package.json'), {
 })
 
 const workspaceFile: string = at('pnpm-workspace.yaml')
-writeFileSync(
-  workspaceFile,
-  `packages:\n  - 'apps/*'\n  - 'packages/*'\n\n${readFileSync(workspaceFile, 'utf8')}`,
-)
+writeFileSync(workspaceFile, `packages:\n  - 'apps/*'\n  - 'packages/*'\n\n${readFileSync(workspaceFile, 'utf8')}`)

@@ -57,9 +57,7 @@ const definiteChecks = (ruleId: string, node: unknown): readonly string[] =>
 const definiteNodes = (result: unknown): readonly string[] => {
   const nodes: unknown = asRecord(result)['nodes']
   const ruleId: string = asText(asRecord(result)['id'])
-  return isArray(nodes)
-    ? nodes.flatMap((node: unknown): readonly string[] => definiteChecks(ruleId, node))
-    : []
+  return isArray(nodes) ? nodes.flatMap((node: unknown): readonly string[] => definiteChecks(ruleId, node)) : []
 }
 
 /**
@@ -72,6 +70,4 @@ const definiteNodes = (result: unknown): readonly string[] => {
  * @returns one human-readable finding per definite defect, in the order axe reported them.
  */
 export const findDefiniteIncomplete = (incomplete: unknown): readonly string[] =>
-  isArray(incomplete)
-    ? incomplete.flatMap((result: unknown): readonly string[] => definiteNodes(result))
-    : []
+  isArray(incomplete) ? incomplete.flatMap((result: unknown): readonly string[] => definiteNodes(result)) : []

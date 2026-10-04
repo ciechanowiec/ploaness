@@ -43,12 +43,8 @@ describe('mirrorSecretCandidates', () => {
   it('preserves a nested text file path and bytes', () => {
     withWorkspace(({ root, mirror }: Workspace): void => {
       write(root, 'src/nested/config.ts', 'export const value = 1\n')
-      expect(mirrorSecretCandidates(root, mirror, ['src/nested/config.ts'])).toEqual([
-        'src/nested/config.ts',
-      ])
-      expect(readFileSync(path.join(mirror, 'src/nested/config.ts'), 'utf8')).toBe(
-        'export const value = 1\n',
-      )
+      expect(mirrorSecretCandidates(root, mirror, ['src/nested/config.ts'])).toEqual(['src/nested/config.ts'])
+      expect(readFileSync(path.join(mirror, 'src/nested/config.ts'), 'utf8')).toBe('export const value = 1\n')
     })
   })
 

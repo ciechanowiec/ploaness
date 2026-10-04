@@ -1,20 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import {
-  isNonTrivial,
-  type ParsedMessage,
-  parseMessage,
-  parseNumstat,
-  validateMessage,
-} from '../src/commit-message.js'
+import { isNonTrivial, type ParsedMessage, parseMessage, parseNumstat, validateMessage } from '../src/commit-message.js'
 
 const ELLIPSIS: string = String.fromCodePoint(0x2026)
 const SCISSORS: string = '# ------------------------ >8 ------------------------'
 
 describe('parseMessage', () => {
   it('extracts header and body, dropping git comment lines', () => {
-    const parsed: ParsedMessage = parseMessage(
-      'feat(x): do a real thing\n\nBecause reasons.\n# a git comment',
-    )
+    const parsed: ParsedMessage = parseMessage('feat(x): do a real thing\n\nBecause reasons.\n# a git comment')
     expect(parsed).toEqual({ header: 'feat(x): do a real thing', body: 'Because reasons.' })
   })
 
@@ -52,8 +44,7 @@ describe('validateMessage', () => {
   })
 
   it('holds a dependency-bump subject to the body and length rules', () => {
-    const header: string =
-      'build(deps): bump @typescript-eslint/eslint-plugin to 8.62.0 in the lint group'
+    const header: string = 'build(deps): bump @typescript-eslint/eslint-plugin to 8.62.0 in the lint group'
     const problems: readonly string[] = validateMessage({ header, body: '' }, true)
     expect(problems.some((problem) => problem.includes('chars'))).toBe(true)
     expect(problems.some((problem) => problem.includes('explaining WHY'))).toBe(true)
@@ -75,40 +66,23 @@ describe('the commit type', () => {
   })
 
   it('rejects a junk word anywhere in the subject, not only as its first word', () => {
-    const problems: readonly string[] = validateMessage(
-      { header: 'fix: clear the tmp directory', body: '' },
-      false,
-    )
+    const problems: readonly string[] = validateMessage({ header: 'fix: clear the tmp directory', body: '' }, false)
     expect(problems.some((problem) => problem.includes('low-effort'))).toBe(true)
   })
 
   it('accepts a subject whose word merely contains a junk word as a substring', () => {
-    expect(
-      validateMessage({ header: 'feat(template): render the template file', body: '' }, false),
-    ).toEqual([])
+    expect(validateMessage({ header: 'feat(template): render the template file', body: '' }, false)).toEqual([])
   })
 
   it('accepts a subject that says update, which the standard does not ban', () => {
-    expect(
-      validateMessage({ header: 'chore(deps): update the pinned biome version', body: '' }, false),
-    ).toEqual([])
+    expect(validateMessage({ header: 'chore(deps): update the pinned biome version', body: '' }, false)).toEqual([])
   })
 
   it('accepts every type the governing standard lists', () => {
-    const types: string[] = [
-      'build',
-      'chore',
-      'ci',
-      'docs',
-      'feat',
-      'fix',
-      'perf',
-      'refactor',
-      'test',
-    ]
+    const types: string[] = ['build', 'chore', 'ci', 'docs', 'feat', 'fix', 'perf', 'refactor', 'test']
     const rejected: string[] = types.filter((type) =>
-      validateMessage({ header: `${type}: describe the real change`, body: '' }, false).some(
-        (problem) => problem.includes('invalid header'),
+      validateMessage({ header: `${type}: describe the real change`, body: '' }, false).some((problem) =>
+        problem.includes('invalid header'),
       ),
     )
     expect(rejected).toEqual([])
@@ -117,25 +91,17 @@ describe('the commit type', () => {
 
 describe('subject quality', () => {
   it('rejects a non-conventional header', () => {
-    const problems: readonly string[] = validateMessage(
-      { header: 'add some stuff to the repo', body: '' },
-      false,
-    )
+    const problems: readonly string[] = validateMessage({ header: 'add some stuff to the repo', body: '' }, false)
     expect(problems.some((problem) => problem.includes('invalid header'))).toBe(true)
   })
 
   it('rejects an over-long header', () => {
     const header: string = `feat(template): ${'x'.repeat(80)}`
-    expect(
-      validateMessage({ header, body: '' }, false).some((problem) => problem.includes('chars')),
-    ).toBe(true)
+    expect(validateMessage({ header, body: '' }, false).some((problem) => problem.includes('chars'))).toBe(true)
   })
 
   it('rejects a trailing period', () => {
-    const problems: readonly string[] = validateMessage(
-      { header: 'feat: add the new commit gate.', body: '' },
-      false,
-    )
+    const problems: readonly string[] = validateMessage({ header: 'feat: add the new commit gate.', body: '' }, false)
     expect(problems.some((problem) => problem.includes('period'))).toBe(true)
   })
 
@@ -145,10 +111,7 @@ describe('subject quality', () => {
   })
 
   it('rejects a low-effort junk description', () => {
-    const problems: readonly string[] = validateMessage(
-      { header: 'chore: wip on the thing', body: '' },
-      false,
-    )
+    const problems: readonly string[] = validateMessage({ header: 'chore: wip on the thing', body: '' }, false)
     expect(problems.some((problem) => problem.includes('low-effort'))).toBe(true)
   })
 })
@@ -171,19 +134,13 @@ describe('what a commit message may not contain', () => {
   })
 
   it('flags an agent session identifier in the body', () => {
-    const problems: readonly string[] = validateMessage(
-      { header: good, body: 'Claude-Session: abc-123' },
-      false,
-    )
+    const problems: readonly string[] = validateMessage({ header: good, body: 'Claude-Session: abc-123' }, false)
     expect(problems.some((problem) => problem.includes('session'))).toBe(true)
   })
 
   it('accepts a commit that only mentions an agent tool in prose', () => {
     expect(
-      validateMessage(
-        { header: 'docs: document the claude code skill', body: 'Explains skill loading.' },
-        true,
-      ),
+      validateMessage({ header: 'docs: document the claude code skill', body: 'Explains skill loading.' }, true),
     ).toEqual([])
   })
 

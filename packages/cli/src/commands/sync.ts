@@ -20,9 +20,7 @@ export const sync = (repository: Repository): number => {
   for (const change of changes) {
     console.info(`  ${change.action} ${change.path}`)
   }
-  const refused: readonly SyncChange[] = changes.filter(
-    (change: SyncChange): boolean => change.action === 'refused',
-  )
+  const refused: readonly SyncChange[] = changes.filter((change: SyncChange): boolean => change.action === 'refused')
   if (refused.length > 0) {
     console.error(
       `\n${String(refused.length)} file(s) carry duplicate, out-of-order, or non-leading ploaness markers.` +

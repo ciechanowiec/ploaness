@@ -222,10 +222,7 @@
   {
     "name": "no-noninteractive-element-interactions-bad",
     "code": "<h1 onClick={() => {}}>Read</h1>",
-    "expected": [
-      "jsx-a11y/click-events-have-key-events",
-      "jsx-a11y/no-noninteractive-element-interactions"
-    ]
+    "expected": ["jsx-a11y/click-events-have-key-events", "jsx-a11y/no-noninteractive-element-interactions"]
   },
   {
     "name": "no-noninteractive-element-interactions-good",

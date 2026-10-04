@@ -11,5 +11,4 @@ const REGEX_METACHARACTERS: RegExp = /[.*+?^${}()|[\]\\]/g
  * @param text the literal to match.
  * @returns the text, safe to embed in a pattern.
  */
-export const escapeForRegex = (text: string): string =>
-  text.replaceAll(REGEX_METACHARACTERS, String.raw`\$&`)
+export const escapeForRegex = (text: string): string => text.replaceAll(REGEX_METACHARACTERS, String.raw`\$&`)

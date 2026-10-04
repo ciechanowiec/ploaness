@@ -89,19 +89,15 @@ export const suppressions = (context: Member): GateResult => {
       content: readFileSync(path.join(context.root, file), 'utf8'),
     }),
   )
-  const sites: readonly SuppressionSite[] = contents.flatMap(
-    (scanned: ScannedFile): readonly SuppressionSite[] => sitesOf(scanned),
+  const sites: readonly SuppressionSite[] = contents.flatMap((scanned: ScannedFile): readonly SuppressionSite[] =>
+    sitesOf(scanned),
   )
   const sourceLines: number = contents.reduce(
     (total: number, scanned: ScannedFile): number => total + countSourceLines(scanned.content),
     0,
   )
 
-  const report: SuppressionReport = judgeSuppressions(
-    sites,
-    sourceLines,
-    context.settings.maxSuppressions,
-  )
+  const report: SuppressionReport = judgeSuppressions(sites, sourceLines, context.settings.maxSuppressions)
   const summary: string =
     `${String(report.count)} of ${String(report.ceiling)} permitted, ` +
     `${String(report.remaining)} remaining (${String(report.sourceLines)} source lines)`
@@ -111,8 +107,6 @@ export const suppressions = (context: Member): GateResult => {
   return failed(summary, [
     `the suppression ceiling is ${String(report.ceiling)} for ` +
       `${String(report.sourceLines)} source lines; remove one before adding another`,
-    ...report.sites.map(
-      (site: SuppressionSite): string => `${site.file}:${String(site.line)} ${site.token}`,
-    ),
+    ...report.sites.map((site: SuppressionSite): string => `${site.file}:${String(site.line)} ${site.token}`),
   ])
 }

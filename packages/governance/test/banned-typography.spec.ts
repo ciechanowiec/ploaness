@@ -55,18 +55,13 @@ describe('findTypographyViolations', () => {
   })
 
   it('reports the correct line and column across multiple lines', () => {
-    const result: readonly TypographyViolation[] = findTypographyViolations(
-      `clean\nbad${ELLIPSIS}here`,
-    )
+    const result: readonly TypographyViolation[] = findTypographyViolations(`clean\nbad${ELLIPSIS}here`)
     expect(result[0]).toMatchObject({ line: 2, column: 4 })
   })
 
   it('reports multiple violations in banned-character order', () => {
     const result: readonly TypographyViolation[] = findTypographyViolations(`${EM_DASH}${EN_DASH}`)
-    expect(result.map((violation) => violation.label)).toEqual([
-      'em dash (U+2014)',
-      'en dash (U+2013)',
-    ])
+    expect(result.map((violation) => violation.label)).toEqual(['em dash (U+2014)', 'en dash (U+2013)'])
   })
 })
 
@@ -78,15 +73,11 @@ describe('the documented typography contract', () => {
     const unreported: readonly string[] = DOCUMENTED_SET.filter(
       (character: string): boolean => findTypographyViolations(`a${character}b`).length !== 1,
     )
-    expect(
-      unreported.map((character: string): string => character.codePointAt(0)?.toString(16) ?? ''),
-    ).toEqual([])
+    expect(unreported.map((character: string): string => character.codePointAt(0)?.toString(16) ?? '')).toEqual([])
   })
 
   it('flags the curly apostrophe, which is what a language model emits by default', () => {
-    const result: readonly TypographyViolation[] = findTypographyViolations(
-      `it${RIGHT_SINGLE_QUOTE}s`,
-    )
+    const result: readonly TypographyViolation[] = findTypographyViolations(`it${RIGHT_SINGLE_QUOTE}s`)
     expect(result).toHaveLength(1)
     expect(result[0]).toMatchObject({
       line: 1,

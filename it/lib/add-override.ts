@@ -30,7 +30,4 @@ if (at === ABSENT) {
 }
 
 const after: number = at + 1
-writeFileSync(
-  file,
-  [...lines.slice(0, after), `  ${name}: ${version}`, ...lines.slice(after)].join('\n'),
-)
+writeFileSync(file, [...lines.slice(0, after), `  ${name}: ${version}`, ...lines.slice(after)].join('\n'))

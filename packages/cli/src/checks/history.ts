@@ -52,29 +52,20 @@ export const commitHistory = (
 ): GateResult => {
   const shas: readonly string[] = shasOf(context, revisionArguments)
   const findings: readonly string[] = shas.flatMap((sha: string): readonly string[] => {
-    const message: ParsedMessage = parseMessage(
-      git(context, ['log', '--format=%B', '-n', '1', sha]),
-    )
-    const isBodyRequired: boolean = isNonTrivial(
-      parseNumstat(git(context, ['show', '--numstat', '--format=', sha])),
-    )
+    const message: ParsedMessage = parseMessage(git(context, ['log', '--format=%B', '-n', '1', sha]))
+    const isBodyRequired: boolean = isNonTrivial(parseNumstat(git(context, ['show', '--numstat', '--format=', sha])))
     return validateMessage(message, isBodyRequired).map(
       (problem: string): string => `${sha.slice(0, SHORT_SHA_LENGTH)} ${problem}`,
     )
   })
   return findings.length > 0
-    ? failed(
-        `${String(findings.length)} commit-message problem(s) across ${String(shas.length)} commit(s)`,
-        findings,
-      )
+    ? failed(`${String(findings.length)} commit-message problem(s) across ${String(shas.length)} commit(s)`, findings)
     : passed(`${String(shas.length)} commit message(s) conform`)
 }
 
 /** Validate one pending message, from a message file the author points at. */
 export const commitMessageProblems = (context: Context, raw: string): readonly string[] => {
-  const isRequireBody: boolean = isNonTrivial(
-    parseNumstat(git(context, ['diff', '--cached', '--numstat'])),
-  )
+  const isRequireBody: boolean = isNonTrivial(parseNumstat(git(context, ['diff', '--cached', '--numstat'])))
   return validateMessage(parseMessage(raw), isRequireBody)
 }
 
@@ -99,8 +90,7 @@ export const linearHistory = (context: Context): GateResult => {
     commits.map(
       (commit: CommitShape): CommitShape => ({
         ...commit,
-        subject:
-          commit.parentCount > 1 ? git(context, ['log', '--format=%s', '-n', '1', commit.sha]) : '',
+        subject: commit.parentCount > 1 ? git(context, ['log', '--format=%s', '-n', '1', commit.sha]) : '',
       }),
     ),
   )
@@ -108,8 +98,7 @@ export const linearHistory = (context: Context): GateResult => {
     ? failed(
         `${String(violations.length)} merge commit(s) in the history`,
         violations.map(
-          (violation: HistoryViolation): string =>
-            `${violation.sha.slice(0, SHORT_SHA_LENGTH)} ${violation.reason}`,
+          (violation: HistoryViolation): string => `${violation.sha.slice(0, SHORT_SHA_LENGTH)} ${violation.reason}`,
         ),
       )
     : passed(`${String(commits.length)} commit(s) form a linear history`)

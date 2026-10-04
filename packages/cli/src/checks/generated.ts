@@ -2,13 +2,7 @@
 // runtime settings file and, on the sync path, writes it back.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import {
-  applyDenyRules,
-  deniedPathsFor,
-  findDenialViolations,
-  type ParsedJson,
-  parseJsonc,
-} from '@ploaness/governance'
+import { applyDenyRules, deniedPathsFor, findDenialViolations, type ParsedJson, parseJsonc } from '@ploaness/governance'
 import type { Member, Repository } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
@@ -47,9 +41,7 @@ const readJson = (root: string, relative: string): unknown => readSettings(root,
 const deniedArtefacts = (repository: Repository): readonly string[] =>
   repository.members
     .filter((member: Member): boolean => member.isPayload)
-    .flatMap((member: Member): readonly string[] =>
-      deniedPathsFor([member.path], member.settings.generatedArtefacts),
-    )
+    .flatMap((member: Member): readonly string[] => deniedPathsFor([member.path], member.settings.generatedArtefacts))
 
 export const generatedDenial = (context: Repository): GateResult => {
   const findings: readonly string[] = findDenialViolations(

@@ -28,26 +28,25 @@ const rulesFor = async (config: readonly Linter.Config[]): Promise<Partial<Linte
     cwd: packageRoot,
   })
   const resolved: unknown = await eslint.calculateConfigForFile('src/lib/example.ts')
-  const rules: Partial<Linter.RulesRecord> | undefined = (resolved as Linter.Config | undefined)
-    ?.rules
+  const rules: Partial<Linter.RulesRecord> | undefined = (resolved as Linter.Config | undefined)?.rules
   if (rules === undefined) {
     throw new TypeError('The shipped source configuration resolved to no rules')
   }
   return Object.fromEntries(
-    [IGNORED_RETURN, DUPLICATE_RETURN, ENUM_ASSIGNMENT].map(
-      (rule: string): readonly [string, Linter.RuleEntry] => [rule, rules[rule] ?? 'off'],
-    ),
+    [IGNORED_RETURN, DUPLICATE_RETURN, ENUM_ASSIGNMENT].map((rule: string): readonly [string, Linter.RuleEntry] => [
+      rule,
+      rules[rule] ?? 'off',
+    ]),
   )
 }
 
-const configurationsWithRules: readonly (readonly [string, Partial<Linter.RulesRecord>])[] =
-  await Promise.all(
-    Object.entries(configurations).map(
-      async ([name, config]: [string, readonly Linter.Config[]]): Promise<
-        readonly [string, Partial<Linter.RulesRecord>]
-      > => [name, await rulesFor(config)],
-    ),
-  )
+const configurationsWithRules: readonly (readonly [string, Partial<Linter.RulesRecord>])[] = await Promise.all(
+  Object.entries(configurations).map(
+    async ([name, config]: [string, readonly Linter.Config[]]): Promise<
+      readonly [string, Partial<Linter.RulesRecord>]
+    > => [name, await rulesFor(config)],
+  ),
+)
 
 const messagesFor = (code: string, rules: Partial<Linter.RulesRecord>): readonly string[] => {
   const directory: string = mkdtempSync(path.join(tmpdir(), 'ploaness-typed-ownership-'))
@@ -92,9 +91,7 @@ describe.each(configurationsWithRules)(
     })
 
     it('rejects an assignment between distinct enum domains', () => {
-      expect(messagesFor(`${ENUMS}const result: First = Second.Value;`, rules)).toEqual([
-        ENUM_ASSIGNMENT,
-      ])
+      expect(messagesFor(`${ENUMS}const result: First = Second.Value;`, rules)).toEqual([ENUM_ASSIGNMENT])
     })
 
     it('accepts an assignment from the declared enum domain', () => {

@@ -25,17 +25,11 @@ const isEslintOwnedDiagnostic = (value: unknown, sites: readonly OxlintLegacySit
     record['message'] === 'Unused eslint-disable directive (no problems were reported).' &&
     record['code'] === undefined &&
     record['severity'] === 'error' &&
-    sites.some(
-      (site: OxlintLegacySite): boolean =>
-        site.file === record['filename'] && site.line === span['line'],
-    )
+    sites.some((site: OxlintLegacySite): boolean => site.file === record['filename'] && site.line === span['line'])
   )
 }
 
-const exitProblems = (
-  diagnostics: readonly unknown[],
-  execution: OxlintExecution,
-): readonly string[] => {
+const exitProblems = (diagnostics: readonly unknown[], execution: OxlintExecution): readonly string[] => {
   const isForeignFailure: boolean =
     execution.exitCode === 1 &&
     diagnostics.some((value: unknown): boolean => isEslintOwnedDiagnostic(value, execution.legacy))
@@ -87,9 +81,7 @@ export const oxlintReportProblems = (
     ...(report['number_of_files'] === files
       ? []
       : [`Oxlint did not analyze the expected ${String(files)} source file(s)`]),
-    ...(report['number_of_rules'] === rules
-      ? []
-      : [`Oxlint did not enable the expected ${String(rules)} rule(s)`]),
+    ...(report['number_of_rules'] === rules ? [] : [`Oxlint did not enable the expected ${String(rules)} rule(s)`]),
     ...report['diagnostics']
       .filter((value: unknown): boolean => !isEslintOwnedDiagnostic(value, execution.legacy))
       .map((value: unknown): string => diagnostic(value)),

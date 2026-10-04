@@ -11,9 +11,7 @@ const exception = (overrides: Partial<SecretException> = {}): SecretException =>
 // is TOML, so a backslash reaches the tool halved; asserting on the raw text instead would pin the
 // escaping rather than the pattern, and would pass just as happily on a document TOML cannot parse.
 const decodedPath = (rendered: string): string =>
-  (/^paths = \["(.*)"\]$/m.exec(rendered)?.[1] ?? '')
-    .replaceAll(String.raw`\"`, '"')
-    .replaceAll('\\\\', '\\')
+  (/^paths = \["(.*)"\]$/m.exec(rendered)?.[1] ?? '').replaceAll(String.raw`\"`, '"').replaceAll('\\\\', '\\')
 
 describe('renderGitleaksConfig', () => {
   // The load-bearing property: a declared entry may add a named exception and may never replace the
@@ -27,10 +25,7 @@ describe('renderGitleaksConfig', () => {
   })
 
   it('renders one allowlist per declared exception', () => {
-    const rendered: string = renderGitleaksConfig([
-      exception(),
-      exception({ path: 'tests/other.json' }),
-    ])
+    const rendered: string = renderGitleaksConfig([exception(), exception({ path: 'tests/other.json' })])
     expect(rendered.match(/\[\[allowlists\]\]/g)).toHaveLength(2)
   })
 
@@ -65,9 +60,7 @@ describe('renderGitleaksConfig', () => {
   it('escapes a newline in the reason rather than rendering a document TOML cannot parse', () => {
     const rendered: string = renderGitleaksConfig([exception({ reason: 'first\nsecond' })])
     expect(rendered).toContain(String.raw`first\nsecond`)
-    expect(
-      rendered.split('\n').filter((line: string) => line.startsWith('description')),
-    ).toHaveLength(1)
+    expect(rendered.split('\n').filter((line: string) => line.startsWith('description'))).toHaveLength(1)
   })
 
   it('renders a valid config when the project declares nothing', () => {
@@ -82,9 +75,7 @@ describe('renderGitleaksConfig escaping', () => {
   // The unicode-escape branch: a control character the document has no named escape for.
   it('escapes a control character with a unicode escape', () => {
     const Bell: number = 0x07
-    const rendered: string = renderGitleaksConfig([
-      exception({ reason: `first${String.fromCodePoint(Bell)}second` }),
-    ])
+    const rendered: string = renderGitleaksConfig([exception({ reason: `first${String.fromCodePoint(Bell)}second` })])
     expect(rendered).toContain(String.raw`first\u0007second`)
   })
 
@@ -94,15 +85,11 @@ describe('renderGitleaksConfig escaping', () => {
     ['\r', String.raw`\r`],
     ['\t', String.raw`\t`],
   ])('escapes %j as its named form', (character: string, escaped: string) => {
-    const rendered: string = renderGitleaksConfig([
-      exception({ reason: `first${character}second` }),
-    ])
+    const rendered: string = renderGitleaksConfig([exception({ reason: `first${character}second` })])
     expect(rendered).toContain(`first${escaped}second`)
   })
 
   it('escapes a backslash in the reason', () => {
-    expect(renderGitleaksConfig([exception({ reason: String.raw`a\b` })])).toContain(
-      String.raw`a\\b`,
-    )
+    expect(renderGitleaksConfig([exception({ reason: String.raw`a\b` })])).toContain(String.raw`a\\b`)
   })
 })

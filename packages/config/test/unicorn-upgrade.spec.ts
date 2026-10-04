@@ -37,16 +37,14 @@ const examples: readonly Example[] = [
   },
   {
     rule: 'unicorn/prefer-combined-guards',
-    invalid:
-      'function check(first, second) { if (first) { return; } if (second) { return; } consume(); }',
+    invalid: 'function check(first, second) { if (first) { return; } if (second) { return; } consume(); }',
     valid: 'function check(first, second) { if (first || second) { return; } consume(); }',
   },
   {
     rule: 'unicorn/prefer-temporal-conversion',
     invalid:
       'const value = Temporal.PlainDateTime.from("2026-10-01T10:00"); const result = Temporal.PlainDate.from(value);',
-    valid:
-      'const value = Temporal.PlainDateTime.from("2026-10-01T10:00"); const result = value.toPlainDate();',
+    valid: 'const value = Temporal.PlainDateTime.from("2026-10-01T10:00"); const result = value.toPlainDate();',
   },
 ]
 
@@ -63,8 +61,7 @@ const rulesFor = async (config: readonly Linter.Config[]): Promise<Partial<Linte
     cwd: packageRoot,
   })
   const resolved: unknown = await eslint.calculateConfigForFile('src/lib/example.ts')
-  const rules: Partial<Linter.RulesRecord> | undefined = (resolved as Linter.Config | undefined)
-    ?.rules
+  const rules: Partial<Linter.RulesRecord> | undefined = (resolved as Linter.Config | undefined)?.rules
   if (rules === undefined) {
     throw new TypeError('The shipped source configuration resolved to no rules')
   }
@@ -81,11 +78,7 @@ const rulesByConfig: Readonly<Record<string, Partial<Linter.RulesRecord>>> = Obj
   ),
 )
 
-const messagesFor = (
-  code: string,
-  rule: string,
-  rules: Partial<Linter.RulesRecord>,
-): readonly Linter.LintMessage[] =>
+const messagesFor = (code: string, rule: string, rules: Partial<Linter.RulesRecord>): readonly Linter.LintMessage[] =>
   new Linter().verify(code, {
     languageOptions: { parser: tseslint.parser, ecmaVersion: 'latest' },
     plugins: { unicorn },
@@ -94,19 +87,13 @@ const messagesFor = (
 
 for (const [name, rules] of Object.entries(rulesByConfig)) {
   describe(`${name} preset additions`, () => {
-    it.each(examples)(
-      'rejects the defect covered by $rule at error severity',
-      (example: Example) => {
-        expect(
-          messagesFor(example.invalid, example.rule, rules).map(
-            (message: Linter.LintMessage): readonly [string | null, number] => [
-              message.ruleId,
-              message.severity,
-            ],
-          ),
-        ).toEqual([[example.rule, 2]])
-      },
-    )
+    it.each(examples)('rejects the defect covered by $rule at error severity', (example: Example) => {
+      expect(
+        messagesFor(example.invalid, example.rule, rules).map(
+          (message: Linter.LintMessage): readonly [string | null, number] => [message.ruleId, message.severity],
+        ),
+      ).toEqual([[example.rule, 2]])
+    })
 
     it.each(examples)('accepts valid code beside $rule', (example: Example) => {
       expect(messagesFor(example.valid, example.rule, rules)).toEqual([])
@@ -114,10 +101,7 @@ for (const [name, rules] of Object.entries(rulesByConfig)) {
 
     it.each(examples)('honors a narrow source suppression for $rule', (example: Example) => {
       const suppressed: string =
-        '// eslint-disable-next-line ' +
-        example.rule +
-        ' -- Exercises the narrow source exception.\n' +
-        example.invalid
+        '// eslint-disable-next-line ' + example.rule + ' -- Exercises the narrow source exception.\n' + example.invalid
       expect(messagesFor(suppressed, example.rule, rules)).toEqual([])
     })
   })

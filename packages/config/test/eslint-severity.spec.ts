@@ -57,9 +57,7 @@ const isOff = (setting: unknown): boolean => {
 }
 
 const declaredRuleIds = (blocks: readonly FlatBlock[]): readonly string[] => [
-  ...new Set(
-    blocks.flatMap((block: FlatBlock): readonly string[] => Object.keys(block.rules ?? {})),
-  ),
+  ...new Set(blocks.flatMap((block: FlatBlock): readonly string[] => Object.keys(block.rules ?? {}))),
 ]
 
 // Last block wins, which is how ESLint resolves the array, so a rule raised late must not be reported
@@ -71,9 +69,7 @@ const resolvedSetting = (blocks: readonly FlatBlock[], ruleId: string): unknown 
   }, undefined)
 
 const warningRules = (blocks: readonly FlatBlock[]): readonly string[] =>
-  declaredRuleIds(blocks).filter((ruleId: string): boolean =>
-    isWarning(resolvedSetting(blocks, ruleId)),
-  )
+  declaredRuleIds(blocks).filter((ruleId: string): boolean => isWarning(resolvedSetting(blocks, ruleId)))
 
 const selectorOf = (entry: unknown): string => {
   const selector: unknown = asRecord(entry)?.['selector']
@@ -118,9 +114,7 @@ const mockBanStatus = async (blocks: readonly FlatBlock[]): Promise<BanStatus> =
   const settings: readonly unknown[] = settingsFor(blocks, RESTRICTED_PROPERTIES)
   const core: unknown = await import(pathToFileURL(path.join(configPackage, 'eslint-core.js')).href)
   const exported: unknown = asRecord(core)?.['NO_MOCK_PROPERTIES']
-  const entries: readonly unknown[] = Array.isArray(exported)
-    ? (exported as readonly unknown[])
-    : []
+  const entries: readonly unknown[] = Array.isArray(exported) ? (exported as readonly unknown[]) : []
   // A placeholder severity in front, so this reads the same shape `mockedMembersIn` sees in a rule
   // setting - where the severity is the first element and the entries follow it.
   const expected: readonly string[] = mockedMembersIn(['error', ...entries])
@@ -139,9 +133,7 @@ const mockBanStatus = async (blocks: readonly FlatBlock[]): Promise<BanStatus> =
 // clock rather than on the rule, having passed moments earlier in isolation. Module evaluation carries
 // no such clock, and a spec that measures a rule should not also be measuring an import.
 const SHIPPED_CONFIG: readonly FlatBlock[] = await loadBlocks(path.join(configPackage, 'eslint.js'))
-const WORKSPACE_CONFIG: readonly FlatBlock[] = await loadBlocks(
-  path.join(workspaceRoot, 'eslint.config.mjs'),
-)
+const WORKSPACE_CONFIG: readonly FlatBlock[] = await loadBlocks(path.join(workspaceRoot, 'eslint.config.mjs'))
 
 // `NO_INHERITANCE` already carries its own leading severity, which is why every caller spreads it as
 // the whole setting rather than prefixing one. Reading the exported constant rather than restating its
@@ -149,9 +141,7 @@ const WORKSPACE_CONFIG: readonly FlatBlock[] = await loadBlocks(
 const sharedSelectors = async (exportName: string): Promise<readonly string[]> => {
   const core: unknown = await import(pathToFileURL(path.join(configPackage, 'eslint-core.js')).href)
   const exported: unknown = asRecord(core)?.[exportName]
-  const entries: readonly unknown[] = Array.isArray(exported)
-    ? (exported as readonly unknown[])
-    : []
+  const entries: readonly unknown[] = Array.isArray(exported) ? (exported as readonly unknown[]) : []
   // `selectorsIn` drops the leading severity, which `NO_INHERITANCE` carries and the newer groups do
   // not. A placeholder in front of both makes the two shapes read the same way here.
   return selectorsIn(['error', ...entries])
@@ -173,14 +163,9 @@ const lintRestrictedSyntax = (code: string, selectors: readonly string[]): reado
 // The determinism groups differ from the inheritance ban in where they belong: they govern specs, so
 // they are spread into the block that lints the suite rather than into every block. What would drift is
 // the spread going missing on a later edit, which is what this reads.
-const carriedSomewhere = (
-  blocks: readonly FlatBlock[],
-  selectors: readonly string[],
-): readonly string[] => {
+const carriedSomewhere = (blocks: readonly FlatBlock[], selectors: readonly string[]): readonly string[] => {
   const present: ReadonlySet<string> = new Set(
-    restrictedSyntaxSettings(blocks).flatMap((setting: unknown): readonly string[] =>
-      selectorsIn(setting),
-    ),
+    restrictedSyntaxSettings(blocks).flatMap((setting: unknown): readonly string[] => selectorsIn(setting)),
   )
   return selectors.filter((selector: string): boolean => !present.has(selector))
 }
@@ -276,23 +261,17 @@ describe('the determinism selectors reach the block that lints the suite', CONFI
     },
   )
 
-  it.each(['NO_LITERAL_ASSERTIONS'])(
-    'carries %s into the shipped config',
-    async (exportName: string) => {
-      const selectors: readonly string[] = await sharedSelectors(exportName)
-      expect(selectors.length).toBeGreaterThan(0)
-      expect(carriedSomewhere(SHIPPED_CONFIG, selectors)).toEqual([])
-    },
-  )
+  it.each(['NO_LITERAL_ASSERTIONS'])('carries %s into the shipped config', async (exportName: string) => {
+    const selectors: readonly string[] = await sharedSelectors(exportName)
+    expect(selectors.length).toBeGreaterThan(0)
+    expect(carriedSomewhere(SHIPPED_CONFIG, selectors)).toEqual([])
+  })
 
   it.each([
     ['a raw datagram import', "import dgram from 'node:dgram'"],
     ['a dynamic child-process import', "const child = await import('node:child_process')"],
     ['a CommonJS worker import', "const threads = require('node:worker_threads')"],
-    [
-      'a cluster loaded through process',
-      "const cluster = process.getBuiltinModule('node:cluster')",
-    ],
+    ['a cluster loaded through process', "const cluster = process.getBuiltinModule('node:cluster')"],
     ['a global worker', "const worker = new Worker('worker.js')"],
   ])('rejects %s', async (_what: string, code: string) => {
     const selectors: readonly string[] = await sharedSelectors('NO_NETWORK_GUARD_ESCAPE')

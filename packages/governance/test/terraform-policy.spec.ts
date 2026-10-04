@@ -6,9 +6,7 @@ const rulesOf = (source: string): readonly string[] =>
 
 describe('no-force-destroy', () => {
   it('reports the argument switched on', () => {
-    expect(rulesOf('resource "aws_s3_bucket" "media" {\n  force_destroy = true\n}')).toEqual([
-      'no-force-destroy',
-    ])
+    expect(rulesOf('resource "aws_s3_bucket" "media" {\n  force_destroy = true\n}')).toEqual(['no-force-destroy'])
   })
 
   it('reports the quoted spelling terraform also accepts', () => {
@@ -110,9 +108,7 @@ describe('no-placeholder-secret', () => {
   )
 
   it('names the attribute in the finding, so the repair is unambiguous', () => {
-    const found: readonly TerraformViolation[] = findTerraformViolations(
-      '  master_password = "REPLACE-ME"',
-    )
+    const found: readonly TerraformViolation[] = findTerraformViolations('  master_password = "REPLACE-ME"')
     expect(found[0]?.reason).toContain('master_password')
   })
 
@@ -140,12 +136,9 @@ describe('no-placeholder-secret', () => {
   )
 
   // These name a secret rather than hold one; a placeholder there guards nothing.
-  it.each(['secret_id', 'secret_arn', 'secret_name'])(
-    'does not read %s as a credential',
-    (attribute: string) => {
-      expect(rulesOf(`  ${attribute} = "REPLACE-ME"`)).toEqual([])
-    },
-  )
+  it.each(['secret_id', 'secret_arn', 'secret_name'])('does not read %s as a credential', (attribute: string) => {
+    expect(rulesOf(`  ${attribute} = "REPLACE-ME"`)).toEqual([])
+  })
 })
 
 const ingressRule = (attributes: string): string =>
@@ -155,43 +148,33 @@ describe('no-open-ingress', () => {
   // The idiomatic spelling of "everything from everywhere" in the rule resource the provider
   // recommends, which the analyzer's own check does not read.
   it('reports every protocol from every address', () => {
-    expect(rulesOf(ingressRule('  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "-1"'))).toEqual([
-      'no-open-ingress',
-    ])
+    expect(rulesOf(ingressRule('  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "-1"'))).toEqual(['no-open-ingress'])
   })
 
   it('reports every port from every address', () => {
     expect(
       rulesOf(
-        ingressRule(
-          '  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "tcp"\n  from_port   = 0\n  to_port     = 65535',
-        ),
+        ingressRule('  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "tcp"\n  from_port   = 0\n  to_port     = 65535'),
       ),
     ).toEqual(['no-open-ingress'])
   })
 
   it('reports SSH from every address, and says so', () => {
     const found: readonly TerraformViolation[] = findTerraformViolations(
-      ingressRule(
-        '  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "tcp"\n  from_port   = 22\n  to_port     = 22',
-      ),
+      ingressRule('  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "tcp"\n  from_port   = 22\n  to_port     = 22'),
     )
     expect(found[0]?.reason).toContain('SSH')
   })
 
   it('reports the IPv6 spelling of every address', () => {
-    expect(rulesOf(ingressRule('  cidr_ipv6   = "::/0"\n  ip_protocol = "-1"'))).toEqual([
-      'no-open-ingress',
-    ])
+    expect(rulesOf(ingressRule('  cidr_ipv6   = "::/0"\n  ip_protocol = "-1"'))).toEqual(['no-open-ingress'])
   })
 
   // The ports a public site opens to the world.
   it('accepts HTTPS from every address', () => {
     expect(
       rulesOf(
-        ingressRule(
-          '  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "tcp"\n  from_port   = 443\n  to_port     = 443',
-        ),
+        ingressRule('  cidr_ipv4   = "0.0.0.0/0"\n  ip_protocol = "tcp"\n  from_port   = 443\n  to_port     = 443'),
       ),
     ).toEqual([])
   })
@@ -231,13 +214,12 @@ describe('no-open-ingress', () => {
 })
 
 describe('no-analyzer-suppression', () => {
-  it.each([
-    '#checkov:skip=CKV_AWS_274:temporary',
-    '# checkov:skip=CKV_AWS_20',
-    '#tfsec:ignore:aws-s3',
-  ])('reports %s, which turns an enabled check off', (comment: string) => {
-    expect(rulesOf(comment)).toEqual(['no-analyzer-suppression'])
-  })
+  it.each(['#checkov:skip=CKV_AWS_274:temporary', '# checkov:skip=CKV_AWS_20', '#tfsec:ignore:aws-s3'])(
+    'reports %s, which turns an enabled check off',
+    (comment: string) => {
+      expect(rulesOf(comment)).toEqual(['no-analyzer-suppression'])
+    },
+  )
 
   it('accepts an ordinary comment', () => {
     expect(rulesOf('# the bucket is private and fronted by the distribution')).toEqual([])
@@ -277,11 +259,9 @@ describe('what findTerraformViolations deliberately leaves alone', () => {
 
 describe('the order findings are reported in', () => {
   it('reports them by the line they sit on rather than by rule', () => {
-    const source: string = [
-      '  db_password = "REPLACE-ME"',
-      '  force_destroy = true',
-      '#checkov:skip=CKV_AWS_20',
-    ].join('\n')
+    const source: string = ['  db_password = "REPLACE-ME"', '  force_destroy = true', '#checkov:skip=CKV_AWS_20'].join(
+      '\n',
+    )
     const lines: readonly number[] = findTerraformViolations(source).map(
       (violation: TerraformViolation): number => violation.line,
     )

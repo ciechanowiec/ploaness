@@ -21,9 +21,7 @@ interface PlaywrightConfig {
 const specDirectory: string = path.dirname(fileURLToPath(import.meta.url))
 
 const loadConfig = async (): Promise<PlaywrightConfig> => {
-  const loaded: unknown = await import(
-    pathToFileURL(path.join(specDirectory, '..', 'dist', 'playwright.js')).href
-  )
+  const loaded: unknown = await import(pathToFileURL(path.join(specDirectory, '..', 'dist', 'playwright.js')).href)
   if (typeof loaded !== 'object' || loaded === null || !Object.hasOwn(loaded, 'default')) {
     throw new TypeError('playwright.js does not default-export a config')
   }

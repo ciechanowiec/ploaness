@@ -59,17 +59,13 @@ describe('configBody', () => {
   const trailing: string = `const Posts = { slug: 'posts', fields: [] } satisfies CollectionConfig`
 
   it('reads the literal that follows an annotation', () => {
-    expect(configBody(annotated, annotated.indexOf('CollectionConfig'), false)).toBe(
-      "{ slug: 'posts', fields: [] }",
-    )
+    expect(configBody(annotated, annotated.indexOf('CollectionConfig'), false)).toBe("{ slug: 'posts', fields: [] }")
   })
 
   // `satisfies` writes the type after the value, so the body is the literal that CLOSES before the
   // marker rather than the one that opens after it. Scanning forward from the marker finds nothing.
   it('reads the literal that precedes a satisfies marker', () => {
-    expect(configBody(trailing, trailing.indexOf('satisfies'), true)).toBe(
-      "{ slug: 'posts', fields: [] }",
-    )
+    expect(configBody(trailing, trailing.indexOf('satisfies'), true)).toBe("{ slug: 'posts', fields: [] }")
   })
 
   it('picks the nearest preceding literal when a file declares several', () => {
@@ -88,8 +84,6 @@ const B = { slug: 'b' } satisfies CollectionConfig`
   // literal early and hand a rule a body that stops mid-declaration.
   it('does not end the body at a brace inside a string literal', () => {
     const tricky: string = `const Posts: CollectionConfig = { slug: 'a}b', fields: [] }`
-    expect(configBody(tricky, tricky.indexOf('CollectionConfig'), false)).toBe(
-      "{ slug: 'a}b', fields: [] }",
-    )
+    expect(configBody(tricky, tricky.indexOf('CollectionConfig'), false)).toBe("{ slug: 'a}b', fields: [] }")
   })
 })

@@ -11,9 +11,7 @@ const NUL: number = 0
 
 const isContainedRelativePath = (candidate: string): boolean => {
   const normalized: string = path.normalize(candidate)
-  return (
-    !path.isAbsolute(normalized) && normalized !== '..' && !normalized.startsWith(`..${path.sep}`)
-  )
+  return !path.isAbsolute(normalized) && normalized !== '..' && !normalized.startsWith(`..${path.sep}`)
 }
 
 const isMissing = (error: unknown): boolean =>

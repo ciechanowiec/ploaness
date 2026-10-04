@@ -15,9 +15,7 @@ import {
 
 describe('logicalLines', (): void => {
   it('joinsABackslashContinuedCommand', (): void => {
-    const lines: readonly string[] = logicalLines(
-      'RUN apk add \\\n    curl \\\n    git\nCMD ["sh"]',
-    )
+    const lines: readonly string[] = logicalLines('RUN apk add \\\n    curl \\\n    git\nCMD ["sh"]')
     expect(lines).toHaveLength(2)
     expect(lines[0]).toMatch(/^RUN apk add\s+curl\s+git$/)
     expect(lines[1]).toBe('CMD ["sh"]')
@@ -50,9 +48,7 @@ describe('imageReferencesInDockerfile', (): void => {
   })
 
   it('ignoresACommentedFrom', (): void => {
-    expect(imageReferencesInDockerfile('# FROM mongo:7\nFROM postgres:18')).toStrictEqual([
-      'postgres:18',
-    ])
+    expect(imageReferencesInDockerfile('# FROM mongo:7\nFROM postgres:18')).toStrictEqual(['postgres:18'])
   })
 
   it('readsTheKeywordCaseInsensitively', (): void => {
@@ -69,12 +65,7 @@ describe('systemPackagesInDockerfile', (): void => {
       '  && rm -rf /var/lib/apt/lists/*',
       'RUN apk add --no-cache mupdf-tools=1.23.7-r0; apk add curl',
     ].join('\n')
-    expect(systemPackagesInDockerfile(dockerfile)).toStrictEqual([
-      'ghostscript',
-      'imagemagick',
-      'mupdf-tools',
-      'curl',
-    ])
+    expect(systemPackagesInDockerfile(dockerfile)).toStrictEqual(['ghostscript', 'imagemagick', 'mupdf-tools', 'curl'])
   })
 
   it('readsNothingFromARunThatInstallsNothing', (): void => {
@@ -106,11 +97,7 @@ describe('imageReferencesInWorkflow', (): void => {
   })
 
   it('leavesAMappingFormContainerToItsImageLine', (): void => {
-    const workflow: string = [
-      '    container:',
-      '      image: node:22',
-      '      options: --cpus 1',
-    ].join('\n')
+    const workflow: string = ['    container:', '      image: node:22', '      options: --cpus 1'].join('\n')
     expect(imageReferencesInWorkflow(workflow)).toStrictEqual(['node:22'])
   })
 })

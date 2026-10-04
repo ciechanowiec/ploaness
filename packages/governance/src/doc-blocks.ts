@@ -3,15 +3,7 @@
 // Extensions whose comment syntax this rule understands. A stylesheet shares the delimiters but has
 // no JSDoc, so two adjacent blocks there are two comments rather than one orphan - which is why this
 // list is narrower than CODE_EXTENSIONS.
-export const DOCUMENTED_EXTENSIONS: readonly string[] = [
-  '.ts',
-  '.tsx',
-  '.mts',
-  '.cts',
-  '.js',
-  '.mjs',
-  '.cjs',
-]
+export const DOCUMENTED_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.mts', '.cts', '.js', '.mjs', '.cjs']
 
 const DOC_OPEN: string = '/**'
 const BLOCK_CLOSE: string = '*/'
@@ -37,8 +29,7 @@ const EMPTY_SCAN: ScanState = { open: NO_OPEN_BLOCK, blocks: [] }
 
 // A block that opens and closes on one line, which is the shape most one-sentence docs take. The
 // search starts past the opening marker so its own trailing asterisk cannot be read as the close.
-const endsOnOpeningLine = (trimmed: string): boolean =>
-  trimmed.slice(DOC_OPEN.length).includes(BLOCK_CLOSE)
+const endsOnOpeningLine = (trimmed: string): boolean => trimmed.slice(DOC_OPEN.length).includes(BLOCK_CLOSE)
 
 const afterOpenLine = (state: ScanState, trimmed: string, line: number): ScanState => {
   if (!trimmed.startsWith(DOC_OPEN)) {
@@ -61,18 +52,14 @@ const docBlocks = (lines: readonly string[]): readonly DocBlock[] =>
   lines.reduce((state: ScanState, raw: string, index: number): ScanState => {
     const trimmed: string = raw.trim()
     const line: number = index + FIRST_LINE
-    return state.open === NO_OPEN_BLOCK
-      ? afterOpenLine(state, trimmed, line)
-      : afterBodyLine(state, trimmed, line)
+    return state.open === NO_OPEN_BLOCK ? afterOpenLine(state, trimmed, line) : afterBodyLine(state, trimmed, line)
   }, EMPTY_SCAN).blocks
 
 // Blank lines are skipped rather than treated as separation. A doc block separated from the next doc
 // block by an empty line is orphaned exactly as tightly as one that is not: what makes it an orphan is
 // that no declaration follows it, and whitespace is not a declaration.
 const opensAnotherBlock = (lines: readonly string[], endLine: number): boolean => {
-  const next: string | undefined = lines
-    .slice(endLine)
-    .find((line: string): boolean => line.trim().length > 0)
+  const next: string | undefined = lines.slice(endLine).find((line: string): boolean => line.trim().length > 0)
   return (next ?? '').trimStart().startsWith(DOC_OPEN)
 }
 
@@ -83,7 +70,5 @@ const opensAnotherBlock = (lines: readonly string[], endLine: number): boolean =
  */
 export const findOrphanedDocBlocks = (text: string): readonly DocBlock[] => {
   const lines: readonly string[] = text.replaceAll('\r\n', '\n').split('\n')
-  return docBlocks(lines).filter((block: DocBlock): boolean =>
-    opensAnotherBlock(lines, block.endLine),
-  )
+  return docBlocks(lines).filter((block: DocBlock): boolean => opensAnotherBlock(lines, block.endLine))
 }

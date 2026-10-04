@@ -23,10 +23,7 @@ const wired = (overrides: Record<string, unknown> = {}): Record<string, unknown>
   ...overrides,
 })
 
-const locationsOf = (
-  packageJson: Record<string, unknown>,
-  overrides: Partial<VersionInputs> = {},
-): readonly string[] =>
+const locationsOf = (packageJson: Record<string, unknown>, overrides: Partial<VersionInputs> = {}): readonly string[] =>
   findVersionViolations(packageJson, inputs(overrides)).map((violation) => violation.location)
 
 describe('a version ploaness pins', () => {
@@ -35,9 +32,7 @@ describe('a version ploaness pins', () => {
   })
 
   it('reports a required package the project never declares', () => {
-    expect(locationsOf({ packageManager: 'pnpm@11.9.0', engines: { node: '>=26' } })).toContain(
-      'package.json vitest',
-    )
+    expect(locationsOf({ packageManager: 'pnpm@11.9.0', engines: { node: '>=26' } })).toContain('package.json vitest')
   })
 
   it('reports a pinned package declared at another version', () => {
@@ -53,14 +48,13 @@ describe('a version ploaness pins', () => {
   // The block a finding names has to be the block the version was read from, or the reader is sent to
   // the wrong half of the file.
   it('names the block the package is actually declared in', () => {
-    expect(
-      locationsOf(wired({ devDependencies: {}, dependencies: { vitest: '4.0.0' } })),
-    ).toContain('package.json dependencies.vitest')
+    expect(locationsOf(wired({ devDependencies: {}, dependencies: { vitest: '4.0.0' } }))).toContain(
+      'package.json dependencies.vitest',
+    )
   })
 })
 
-const declaring = (specifier: string): Record<string, unknown> =>
-  wired({ dependencies: { next: specifier } })
+const declaring = (specifier: string): Record<string, unknown> => wired({ dependencies: { next: specifier } })
 
 describe('a specifier that is not one exact version', () => {
   it.each(['^16.3.2', '~16.3.2', '>=16.3.2', '*', '', '16.x', '1.0.0 || 2.0.0', '1.0.0 - 2.0.0'])(
@@ -120,9 +114,7 @@ describe('the Payload family', () => {
 
 describe('the runtime a project declares', () => {
   it('reports a packageManager that is not the pinned one', () => {
-    expect(locationsOf(wired({ packageManager: 'pnpm@11.5.0' }))).toContain(
-      'package.json packageManager',
-    )
+    expect(locationsOf(wired({ packageManager: 'pnpm@11.5.0' }))).toContain('package.json packageManager')
   })
 
   it('reports an engines entry that is not the required range', () => {
@@ -138,9 +130,7 @@ describe('the runtime a project declares', () => {
   // way - two literals for one version - the pair had already drifted, an exact `pnpm@11.9.0` beside a
   // `>=11` floor that told a reader any pnpm 11 would resolve the same tree.
   it('requires engines.pnpm at the version packageManager names, without pinning it twice', () => {
-    expect(locationsOf(wired({ engines: { node: '>=26', pnpm: '>=11' } }))).toContain(
-      'package.json engines.pnpm',
-    )
+    expect(locationsOf(wired({ engines: { node: '>=26', pnpm: '>=11' } }))).toContain('package.json engines.pnpm')
   })
 
   it('says nothing about an engines.pnpm that is the version packageManager names', () => {
@@ -148,9 +138,9 @@ describe('the runtime a project declares', () => {
   })
 
   it('requires no engines.pnpm when ploaness pins no package manager', () => {
-    expect(
-      locationsOf(wired({ engines: { node: '>=26' } }), { requiredPackageManager: undefined }),
-    ).not.toContain('package.json engines.pnpm')
+    expect(locationsOf(wired({ engines: { node: '>=26' } }), { requiredPackageManager: undefined })).not.toContain(
+      'package.json engines.pnpm',
+    )
   })
 })
 
@@ -158,30 +148,24 @@ describe('the ways to change what a pin installs without changing the pin', () =
   it.each(['overrides', 'resolutions', 'patchedDependencies', 'packageExtensions'])(
     'reports a %s entry in package.json naming a pinned package',
     (key: string) => {
-      expect(locationsOf(wired({ [key]: { vitest: '4.0.0' } }))).toContain(
-        `package.json ${key}.vitest`,
-      )
+      expect(locationsOf(wired({ [key]: { vitest: '4.0.0' } }))).toContain(`package.json ${key}.vitest`)
     },
   )
 
   it('reads the same keys under the pnpm block', () => {
-    expect(locationsOf(wired({ pnpm: { overrides: { vitest: '4.0.0' } } }))).toContain(
-      'package.json overrides.vitest',
-    )
+    expect(locationsOf(wired({ pnpm: { overrides: { vitest: '4.0.0' } } }))).toContain('package.json overrides.vitest')
   })
 
   it('reads a patch key past the version it is qualified by', () => {
-    expect(
-      locationsOf(wired({ pnpm: { patchedDependencies: { 'vitest@4.1.11': 'p.patch' } } })),
-    ).toContain('package.json patchedDependencies.vitest@4.1.11')
+    expect(locationsOf(wired({ pnpm: { patchedDependencies: { 'vitest@4.1.11': 'p.patch' } } }))).toContain(
+      'package.json patchedDependencies.vitest@4.1.11',
+    )
   })
 
   it('reports a workspace override of a package the project declares itself', () => {
     const workspaceFile: string = ['overrides:', '  left-pad: 1.0.0'].join('\n')
     const packageJson: Record<string, unknown> = wired({ dependencies: { 'left-pad': '1.1.0' } })
-    expect(locationsOf(packageJson, { workspaceFile })).toContain(
-      'pnpm-workspace.yaml overrides.left-pad',
-    )
+    expect(locationsOf(packageJson, { workspaceFile })).toContain('pnpm-workspace.yaml overrides.left-pad')
   })
 
   it('leaves an override of a transitive package alone, which is the one permitted case', () => {
@@ -196,9 +180,7 @@ describe('the ways to change what a pin installs without changing the pin', () =
     'reports a workspace override of a pinned package written as %j',
     (specifier: string) => {
       const workspaceFile: string = ['overrides:', `  vitest: ${specifier}`].join('\n')
-      expect(locationsOf(wired(), { workspaceFile })).toContain(
-        'pnpm-workspace.yaml overrides.vitest',
-      )
+      expect(locationsOf(wired(), { workspaceFile })).toContain('pnpm-workspace.yaml overrides.vitest')
     },
   )
 })
@@ -220,9 +202,7 @@ describe('an override of the harness itself', () => {
   it('still reports the harness packages overridden to another registry version', () => {
     const workspaceFile: string = ['overrides:', '  ploaness: 2.0.0'].join('\n')
     const packageJson: Record<string, unknown> = wired({ dependencies: { ploaness: '1.0.0' } })
-    expect(locationsOf(packageJson, { workspaceFile })).toContain(
-      'pnpm-workspace.yaml overrides.ploaness',
-    )
+    expect(locationsOf(packageJson, { workspaceFile })).toContain('pnpm-workspace.yaml overrides.ploaness')
   })
 })
 
@@ -254,9 +234,7 @@ describe('the harness family', () => {
       inputs(),
     )
     expect(
-      findings.filter((finding: WiringViolation): boolean =>
-        finding.location.includes('@ploaness/runtime'),
-      ),
+      findings.filter((finding: WiringViolation): boolean => finding.location.includes('@ploaness/runtime')),
     ).toEqual([])
   })
 
@@ -275,9 +253,7 @@ describe('the harness family', () => {
       inputs(),
     )
     expect(
-      findings.filter((finding: WiringViolation): boolean =>
-        finding.location.includes('@ploaness/runtime'),
-      ),
+      findings.filter((finding: WiringViolation): boolean => finding.location.includes('@ploaness/runtime')),
     ).toEqual([])
   })
 })

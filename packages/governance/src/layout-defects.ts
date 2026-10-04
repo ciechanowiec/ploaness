@@ -5,12 +5,7 @@
 // an edge attached at a phone width and apart at a desktop one is the ordinary shape of a responsive
 // layout, so an exemption is stale only when it excuses nothing at any of them.
 import { type BoxFinding, findTouchingBoxes } from './layout-boxes.js'
-import {
-  ATTACHED_EXEMPTION,
-  keyOf,
-  type LayoutNode,
-  type LayoutSnapshot,
-} from './layout-snapshot.js'
+import { ATTACHED_EXEMPTION, keyOf, type LayoutNode, type LayoutSnapshot } from './layout-snapshot.js'
 import {
   type ClipFinding,
   findClippedText,
@@ -42,8 +37,7 @@ export const LAYOUT_REASON_ATTRIBUTE: string = 'data-ploaness-layout-reason'
 
 const PAIR_SEPARATOR: string = '  <->  '
 
-const where = (snapshot: LayoutSnapshot): string =>
-  `${snapshot.route} @${String(snapshot.viewportWidth)}px`
+const where = (snapshot: LayoutSnapshot): string => `${snapshot.route} @${String(snapshot.viewportWidth)}px`
 
 const boxLine = (snapshot: LayoutSnapshot, finding: BoxFinding): string => {
   const kind: string = finding.isOverlap
@@ -83,9 +77,7 @@ const snapshotLines = (snapshot: LayoutSnapshot, minimumGap: number): readonly s
   ...findTouchingBoxes(snapshot, minimumGap)
     .filter((finding: BoxFinding): boolean => !isExempted(finding))
     .map((finding: BoxFinding): string => boxLine(snapshot, finding)),
-  ...findOverlappingText(snapshot).map((finding: TextFinding): string =>
-    textLine(snapshot, finding),
-  ),
+  ...findOverlappingText(snapshot).map((finding: TextFinding): string => textLine(snapshot, finding)),
   ...findClippedText(snapshot).map((finding: ClipFinding): string => clipLine(snapshot, finding)),
   ...overflowLines(snapshot),
 ]
@@ -109,10 +101,7 @@ const exemptionLines = (snapshot: LayoutSnapshot): readonly string[] =>
       : []
   })
 
-const usedExemptionKeys = (
-  snapshots: readonly LayoutSnapshot[],
-  minimumGap: number,
-): ReadonlySet<string> =>
+const usedExemptionKeys = (snapshots: readonly LayoutSnapshot[], minimumGap: number): ReadonlySet<string> =>
   new Set<string>(
     snapshots.flatMap((snapshot: LayoutSnapshot): readonly string[] =>
       findTouchingBoxes(snapshot, minimumGap).flatMap((finding: BoxFinding): readonly string[] =>
@@ -127,11 +116,10 @@ interface Exemption {
 }
 
 const attachedExemptions = (snapshots: readonly LayoutSnapshot[]): readonly Exemption[] => {
-  const all: readonly Exemption[] = snapshots.flatMap(
-    (snapshot: LayoutSnapshot): readonly Exemption[] =>
-      snapshot.nodes
-        .filter((node: LayoutNode): boolean => node.exemption === ATTACHED_EXEMPTION)
-        .map((node: LayoutNode): Exemption => ({ key: keyOf(snapshot, node), label: node.label })),
+  const all: readonly Exemption[] = snapshots.flatMap((snapshot: LayoutSnapshot): readonly Exemption[] =>
+    snapshot.nodes
+      .filter((node: LayoutNode): boolean => node.exemption === ATTACHED_EXEMPTION)
+      .map((node: LayoutNode): Exemption => ({ key: keyOf(snapshot, node), label: node.label })),
   )
   return all.filter(
     (exemption: Exemption, index: number): boolean =>
@@ -139,10 +127,7 @@ const attachedExemptions = (snapshots: readonly LayoutSnapshot[]): readonly Exem
   )
 }
 
-const staleLines = (
-  snapshots: readonly LayoutSnapshot[],
-  minimumGap: number,
-): readonly string[] => {
+const staleLines = (snapshots: readonly LayoutSnapshot[], minimumGap: number): readonly string[] => {
   const used: ReadonlySet<string> = usedExemptionKeys(snapshots, minimumGap)
   const widths: string = snapshots
     .map((snapshot: LayoutSnapshot): string => `${String(snapshot.viewportWidth)}px`)
@@ -163,10 +148,7 @@ const staleLines = (
  * @param minimumGap the smallest gap, in CSS pixels, between a boxed element and its sibling.
  * @returns one line per defect, without duplicates, in the order the viewports were measured.
  */
-export const findLayoutDefects = (
-  snapshots: readonly LayoutSnapshot[],
-  minimumGap: number,
-): readonly string[] => [
+export const findLayoutDefects = (snapshots: readonly LayoutSnapshot[], minimumGap: number): readonly string[] => [
   ...new Set<string>([
     ...snapshots.flatMap((snapshot: LayoutSnapshot): readonly string[] => [
       ...snapshotLines(snapshot, minimumGap),
@@ -181,13 +163,10 @@ export const findLayoutDefects = (
  * @param declared the viewports a project declared.
  * @returns the required viewports first, each width once.
  */
-export const layoutViewportsWith = (
-  declared: readonly LayoutViewport[],
-): readonly LayoutViewport[] =>
+export const layoutViewportsWith = (declared: readonly LayoutViewport[]): readonly LayoutViewport[] =>
   [...LAYOUT_VIEWPORTS, ...declared].filter(
     (viewport: LayoutViewport, index: number, all: readonly LayoutViewport[]): boolean =>
       all.findIndex(
-        (other: LayoutViewport): boolean =>
-          other.width === viewport.width && other.height === viewport.height,
+        (other: LayoutViewport): boolean => other.width === viewport.width && other.height === viewport.height,
       ) === index,
   )

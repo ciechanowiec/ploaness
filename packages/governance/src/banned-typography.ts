@@ -83,10 +83,7 @@ export interface TypographyViolation {
 }
 
 const BY_CHARACTER: ReadonlyMap<string, BannedCharacter> = new Map(
-  BANNED_CHARACTERS.map((banned: BannedCharacter): readonly [string, BannedCharacter] => [
-    banned.char,
-    banned,
-  ]),
+  BANNED_CHARACTERS.map((banned: BannedCharacter): readonly [string, BannedCharacter] => [banned.char, banned]),
 )
 
 // Every occurrence, at its own column, in the order it is read.
@@ -122,6 +119,4 @@ export const findTypographyViolations = (text: string): readonly TypographyViola
   text
     .replaceAll('\r\n', '\n')
     .split('\n')
-    .flatMap((line: string, index: number): readonly TypographyViolation[] =>
-      violationsInLine(line, index + 1),
-    )
+    .flatMap((line: string, index: number): readonly TypographyViolation[] => violationsInLine(line, index + 1))

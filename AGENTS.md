@@ -88,6 +88,7 @@ Use Node 26 or later and the exact pnpm version in `packageManager`.
 | `sh it/verify.sh --native-only` | Diagnostic native-rule and suppression subset. |
 | `sh it/verify.sh --jsx-only` | Diagnostic JSX and browser-name subset. |
 | `sh it/verify.sh --layout-only` | Diagnostic layout-scan subset against real Next pages. |
+| `sh it/verify.sh --browser-servers-only` | Diagnostic browser-server ownership subset. |
 | `pnpm run format` | Apply the formatting and fixes judged by the lint checks. |
 | `pnpm run lint:eslint` | Type-aware lint subset. |
 

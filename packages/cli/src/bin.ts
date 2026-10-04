@@ -8,12 +8,7 @@ import { verify, verifyOne } from './commands/verify.js'
 // options that change what is checked. Two flags exist and neither reaches a rule: --enforce=false
 // changes whether findings are fatal, and --verbose changes what is shown. There is no flag that skips
 // a gate.
-import {
-  createRepository as createRepo,
-  type Member,
-  memberAt,
-  type Repository as Repo,
-} from './context.js'
+import { createRepository as createRepo, type Member, memberAt, type Repository as Repo } from './context.js'
 import { ALL_GATES, type Gate, gateById } from './gates.js'
 
 // argv begins with the node binary and the script path; the command follows them.
@@ -60,9 +55,7 @@ const listGates = (rest: readonly string[]): number => {
       console.info(gate.id)
     } else {
       const mode: string = gate.isExtended ? 'extended' : 'default '
-      console.info(
-        `${mode}  ${gate.id.padEnd(GATE_ID_COLUMN)} ${gate.scope.padEnd(GATE_SCOPE_COLUMN)} ${gate.title}`,
-      )
+      console.info(`${mode}  ${gate.id.padEnd(GATE_ID_COLUMN)} ${gate.scope.padEnd(GATE_SCOPE_COLUMN)} ${gate.title}`)
     }
   }
   return 0
@@ -71,18 +64,13 @@ const listGates = (rest: readonly string[]): number => {
 // A single gate names no member, so a member-scope gate is asked about the package the engineer is
 // standing in. That is the only reading that stays useful in a workspace and is exactly today's
 // behaviour in a single-package repository, where there is one member and it is the root.
-const runOneGate = async (
-  repo: Repo,
-  id: string | undefined,
-  isVerbose: boolean,
-): Promise<number> => {
+const runOneGate = async (repo: Repo, id: string | undefined, isVerbose: boolean): Promise<number> => {
   const gate: Gate | undefined = id === undefined ? undefined : gateById(id)
   if (gate === undefined) {
     console.error(`unknown gate "${id ?? ''}". Run \`ploaness gates\` to list them.`)
     return 1
   }
-  const member: Member | undefined =
-    gate.scope === 'repository' ? undefined : memberAt(repo, process.cwd())
+  const member: Member | undefined = gate.scope === 'repository' ? undefined : memberAt(repo, process.cwd())
   return await verifyOne(repo, { gate, member }, isVerbose)
 }
 
@@ -99,8 +87,7 @@ const COMMANDS: Readonly<Record<string, CommandRunner>> = {
   gates: (_repository: Repo, rest: readonly string[]): number => listGates(rest),
   gate: async (repo: Repo, rest: readonly string[]): Promise<number> =>
     await runOneGate(repo, rest[0], rest.includes(VERBOSE_OPTION)),
-  'commit-message': (repo: Repo, rest: readonly string[]): number =>
-    commitMessage(repo, rest[0], rest[1]),
+  'commit-message': (repo: Repo, rest: readonly string[]): number => commitMessage(repo, rest[0], rest[1]),
 }
 
 // Each command owns its grammar. A global allowlist rejected the documented `commit-message --all` and
@@ -112,8 +99,7 @@ const GATE_OPTIONS: ReadonlySet<string> = new Set<string>([VERBOSE_OPTION])
 const RANGE_ARGUMENT_COUNT: number = 2
 
 const hasDistinctMembersOf = (values: readonly string[], allowed: ReadonlySet<string>): boolean =>
-  values.every((value: string): boolean => allowed.has(value)) &&
-  new Set<string>(values).size === values.length
+  values.every((value: string): boolean => allowed.has(value)) && new Set<string>(values).size === values.length
 
 const isCommitMessageArguments = (rest: readonly string[]): boolean => {
   const [mode, value] = rest

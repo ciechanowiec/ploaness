@@ -6,60 +6,39 @@
 // halves passed the file size cap. Every one of them is a security decision that Payload will silently
 // make on the project's behalf if the project does not make it first.
 
-import {
-  type FoundPayloadConfig,
-  type PayloadConfigKind,
-  payloadConfigsIn,
-} from './payload-configs.js'
-import {
-  configBody,
-  depthOneBlockKeys,
-  depthOneValue,
-  type PayloadViolation,
-} from './payload-source.js'
-import {
-  balancedArguments,
-  type Folded,
-  NOT_FOUND,
-  type ScanStep,
-  scanDelimited,
-  topLevelKeys,
-} from './source-text.js'
+import { type FoundPayloadConfig, type PayloadConfigKind, payloadConfigsIn } from './payload-configs.js'
+import { configBody, depthOneBlockKeys, depthOneValue, type PayloadViolation } from './payload-source.js'
+import { balancedArguments, type Folded, NOT_FOUND, type ScanStep, scanDelimited, topLevelKeys } from './source-text.js'
 
 const eachConfig = (
   source: string,
   judge: (kind: PayloadConfigKind, found: FoundPayloadConfig) => readonly PayloadViolation[],
 ): readonly PayloadViolation[] =>
-  payloadConfigsIn(source).flatMap((found: FoundPayloadConfig): readonly PayloadViolation[] =>
-    judge(found.kind, found),
-  )
+  payloadConfigsIn(source).flatMap((found: FoundPayloadConfig): readonly PayloadViolation[] => judge(found.kind, found))
 
 // Payload fills the missing operations in during sanitisation, so a partial access block is invisible
 // the moment the app boots - and its default admits every signed-in user to every operation. Checking
 // that the word `access` appears somewhere in the file, which is what this rule used to do, accepted a
 // block that declared one operation out of four.
 export const findUndeclaredAccess = (source: string): readonly PayloadViolation[] =>
-  eachConfig(
-    source,
-    (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] => {
-      const declared: readonly string[] = depthOneBlockKeys(found.body, 'access')
-      const missing: readonly string[] = kind.operations.filter(
-        (operation: string): boolean => !declared.includes(operation),
-      )
-      return missing.length === 0
-        ? []
-        : [
-            {
-              line: found.line,
-              rule: 'require-complete-access',
-              reason:
-                `a ${kind.label} must declare access for ${kind.operations.join(', ')}; ` +
-                `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} left to Payload's ` +
-                'default, which admits every signed-in user',
-            },
-          ]
-    },
-  )
+  eachConfig(source, (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] => {
+    const declared: readonly string[] = depthOneBlockKeys(found.body, 'access')
+    const missing: readonly string[] = kind.operations.filter(
+      (operation: string): boolean => !declared.includes(operation),
+    )
+    return missing.length === 0
+      ? []
+      : [
+          {
+            line: found.line,
+            rule: 'require-complete-access',
+            reason:
+              `a ${kind.label} must declare access for ${kind.operations.join(', ')}; ` +
+              `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} left to Payload's ` +
+              'default, which admits every signed-in user',
+          },
+        ]
+  })
 
 // Payload locks nothing by default: without a login-attempt cap and a lock time, an auth collection
 // accepts guesses at whatever rate a client can make them. `auth: true` is the bare enable, so it is
@@ -69,9 +48,7 @@ const AUTH_HARDENING_KEYS: readonly string[] = ['maxLoginAttempts', 'lockTime']
 const COLLECTION: string = 'CollectionConfig'
 
 const leadingNumber = (value: string | undefined): number | undefined => {
-  const match: RegExpExecArray | null = /^\s*(-?\d[\d_]*(?:\.\d[\d_]*)?)\s*(?=[,}])/.exec(
-    value ?? '',
-  )
+  const match: RegExpExecArray | null = /^\s*(-?\d[\d_]*(?:\.\d[\d_]*)?)\s*(?=[,}])/.exec(value ?? '')
   return match === null ? undefined : Number((match[1] ?? '').replaceAll('_', ''))
 }
 
@@ -80,12 +57,8 @@ const unhardenedAuthIn = (found: FoundPayloadConfig): readonly PayloadViolation[
   if (value === undefined) {
     return []
   }
-  const declared: readonly string[] = value.trimStart().startsWith('{')
-    ? topLevelKeys(value, 0)
-    : []
-  const missing: readonly string[] = AUTH_HARDENING_KEYS.filter(
-    (key: string): boolean => !declared.includes(key),
-  )
+  const declared: readonly string[] = value.trimStart().startsWith('{') ? topLevelKeys(value, 0) : []
+  const missing: readonly string[] = AUTH_HARDENING_KEYS.filter((key: string): boolean => !declared.includes(key))
   const disabled: readonly string[] = AUTH_HARDENING_KEYS.filter((key: string): boolean => {
     const numeric: number | undefined = leadingNumber(depthOneValue(value, key))
     return numeric !== undefined && numeric <= 0
@@ -107,10 +80,8 @@ const unhardenedAuthIn = (found: FoundPayloadConfig): readonly PayloadViolation[
 
 /** Report an auth collection that leaves the login-attempt cap and lock time to Payload's defaults. */
 export const findUnhardenedAuth = (source: string): readonly PayloadViolation[] =>
-  eachConfig(
-    source,
-    (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
-      kind.label === COLLECTION ? unhardenedAuthIn(found) : [],
+  eachConfig(source, (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
+    kind.label === COLLECTION ? unhardenedAuthIn(found) : [],
   )
 
 // The cap above, undone from inside. `unlock` is one of the operations Payload fills the access block
@@ -142,10 +113,8 @@ const unlockableAuthIn = (found: FoundPayloadConfig): readonly PayloadViolation[
 
 /** Report an auth collection that leaves who may clear a lockout to Payload's default. */
 export const findUnlockableAuth = (source: string): readonly PayloadViolation[] =>
-  eachConfig(
-    source,
-    (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
-      kind.label === COLLECTION ? unlockableAuthIn(found) : [],
+  eachConfig(source, (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
+    kind.label === COLLECTION ? unlockableAuthIn(found) : [],
   )
 
 // A draft is unpublished content. With versions.drafts enabled, `?draft=true` serves it to whoever the
@@ -196,20 +165,18 @@ const isDraftExposed = (body: string): boolean => {
 
 /** Report a config whose drafts are readable by an unauthenticated client. */
 export const findAnonymousDraftReads = (source: string): readonly PayloadViolation[] =>
-  eachConfig(
-    source,
-    (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
-      isDraftExposed(found.body)
-        ? [
-            {
-              line: found.line,
-              rule: 'no-anonymous-draft-reads',
-              reason:
-                `a ${kind.label} with drafts enabled must not grant an unconditionally true read; ` +
-                'an unauthenticated client would fetch unpublished drafts through ?draft=true',
-            },
-          ]
-        : [],
+  eachConfig(source, (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
+    isDraftExposed(found.body)
+      ? [
+          {
+            line: found.line,
+            rule: 'no-anonymous-draft-reads',
+            reason:
+              `a ${kind.label} with drafts enabled must not grant an unconditionally true read; ` +
+              'an unauthenticated client would fetch unpublished drafts through ?draft=true',
+          },
+        ]
+      : [],
   )
 
 // The read rule, bypassed by asking a different question. A version carries the whole document, and
@@ -229,23 +196,20 @@ const carriesVersions = (body: string): boolean => {
 
 /** Report a config that keeps versions and leaves who may read them to Payload's fall-through. */
 export const findUndeclaredVersionReads = (source: string): readonly PayloadViolation[] =>
-  eachConfig(
-    source,
-    (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
-      carriesVersions(found.body) &&
-      !depthOneBlockKeys(found.body, 'access').includes(READ_VERSIONS_OPERATION)
-        ? [
-            {
-              line: found.line,
-              rule: 'require-version-read-access',
-              reason:
-                `a ${kind.label} that keeps versions must declare access for ` +
-                `${READ_VERSIONS_OPERATION}; Payload leaves it undeclared and then admits every ` +
-                'signed-in user, so a scoped read is bypassed by asking for a version of a document ' +
-                'instead of the document',
-            },
-          ]
-        : [],
+  eachConfig(source, (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
+    carriesVersions(found.body) && !depthOneBlockKeys(found.body, 'access').includes(READ_VERSIONS_OPERATION)
+      ? [
+          {
+            line: found.line,
+            rule: 'require-version-read-access',
+            reason:
+              `a ${kind.label} that keeps versions must declare access for ` +
+              `${READ_VERSIONS_OPERATION}; Payload leaves it undeclared and then admits every ` +
+              'signed-in user, so a scoped read is bypassed by asking for a version of a document ' +
+              'instead of the document',
+          },
+        ]
+      : [],
   )
 
 // `mimeTypes` defaults to undefined, so an upload collection takes whatever a client sends until the
@@ -259,9 +223,7 @@ const unrestrictedUploadIn = (found: FoundPayloadConfig): readonly PayloadViolat
   if (value === undefined) {
     return []
   }
-  const declared: readonly string[] = value.trimStart().startsWith('{')
-    ? topLevelKeys(value, 0)
-    : []
+  const declared: readonly string[] = value.trimStart().startsWith('{') ? topLevelKeys(value, 0) : []
   return declared.includes(UPLOAD_RESTRICTION)
     ? []
     : [
@@ -277,10 +239,8 @@ const unrestrictedUploadIn = (found: FoundPayloadConfig): readonly PayloadViolat
 
 /** Report an upload collection that accepts whatever file type Payload's defaults allow. */
 export const findUnrestrictedUploads = (source: string): readonly PayloadViolation[] =>
-  eachConfig(
-    source,
-    (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
-      kind.label === COLLECTION ? unrestrictedUploadIn(found) : [],
+  eachConfig(source, (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
+    kind.label === COLLECTION ? unrestrictedUploadIn(found) : [],
   )
 
 // An upload collection that admits SVG and has not decided how the file is served.
@@ -360,8 +320,8 @@ const svgAdmissionOf = (raw: string): SvgAdmission => {
   if (elements.length === 0) {
     return { verdict: 'admitted', entry: EMPTY_LIST }
   }
-  const literals: readonly (string | undefined)[] = elements.map(
-    (element: string): string | undefined => literalOf(element),
+  const literals: readonly (string | undefined)[] = elements.map((element: string): string | undefined =>
+    literalOf(element),
   )
   const admitting: string | undefined = literals.find(
     (literal: string | undefined): boolean => literal !== undefined && coversSvg(literal),
@@ -405,10 +365,7 @@ const undecidedSvgHeadersIn = (found: FoundPayloadConfig): readonly PayloadViola
   }
   const keys: readonly string[] = topLevelKeys(block, 0)
   // An absent list is the restriction rule's finding, so one collection never carries both.
-  if (
-    !keys.includes(UPLOAD_RESTRICTION) ||
-    RESPONSE_HEADER_KEYS.some((key: string): boolean => keys.includes(key))
-  ) {
+  if (!keys.includes(UPLOAD_RESTRICTION) || RESPONSE_HEADER_KEYS.some((key: string): boolean => keys.includes(key))) {
     return []
   }
   const admission: SvgAdmission = svgAdmissionOf(depthOneValue(block, UPLOAD_RESTRICTION) ?? '')
@@ -419,8 +376,6 @@ const undecidedSvgHeadersIn = (found: FoundPayloadConfig): readonly PayloadViola
 
 /** Report an upload collection that admits SVG, or may, without deciding the headers it is served with. */
 export const findUndecidedSvgHeaders = (source: string): readonly PayloadViolation[] =>
-  eachConfig(
-    source,
-    (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
-      kind.label === COLLECTION ? undecidedSvgHeadersIn(found) : [],
+  eachConfig(source, (kind: PayloadConfigKind, found: FoundPayloadConfig): readonly PayloadViolation[] =>
+    kind.label === COLLECTION ? undecidedSvgHeadersIn(found) : [],
   )

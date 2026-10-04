@@ -83,10 +83,7 @@ const resolveRules = async (
 }
 
 /** The accessors the rule is told to leave alone at one path, sorted so two configs compare directly. */
-const exemptAccessorsOf = async (
-  config: readonly Linter.Config[],
-  filePath: string,
-): Promise<readonly string[]> => {
+const exemptAccessorsOf = async (config: readonly Linter.Config[], filePath: string): Promise<readonly string[]> => {
   const rules: Readonly<Record<string, unknown>> = await resolveRules(config, filePath)
   const setting: unknown = rules[RULE]
   if (!Array.isArray(setting)) {
@@ -101,35 +98,27 @@ const exemptAccessorsOf = async (
 }
 
 /** What every shipped config exempts at one path, keyed by config so a failure names which one drifted. */
-const accessorsAt = async (
-  filePath: string,
-): Promise<Readonly<Record<string, readonly string[]>>> =>
+const accessorsAt = async (filePath: string): Promise<Readonly<Record<string, readonly string[]>>> =>
   Object.fromEntries(
     await Promise.all(
       Object.entries(shippedConfigs).map(
-        async ([name, config]: [string, readonly Linter.Config[]]): Promise<
-          readonly [string, readonly string[]]
-        > => [name, await exemptAccessorsOf(config, filePath)],
+        async ([name, config]: [string, readonly Linter.Config[]]): Promise<readonly [string, readonly string[]]> => [
+          name,
+          await exemptAccessorsOf(config, filePath),
+        ],
       ),
     ),
   )
 
 /** The same answer expected of every config, which is the property: neither may drift from the other. */
 const everyConfig = <Value>(value: Value): Readonly<Record<string, Value>> =>
-  Object.fromEntries(
-    Object.keys(shippedConfigs).map((name: string): readonly [string, Value] => [name, value]),
-  )
+  Object.fromEntries(Object.keys(shippedConfigs).map((name: string): readonly [string, Value] => [name, value]))
 
 const inEveryConfig = (accessors: readonly string[]): Readonly<Record<string, readonly string[]>> =>
   everyConfig(sorted(accessors))
 
-const carriesAccessor = (
-  byConfig: Readonly<Record<string, readonly string[]>>,
-  accessor: string,
-): boolean =>
-  Object.values(byConfig).some((accessors: readonly string[]): boolean =>
-    accessors.includes(accessor),
-  )
+const carriesAccessor = (byConfig: Readonly<Record<string, readonly string[]>>, accessor: string): boolean =>
+  Object.values(byConfig).some((accessors: readonly string[]): boolean => accessors.includes(accessor))
 
 /**
  * Whether one rule is declared at ordinary source, keyed by config so a failure names which one drifted.
@@ -142,9 +131,7 @@ const declaredInEveryConfig = async (rule: string): Promise<Readonly<Record<stri
   Object.fromEntries(
     await Promise.all(
       Object.entries(shippedConfigs).map(
-        async ([name, config]: [string, readonly Linter.Config[]]): Promise<
-          readonly [string, boolean]
-        > => {
+        async ([name, config]: [string, readonly Linter.Config[]]): Promise<readonly [string, boolean]> => {
           const rules: Readonly<Record<string, unknown>> = await resolveRules(config, SOURCE_FILE)
           return [name, rules[rule] !== undefined]
         },
@@ -158,16 +145,11 @@ const declaredInEveryConfig = async (rule: string): Promise<Readonly<Record<stri
  * Read back out of the config rather than written here, so it asserts what a consumer's own file is told
  * rather than that a literal in this file equals itself.
  */
-const findingsAt = async (
-  code: string,
-  filePath: string,
-): Promise<Readonly<Record<string, readonly string[]>>> =>
+const findingsAt = async (code: string, filePath: string): Promise<Readonly<Record<string, readonly string[]>>> =>
   Object.fromEntries(
     await Promise.all(
       Object.entries(shippedConfigs).map(
-        async ([name, config]: [string, readonly Linter.Config[]]): Promise<
-          readonly [string, readonly string[]]
-        > => {
+        async ([name, config]: [string, readonly Linter.Config[]]): Promise<readonly [string, readonly string[]]> => {
           const rules: Readonly<Record<string, unknown>> = await resolveRules(config, filePath)
           const messages: readonly Linter.LintMessage[] = new Linter().verify(code, {
             plugins: { functional: functionalPlugin },
@@ -200,9 +182,7 @@ describe('the environment, and the two roles that may set it', () => {
   // supplied, so the setup file keeps its verdict carve-out only because the shared constructor rebuilds
   // it. Stated by hand there, `process.exitCode` would silently stop being exempt in that one file.
   it('adds the environment WITHOUT dropping what the base block stated, at both paths', async () => {
-    expect(await accessorsAt(PROJECT_SETUP_FILE)).toStrictEqual(
-      inEveryConfig([RUNTIME_GLOBALS, ENVIRONMENT, VERDICT]),
-    )
+    expect(await accessorsAt(PROJECT_SETUP_FILE)).toStrictEqual(inEveryConfig([RUNTIME_GLOBALS, ENVIRONMENT, VERDICT]))
     expect(await accessorsAt(SPEC_FILE)).toStrictEqual(inEveryConfig([ENVIRONMENT, VERDICT]))
   })
 
@@ -231,9 +211,7 @@ describe('the environment, and the two roles that may set it', () => {
     const held: Readonly<Record<string, unknown>> = Object.fromEntries(
       await Promise.all(
         Object.entries(shippedConfigs).map(
-          async ([name, config]: [string, readonly Linter.Config[]]): Promise<
-            readonly [string, unknown]
-          > => {
+          async ([name, config]: [string, readonly Linter.Config[]]): Promise<readonly [string, unknown]> => {
             const rules: Readonly<Record<string, unknown>> = await resolveRules(config, SPEC_FILE)
             const setting: unknown = rules[NO_LET_RULE]
             // `calculateConfigForFile` normalises a severity to its numeric form in a one-element
@@ -344,18 +322,12 @@ describe("a hook's per-request state, and the one layer that may write it", () =
   // Why the pattern carries `*.**` rather than `**`, asserted rather than described: the plugin reads
   // `**` as any depth including none, so the shorter spelling would admit replacing the bag itself.
   it('leaves replacing the context itself reported', async () => {
-    const findings: Readonly<Record<string, readonly string[]>> = await findingsAt(
-      'req.context = {}',
-      HOOK_FILE,
-    )
+    const findings: Readonly<Record<string, readonly string[]>> = await findingsAt('req.context = {}', HOOK_FILE)
     expect(findings).toStrictEqual(everyConfig([RULE]))
   })
 
   it('leaves the rest of the request reported, the upload included', async () => {
-    const findings: Readonly<Record<string, readonly string[]>> = await findingsAt(
-      'req.file = sanitised',
-      HOOK_FILE,
-    )
+    const findings: Readonly<Record<string, readonly string[]>> = await findingsAt('req.file = sanitised', HOOK_FILE)
     expect(findings).toStrictEqual(everyConfig([RULE]))
   })
 

@@ -64,15 +64,11 @@ describe('a page the crawl reached', () => {
 
 describe('a page the crawl never reached', () => {
   it('is reported when nothing drives it', () => {
-    expect(rulesOf({ declaredRoutes: [routeOf('/welcome')], visitedRoutes: ['/'] })).toEqual([
-      'route-unswept',
-    ])
+    expect(rulesOf({ declaredRoutes: [routeOf('/welcome')], visitedRoutes: ['/'] })).toEqual(['route-unswept'])
   })
 
   it('names the address, so the report says which page to answer for', () => {
-    expect(routesOf({ declaredRoutes: [routeOf('/welcome')], visitedRoutes: ['/'] })).toEqual([
-      '/welcome',
-    ])
+    expect(routesOf({ declaredRoutes: [routeOf('/welcome')], visitedRoutes: ['/'] })).toEqual(['/welcome'])
   })
 
   it('is covered by a specification that drives it and scans it', () => {
@@ -165,9 +161,7 @@ describe('a page the project declared out of scope', () => {
   // Payload puts the admin panel behind a page file of its own, and the crawl is told to skip that
   // prefix. Reporting it would be the harness disagreeing with itself.
   it('is not reported when its address sits under a skipped prefix', () => {
-    expect(
-      rulesOf({ declaredRoutes: [routeOf('/admin/[[...segments]]', true)], visitedRoutes: ['/'] }),
-    ).toEqual([])
+    expect(rulesOf({ declaredRoutes: [routeOf('/admin/[[...segments]]', true)], visitedRoutes: ['/'] })).toEqual([])
   })
 
   it('is not reported when the project declared the prefix itself', () => {
@@ -218,9 +212,9 @@ describe('a dynamic page', () => {
   })
 
   it('is reported when the crawl only reached its parent', () => {
-    expect(
-      rulesOf({ declaredRoutes: [routeOf('/play/[id]', true)], visitedRoutes: ['/', '/play'] }),
-    ).toEqual(['route-unswept'])
+    expect(rulesOf({ declaredRoutes: [routeOf('/play/[id]', true)], visitedRoutes: ['/', '/play'] })).toEqual([
+      'route-unswept',
+    ])
   })
 
   it('is covered by a specification that builds an address beneath it and scans', () => {

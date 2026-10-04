@@ -35,13 +35,8 @@ const BUILD_CONFIG_CALL: string = 'buildConfig('
  */
 export const rootConfigsIn = (code: string): readonly FoundRootConfig[] =>
   occurrences(code, BUILD_CONFIG_CALL).flatMap((found: number): readonly FoundRootConfig[] => {
-    const argumentText: string | undefined = balancedArguments(
-      code,
-      found + BUILD_CONFIG_CALL.length - 1,
-    )
-    return argumentText?.trimStart().startsWith('{') === true
-      ? [{ body: argumentText, line: lineOf(code, found) }]
-      : []
+    const argumentText: string | undefined = balancedArguments(code, found + BUILD_CONFIG_CALL.length - 1)
+    return argumentText?.trimStart().startsWith('{') === true ? [{ body: argumentText, line: lineOf(code, found) }] : []
   })
 
 /**
@@ -81,8 +76,7 @@ const adapterCallIn = (databaseValue: string): AdapterCall | undefined => {
 const PUSH_PROPERTY: RegExp = /(?:^|,)\s*push\s*:\s*([^,]*)/
 const MIGRATION_DIR_PROPERTY: RegExp = /(?:^|[{,])\s*migrationDir\s*:\s*['"]([^'"]*)['"]/
 
-const declaredPushIn = (options: string): string | undefined =>
-  PUSH_PROPERTY.exec(topLevelSlice(options))?.[1]?.trim()
+const declaredPushIn = (options: string): string | undefined => PUSH_PROPERTY.exec(topLevelSlice(options))?.[1]?.trim()
 
 /** The rule name a schema-push finding carries. */
 export const SCHEMA_PUSH_RULE: string = 'no-unreviewed-schema-push'
@@ -137,9 +131,7 @@ export const findUnreviewedSchemaPush = (code: string): readonly PayloadViolatio
  * @returns true when at least one root configuration names such an adapter.
  */
 export const declaresPushingAdapter = (code: string): boolean =>
-  rootConfigsIn(code).some(
-    (config: FoundRootConfig): boolean => pushingAdapterIn(config.body) !== undefined,
-  )
+  rootConfigsIn(code).some((config: FoundRootConfig): boolean => pushingAdapterIn(config.body) !== undefined)
 
 /**
  * The migration directory a configuration names, when it names one.
@@ -155,11 +147,7 @@ export const declaredMigrationDirectoryIn = (code: string): string | undefined =
     .find((declared: string | undefined): declared is string => declared !== undefined)
 
 /** The directories Payload looks in, in the order its own resolver tries them. */
-export const MIGRATION_DIRECTORY_CANDIDATES: readonly string[] = [
-  'src/migrations',
-  'dist/migrations',
-  'migrations',
-]
+export const MIGRATION_DIRECTORY_CANDIDATES: readonly string[] = ['src/migrations', 'dist/migrations', 'migrations']
 
 const MIGRATION_EXTENSIONS: readonly string[] = ['.ts', '.js']
 const BARRELS: ReadonlySet<string> = new Set(['index.ts', 'index.js'])
@@ -174,8 +162,7 @@ const BARRELS: ReadonlySet<string> = new Set(['index.ts', 'index.js'])
  * @returns true when Payload would read it as a migration.
  */
 export const isMigrationFile = (name: string): boolean =>
-  MIGRATION_EXTENSIONS.some((extension: string): boolean => name.endsWith(extension)) &&
-  !BARRELS.has(name)
+  MIGRATION_EXTENSIONS.some((extension: string): boolean => name.endsWith(extension)) && !BARRELS.has(name)
 
 /**
  * The directories to read for a member, the declared one first.
@@ -183,9 +170,7 @@ export const isMigrationFile = (name: string): boolean =>
  * @returns the candidate paths, relative to the member root.
  */
 export const migrationDirectoriesFor = (declared: string | undefined): readonly string[] =>
-  declared === undefined
-    ? MIGRATION_DIRECTORY_CANDIDATES
-    : [declared, ...MIGRATION_DIRECTORY_CANDIDATES]
+  declared === undefined ? MIGRATION_DIRECTORY_CANDIDATES : [declared, ...MIGRATION_DIRECTORY_CANDIDATES]
 
 /** One candidate directory as the gate found it: its path, and the entries it holds. */
 export interface MigrationDirectory {
@@ -217,9 +202,8 @@ export const findMissingMigrations = (evidence: MigrationEvidence): readonly str
   if (!evidence.declaresPushingAdapter) {
     return []
   }
-  const carriesMigration: boolean = evidence.directories.some(
-    (directory: MigrationDirectory): boolean =>
-      directory.names.some((name: string): boolean => isMigrationFile(name)),
+  const carriesMigration: boolean = evidence.directories.some((directory: MigrationDirectory): boolean =>
+    directory.names.some((name: string): boolean => isMigrationFile(name)),
   )
   return carriesMigration ? [] : [MISSING_MIGRATIONS]
 }

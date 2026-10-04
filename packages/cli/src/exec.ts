@@ -138,11 +138,7 @@ const withProjectBinaries = (
   }
 }
 
-export const run = (
-  command: string,
-  commandArguments: readonly string[],
-  options: RunOptions,
-): RunResult => {
+export const run = (command: string, commandArguments: readonly string[], options: RunOptions): RunResult => {
   const result: SpawnSyncReturns<string> = spawnSync(command, [...commandArguments], {
     cwd: options.cwd,
     encoding: 'utf8',
@@ -164,11 +160,8 @@ export const run = (
 }
 
 /** Run a Node-based tool through the current interpreter, so no shim or PATH entry is required. */
-export const runNode = (
-  script: string,
-  commandArguments: readonly string[],
-  options: RunOptions,
-): RunResult => run(process.execPath, [script, ...commandArguments], options)
+export const runNode = (script: string, commandArguments: readonly string[], options: RunOptions): RunResult =>
+  run(process.execPath, [script, ...commandArguments], options)
 
 /**
  * Split a tool's combined output into findings, collapsing an empty report to a single marker line.
@@ -176,9 +169,7 @@ export const runNode = (
  * @returns one entry per line, with CRLF endings normalised so no finding carries a stray `\r`.
  */
 export const asFindings = (output: string): readonly string[] =>
-  output.length > 0
-    ? output.replaceAll('\r\n', '\n').split('\n')
-    : ['(the tool produced no output)']
+  output.length > 0 ? output.replaceAll('\r\n', '\n').split('\n') : ['(the tool produced no output)']
 
 /**
  * Turn a child-process outcome into a gate result.
@@ -193,7 +184,4 @@ export const asFindings = (output: string): readonly string[] =>
  * @returns the gate result, carrying the tool's own output on failure.
  */
 export const fromRun = (result: RunResult, passSummary: string, failSummary: string): GateResult =>
-  withOutput(
-    result.code === 0 ? passed(passSummary) : failed(failSummary, asFindings(result.output)),
-    result.output,
-  )
+  withOutput(result.code === 0 ? passed(passSummary) : failed(failSummary, asFindings(result.output)), result.output)

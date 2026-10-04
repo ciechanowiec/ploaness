@@ -33,9 +33,7 @@ const rect = (left: number, top: number, right: number, bottom: number): LayoutR
   bottom,
 })
 
-const nodeOf = (
-  fields: Partial<LayoutNode> & Pick<LayoutNode, 'index' | 'parent'>,
-): LayoutNode => ({
+const nodeOf = (fields: Partial<LayoutNode> & Pick<LayoutNode, 'index' | 'parent'>): LayoutNode => ({
   label: `div#n${String(fields.index)}`,
   tag: 'div',
   rects: [],
@@ -68,10 +66,7 @@ const nodeOf = (
 
 const PHONE: LayoutViewport = { width: 390, height: 844 }
 
-const snapshotOf = (
-  nodes: readonly LayoutNode[],
-  viewport: LayoutViewport = PHONE,
-): LayoutSnapshot => ({
+const snapshotOf = (nodes: readonly LayoutNode[], viewport: LayoutViewport = PHONE): LayoutSnapshot => ({
   route: '/en/account/verify',
   viewportWidth: viewport.width,
   viewportHeight: viewport.height,
@@ -80,10 +75,8 @@ const snapshotOf = (
   nodes,
 })
 
-const defectsOf = (
-  nodes: readonly LayoutNode[],
-  minimumGap: number = LAYOUT_MINIMUM_GAP,
-): readonly string[] => findLayoutDefects([snapshotOf(nodes)], minimumGap)
+const defectsOf = (nodes: readonly LayoutNode[], minimumGap: number = LAYOUT_MINIMUM_GAP): readonly string[] =>
+  findLayoutDefects([snapshotOf(nodes)], minimumGap)
 
 const BODY: LayoutNode = nodeOf({
   index: 0,
@@ -174,15 +167,11 @@ describe('what makes an element boxed', () => {
   })
 
   it('treats a background image as a box whatever its colour', () => {
-    expect(defectsOf(stacked({ backgroundImage: 'linear-gradient(red, blue)' }, {}))).toHaveLength(
-      1,
-    )
+    expect(defectsOf(stacked({ backgroundImage: 'linear-gradient(red, blue)' }, {}))).toHaveLength(1)
   })
 
   it('treats a shadow as a box', () => {
-    expect(
-      defectsOf(stacked({ boxShadow: 'rgba(0, 0, 0, 0.2) 0px 1px 3px 0px' }, {})),
-    ).toHaveLength(1)
+    expect(defectsOf(stacked({ boxShadow: 'rgba(0, 0, 0, 0.2) 0px 1px 3px 0px' }, {}))).toHaveLength(1)
   })
 
   it('counts a border only on the side that faces the neighbour', () => {
@@ -248,9 +237,7 @@ describe('how close is too close', () => {
       nodeOf({ index: 1, parent: 0, rects: [rect(0, 0, 100, 40)], backgroundColor: RED }),
       nodeOf({ index: 2, parent: 0, rects: [rect(102, 0, 200, 40)], backgroundColor: RED }),
     ]
-    expect(defectsOf(sideBySide)).toEqual([
-      '/en/account/verify @390px: touching boxes (gap 2px): div#n1  <->  div#n2',
-    ])
+    expect(defectsOf(sideBySide)).toEqual(['/en/account/verify @390px: touching boxes (gap 2px): div#n1  <->  div#n2'])
   })
 
   // An inline link wrapped over two lines has a bounding box covering both lines. Judged on that box it
@@ -286,8 +273,7 @@ describe('how close is too close', () => {
   })
 })
 
-const touchingRed = (second: Partial<LayoutNode>): readonly LayoutNode[] =>
-  stacked({ backgroundColor: RED }, second)
+const touchingRed = (second: Partial<LayoutNode>): readonly LayoutNode[] => stacked({ backgroundColor: RED }, second)
 
 describe('what is not compared', () => {
   // Rows paint nothing, so without this every cell would be compared with the cell below it, and each
@@ -353,9 +339,7 @@ describe('what is not compared', () => {
       nodeOf({ index: 2, parent: 1, rects: [rect(0, 0, 200, 40)], backgroundColor: RED }),
       nodeOf({ index: 3, parent: 1, rects: [rect(0, 40, 200, 80)] }),
     ]
-    expect(defectsOf(cell)).toEqual([
-      '/en/account/verify @390px: touching boxes (gap 0px): div#n2  <->  div#n3',
-    ])
+    expect(defectsOf(cell)).toEqual(['/en/account/verify @390px: touching boxes (gap 0px): div#n2  <->  div#n3'])
   })
 
   it('skips a sibling hidden from assistive technology as decoration', () => {
@@ -385,9 +369,7 @@ describe('what is not compared', () => {
       nodeOf({ index: 2, parent: 0, display: 'contents', backgroundColor: TINT }),
       nodeOf({ index: 3, parent: 2, rects: [rect(0, 40, 200, 80)] }),
     ]
-    expect(defectsOf(contents)).toEqual([
-      '/en/account/verify @390px: touching boxes (gap 0px): div#n1  <->  div#n3',
-    ])
+    expect(defectsOf(contents)).toEqual(['/en/account/verify @390px: touching boxes (gap 0px): div#n1  <->  div#n3'])
   })
 
   it('does not look through a wrapper that carries text of its own', () => {
@@ -413,10 +395,7 @@ describe('what is not compared', () => {
   })
 })
 
-const attachedTab = (
-  exemption: Partial<LayoutNode>,
-  panelTop: number = 40,
-): readonly LayoutNode[] => [
+const attachedTab = (exemption: Partial<LayoutNode>, panelTop: number = 40): readonly LayoutNode[] => [
   BODY,
   nodeOf({
     index: 1,

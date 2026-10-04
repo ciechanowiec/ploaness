@@ -48,6 +48,11 @@ versions. A permitted override may repair an unpinned transitive dependency.
 
 ### Managed Files
 
+The managed editor settings use spaces, LF endings, UTF-8 without a BOM, and a 120-character line
+width. Indentation is four spaces generally and two spaces for YAML, JavaScript, TypeScript, JSON,
+and JSONC. The inherited Biome formatter uses the same widths for the languages it formats.
+The EditorConfig gate retains the code-role line cap and generated-file exceptions.
+
 `ploaness sync` applies the managed catalogue and generated-file write denials. The catalogue distinguishes:
 
 - **Pinned:** content is owned by Ploaness and must match its shipped bytes.
@@ -238,6 +243,13 @@ Vitest collects:
 - `tests/unit/**/*.unit.spec.ts` for pure behavior;
 - `tests/component/**/*.component.spec.ts` and `tests/component/**/*.component.spec.tsx` for components under jsdom;
 - `tests/int/**/*.int.spec.ts` and `tests/int/**/*.int.spec.tsx` for integration behavior.
+
+The `e2e` gate always starts fresh application and auxiliary servers, locally as well as in CI.
+Before running `ploaness verify --extended` or `ploaness gate e2e`, stop servers already listening at
+the configured `serverUrl` and `auxiliaryServers` addresses. An occupied port fails the gate even when
+its health endpoint is failing. Ploaness reports the address to release and leaves the existing process
+running. Direct local `pnpm exec playwright test` runs may reuse existing servers; they do not establish
+a verification verdict.
 
 Playwright collects end-to-end specs under `tests/e2e`. Place tests in the collected paths. Test code
 receives strict typing and linting; type assertions are excluded from the production type-coverage

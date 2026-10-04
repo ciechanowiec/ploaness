@@ -12,18 +12,12 @@ describe('findArbitraryValues', () => {
   })
 
   it('flags a size written as a literal, and says where it is', () => {
-    const [violation]: readonly ArbitraryValueViolation[] = findArbitraryValues(
-      '\n  className="translate-y-[2px]"',
-    )
+    const [violation]: readonly ArbitraryValueViolation[] = findArbitraryValues('\n  className="translate-y-[2px]"')
     expect(violation).toEqual({ line: 2, column: 25, value: '-[2px]' })
   })
 
   it('reports every literal on a line rather than stopping at the first', () => {
-    expect(valuesIn('className="bg-[#0a7] p-[13px] m-[2rem]"')).toEqual([
-      '-[#0a7]',
-      '-[13px]',
-      '-[2rem]',
-    ])
+    expect(valuesIn('className="bg-[#0a7] p-[13px] m-[2rem]"')).toEqual(['-[#0a7]', '-[13px]', '-[2rem]'])
   })
 
   it('accepts markup whose every value comes from the theme', () => {
@@ -71,9 +65,7 @@ describe('a bracketed value that reads a custom property', () => {
   })
 
   it('accepts a calculation over a custom property', () => {
-    expect(
-      findArbitraryValues('<div className="basis-[calc(var(--tile-basis)_-_2rem)]" />'),
-    ).toEqual([])
+    expect(findArbitraryValues('<div className="basis-[calc(var(--tile-basis)_-_2rem)]" />')).toEqual([])
   })
 
   it('still reports a calculation over lengths the theme could hold', () => {

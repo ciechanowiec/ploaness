@@ -8,10 +8,7 @@ import { ALL_GATES, type Gate, gatesFor } from '../src/gates.js'
 const DIRECTORY: string = path.dirname(fileURLToPath(import.meta.url))
 const ROOT: string = path.join(DIRECTORY, '..', '..', '..')
 const README: string = readFileSync(path.join(ROOT, 'README.adoc'), 'utf8')
-const GUIDE: string = readFileSync(
-  path.join(ROOT, 'packages/assets/files/.ploaness/agent-guide.md.asset'),
-  'utf8',
-)
+const GUIDE: string = readFileSync(path.join(ROOT, 'packages/assets/files/.ploaness/agent-guide.md.asset'), 'utf8')
 
 const sectionAfter = (heading: string): string => {
   const start: number = GUIDE.indexOf(heading)
@@ -24,25 +21,14 @@ const sectionAfter = (heading: string): string => {
 }
 
 const gateRows = (heading: string): readonly (readonly string[])[] =>
-  [
-    ...sectionAfter(heading).matchAll(/^\| `([a-z0-9-]+)` \| (repository|package|payload) \|/gm),
-  ].map((match: RegExpExecArray): readonly string[] => [match[1] ?? '', match[2] ?? ''])
+  [...sectionAfter(heading).matchAll(/^\| `([a-z0-9-]+)` \| (repository|package|payload) \|/gm)].map(
+    (match: RegExpExecArray): readonly string[] => [match[1] ?? '', match[2] ?? ''],
+  )
 
 const expectedRows = (gates: readonly Gate[]): readonly (readonly string[])[] =>
   gates.map((gate: Gate): readonly string[] => [gate.id, gate.scope])
 
-const COUNT_WORDS: readonly string[] = [
-  'zero',
-  'one',
-  'two',
-  'three',
-  'four',
-  'five',
-  'six',
-  'seven',
-  'eight',
-  'nine',
-]
+const COUNT_WORDS: readonly string[] = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
 
 const statedCount = (source: string, pattern: RegExp): number => {
   const value: string = pattern.exec(source)?.[1] ?? ''
@@ -54,9 +40,7 @@ const extended: readonly Gate[] = ALL_GATES.filter((gate: Gate): boolean => gate
 describe('the installed gate reference', () => {
   it('states the actual registry counts in both documents', () => {
     for (const source of [README, GUIDE]) {
-      expect(statedCount(source, /Default verification runs (\d+) gates/)).toBe(
-        gatesFor(false).length,
-      )
+      expect(statedCount(source, /Default verification runs (\d+) gates/)).toBe(gatesFor(false).length)
       expect(statedCount(source, /Extended verification adds (\w+)/)).toBe(extended.length)
     }
   })
@@ -76,8 +60,8 @@ describe('the installed gate reference', () => {
     const settings: readonly string[] = Object.keys(readSettings({})).filter(
       (key: string): boolean => key !== 'declaredExclusions',
     )
-    expect(
-      documented.toSorted((left: string, right: string): number => left.localeCompare(right)),
-    ).toEqual(settings.toSorted((left: string, right: string): number => left.localeCompare(right)))
+    expect(documented.toSorted((left: string, right: string): number => left.localeCompare(right))).toEqual(
+      settings.toSorted((left: string, right: string): number => left.localeCompare(right)),
+    )
   })
 })

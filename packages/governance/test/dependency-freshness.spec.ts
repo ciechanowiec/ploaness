@@ -16,12 +16,7 @@ import {
   parseVersion,
 } from '../src/dependency-freshness.js'
 
-const makeStatus = (
-  name: string,
-  current: string,
-  latest: string,
-  isInherited = false,
-): DependencyStatus => ({
+const makeStatus = (name: string, current: string, latest: string, isInherited = false): DependencyStatus => ({
   name,
   owner: '.',
   current,
@@ -150,10 +145,7 @@ describe('dependency-freshness properties (fast-check)', () => {
     expect(classifyFreshness('1.0.0', '3.0.0')).toBe('fail')
     fc.assert(
       fc.property(smallInt, smallInt, (currentMajor: number, latestMajor: number): boolean => {
-        const verdict: FreshnessVerdict = classifyFreshness(
-          `${String(currentMajor)}.0.0`,
-          `${String(latestMajor)}.0.0`,
-        )
+        const verdict: FreshnessVerdict = classifyFreshness(`${String(currentMajor)}.0.0`, `${String(latestMajor)}.0.0`)
         const shouldFail: boolean = latestMajor - currentMajor >= MAJOR_FAIL_THRESHOLD
         return (verdict === 'fail') === shouldFail
       }),
@@ -170,9 +162,7 @@ describe('dependency-freshness properties (fast-check)', () => {
         fc.constantFrom('', '^', '~', '>=', 'v'),
         (major: number, minor: number, patch: number, prefix: string): boolean => {
           const core: string = `${String(major)}.${String(minor)}.${String(patch)}`
-          return (
-            JSON.stringify(parseVersion(`${prefix}${core}`)) === JSON.stringify(parseVersion(core))
-          )
+          return JSON.stringify(parseVersion(`${prefix}${core}`)) === JSON.stringify(parseVersion(core))
         },
       ),
     )
@@ -193,15 +183,11 @@ describe('collectCoordinates', () => {
       own('package.json', { dependencies: { next: '16.3.2' } }),
       own('packages/config/package.json', { devDependencies: { knip: '5.0.0' } }),
     ]
-    expect(
-      collectCoordinates(manifests).map((one: DeclaredCoordinate): string => one.name),
-    ).toEqual(['next', 'knip'])
+    expect(collectCoordinates(manifests).map((one: DeclaredCoordinate): string => one.name)).toEqual(['next', 'knip'])
   })
 
   it('attributes a coordinate to the manifest that declares it', () => {
-    const manifests: readonly ManifestSource[] = [
-      own('packages/cli/package.json', { dependencies: { knip: '5.0.0' } }),
-    ]
+    const manifests: readonly ManifestSource[] = [own('packages/cli/package.json', { dependencies: { knip: '5.0.0' } })]
     expect(collectCoordinates(manifests)[0]?.owner).toBe('packages/cli/package.json')
   })
 
@@ -212,9 +198,10 @@ describe('collectCoordinates', () => {
       own('a/package.json', { dependencies: { knip: '5.0.0' } }),
       own('b/package.json', { dependencies: { knip: '7.0.0' } }),
     ]
-    expect(
-      collectCoordinates(manifests).map((one: DeclaredCoordinate): string => one.current),
-    ).toEqual(['5.0.0', '7.0.0'])
+    expect(collectCoordinates(manifests).map((one: DeclaredCoordinate): string => one.current)).toEqual([
+      '5.0.0',
+      '7.0.0',
+    ])
   })
 
   it('reads both dependency blocks of one manifest', () => {
@@ -283,9 +270,7 @@ describe('findFreshnessViolations: build impact', () => {
   // its real verdict, because a report that softened it into an ordinary update would say the harness
   // is a patch behind when it is two majors behind.
   it('reports an inherited coordinate past the bound instead of failing on it', () => {
-    const report: FreshnessReport = findFreshnessViolations([
-      makeStatus('knip', '5.0.0', '7.0.0', true),
-    ])
+    const report: FreshnessReport = findFreshnessViolations([makeStatus('knip', '5.0.0', '7.0.0', true)])
     expect(report.failures).toEqual([])
     expect(report.reported.map((one: FreshnessFinding): string => one.verdict)).toEqual(['fail'])
   })
@@ -298,9 +283,7 @@ describe('findFreshnessViolations: build impact', () => {
   })
 
   it('reports a lesser lag in an inherited manifest as an ordinary update', () => {
-    const report: FreshnessReport = findFreshnessViolations([
-      makeStatus('eslint', '10.8.1', '10.9.1', true),
-    ])
+    const report: FreshnessReport = findFreshnessViolations([makeStatus('eslint', '10.8.1', '10.9.1', true)])
     expect(report.failures).toEqual([])
     expect(report.reported.map((one: FreshnessFinding): string => one.verdict)).toEqual(['update'])
   })
@@ -320,9 +303,9 @@ describe('inheritedManifestPaths', () => {
   // twice and the update report would name the same stale pin on two lines.
   it('visits a manifest two packages share exactly once', () => {
     const walked: readonly string[] = inheritedManifestPaths(ENTRY, resolver)
-    expect(walked.filter((file: string): boolean => file === '/n/governance/package.json')).toEqual(
-      ['/n/governance/package.json'],
-    )
+    expect(walked.filter((file: string): boolean => file === '/n/governance/package.json')).toEqual([
+      '/n/governance/package.json',
+    ])
   })
 
   it('does not follow a dependency outside the harness', () => {
@@ -377,8 +360,7 @@ describe('collectCoordinates: inheritance', () => {
     ])
     expect(
       coordinates.map(
-        (coordinate: DeclaredCoordinate): string =>
-          `${coordinate.name}:${String(coordinate.isInherited)}`,
+        (coordinate: DeclaredCoordinate): string => `${coordinate.name}:${String(coordinate.isInherited)}`,
       ),
     ).toEqual(['next:false', 'eslint:true'])
   })

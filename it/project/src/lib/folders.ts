@@ -14,11 +14,7 @@ export type FolderCollection = Omit<CollectionConfig, 'trash'>
  * @param override.collection - the folder collection as the framework built it.
  * @returns the same collection with every operation decided.
  */
-export const foldersAccess = ({
-  collection,
-}: {
-  readonly collection: FolderCollection
-}): FolderCollection => ({
+export const foldersAccess = ({ collection }: { readonly collection: FolderCollection }): FolderCollection => ({
   ...collection,
   access: { create: nobody, read: nobody, readVersions: nobody, update: nobody, delete: nobody },
 })

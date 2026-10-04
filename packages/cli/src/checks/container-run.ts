@@ -3,17 +3,12 @@
 // Shared rather than private to one gate: every containerised analyzer needs both answers, and a second
 // copy of either would be a second opinion about what "docker is unavailable" means. The reasoning each
 // carries is the reason it exists, so it travels with the function rather than staying behind.
-import {
-  classifyContainerExit,
-  classifyImageFailure,
-  type DockerFailure,
-} from '@ploaness/governance'
+import { classifyContainerExit, classifyImageFailure, type DockerFailure } from '@ploaness/governance'
 import type { Context } from '../context.js'
 import { failed, type GateResult, type RunResult, run } from '../exec.js'
 
 /** A docker failure, as the verdict a gate returns for it. */
-export const describeFailure = (failure: DockerFailure): GateResult =>
-  failed(failure.summary, failure.remedies)
+export const describeFailure = (failure: DockerFailure): GateResult => failed(failure.summary, failure.remedies)
 
 // The image is acquired as a step of its own, BEFORE any analyzer runs, and that ordering is the repair
 // rather than an optimisation. It puts "the analyzer could not be obtained" on a command whose output
@@ -30,11 +25,7 @@ export const describeFailure = (failure: DockerFailure): GateResult =>
  * @param gate what to call this gate in a failure, so the message names the check that stopped.
  * @returns a failing result when the image cannot be obtained, or undefined when it is present.
  */
-export const acquireImage = (
-  context: Context,
-  image: string,
-  gate: string,
-): GateResult | undefined => {
+export const acquireImage = (context: Context, image: string, gate: string): GateResult | undefined => {
   const present: RunResult = run('docker', ['image', 'inspect', '--format', '{{.Id}}', image], {
     cwd: context.root,
   })

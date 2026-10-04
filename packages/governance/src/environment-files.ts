@@ -12,9 +12,7 @@ export const RUN_ENVIRONMENT_FILES: readonly string[] = ['.env.local', '.env']
  * @param isExistingFile whether a repository-relative path names a file that exists.
  * @returns the present subset of {@link RUN_ENVIRONMENT_FILES}, highest precedence first.
  */
-export const runEnvironmentFiles = (
-  isExistingFile: (relativePath: string) => boolean,
-): readonly string[] =>
+export const runEnvironmentFiles = (isExistingFile: (relativePath: string) => boolean): readonly string[] =>
   RUN_ENVIRONMENT_FILES.filter((file: string): boolean => isExistingFile(file))
 
 /**
@@ -61,10 +59,8 @@ export const runEnvironmentOverrides = (
 ): Readonly<Record<string, string>> =>
   Object.fromEntries(
     parsedFiles
-      .flatMap(
-        (
-          file: Readonly<Record<string, string | undefined>>,
-        ): readonly [string, string | undefined][] => Object.entries(file),
+      .flatMap((file: Readonly<Record<string, string | undefined>>): readonly [string, string | undefined][] =>
+        Object.entries(file),
       )
       .filter(
         (entry: readonly [string, string | undefined]): entry is [string, string] =>

@@ -61,9 +61,7 @@ describe('accessOperationsFor', () => {
   })
 
   it('asks an ordinary global for the two', () => {
-    expect(accessOperationsFor({ kind: 'global', hasAuth: false, hasVersions: false })).toEqual(
-      GLOBAL_OPERATIONS,
-    )
+    expect(accessOperationsFor({ kind: 'global', hasAuth: false, hasVersions: false })).toEqual(GLOBAL_OPERATIONS)
   })
 
   it('asks a versioned global for the version read, which Payload leaves undeclared there too', () => {
@@ -75,9 +73,7 @@ describe('accessOperationsFor', () => {
 
   // A global has no login of its own, so the unlock operation does not exist on one whatever it claims.
   it('never asks a global for unlock', () => {
-    expect(accessOperationsFor({ kind: 'global', hasAuth: true, hasVersions: false })).toEqual(
-      GLOBAL_OPERATIONS,
-    )
+    expect(accessOperationsFor({ kind: 'global', hasAuth: true, hasVersions: false })).toEqual(GLOBAL_OPERATIONS)
   })
 })
 
@@ -131,9 +127,9 @@ describe('findInheritedAccess', () => {
   // hazard: exempting it would restore exactly the blindness this rule was added to close, because an
   // undecided `create` there admits every signed-in user.
   it('judges the query-presets collection rather than exempting it as framework bookkeeping', () => {
-    expect(
-      EXEMPT_PAYLOAD_SUBJECTS.map((subject: ExemptPayloadSubject): string => subject.slug),
-    ).not.toContain(QUERY_PRESETS_SLUG)
+    expect(EXEMPT_PAYLOAD_SUBJECTS.map((subject: ExemptPayloadSubject): string => subject.slug)).not.toContain(
+      QUERY_PRESETS_SLUG,
+    )
   })
 
   it('points a project or plugin collection at its own access block, singular for one operation', () => {
@@ -163,8 +159,7 @@ describe('findInheritedAccess', () => {
   it.each(EXEMPT_PAYLOAD_SUBJECTS)(
     'exempts $kind "$slug", which keeps the default by design',
     ({ kind, slug }: ExemptPayloadSubject) => {
-      const operations: readonly string[] =
-        kind === 'collection' ? COLLECTION_OPERATIONS : GLOBAL_OPERATIONS
+      const operations: readonly string[] = kind === 'collection' ? COLLECTION_OPERATIONS : GLOBAL_OPERATIONS
       const entry: { readonly slug: string; readonly inherited: readonly string[] } = {
         slug,
         inherited: operations,
@@ -197,9 +192,11 @@ describe('findInheritedAccess', () => {
       draftReads: [],
       globals: [{ slug: 'g', inherited: ['read'] }],
     }
-    expect(
-      findInheritedAccess(report).map((finding: string): string => finding.split('"', 2)[1] ?? ''),
-    ).toEqual(['b', 'a', 'g'])
+    expect(findInheritedAccess(report).map((finding: string): string => finding.split('"', 2)[1] ?? '')).toEqual([
+      'b',
+      'a',
+      'g',
+    ])
   })
 })
 
@@ -247,9 +244,7 @@ describe('findUnconstrainedDraftReads', () => {
       draftsOf({ kind: 'filtered', where: { and: [AUDIENCE] } }),
     )
     expect(findings).toHaveLength(1)
-    expect(findings[0]).toContain(
-      'collection "articles" keeps drafts and filters its anonymous read',
-    )
+    expect(findings[0]).toContain('collection "articles" keeps drafts and filters its anonymous read')
     expect(findings[0]).toContain('_status equals published')
   })
 
@@ -270,11 +265,9 @@ describe('findUnconstrainedDraftReads', () => {
 
   it('passes a read that refuses a stranger and one that constrains the status', () => {
     expect(findUnconstrainedDraftReads(draftsOf({ kind: 'denied' }))).toEqual([])
-    expect(
-      findUnconstrainedDraftReads(
-        draftsOf({ kind: 'filtered', where: { and: [PUBLISHED, AUDIENCE] } }),
-      ),
-    ).toEqual([])
+    expect(findUnconstrainedDraftReads(draftsOf({ kind: 'filtered', where: { and: [PUBLISHED, AUDIENCE] } }))).toEqual(
+      [],
+    )
   })
 
   it('says which kind of entity it found, and passes a configuration that keeps no drafts', () => {
@@ -339,8 +332,7 @@ describe('parseInheritedAccessReport over the drafts half', () => {
     ['the drafts half not an array', '{"collections":[],"globals":[],"draftReads":{}}'],
     [
       'an entry with no slug',
-      '{"collections":[],"globals":[],"draftReads":' +
-        '[{"kind":"collection","anonymousRead":{"kind":"open"}}]}',
+      '{"collections":[],"globals":[],"draftReads":[{"kind":"collection","anonymousRead":{"kind":"open"}}]}',
     ],
     [
       'an entry of no known kind',

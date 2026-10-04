@@ -77,23 +77,17 @@ describe('declaresInstallScriptAllowlist', () => {
   })
 
   it('rejects a non-list value under the pnpm key', () => {
-    expect(declaresInstallScriptAllowlist('', { pnpm: { onlyBuiltDependencies: 'sharp' } })).toBe(
-      false,
-    )
+    expect(declaresInstallScriptAllowlist('', { pnpm: { onlyBuiltDependencies: 'sharp' } })).toBe(false)
   })
 })
 
 describe('findSilencedAdvisories', () => {
   it('reports an ignored CVE list', () => {
-    expect(findSilencedAdvisories({ pnpm: { auditConfig: { ignoreCves: ['CVE-1'] } } })).toEqual([
-      'ignoreCves',
-    ])
+    expect(findSilencedAdvisories({ pnpm: { auditConfig: { ignoreCves: ['CVE-1'] } } })).toEqual(['ignoreCves'])
   })
 
   it('reports an ignored advisory list', () => {
-    expect(findSilencedAdvisories({ pnpm: { auditConfig: { ignoreGhsas: ['GHSA-1'] } } })).toEqual([
-      'ignoreGhsas',
-    ])
+    expect(findSilencedAdvisories({ pnpm: { auditConfig: { ignoreGhsas: ['GHSA-1'] } } })).toEqual(['ignoreGhsas'])
   })
 
   it('reports both when both are present', () => {
@@ -179,9 +173,7 @@ describe('findReleaseAgeViolations', () => {
 
   it('reports the strict setting before the exclusions', () => {
     const file: string = 'minimumReleaseAgeExclude:\n  - nx\n'
-    expect(
-      findReleaseAgeViolations(file).map((one: string): boolean => one.includes('Strict')),
-    ).toEqual([true, false])
+    expect(findReleaseAgeViolations(file).map((one: string): boolean => one.includes('Strict'))).toEqual([true, false])
   })
 
   it('reports nothing for an empty file beyond the missing strict setting', () => {

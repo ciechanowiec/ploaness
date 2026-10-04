@@ -47,9 +47,8 @@ const foreignKeys = (entry: unknown): readonly string[] =>
 
 describe('every shipped ESLint config is loadable by the pinned ESLint', () => {
   it.each(SHIPPED)('%s carries only flat-config keys in every entry', (name, blocks) => {
-    const offenders: readonly string[] = blocks.flatMap(
-      (entry: unknown, index: number): readonly string[] =>
-        foreignKeys(entry).map((key: string): string => `${name}[${String(index)}].${key}`),
+    const offenders: readonly string[] = blocks.flatMap((entry: unknown, index: number): readonly string[] =>
+      foreignKeys(entry).map((key: string): string => `${name}[${String(index)}].${key}`),
     )
     expect(offenders).toEqual([])
   })

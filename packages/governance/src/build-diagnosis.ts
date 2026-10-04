@@ -45,6 +45,4 @@ const DIAGNOSES: readonly Diagnosis[] = [{ pattern: MISSING_RELATION, hint: PRER
  * @returns hint lines to append to the gate's findings, in the order they were matched.
  */
 export const diagnoseBuildFailure = (output: string): readonly string[] =>
-  DIAGNOSES.flatMap((diagnosis: Diagnosis): readonly string[] =>
-    diagnosis.pattern.test(output) ? diagnosis.hint : [],
-  )
+  DIAGNOSES.flatMap((diagnosis: Diagnosis): readonly string[] => (diagnosis.pattern.test(output) ? diagnosis.hint : []))

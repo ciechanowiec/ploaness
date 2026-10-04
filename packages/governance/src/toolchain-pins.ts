@@ -6,29 +6,23 @@ export type ContainerTool = 'gitleaks' | 'hadolint' | 'actionlint' | 'shellcheck
 
 /** The exact image each containerised analyzer runs, by digest. */
 export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
-  gitleaks:
-    'zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f',
-  hadolint:
-    'hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d',
-  actionlint:
-    'rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667',
+  gitleaks: 'zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f',
+  hadolint: 'hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d',
+  actionlint: 'rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667',
   // A project's operational scripts are code it runs against its own database and its own deployments,
   // and the standard makes a check a repository implements itself into its source code. The `shell`
   // gate reads both: a consumer's scripts, and the ones this verification command is written in.
-  shellcheck:
-    'koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d',
+  shellcheck: 'koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d',
   // The infrastructure gate enables named checks rather than a category, and a `--check` id that does
   // not exist matches nothing and raises no error. The digest is what makes that audit durable: the
   // catalogue cannot change underneath it, so the enabled ids stay the ones somebody confirmed with
   // `--list`. The provider standings beside the catalogue rest on the same listing: which providers
   // the image has no check for at all. Re-confirm both whenever this pin moves.
-  checkov:
-    'bridgecrew/checkov:3.3.22@sha256:617c76e3f9b1f7907ebca9abb6b9d746844edcb48e9bd775e4692c69c1c6ac47',
+  checkov: 'bridgecrew/checkov:3.3.22@sha256:617c76e3f9b1f7907ebca9abb6b9d746844edcb48e9bd775e4692c69c1c6ac47',
 }
 
 /** Matches a reference that names image bytes AND the release they are, and only such a reference. */
-export const DIGEST_PINNED: RegExp =
-  /^[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9][\w.-]*@sha256:[0-9a-f]{64}$/
+export const DIGEST_PINNED: RegExp = /^[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9][\w.-]*@sha256:[0-9a-f]{64}$/
 
 /**
  * Report every containerised analyzer whose image is not pinned to an exact digest.

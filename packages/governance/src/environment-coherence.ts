@@ -60,10 +60,7 @@ export const VALIDATED_ENVIRONMENT_MODULE: string = 'src/lib/environment.ts'
  * there is `NODE_ENV`, which the framework sets. So it is exempt from the LINT rule and is deliberately
  * not read by this one: it holds no project configuration to document.
  */
-export const ENVIRONMENT_READ_EXEMPTIONS: readonly string[] = [
-  VALIDATED_ENVIRONMENT_MODULE,
-  'src/proxy.ts',
-]
+export const ENVIRONMENT_READ_EXEMPTIONS: readonly string[] = [VALIDATED_ENVIRONMENT_MODULE, 'src/proxy.ts']
 
 /**
  * The example files a repository may document its environment in, most conventional first.
@@ -71,11 +68,7 @@ export const ENVIRONMENT_READ_EXEMPTIONS: readonly string[] = [
  * A list rather than one name because the convention is not universal, and a project using
  * `.env.sample` has documented its variables just as well as one using `.env.example`.
  */
-export const ENVIRONMENT_EXAMPLE_FILES: readonly string[] = [
-  '.env.example',
-  '.env.sample',
-  '.env.template',
-]
+export const ENVIRONMENT_EXAMPLE_FILES: readonly string[] = ['.env.example', '.env.sample', '.env.template']
 
 /**
  * The framework configuration a member may hold at its own root.
@@ -85,11 +78,7 @@ export const ENVIRONMENT_EXAMPLE_FILES: readonly string[] = [
  * has to. Every spelling present is read, unlike the example files above, because a project ships one
  * and reading all of them cannot produce two answers that disagree.
  */
-export const BUILD_CONFIGURATION_FILES: readonly string[] = [
-  'next.config.ts',
-  'next.config.mjs',
-  'next.config.js',
-]
+export const BUILD_CONFIGURATION_FILES: readonly string[] = ['next.config.ts', 'next.config.mjs', 'next.config.js']
 
 // BRACKET ACCESS ONLY, and that is the rule rather than a shortcut. `process.env` is an index
 // signature, so a variable this project invented can only be read with brackets; a variable node or the
@@ -116,8 +105,7 @@ const COMPOSE_INTERPOLATION: RegExp = /\$\{(?<name>[A-Z_]\w*)\}/gi
 // the value a build input at all. A name read through a plain record parameter is not matched: nothing
 // is inlined there, and the value arrives from whoever built the record.
 const INLINED_DOTTED_READ: RegExp = /process\.env\.(?<name>NEXT_PUBLIC_\w+)/g
-const INLINED_BRACKETED_READ: RegExp =
-  /process\.env\[\s*(?<quote>['"])(?<name>NEXT_PUBLIC_\w+)\k<quote>\s*\]/g
+const INLINED_BRACKETED_READ: RegExp = /process\.env\[\s*(?<quote>['"])(?<name>NEXT_PUBLIC_\w+)\k<quote>\s*\]/g
 
 // A build-argument DECLARATION, with or without a default. The compose analogue above puts
 // `${NAME:-5432}` out of scope because a default SUPPLIES the value and the claim was that something
@@ -131,8 +119,7 @@ const DEFAULT_SEPARATOR: string = '='
 // A name a workflow supplies: a mapping key in SCREAMING_SNAKE, or a reference to a secret, a variable,
 // or the job environment. The key form is matched at any indentation, for the reason the header states.
 const WORKFLOW_KEY: RegExp = /^[ \t]*(?<name>[A-Z_][A-Z0-9_]*)[ \t]*:/gm
-const WORKFLOW_CONTEXT_REFERENCE: RegExp =
-  /\$\{\{[^}]*?\b(?:secrets|vars|env)\.(?<name>[A-Za-z_]\w*)/g
+const WORKFLOW_CONTEXT_REFERENCE: RegExp = /\$\{\{[^}]*?\b(?:secrets|vars|env)\.(?<name>[A-Za-z_]\w*)/g
 
 // What makes a workflow one whose job environment has to carry the compose variables: it runs a
 // ploaness verification, and verification validates every compose file the repository ships. A workflow
@@ -144,14 +131,10 @@ const VERIFYING_COMMANDS: readonly string[] = ['ploaness verify', 'ploaness gate
 // quote in the first - a number that says nothing at the call site and that the magic-number rule is
 // right to refuse. Every pattern here therefore captures into `name`.
 const namesMatching = (source: string, pattern: RegExp): readonly string[] =>
-  [...source.matchAll(pattern)].map((match: RegExpExecArray): string =>
-    String(match.groups?.['name']),
-  )
+  [...source.matchAll(pattern)].map((match: RegExpExecArray): string => String(match.groups?.['name']))
 
 const uniqueSorted = (names: readonly string[]): readonly string[] =>
-  [...new Set<string>(names)].sort((left: string, right: string): number =>
-    left.localeCompare(right),
-  )
+  [...new Set<string>(names)].sort((left: string, right: string): number => left.localeCompare(right))
 
 /**
  * The variables an application reads out of its validated environment module.
@@ -183,10 +166,7 @@ export const interpolatedEnvironmentNames = (compose: string): readonly string[]
  * @returns each name once, sorted.
  */
 export const inlinedEnvironmentNames = (source: string): readonly string[] =>
-  uniqueSorted([
-    ...namesMatching(source, INLINED_DOTTED_READ),
-    ...namesMatching(source, INLINED_BRACKETED_READ),
-  ])
+  uniqueSorted([...namesMatching(source, INLINED_DOTTED_READ), ...namesMatching(source, INLINED_BRACKETED_READ)])
 
 const argumentNamesIn = (declaration: string): readonly string[] =>
   declaration
@@ -217,10 +197,7 @@ export const declaredBuildArguments = (dockerfile: string): readonly string[] =>
  * @returns each name once, sorted.
  */
 export const workflowSuppliedNames = (workflow: string): readonly string[] =>
-  uniqueSorted([
-    ...namesMatching(workflow, WORKFLOW_KEY),
-    ...namesMatching(workflow, WORKFLOW_CONTEXT_REFERENCE),
-  ])
+  uniqueSorted([...namesMatching(workflow, WORKFLOW_KEY), ...namesMatching(workflow, WORKFLOW_CONTEXT_REFERENCE)])
 
 /**
  * Whether a workflow runs a ploaness verification, and therefore evaluates the compose files.
@@ -236,9 +213,7 @@ const ROOT_MEMBER: string = '.'
 // directory is resolved by, so a nested member keeps its own image instead of inheriting its parent's.
 const ownerOf = (file: string, everyMemberPath: readonly string[]): string =>
   [...everyMemberPath]
-    .filter(
-      (candidate: string): boolean => candidate !== ROOT_MEMBER && file.startsWith(`${candidate}/`),
-    )
+    .filter((candidate: string): boolean => candidate !== ROOT_MEMBER && file.startsWith(`${candidate}/`))
     .toSorted((left: string, right: string): number => right.length - left.length)
     .at(0) ?? ROOT_MEMBER
 
@@ -256,8 +231,7 @@ export const dockerfilesBuilding = (
   dockerfiles: readonly DockerfileSource[],
 ): readonly DockerfileSource[] =>
   dockerfiles.filter(
-    (dockerfile: DockerfileSource): boolean =>
-      ownerOf(dockerfile.file, everyMemberPath) === memberPath,
+    (dockerfile: DockerfileSource): boolean => ownerOf(dockerfile.file, everyMemberPath) === memberPath,
   )
 
 const undocumented = (
@@ -270,10 +244,7 @@ const undocumented = (
     .filter((name: string): boolean => !documented.has(name))
     .map((name: string): EnvironmentViolation => ({ name, origin, reason }))
 
-const missingFromWorkflow = (
-  names: readonly string[],
-  workflow: WorkflowFile,
-): readonly EnvironmentViolation[] => {
+const missingFromWorkflow = (names: readonly string[], workflow: WorkflowFile): readonly EnvironmentViolation[] => {
   const supplied: ReadonlySet<string> = new Set(workflowSuppliedNames(workflow.content))
   return names
     .filter((name: string): boolean => !supplied.has(name))
@@ -299,12 +270,8 @@ const missingBuildArguments = (build: ImageBuild): readonly EnvironmentViolation
       declaredBuildArguments(dockerfile.content),
     ),
   )
-  const files: string = build.dockerfiles
-    .map((dockerfile: DockerfileSource): string => dockerfile.file)
-    .join(', ')
-  return uniqueSorted(
-    build.sources.flatMap((source: string): readonly string[] => inlinedEnvironmentNames(source)),
-  )
+  const files: string = build.dockerfiles.map((dockerfile: DockerfileSource): string => dockerfile.file).join(', ')
+  return uniqueSorted(build.sources.flatMap((source: string): readonly string[] => inlinedEnvironmentNames(source)))
     .filter((name: string): boolean => !declared.has(name))
     .map(
       (name: string): EnvironmentViolation => ({
@@ -335,24 +302,18 @@ const missingBuildArguments = (build: ImageBuild): readonly EnvironmentViolation
  * @param inputs the files, already read.
  * @returns the violations, sorted by name within each rule. An empty array means the five places agree.
  */
-export const findEnvironmentViolations = (
-  inputs: EnvironmentInputs,
-): readonly EnvironmentViolation[] => {
+export const findEnvironmentViolations = (inputs: EnvironmentInputs): readonly EnvironmentViolation[] => {
   const documented: ReadonlySet<string> = new Set(
     inputs.example === undefined ? [] : documentedEnvironmentNames(inputs.example),
   )
   const read: readonly string[] = uniqueSorted(
-    inputs.applicationSources.flatMap((source: string): readonly string[] =>
-      readEnvironmentNames(source),
-    ),
+    inputs.applicationSources.flatMap((source: string): readonly string[] => readEnvironmentNames(source)),
   )
   const interpolated: readonly string[] = uniqueSorted(
-    inputs.composeSources.flatMap((source: string): readonly string[] =>
-      interpolatedEnvironmentNames(source),
-    ),
+    inputs.composeSources.flatMap((source: string): readonly string[] => interpolatedEnvironmentNames(source)),
   )
-  const verifying: readonly WorkflowFile[] = inputs.workflows.filter(
-    (workflow: WorkflowFile): boolean => isVerifyingWorkflow(workflow.content),
+  const verifying: readonly WorkflowFile[] = inputs.workflows.filter((workflow: WorkflowFile): boolean =>
+    isVerifyingWorkflow(workflow.content),
   )
   return [
     ...undocumented(
@@ -370,8 +331,6 @@ export const findEnvironmentViolations = (
     ...verifying.flatMap((workflow: WorkflowFile): readonly EnvironmentViolation[] =>
       missingFromWorkflow(interpolated, workflow),
     ),
-    ...inputs.builds.flatMap((build: ImageBuild): readonly EnvironmentViolation[] =>
-      missingBuildArguments(build),
-    ),
+    ...inputs.builds.flatMap((build: ImageBuild): readonly EnvironmentViolation[] => missingBuildArguments(build)),
   ]
 }

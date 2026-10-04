@@ -64,9 +64,7 @@ const isOn = (setting: unknown): boolean => ENABLED.has(severityOf(setting))
 // preset rather than from a table this package writes - `no-misused-spread` comes in with
 // `strictTypeChecked`. A source read would find it absent and conclude it was off, which is the
 // opposite of the truth.
-const resolveRules = async (
-  config: readonly Linter.Config[],
-): Promise<Readonly<Record<string, unknown>>> => {
+const resolveRules = async (config: readonly Linter.Config[]): Promise<Readonly<Record<string, unknown>>> => {
   const eslint: ESLint = new ESLint({
     overrideConfigFile: true,
     baseConfig: [...config],
@@ -84,9 +82,7 @@ const onInEveryConfig = async (rule: string): Promise<Readonly<Record<string, bo
   Object.fromEntries(
     await Promise.all(
       Object.entries(shippedConfigs).map(
-        async ([name, config]: [string, readonly Linter.Config[]]): Promise<
-          readonly [string, boolean]
-        > => {
+        async ([name, config]: [string, readonly Linter.Config[]]): Promise<readonly [string, boolean]> => {
           const rules: Readonly<Record<string, unknown>> = await resolveRules(config)
           return [name, isOn(rules[rule])]
         },
@@ -95,9 +91,7 @@ const onInEveryConfig = async (rule: string): Promise<Readonly<Record<string, bo
   )
 
 const everyConfig = <Value>(value: Value): Readonly<Record<string, Value>> =>
-  Object.fromEntries(
-    Object.keys(shippedConfigs).map((name: string): readonly [string, Value] => [name, value]),
-  )
+  Object.fromEntries(Object.keys(shippedConfigs).map((name: string): readonly [string, Value] => [name, value]))
 
 // Searched for the KEY wherever it sits rather than at a path in the schema, so moving the rule between
 // Biome's groups cannot make this spec quietly stop looking. A ban re-added anywhere fails it.
@@ -125,9 +119,7 @@ describe('the fold it is left with', () => {
   // Biome cannot see the ESLint config and ESLint cannot see Biome's, so nothing but a spec spanning
   // both can notice that one tool has re-banned what the others leave as the only way through.
   it('is not re-banned anywhere in the shared Biome configuration', () => {
-    const shared: unknown = JSON.parse(
-      readFileSync(path.join(packageRoot, 'biome-core.json'), 'utf8'),
-    )
+    const shared: unknown = JSON.parse(readFileSync(path.join(packageRoot, 'biome-core.json'), 'utf8'))
     expect(containsAccumulatingSpreadBan(shared)).toBe(false)
   })
 
@@ -163,9 +155,7 @@ describe('math rule ownership across the composed analyzers', () => {
     ['useModernMathApis', 'unicorn/prefer-modern-math-apis'],
     ['noXorAsExponentiation', 'unicorn/no-xor-as-exponentiation'],
   ])('keeps %s with its existing ESLint owner', async (biomeRule: string, eslintRule: string) => {
-    const shared: BiomeRules = JSON.parse(
-      readFileSync(path.join(packageRoot, 'biome-core.json'), 'utf8'),
-    ) as BiomeRules
+    const shared: BiomeRules = JSON.parse(readFileSync(path.join(packageRoot, 'biome-core.json'), 'utf8')) as BiomeRules
     expect(shared.linter.rules.nursery[biomeRule]).toBe('off')
     expect(await onInEveryConfig(eslintRule)).toStrictEqual(everyConfig(true))
   })

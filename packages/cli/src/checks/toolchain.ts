@@ -53,9 +53,7 @@ const SCHEMA_PATTERN: RegExp = /biomejs\.dev\/schemas\/(\d+\.\d+\.\d+)\/schema\.
 export const biomeSchema = (): GateResult => {
   const manifest: unknown = readJson(path.join(shippedDirectory('@biomejs/biome'), 'package.json'))
   const installed: string = versionOf(asRecord(manifest))
-  const declared: string | undefined = SCHEMA_PATTERN.exec(
-    readFileSync(configFile('biome.json'), 'utf8'),
-  )?.[1]
+  const declared: string | undefined = SCHEMA_PATTERN.exec(readFileSync(configFile('biome.json'), 'utf8'))?.[1]
   if (declared === undefined) {
     return failed('the ploaness Biome config declares no $schema URL', [
       'this is a ploaness packaging defect; report it',
@@ -128,19 +126,14 @@ export const css = (context: Context): GateResult =>
 const JSON_INDENT: number = 2
 
 const architectureConfig = (context: Context, kind: MemberKind): string => {
-  const shipped: string = configFile(
-    kind === 'library' ? 'dependency-cruiser-core.json' : 'dependency-cruiser.json',
-  )
+  const shipped: string = configFile(kind === 'library' ? 'dependency-cruiser-core.json' : 'dependency-cruiser.json')
   const floor: Record<string, unknown> | undefined = pureLogicRule(context.settings.pureLogicRoots)
   if (floor === undefined) {
     return shipped
   }
   const directory: string = mkdtempSync(path.join(tmpdir(), 'ploaness-arch-'))
   const rendered: string = path.join(directory, 'dependency-cruiser.json')
-  writeFileSync(
-    rendered,
-    `${JSON.stringify({ extends: shipped, forbidden: [floor] }, null, JSON_INDENT)}\n`,
-  )
+  writeFileSync(rendered, `${JSON.stringify({ extends: shipped, forbidden: [floor] }, null, JSON_INDENT)}\n`)
   return rendered
 }
 
@@ -149,9 +142,7 @@ const architectureConfig = (context: Context, kind: MemberKind): string => {
 // EXIST, though - the analyzer refuses a directory it cannot open, so a package holding shared scripts
 // and no `src` failed on the shape of its own layout rather than on anything about its architecture.
 const presentSourceRoots = (context: Member): readonly string[] =>
-  context.settings.sourceRoots.filter((root: string): boolean =>
-    existsSync(path.join(context.root, root)),
-  )
+  context.settings.sourceRoots.filter((root: string): boolean => existsSync(path.join(context.root, root)))
 
 export const architecture = (context: Member): GateResult => {
   const roots: readonly string[] = presentSourceRoots(context)
@@ -160,11 +151,9 @@ export const architecture = (context: Member): GateResult => {
   }
   const kind: MemberKind = memberKindOf(context.packageJson)
   return fromRun(
-    runNode(
-      resolveTool('dependency-cruiser', 'depcruise'),
-      [...roots, '--config', architectureConfig(context, kind)],
-      { cwd: context.root },
-    ),
+    runNode(resolveTool('dependency-cruiser', 'depcruise'), [...roots, '--config', architectureConfig(context, kind)], {
+      cwd: context.root,
+    }),
     'module architecture holds',
     'the module architecture contract is broken',
   )
@@ -210,10 +199,7 @@ export const typeCoverage = (context: Context): GateResult =>
         '--strict',
         '--cache',
         'false',
-        ...TYPE_COVERAGE_IGNORE.flatMap((pattern: string): readonly string[] => [
-          '--ignore-files',
-          pattern,
-        ]),
+        ...TYPE_COVERAGE_IGNORE.flatMap((pattern: string): readonly string[] => ['--ignore-files', pattern]),
       ],
       { cwd: context.root },
     ),
@@ -233,10 +219,7 @@ const knipConfig = (context: Member): string => {
   const shipped: Record<string, unknown> = asRecord(readJson(configFile('knip.json')))
   const directory: string = mkdtempSync(path.join(tmpdir(), 'ploaness-knip-'))
   const rendered: string = path.join(directory, 'knip.json')
-  writeFileSync(
-    rendered,
-    `${JSON.stringify({ ...shipped, ignore: boundaries }, null, JSON_INDENT)}\n`,
-  )
+  writeFileSync(rendered, `${JSON.stringify({ ...shipped, ignore: boundaries }, null, JSON_INDENT)}\n`)
   return rendered
 }
 

@@ -34,12 +34,7 @@ const STRICTEST_NUMBER: ReadonlySet<string> = new Set<string>([
 const STRICTEST_LARGER: ReadonlySet<string> = new Set<string>(['layoutMinimumGap'])
 
 /** Keys that are one value describing one package, where the member's answer replaces the repository's. */
-const REPLACED: ReadonlySet<string> = new Set<string>([
-  'pretest',
-  'testWrapper',
-  'serverUrl',
-  'vulnerabilitySeverity',
-])
+const REPLACED: ReadonlySet<string> = new Set<string>(['pretest', 'testWrapper', 'serverUrl', 'vulnerabilitySeverity'])
 
 const mergeArrays = (base: unknown, overlay: unknown): unknown => [
   ...(isArray(base) ? base : []),
@@ -47,9 +42,7 @@ const mergeArrays = (base: unknown, overlay: unknown): unknown => [
 ]
 
 const isValidCeiling = (key: string, value: unknown): value is number =>
-  typeof value === 'number' &&
-  Number.isSafeInteger(value) &&
-  (key === 'maxSuppressions' ? value >= 0 : value > 0)
+  typeof value === 'number' && Number.isSafeInteger(value) && (key === 'maxSuppressions' ? value >= 0 : value > 0)
 
 const smaller = (key: string, base: unknown, overlay: unknown): unknown => {
   if (!isValidCeiling(key, base)) {
@@ -111,19 +104,14 @@ export const layerSettingBlocks = (
  * @param entry the original exclusion.
  * @returns a scoped regex, a rebased glob, or the unchanged root/route declaration.
  */
-export const rebaseExclusion = (
-  memberPath: string,
-  entry: DeclaredExclusion,
-): DeclaredExclusion => {
+export const rebaseExclusion = (memberPath: string, entry: DeclaredExclusion): DeclaredExclusion => {
   if (memberPath === '.') {
     return entry
   }
   if (entry.kind === 'route') {
     return entry
   }
-  return entry.kind === 'glob'
-    ? { ...entry, pattern: `${memberPath}/${entry.pattern}` }
-    : { ...entry, memberPath }
+  return entry.kind === 'glob' ? { ...entry, pattern: `${memberPath}/${entry.pattern}` } : { ...entry, memberPath }
 }
 
 /**

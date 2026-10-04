@@ -36,9 +36,7 @@ describe('LOCAL_API_MUTATIONS', () => {
 
 describe('bootstrapHooksIn', () => {
   it('reads the body of an arrow hook', () => {
-    const found: readonly BootstrapHook[] = bootstrapHooksIn(
-      configWith('async (payload) => { await warm(payload) }'),
-    )
+    const found: readonly BootstrapHook[] = bootstrapHooksIn(configWith('async (payload) => { await warm(payload) }'))
     expect(found).toHaveLength(1)
     expect(found[0]?.body).toContain('warm')
   })
@@ -70,15 +68,11 @@ describe('bootstrapHooksIn', () => {
 
 describe('moduleOfImport', () => {
   it('reads the specifier a name is imported from', () => {
-    expect(moduleOfImport("import { seedContent } from './seed/seed'", 'seedContent')).toBe(
-      './seed/seed',
-    )
+    expect(moduleOfImport("import { seedContent } from './seed/seed'", 'seedContent')).toBe('./seed/seed')
   })
 
   it('reads a renamed binding by the name the file uses', () => {
-    expect(moduleOfImport("import { seed as seedContent } from '@/seed'", 'seedContent')).toBe(
-      '@/seed',
-    )
+    expect(moduleOfImport("import { seed as seedContent } from '@/seed'", 'seedContent')).toBe('@/seed')
   })
 
   it('is undefined for a name the file never imports', () => {
@@ -149,9 +143,7 @@ describe('findBootstrapWrites', () => {
   })
 
   it('accepts a configuration that declares no hook', () => {
-    expect(rulesOf([file(CONFIG_PATH, 'export default buildConfig({ collections: [] })')])).toEqual(
-      [],
-    )
+    expect(rulesOf([file(CONFIG_PATH, 'export default buildConfig({ collections: [] })')])).toEqual([])
   })
 
   it('reports a write the hook performs itself', () => {
@@ -165,11 +157,8 @@ describe('findBootstrapWrites', () => {
       "import { seedContent } from './seed/seed'",
       configWith('async (payload) => { await seedContent(payload) }'),
     ].join('\n')
-    const seed: string =
-      'export async function seedContent(payload) { await payload.updateGlobal({}) }'
-    expect(rulesOf([file(CONFIG_PATH, config), file('src/seed/seed.ts', seed)])).toEqual([
-      'no-boot-time-writes',
-    ])
+    const seed: string = 'export async function seedContent(payload) { await payload.updateGlobal({}) }'
+    expect(rulesOf([file(CONFIG_PATH, config), file('src/seed/seed.ts', seed)])).toEqual(['no-boot-time-writes'])
   })
 
   it('names the reached function and its module, so the finding is actionable', () => {
@@ -177,8 +166,7 @@ describe('findBootstrapWrites', () => {
       "import { seedContent } from './seed/seed'",
       configWith('async (payload) => { await seedContent(payload) }'),
     ].join('\n')
-    const seed: string =
-      'export async function seedContent(payload) { await payload.updateGlobal({}) }'
+    const seed: string = 'export async function seedContent(payload) { await payload.updateGlobal({}) }'
     const found: readonly LocatedViolation[] = findBootstrapWrites([
       file(CONFIG_PATH, config),
       file('src/seed/seed.ts', seed),
@@ -192,8 +180,7 @@ describe('findBootstrapWrites', () => {
       "import { seedContent } from './seed/seed'",
       configWith('async (payload) => { await seedContent(payload) }'),
     ].join('\n')
-    const seed: string =
-      'export async function seedContent(payload) { await payload.updateGlobal({}) }'
+    const seed: string = 'export async function seedContent(payload) { await payload.updateGlobal({}) }'
     const found: readonly LocatedViolation[] = findBootstrapWrites([
       file(CONFIG_PATH, config),
       file('src/seed/seed.ts', seed),
@@ -214,9 +201,7 @@ describe('findBootstrapWrites', () => {
       '  await payload.updateGlobal({ slug: "configuration" })',
       '}',
     ].join('\n')
-    expect(rulesOf([file(CONFIG_PATH, config), file('src/seed/seed.ts', seed)])).toEqual([
-      'no-boot-time-writes',
-    ])
+    expect(rulesOf([file(CONFIG_PATH, config), file('src/seed/seed.ts', seed)])).toEqual(['no-boot-time-writes'])
   })
 
   it('accepts a reached function whose body only reads', () => {

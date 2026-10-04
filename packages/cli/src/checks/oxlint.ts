@@ -69,26 +69,16 @@ const legacySitesIn = (member: Member, files: readonly string[]): readonly Oxlin
       .map((comment: SourceComment): OxlintLegacySite => ({ file, line: comment.line }))
   })
 
-const nativeVerdict = (
-  result: RunResult,
-  group: OxlintGroup,
-  legacy: readonly OxlintLegacySite[],
-): GateResult => {
-  const findings: readonly string[] = oxlintReportProblems(
-    result.stdout,
-    group.files.length,
-    group.rules.length,
-    { exitCode: result.code, output: result.output, legacy },
-  )
+const nativeVerdict = (result: RunResult, group: OxlintGroup, legacy: readonly OxlintLegacySite[]): GateResult => {
+  const findings: readonly string[] = oxlintReportProblems(result.stdout, group.files.length, group.rules.length, {
+    exitCode: result.code,
+    output: result.output,
+    legacy,
+  })
   return withOutput(
     findings.length === 0
-      ? passed(
-          `${String(group.files.length)} source file(s) pass ${String(group.rules.length)} native rules`,
-        )
-      : failed('Oxlint did not establish conformance', [
-          ...findings,
-          ...(result.code === 0 ? [] : [result.output]),
-        ]),
+      ? passed(`${String(group.files.length)} source file(s) pass ${String(group.rules.length)} native rules`)
+      : failed('Oxlint did not establish conformance', [...findings, ...(result.code === 0 ? [] : [result.output])]),
     result.output,
   )
 }
@@ -131,18 +121,13 @@ const analyzeGroups = (member: Member, groups: readonly OxlintGroup[]): GateResu
 /** Native core checks for every member, with accessibility only in the existing application scope. */
 export const oxlint = (member: Member): GateResult => {
   const inventory: readonly string[] = workingTreeFiles(member.root)
-  const groups: readonly OxlintGroup[] = oxlintGroups(
-    eligibleFiles(member, inventory),
-    hasOwnRuntime(member),
-  )
+  const groups: readonly OxlintGroup[] = oxlintGroups(eligibleFiles(member, inventory), hasOwnRuntime(member))
   const problems: readonly string[] = [
     ...versionProblems(),
     ...inventory
       .filter(isOxlintConfig)
       .map((file: string): string => `${file}: Oxlint configuration is owned by ploaness`),
-    ...groups.flatMap((group: OxlintGroup): readonly string[] =>
-      suppressionProblems(member, group),
-    ),
+    ...groups.flatMap((group: OxlintGroup): readonly string[] => suppressionProblems(member, group)),
   ]
   return problems.length > 0
     ? failed('Oxlint wiring or suppression policy is violated', problems)

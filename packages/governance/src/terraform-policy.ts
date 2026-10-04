@@ -71,9 +71,7 @@ const FLAG_RULES: readonly FlagRule[] = [
       assigned('role', 'roles/owner'),
       assigned('role', 'roles/editor'),
       assigned('role_definition_name', 'Owner'),
-      new RegExp(
-        String.raw`^[ \t]*role_definition_id[ \t]*=[ \t]*"[^"]*${AZURE_OWNER_DEFINITION}"`,
-      ),
+      new RegExp(String.raw`^[ \t]*role_definition_id[ \t]*=[ \t]*"[^"]*${AZURE_OWNER_DEFINITION}"`),
     ],
     rule: 'no-administrative-role-grant',
     reason:
@@ -113,13 +111,7 @@ const CREDENTIAL_WORDS: ReadonlySet<string> = new Set([
   'credentials',
 ])
 
-const QUALIFIED_KEYS: ReadonlySet<string> = new Set([
-  'api',
-  'access',
-  'secret',
-  'private',
-  'encryption',
-])
+const QUALIFIED_KEYS: ReadonlySet<string> = new Set(['api', 'access', 'secret', 'private', 'encryption'])
 
 // A secret's CONTENT argument is named the other way round: `secret_string`, `secret_data` and
 // `secret_binary` are what a secret-store version holds, so the first segment carries the meaning and
@@ -228,8 +220,7 @@ const suppressionViolations = (source: string): readonly TerraformViolation[] =>
 // Formatted HCL closes a resource at column 0; unformatted HCL over-reads at worst the blank lines
 // before the next block, never the next block's attributes.
 const INGRESS_RULE_HEADER: RegExp = /^[ \t]*resource[ \t]+"aws_vpc_security_group_ingress_rule"/
-const BLOCK_BOUNDARY: RegExp =
-  /^(?:\}|(?:resource|data|module|variable|output|locals|provider|terraform)\b)/
+const BLOCK_BOUNDARY: RegExp = /^(?:\}|(?:resource|data|module|variable|output|locals|provider|terraform)\b)/
 const ANY_ADDRESS: RegExp = /^[ \t]*cidr_ipv[46][ \t]*=[ \t]*"(?:0\.0\.0\.0\/0|::\/0)"/
 const EVERY_PROTOCOL: RegExp = /^[ \t]*ip_protocol[ \t]*=[ \t]*"?-1"?/
 const PORT_EDGE: RegExp = /^[ \t]*(?<edge>from_port|to_port)[ \t]*=[ \t]*(?<port>\d+)/
@@ -254,9 +245,7 @@ const ingressRulesIn = (lines: readonly string[]): readonly IngressRule[] =>
       return []
     }
     const rest: readonly string[] = lines.slice(index + 1)
-    const end: number = rest.findIndex((candidate: string): boolean =>
-      BLOCK_BOUNDARY.test(candidate),
-    )
+    const end: number = rest.findIndex((candidate: string): boolean => BLOCK_BOUNDARY.test(candidate))
     return [{ line: index + FIRST_LINE, body: end === -1 ? rest : rest.slice(0, end) }]
   })
 
@@ -264,9 +253,7 @@ const portRangeOf = (body: readonly string[]): PortRange | undefined => {
   const edges: ReadonlyMap<string, number> = new Map(
     body.flatMap((line: string): readonly (readonly [string, number])[] => {
       const found: RegExpExecArray | null = PORT_EDGE.exec(line)
-      return found === null
-        ? []
-        : [[found.groups?.['edge'] ?? '', Number(found.groups?.['port'] ?? '')]]
+      return found === null ? [] : [[found.groups?.['edge'] ?? '', Number(found.groups?.['port'] ?? '')]]
     }),
   )
   const from: number | undefined = edges.get('from_port')
@@ -274,8 +261,7 @@ const portRangeOf = (body: readonly string[]): PortRange | undefined => {
   return from === undefined || to === undefined ? undefined : { from, to }
 }
 
-const coversPort = (range: PortRange, port: number): boolean =>
-  range.from <= port && port <= range.to
+const coversPort = (range: PortRange, port: number): boolean => range.from <= port && port <= range.to
 
 // What a port range exposes when its source is every address, or nothing when its ports are ones a
 // public site legitimately opens.
@@ -332,7 +318,5 @@ export const findTerraformViolations = (source: string): readonly TerraformViola
     ...placeholderViolations(code),
     ...openIngressViolations(code),
     ...suppressionViolations(source),
-  ].toSorted(
-    (left: TerraformViolation, right: TerraformViolation): number => left.line - right.line,
-  )
+  ].toSorted((left: TerraformViolation, right: TerraformViolation): number => left.line - right.line)
 }

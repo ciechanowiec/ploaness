@@ -9,11 +9,7 @@ import {
 } from '../src/wiring-policy.js'
 import type { WiringViolation } from '../src/wiring-violation.js'
 
-const BIOME_FILES: Readonly<Record<string, unknown>> = requiredBiomeFiles([
-  'src',
-  'tests',
-  'scripts',
-])
+const BIOME_FILES: Readonly<Record<string, unknown>> = requiredBiomeFiles(['src', 'tests', 'scripts'])
 
 const WIRED_PACKAGE_JSON: Record<string, unknown> = {
   devDependencies: { ploaness: '1.0.0', vitest: '4.1.11' },
@@ -157,14 +153,10 @@ describe('the Biome file-selection block', () => {
       extends: ['ploaness/biome'],
       files: {
         ...BIOME_FILES,
-        includes: biomeIncludes().filter(
-          (entry: string): boolean => entry !== '!src/payload-types.ts',
-        ),
+        includes: biomeIncludes().filter((entry: string): boolean => entry !== '!src/payload-types.ts'),
       },
     })
-    expect(reasonFor(wiredInputs({ biomeConfig }), 'biome.json files')).toContain(
-      'add "!src/payload-types.ts"',
-    )
+    expect(reasonFor(wiredInputs({ biomeConfig }), 'biome.json files')).toContain('add "!src/payload-types.ts"')
   })
 
   it('names the entry a project added that ploaness does not declare', () => {
@@ -172,16 +164,12 @@ describe('the Biome file-selection block', () => {
       extends: ['ploaness/biome'],
       files: { ...BIOME_FILES, includes: [...biomeIncludes(), 'docs/**/*'] },
     })
-    expect(reasonFor(wiredInputs({ biomeConfig }), 'biome.json files')).toContain(
-      'remove "docs/**/*"',
-    )
+    expect(reasonFor(wiredInputs({ biomeConfig }), 'biome.json files')).toContain('remove "docs/**/*"')
   })
 
   it('does not instruct running init, which leaves an existing file alone', () => {
     const biomeConfig: string = JSON.stringify({ extends: ['ploaness/biome'] })
-    expect(reasonFor(wiredInputs({ biomeConfig }), 'biome.json files')).not.toContain(
-      'run `ploaness init`',
-    )
+    expect(reasonFor(wiredInputs({ biomeConfig }), 'biome.json files')).not.toContain('run `ploaness init`')
   })
 })
 
@@ -238,12 +226,8 @@ describe('a project file that is absent entirely', () => {
     ['biome.json', 'biomeConfig'],
     ['tsconfig.json', 'tsconfig'],
   ])('names %s when it is missing', (expected: string, key: string) => {
-    const violations: readonly WiringViolation[] = findWiringViolations(
-      wiredInputs({ [key]: undefined }),
-    )
-    expect(violations.some((violation: WiringViolation) => violation.location === expected)).toBe(
-      true,
-    )
+    const violations: readonly WiringViolation[] = findWiringViolations(wiredInputs({ [key]: undefined }))
+    expect(violations.some((violation: WiringViolation) => violation.location === expected)).toBe(true)
   })
 
   it('reports a pinned package the project never declared', () => {
@@ -251,13 +235,9 @@ describe('a project file that is absent entirely', () => {
       ...WIRED_PACKAGE_JSON,
       devDependencies: { ploaness: '1.0.0' },
     }
-    const violations: readonly WiringViolation[] = findWiringViolations(
-      wiredInputs({ packageJson }),
-    )
+    const violations: readonly WiringViolation[] = findWiringViolations(wiredInputs({ packageJson }))
     expect(
-      violations.some((violation: WiringViolation) =>
-        violation.reason.includes('the project must declare it'),
-      ),
+      violations.some((violation: WiringViolation) => violation.reason.includes('the project must declare it')),
     ).toBe(true)
   })
 })
@@ -286,9 +266,9 @@ describe('the vitest config', () => {
   })
 
   it('reports the file as missing when it is absent', () => {
-    const reasons: readonly string[] = findWiringViolations(
-      wiredInputs({ vitestConfig: undefined }),
-    ).map((violation: WiringViolation): string => violation.reason)
+    const reasons: readonly string[] = findWiringViolations(wiredInputs({ vitestConfig: undefined })).map(
+      (violation: WiringViolation): string => violation.reason,
+    )
     expect(reasons.some((reason: string) => reason.includes('missing'))).toBe(true)
   })
 })
@@ -298,19 +278,18 @@ describe('the vitest config', () => {
 describe('the playwright config', () => {
   it('rejects a config that is not the bare re-export', () => {
     const playwrightConfig: string =
-      "import { defineConfig } from '@playwright/test'\n\n" +
-      'export default defineConfig({ forbidOnly: false })\n'
-    const locations: readonly string[] = findWiringViolations(
-      wiredInputs({ playwrightConfig }),
-    ).map((violation: WiringViolation): string => violation.location)
+      "import { defineConfig } from '@playwright/test'\n\nexport default defineConfig({ forbidOnly: false })\n"
+    const locations: readonly string[] = findWiringViolations(wiredInputs({ playwrightConfig })).map(
+      (violation: WiringViolation): string => violation.location,
+    )
     expect(locations).toContain('playwright.config.ts')
   })
 
   // Absent is a defect rather than an opt-out: the sweep is a managed file every project receives.
   it('reports the file as missing when it is absent', () => {
-    const reasons: readonly string[] = findWiringViolations(
-      wiredInputs({ playwrightConfig: undefined }),
-    ).map((violation: WiringViolation): string => violation.reason)
+    const reasons: readonly string[] = findWiringViolations(wiredInputs({ playwrightConfig: undefined })).map(
+      (violation: WiringViolation): string => violation.reason,
+    )
     expect(reasons.some((reason: string): boolean => reason.includes('missing'))).toBe(true)
   })
 })
@@ -445,15 +424,11 @@ const withKey = (holder: string, key: string, entry: string): WiringInputs =>
 
 describe('an escape from a pinned version', () => {
   it('rejects a package.json override of a pinned package', () => {
-    expect(locations(withKey('root', 'overrides', 'vitest'))).toContain(
-      'package.json overrides.vitest',
-    )
+    expect(locations(withKey('root', 'overrides', 'vitest'))).toContain('package.json overrides.vitest')
   })
 
   it('rejects a yarn-style resolution of a pinned package', () => {
-    expect(locations(withKey('root', 'resolutions', 'vitest'))).toContain(
-      'package.json resolutions.vitest',
-    )
+    expect(locations(withKey('root', 'resolutions', 'vitest'))).toContain('package.json resolutions.vitest')
   })
 
   // A patch keeps the version and swaps the code, which is the quietest bypass of the three.
@@ -464,9 +439,7 @@ describe('an escape from a pinned version', () => {
   })
 
   it('rejects a package extension that rewrites a pinned package manifest', () => {
-    expect(locations(withKey('pnpm', 'packageExtensions', 'vitest'))).toContain(
-      'package.json packageExtensions.vitest',
-    )
+    expect(locations(withKey('pnpm', 'packageExtensions', 'vitest'))).toContain('package.json packageExtensions.vitest')
   })
 
   it('leaves an entry for a package ploaness does not pin alone', () => {

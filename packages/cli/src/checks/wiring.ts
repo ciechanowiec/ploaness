@@ -21,14 +21,7 @@ import {
   requiredBiomeFiles,
   type WiringViolation,
 } from '@ploaness/governance'
-import {
-  type Member,
-  type Repository,
-  readJson,
-  readPins,
-  readText,
-  shippedDirectory,
-} from '../context.js'
+import { type Member, type Repository, readJson, readPins, readText, shippedDirectory } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 // Libraries the consumer's own specs import. They cannot move into the harness: under the strict pnpm
@@ -90,10 +83,7 @@ const pinGroups = (): readonly PinGroup[] => {
 
 /** Every pinned version, whether the group that holds it is required or merely matched. */
 const ownedVersions = (): Readonly<Record<string, string>> =>
-  Object.assign({}, ...pinGroups().map((group: PinGroup): unknown => group.versions)) as Record<
-    string,
-    string
-  >
+  Object.assign({}, ...pinGroups().map((group: PinGroup): unknown => group.versions)) as Record<string, string>
 
 // Where a pinned version is read from. The harness installs these itself, so its own manifests are the
 // single source of the expectation and a harness bump moves it in exactly one place. Both packages are
@@ -160,10 +150,7 @@ export const harnessDecidedVersions = (): Readonly<Record<string, string>> => {
   )
   const fromDependencies: Record<string, string> = asStringRecord(
     Object.fromEntries(
-      [...TEST_LIBRARY_NAMES, 'oxlint'].map((name: string): readonly [string, unknown] => [
-        name,
-        declared[name],
-      ]),
+      [...TEST_LIBRARY_NAMES, 'oxlint'].map((name: string): readonly [string, unknown] => [name, declared[name]]),
     ),
   )
   return { ...fromDependencies, ...ownedVersions(), ...harnessRuntimeVersion() }
@@ -203,18 +190,10 @@ const BROWSER_LIBRARIES: ReadonlySet<string> = new Set<string>([
 
 // The specs of every governed package import these, so pnpm's strict layout means every package must
 // declare them. The browser three are added only where there is an application to drive.
-const SUITE_LIBRARIES: ReadonlySet<string> = new Set<string>([
-  'vitest',
-  '@vitest/coverage-v8',
-  'typescript',
-])
+const SUITE_LIBRARIES: ReadonlySet<string> = new Set<string>(['vitest', '@vitest/coverage-v8', 'typescript'])
 
 const requiredFor = (kind: MemberKind): ReadonlySet<string> =>
-  new Set<string>([
-    ...SUITE_LIBRARIES,
-    ...(hasRuntime(kind) ? BROWSER_LIBRARIES : []),
-    ...requiredPackages(kind),
-  ])
+  new Set<string>([...SUITE_LIBRARIES, ...(hasRuntime(kind) ? BROWSER_LIBRARIES : []), ...requiredPackages(kind)])
 
 const memberViolations = (member: Member): readonly WiringViolation[] => {
   const kind: MemberKind = memberKindOf(member.packageJson)
@@ -223,11 +202,7 @@ const memberViolations = (member: Member): readonly WiringViolation[] => {
     kind,
     isNestedMember: member.path !== ROOT_MEMBER_PATH,
     nestedMembers: member.siblingPaths,
-    requiredBiomeFiles: requiredBiomeFiles(
-      member.settings.sourceRoots,
-      kind,
-      member.settings.generatedArtefacts,
-    ),
+    requiredBiomeFiles: requiredBiomeFiles(member.settings.sourceRoots, kind, member.settings.generatedArtefacts),
     eslintConfig: readText(path.join(member.root, 'eslint.config.mjs')),
     vitestConfig: readText(path.join(member.root, 'vitest.config.mts')),
     playwrightConfig: readText(path.join(member.root, 'playwright.config.ts')),
@@ -243,9 +218,7 @@ const memberViolations = (member: Member): readonly WiringViolation[] => {
 // A finding names the member it came from only when there is more than one, so a single-package project
 // reads exactly the findings it always did.
 const locate = (member: Member, isSolo: boolean, violation: WiringViolation): string =>
-  isSolo
-    ? `${violation.location}: ${violation.reason}`
-    : `${member.path}/${violation.location}: ${violation.reason}`
+  isSolo ? `${violation.location}: ${violation.reason}` : `${member.path}/${violation.location}: ${violation.reason}`
 
 const shapeOf = (member: Member): MemberShape => ({
   path: member.path,
@@ -271,9 +244,7 @@ const acrossMembers = (repository: Repository): readonly WiringViolation[] => [
 const declaredEverywhere = (repository: Repository): Record<string, string> =>
   Object.assign(
     {},
-    ...repository.members.map(
-      (member: Member): Record<string, string> => declaredDependencies(member.packageJson),
-    ),
+    ...repository.members.map((member: Member): Record<string, string> => declaredDependencies(member.packageJson)),
   ) as Record<string, string>
 
 /** Verify the repository and each of its members have installed ploaness exactly as ploaness dictates. */
@@ -291,15 +262,10 @@ export const wiring = (repository: Repository): GateResult => {
       repositoryFindings: acrossMembers(repository),
     }).map((violation: WiringViolation): string => `${violation.location}: ${violation.reason}`),
     ...repository.members.flatMap((member: Member): readonly string[] =>
-      memberViolations(member).map((violation: WiringViolation): string =>
-        locate(member, isSolo, violation),
-      ),
+      memberViolations(member).map((violation: WiringViolation): string => locate(member, isSolo, violation)),
     ),
   ]
   return findings.length > 0
-    ? failed(
-        `${String(findings.length)} wiring defect(s); the harness is not installed as ploaness requires`,
-        findings,
-      )
+    ? failed(`${String(findings.length)} wiring defect(s); the harness is not installed as ploaness requires`, findings)
     : passed('ploaness is wired into the project as required')
 }

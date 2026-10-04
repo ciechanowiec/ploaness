@@ -39,11 +39,9 @@ const SENSITIVE_LOGGING: readonly RestrictedSyntax[] = [
 ]
 
 const INTERNAL_ERROR: string =
-  'MemberExpression[object.name=/^(?:err|error|exception)$/]' +
-  '[property.name=/^(?:message|stack)$/]'
+  'MemberExpression[object.name=/^(?:err|error|exception)$/][property.name=/^(?:message|stack)$/]'
 
-const ERROR_PROPERTY: string =
-  'Property[key.name=/^(?:error|message)$/], Property[key.value=/^(?:error|message)$/]'
+const ERROR_PROPERTY: string = 'Property[key.name=/^(?:error|message)$/], Property[key.value=/^(?:error|message)$/]'
 
 const JSON_RESPONSE: string =
   "CallExpression[callee.type='MemberExpression']" +
@@ -60,13 +58,9 @@ const errorResponse = (selector: string): RestrictedSyntax => ({
 })
 
 const INTERNAL_ERROR_RESPONSES: readonly RestrictedSyntax[] = [
-  errorResponse(
-    `${JSON_RESPONSE} > ObjectExpression > :matches(${ERROR_PROPERTY}) > ${INTERNAL_ERROR}`,
-  ),
+  errorResponse(`${JSON_RESPONSE} > ObjectExpression > :matches(${ERROR_PROPERTY}) > ${INTERNAL_ERROR}`),
   errorResponse(`${JSON_RESPONSE} > ${INTERNAL_ERROR}`),
-  errorResponse(
-    `ReturnStatement > ObjectExpression > :matches(${ERROR_PROPERTY}) > ${INTERNAL_ERROR}`,
-  ),
+  errorResponse(`ReturnStatement > ObjectExpression > :matches(${ERROR_PROPERTY}) > ${INTERNAL_ERROR}`),
   errorResponse(
     `ArrowFunctionExpression[expression=true] > ObjectExpression > ` +
       `:matches(${ERROR_PROPERTY}) > ${INTERNAL_ERROR}`,
@@ -75,7 +69,4 @@ const INTERNAL_ERROR_RESPONSES: readonly RestrictedSyntax[] = [
 ]
 
 /** Output-boundary syntax every composed configuration must retain. */
-export const SECURITY_RESTRICTIONS: readonly RestrictedSyntax[] = [
-  ...SENSITIVE_LOGGING,
-  ...INTERNAL_ERROR_RESPONSES,
-]
+export const SECURITY_RESTRICTIONS: readonly RestrictedSyntax[] = [...SENSITIVE_LOGGING, ...INTERNAL_ERROR_RESPONSES]

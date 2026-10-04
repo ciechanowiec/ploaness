@@ -12,10 +12,7 @@ export interface DeclaredAdminView {
 // `components` then `views`, each read as the block it opens rather than as text found anywhere in the
 // file. Nesting the two is what tells Payload's own vocabulary apart from a project's: a `views` key
 // that is not inside a `components` block is not a custom admin view.
-const BLOCK_PATTERNS: readonly string[] = [
-  String.raw`\bcomponents\s*:\s*\{`,
-  String.raw`\bviews\s*:\s*\{`,
-]
+const BLOCK_PATTERNS: readonly string[] = [String.raw`\bcomponents\s*:\s*\{`, String.raw`\bviews\s*:\s*\{`]
 
 const VIEW_PATH: RegExp = /\bpath\s*:\s*['"](\/[^'"]*)['"]/gu
 
@@ -35,14 +32,10 @@ const blockAt = (source: string, at: number): Block | undefined => {
 
 const blocksMatching = (blocks: readonly Block[], pattern: string): readonly Block[] =>
   blocks.flatMap((block: Block): readonly Block[] =>
-    [...block.text.matchAll(new RegExp(pattern, 'gu'))].flatMap(
-      (match: RegExpExecArray): Block[] => {
-        const opened: Block | undefined = blockAt(block.text, match.index + match[0].length - 1)
-        return opened === undefined
-          ? []
-          : [{ text: opened.text, start: block.start + opened.start }]
-      },
-    ),
+    [...block.text.matchAll(new RegExp(pattern, 'gu'))].flatMap((match: RegExpExecArray): Block[] => {
+      const opened: Block | undefined = blockAt(block.text, match.index + match[0].length - 1)
+      return opened === undefined ? [] : [{ text: opened.text, start: block.start + opened.start }]
+    }),
   )
 
 /**
@@ -56,8 +49,7 @@ const blocksMatching = (blocks: readonly Block[], pattern: string): readonly Blo
 export const findDeclaredAdminViews = (source: string): readonly DeclaredAdminView[] => {
   const code: string = stripComments(source)
   const views: readonly Block[] = BLOCK_PATTERNS.reduce(
-    (blocks: readonly Block[], pattern: string): readonly Block[] =>
-      blocksMatching(blocks, pattern),
+    (blocks: readonly Block[], pattern: string): readonly Block[] => blocksMatching(blocks, pattern),
     [{ text: code, start: 0 }],
   )
   return views.flatMap((block: Block): DeclaredAdminView[] =>

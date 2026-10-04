@@ -21,11 +21,9 @@ const declaring = (entity: string, operation: string): readonly PublicAccess[] =
   { entity, operation, reason: 'the public site reads it' },
 ]
 
-const declaringFields = (
-  entity: string,
-  operation: string,
-  fields: readonly string[],
-): readonly PublicAccess[] => [{ entity, operation, reason: 'the public site reads it', fields }]
+const declaringFields = (entity: string, operation: string, fields: readonly string[]): readonly PublicAccess[] => [
+  { entity, operation, reason: 'the public site reads it', fields },
+]
 
 // The two shapes Payload's own sanitisation produces, named for what distinguishes them. An
 // unconstrained grant is collapsed to a bare `true`; the object survives only when a `where` clause
@@ -70,16 +68,17 @@ describe('grantedPermissions', () => {
         pages: { read: CONSTRAINED },
       },
     }
-    expect(
-      grantedPermissions(report).map((granted: Granted): string => describeGrant(granted)),
-    ).toEqual(['media.read', 'pages.read'])
+    expect(grantedPermissions(report).map((granted: Granted): string => describeGrant(granted))).toEqual([
+      'media.read',
+      'pages.read',
+    ])
   })
 
   it('readsGlobalsAsWellAsCollections', () => {
     const report: AccessReport = { globals: { configuration: { read: OPEN } } }
-    expect(
-      grantedPermissions(report).map((granted: Granted): string => describeGrant(granted)),
-    ).toEqual(['configuration.read'])
+    expect(grantedPermissions(report).map((granted: Granted): string => describeGrant(granted))).toEqual([
+      'configuration.read',
+    ])
   })
 
   it('reportsEveryOperationItJudgesAndNotOnlyRead', () => {
@@ -140,9 +139,10 @@ describe('grantedPermissions over the field map', () => {
     const report: AccessReport = {
       collections: { leaderboard: { read: OPEN, fields: { displayName: { read: OPEN } } } },
     }
-    expect(
-      grantedPermissions(report).map((granted: Granted): string => describeGrant(granted)),
-    ).toEqual(['leaderboard.read', 'leaderboard.read.displayName'])
+    expect(grantedPermissions(report).map((granted: Granted): string => describeGrant(granted))).toEqual([
+      'leaderboard.read',
+      'leaderboard.read.displayName',
+    ])
   })
 
   // The rule that keeps this free of findings nobody can answer. Payload reports a field's own verdict
@@ -152,9 +152,10 @@ describe('grantedPermissions over the field map', () => {
     const report: AccessReport = {
       collections: { users: { create: OPEN, fields: { email: { create: OPEN, read: OPEN } } } },
     }
-    expect(
-      grantedPermissions(report).map((granted: Granted): string => describeGrant(granted)),
-    ).toEqual(['users.create', 'users.create.email'])
+    expect(grantedPermissions(report).map((granted: Granted): string => describeGrant(granted))).toEqual([
+      'users.create',
+      'users.create.email',
+    ])
   })
 
   // An array field carries a field map of its own, and two arrays on one collection routinely share a
@@ -168,27 +169,31 @@ describe('grantedPermissions over the field map', () => {
         },
       },
     }
-    expect(
-      grantedPermissions(report).map((granted: Granted): string => describeGrant(granted)),
-    ).toEqual(['games.create', 'games.create.playerShots', 'games.create.playerShots.row'])
+    expect(grantedPermissions(report).map((granted: Granted): string => describeGrant(granted))).toEqual([
+      'games.create',
+      'games.create.playerShots',
+      'games.create.playerShots.row',
+    ])
   })
 
   // Payload collapses a fully permitted field map to a bare `true`, which says every field without
   // naming one. Reporting nothing there would make the most open case the least judged.
   it('namesACollapsedFieldMapAsEveryField', () => {
     const report: AccessReport = { collections: { pages: { read: OPEN, fields: true } } }
-    expect(
-      grantedPermissions(report).map((granted: Granted): string => describeGrant(granted)),
-    ).toEqual(['pages.read', 'pages.read.*'])
+    expect(grantedPermissions(report).map((granted: Granted): string => describeGrant(granted))).toEqual([
+      'pages.read',
+      'pages.read.*',
+    ])
   })
 
   it('readsAConstrainedFieldGrantAsPermittedJustAsAnEntityOne', () => {
     const report: AccessReport = {
       collections: { pages: { read: OPEN, fields: { body: { read: CONSTRAINED } } } },
     }
-    expect(
-      grantedPermissions(report).map((granted: Granted): string => describeGrant(granted)),
-    ).toEqual(['pages.read', 'pages.read.body'])
+    expect(grantedPermissions(report).map((granted: Granted): string => describeGrant(granted))).toEqual([
+      'pages.read',
+      'pages.read.body',
+    ])
   })
 })
 
@@ -222,19 +227,14 @@ describe('undeclaredGrants over the field map', () => {
   }
 
   it('passesAFieldTheProjectListed', () => {
-    const declared: readonly PublicAccess[] = declaringFields('leaderboard', 'read', [
-      'displayName',
-      'player',
-    ])
+    const declared: readonly PublicAccess[] = declaringFields('leaderboard', 'read', ['displayName', 'player'])
     expect(undeclaredGrants(Leaderboard, declared)).toEqual([])
   })
 
   // The defect this whole half exists for: the entity grant was declared and correct, and the field
   // beneath it exposed the account behind every row with nothing to say so.
   it('reportsAFieldTheProjectDidNotList', () => {
-    const declared: readonly PublicAccess[] = declaringFields('leaderboard', 'read', [
-      'displayName',
-    ])
+    const declared: readonly PublicAccess[] = declaringFields('leaderboard', 'read', ['displayName'])
     expect(undeclaredGrants(Leaderboard, declared)).toEqual(['leaderboard.read.player'])
   })
 
@@ -249,10 +249,7 @@ describe('undeclaredGrants over the field map', () => {
   // collapsed grant and nothing else, so no declaration can stand in for a field added later.
   it('doesNotLetAStarDeclarationStandForANamedField', () => {
     const declared: readonly PublicAccess[] = declaringFields('leaderboard', 'read', ['*'])
-    expect(undeclaredGrants(Leaderboard, declared)).toEqual([
-      'leaderboard.read.displayName',
-      'leaderboard.read.player',
-    ])
+    expect(undeclaredGrants(Leaderboard, declared)).toEqual(['leaderboard.read.displayName', 'leaderboard.read.player'])
   })
 
   it('passesTheCollapsedGrantWhenTheProjectDeclaredEveryField', () => {
@@ -326,17 +323,12 @@ describe('undeclaredGrants over a declared subtree', () => {
 
   it('doesNotLetASubtreeDeclarationReachASiblingSharingItsPrefix', () => {
     const declared: readonly PublicAccess[] = declaringFields('media', 'read', ['alt', 'sizes.**'])
-    expect(undeclaredGrants(Media, declared)).toEqual([
-      'media.read.sizesLegacy',
-      'media.read.sizesLegacy.url',
-    ])
+    expect(undeclaredGrants(Media, declared)).toEqual(['media.read.sizesLegacy', 'media.read.sizesLegacy.url'])
   })
 
   it('readsABareDoubleStarAsALiteralName', () => {
     const declared: readonly PublicAccess[] = declaringFields('media', 'read', ['**'])
-    expect(undeclaredGrants(Media, declared)).toEqual(
-      undeclaredGrants(Media, declaring('media', 'read')),
-    )
+    expect(undeclaredGrants(Media, declared)).toEqual(undeclaredGrants(Media, declaring('media', 'read')))
   })
 
   it('readsADoubleStarMidPathAsALiteralName', () => {
@@ -416,16 +408,12 @@ describe('staleDeclarations', () => {
   })
 
   it('reportsASubtreeUnderWhichNothingIsGranted', () => {
-    expect(
-      staleDeclarations(Media, declaringFields('media', 'read', ['sizesLegacy.**'])),
-    ).toHaveLength(1)
+    expect(staleDeclarations(Media, declaringFields('media', 'read', ['sizesLegacy.**']))).toHaveLength(1)
   })
 
   it('reportsTheSpellingsThatAreLiteralsMatchingNothing', () => {
     const literals: readonly string[] = ['**', 'sizes.**.url', 'sizes.*']
-    expect(staleDeclarations(Media, declaringFields('media', 'read', literals))).toHaveLength(
-      literals.length,
-    )
+    expect(staleDeclarations(Media, declaringFields('media', 'read', literals))).toHaveLength(literals.length)
   })
 
   it('acceptsAStarAgainstAMapPayloadCollapsed', () => {
@@ -439,11 +427,9 @@ describe('staleDeclarations', () => {
       ...declaring('posts', 'read'),
       ...declaringFields('media', 'read', ['gone']),
     ]
-    expect(
-      staleDeclarations(Media, declared).map(
-        (finding: string): string => finding.split('"', 2)[1] ?? '',
-      ),
-    ).toEqual(['posts.read', 'media.read.gone'])
+    expect(staleDeclarations(Media, declared).map((finding: string): string => finding.split('"', 2)[1] ?? '')).toEqual(
+      ['posts.read', 'media.read.gone'],
+    )
   })
 })
 
@@ -478,16 +464,12 @@ describe('datalessFieldsIn', () => {
   })
 
   it('addsASegmentForANamedTab', () => {
-    const config: unknown = withFields([
-      { type: 'tabs', tabs: [{ name: 'settings', fields: [Banner] }] },
-    ])
+    const config: unknown = withFields([{ type: 'tabs', tabs: [{ name: 'settings', fields: [Banner] }] }])
     expect(datalessFieldsIn(config)).toEqual({ media: ['settings.banner'] })
   })
 
   it('hoistsAUiFieldOutOfAnUnnamedTab', () => {
-    const config: unknown = withFields([
-      { type: 'tabs', tabs: [{ label: 'Settings', fields: [Banner] }] },
-    ])
+    const config: unknown = withFields([{ type: 'tabs', tabs: [{ label: 'Settings', fields: [Banner] }] }])
     expect(datalessFieldsIn(config)).toEqual({ media: ['banner'] })
   })
 
@@ -535,9 +517,7 @@ describe('the grants a field storing nothing makes', () => {
   const Dataless: DatalessFields = { media: ['banner'] }
 
   it('dropsThePathTheConfigurationStoresNothingBehind', () => {
-    expect(undeclaredGrants(Media, declaring('media', 'read'), Dataless)).not.toContain(
-      'media.read.banner',
-    )
+    expect(undeclaredGrants(Media, declaring('media', 'read'), Dataless)).not.toContain('media.read.banner')
   })
 
   it('keepsADataFieldSharingItsNameAtAnotherLevel', () => {
@@ -570,8 +550,6 @@ describe('the grants a field storing nothing makes', () => {
       collections: { media: { read: OPEN, fields: { sizes: { read: OPEN } } } },
     }
     const dataless: DatalessFields = { media: ['sizes'] }
-    expect(
-      staleDeclarations(report, declaringFields('media', 'read', ['sizes.**']), dataless),
-    ).toHaveLength(1)
+    expect(staleDeclarations(report, declaringFields('media', 'read', ['sizes.**']), dataless)).toHaveLength(1)
   })
 })

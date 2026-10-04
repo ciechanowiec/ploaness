@@ -1,11 +1,6 @@
 // Registry order is run order: structural preconditions precede analyzers, and tree verification is last.
 
-import {
-  type GateDescriptor,
-  type MemberDescriptor,
-  type PlanStep,
-  planSteps,
-} from '@ploaness/governance'
+import { type GateDescriptor, type MemberDescriptor, type PlanStep, planSteps } from '@ploaness/governance'
 import { assets } from './checks/assets.js'
 import { blocklist } from './checks/blocklist.js'
 import { actions, containers, secrets } from './checks/containers.js'
@@ -26,16 +21,7 @@ import { shell } from './checks/shell.js'
 import { suppressions } from './checks/suppressions.js'
 import { tailwindTokens } from './checks/tailwind.js'
 import { build, endToEnd, tests } from './checks/tests.js'
-import {
-  architecture,
-  biome,
-  biomeSchema,
-  css,
-  eslint,
-  knip,
-  typeCoverage,
-  types,
-} from './checks/toolchain.js'
+import { architecture, biome, biomeSchema, css, eslint, knip, typeCoverage, types } from './checks/toolchain.js'
 import { treeSnapshot, treeVerify } from './checks/tree.js'
 import { wiring } from './checks/wiring.js'
 import type { Member, Repository as Repo } from './context.js'
@@ -385,8 +371,7 @@ export const gatesFor = (isExtended: boolean): readonly Gate[] =>
   isExtended ? ALL_GATES : [...DEFAULT_GATES, TREE_VERIFY]
 
 /** Look up one gate by identifier. */
-export const gateById = (id: string): Gate | undefined =>
-  ALL_GATES.find((gate: Gate): boolean => gate.id === id)
+export const gateById = (id: string): Gate | undefined => ALL_GATES.find((gate: Gate): boolean => gate.id === id)
 
 /** One gate invocation: the gate, and the member it is about when it has one. */
 export interface PlannedGate {
@@ -426,9 +411,7 @@ export const planFor = (repository: Repo, isExtended: boolean): readonly Planned
     return [
       {
         gate,
-        member: repository.members.find(
-          (candidate: Member): boolean => candidate.path === step.member,
-        ),
+        member: repository.members.find((candidate: Member): boolean => candidate.path === step.member),
       },
     ]
   })

@@ -51,17 +51,10 @@ const DOT: string = '.'
 // alternation, because the pattern that expresses it backtracks super-linearly on a long name.
 const LOCALHOST: string = 'localhost'
 
-const isLocalhostName = (host: string): boolean =>
-  host === LOCALHOST || host.endsWith(`.${LOCALHOST}`)
+const isLocalhostName = (host: string): boolean => host === LOCALHOST || host.endsWith(`.${LOCALHOST}`)
 
 // The unspecified address and the two spellings of the IPv6 loopback. Both name this machine.
-const LOOPBACK_LITERALS: ReadonlySet<string> = new Set([
-  '::1',
-  '0:0:0:0:0:0:0:1',
-  '0.0.0.0',
-  '::',
-  '0:0:0:0:0:0:0:0',
-])
+const LOOPBACK_LITERALS: ReadonlySet<string> = new Set(['::1', '0:0:0:0:0:0:0:1', '0.0.0.0', '::', '0:0:0:0:0:0:0:0'])
 
 // One canonical spelling for a host, so an address read off this machine's interfaces and a host a test
 // wrote compare as equals: lower case, no brackets around an IPv6 literal, no zone identifier, no
@@ -70,10 +63,7 @@ const LOOPBACK_LITERALS: ReadonlySet<string> = new Set([
 // trims backtracks super-linearly on a long host, and a host is attacker-shaped input in a suite that
 // reads a URL out of a fixture.
 const canonicalHost = (host: string): string => {
-  const lowered: string = host
-    .toLowerCase()
-    .replaceAll(OPENING_BRACKET, '')
-    .replaceAll(CLOSING_BRACKET, '')
+  const lowered: string = host.toLowerCase().replaceAll(OPENING_BRACKET, '').replaceAll(CLOSING_BRACKET, '')
   const withoutZone: string = lowered.split(ZONE_SEPARATOR)[0] ?? ''
   const rooted: string = withoutZone.endsWith(DOT) ? withoutZone.slice(0, -1) : withoutZone
   return rooted.startsWith(IPV4_MAPPED_PREFIX) ? rooted.slice(IPV4_MAPPED_PREFIX.length) : rooted
@@ -96,9 +86,7 @@ export const localAddresses = (
   new Set(
     Object.values(interfaces)
       .flatMap(
-        (
-          entries: readonly NetworkInterfaceAddress[] | undefined,
-        ): readonly NetworkInterfaceAddress[] => entries ?? [],
+        (entries: readonly NetworkInterfaceAddress[] | undefined): readonly NetworkInterfaceAddress[] => entries ?? [],
       )
       .map((entry: NetworkInterfaceAddress): string => canonicalHost(entry.address)),
   )
@@ -114,10 +102,7 @@ export const localAddresses = (
  * @param local the addresses this machine carries, from {@link localAddresses}.
  * @returns true when the reach stays on this machine.
  */
-export const isMachineLocalHost = (
-  host: string | undefined,
-  local: ReadonlySet<string>,
-): boolean => {
+export const isMachineLocalHost = (host: string | undefined, local: ReadonlySet<string>): boolean => {
   if (host === undefined || host.length === 0) {
     return true
   }
@@ -187,8 +172,7 @@ export const describeSocketTarget = (callArguments: readonly unknown[]): Network
 }
 
 const OFF_MACHINE_REASON: string = 'that host is not this machine'
-const RESOLVER_REASON: string =
-  'a resolver query is a packet to a nameserver, which no hosts file answers'
+const RESOLVER_REASON: string = 'a resolver query is a packet to a nameserver, which no hosts file answers'
 
 const refusal = (attempt: NetworkAttempt, reason: string): string =>
   `${NETWORK_RULE} A test reached ${attempt.destination} through ${attempt.api}, and ${reason}. ` +
@@ -204,10 +188,7 @@ const refusal = (attempt: NetworkAttempt, reason: string): string =>
  * @param local the addresses this machine carries, from {@link localAddresses}.
  * @returns undefined when the reach is allowed, or the message a refusal should carry.
  */
-export const findNetworkEscape = (
-  attempt: NetworkAttempt,
-  local: ReadonlySet<string>,
-): string | undefined => {
+export const findNetworkEscape = (attempt: NetworkAttempt, local: ReadonlySet<string>): string | undefined => {
   if (attempt.api === 'resolve') {
     return refusal(attempt, RESOLVER_REASON)
   }

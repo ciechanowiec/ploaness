@@ -12,13 +12,7 @@ import { findUnreviewedSchemaPush } from './payload-database.js'
 import { findUnprotectedPrivilegedFields } from './payload-field-access.js'
 import type { PayloadViolation } from './payload-source.js'
 import { findAbsentSecretAcceptances, findFailOpenSecretGuards } from './source-security.js'
-import {
-  balancedArguments,
-  lineOf,
-  occurrences,
-  stripComments,
-  topLevelSlice,
-} from './source-text.js'
+import { balancedArguments, lineOf, occurrences, stripComments, topLevelSlice } from './source-text.js'
 
 interface BoundedCallRule {
   readonly call: string
@@ -34,8 +28,7 @@ const BOUNDED_CALLS: readonly BoundedCallRule[] = [
     call: '.find(',
     required: ['depth', 'limit'],
     rule: 'no-unbounded-find',
-    reason:
-      'bound payload.find() with an explicit depth and/or limit, or it pulls an unbounded relationship graph',
+    reason: 'bound payload.find() with an explicit depth and/or limit, or it pulls an unbounded relationship graph',
   },
   {
     call: '.findByID(',
@@ -57,20 +50,14 @@ const BOUNDED_CALLS: readonly BoundedCallRule[] = [
  * Exported so a rule about WHERE a Local API call runs derives the receiver from here rather than
  * restating it. Two spellings of "this is Payload" would be two rules disagreeing about what Payload is.
  */
-export const PAYLOAD_RECEIVER: RegExp =
-  /(?:^|[^\w$.])(?:payload|(?:[\w$]+\.)*req\.payload|this\.payload)$/
+export const PAYLOAD_RECEIVER: RegExp = /(?:^|[^\w$.])(?:payload|(?:[\w$]+\.)*req\.payload|this\.payload)$/
 
 // A property boundary keeps a value such as request: req from being read as a req property.
 const declaresProperty = (topLevel: string, key: string): boolean =>
   new RegExp(String.raw`(?:^|,)\s*${key}\s*(?::|,|$)`).test(topLevel)
 
 // The depth-one text of a call's options literal, or undefined when the call is not one to judge.
-const topLevelOptionsAt = (
-  source: string,
-  call: string,
-  found: number,
-  receiver: RegExp,
-): string | undefined => {
+const topLevelOptionsAt = (source: string, call: string, found: number, receiver: RegExp): string | undefined => {
   if (!receiver.test(source.slice(0, found))) {
     return undefined
   }
@@ -87,14 +74,9 @@ const hasEffectiveProperty = (topLevel: string, key: string): boolean => {
   return last !== undefined && last.index > topLevel.lastIndexOf('...')
 }
 
-const unboundedCallAt = (
-  source: string,
-  rule: BoundedCallRule,
-  found: number,
-): PayloadViolation | undefined => {
+const unboundedCallAt = (source: string, rule: BoundedCallRule, found: number): PayloadViolation | undefined => {
   const topLevel: string | undefined = topLevelOptionsAt(source, rule.call, found, PAYLOAD_RECEIVER)
-  return topLevel === undefined ||
-    rule.required.some((key: string): boolean => hasEffectiveProperty(topLevel, key))
+  return topLevel === undefined || rule.required.some((key: string): boolean => hasEffectiveProperty(topLevel, key))
     ? undefined
     : { line: lineOf(source, found), rule: rule.rule, reason: rule.reason }
 }
@@ -103,10 +85,7 @@ const findUnboundedCalls = (source: string): readonly PayloadViolation[] =>
   BOUNDED_CALLS.flatMap((rule: BoundedCallRule): readonly PayloadViolation[] =>
     occurrences(source, rule.call)
       .map((found: number): PayloadViolation | undefined => unboundedCallAt(source, rule, found))
-      .filter(
-        (violation: PayloadViolation | undefined): violation is PayloadViolation =>
-          violation !== undefined,
-      ),
+      .filter((violation: PayloadViolation | undefined): violation is PayloadViolation => violation !== undefined),
   )
 
 // The collection, global, and version operations whose options carry both the caller and the request.
@@ -155,11 +134,7 @@ const findOpaqueOptions = (source: string): readonly PayloadViolation[] =>
     ),
   )
 
-const unthreadedCallAt = (
-  source: string,
-  call: string,
-  found: number,
-): PayloadViolation | undefined => {
+const unthreadedCallAt = (source: string, call: string, found: number): PayloadViolation | undefined => {
   const topLevel: string | undefined = topLevelOptionsAt(source, call, found, REQUEST_RECEIVER)
   if (topLevel === undefined || hasEffectiveProperty(topLevel, 'req')) {
     return undefined
@@ -183,10 +158,7 @@ const findUnthreadedRequests = (source: string): readonly PayloadViolation[] =>
   LOCAL_API_CALLS.flatMap((call: string): readonly PayloadViolation[] =>
     occurrences(source, call)
       .map((found: number): PayloadViolation | undefined => unthreadedCallAt(source, call, found))
-      .filter(
-        (violation: PayloadViolation | undefined): violation is PayloadViolation =>
-          violation !== undefined,
-      ),
+      .filter((violation: PayloadViolation | undefined): violation is PayloadViolation => violation !== undefined),
   )
 
 interface OverrideProperty {
@@ -211,19 +183,13 @@ const hasEffectiveAccessControl = (topLevel: string): boolean => {
   return last?.value === 'false' && last.index > topLevel.lastIndexOf('...')
 }
 
-const userAccessViolationAt = (
-  source: string,
-  call: string,
-  found: number,
-): PayloadViolation | undefined => {
+const userAccessViolationAt = (source: string, call: string, found: number): PayloadViolation | undefined => {
   const topLevel: string | undefined = topLevelOptionsAt(source, call, found, PAYLOAD_RECEIVER)
   if (
     topLevel === undefined ||
     !(declaresProperty(topLevel, 'user') || topLevel.includes('...')) ||
     hasEffectiveAccessControl(topLevel) ||
-    overrideProperties(topLevel).some(
-      (property: OverrideProperty): boolean => property.value === 'true',
-    )
+    overrideProperties(topLevel).some((property: OverrideProperty): boolean => property.value === 'true')
   ) {
     return undefined
   }
@@ -240,13 +206,8 @@ const userAccessViolationAt = (
 const findIgnoredUsers = (source: string): readonly PayloadViolation[] =>
   LOCAL_API_CALLS.flatMap((call: string): readonly PayloadViolation[] =>
     occurrences(source, call)
-      .map((found: number): PayloadViolation | undefined =>
-        userAccessViolationAt(source, call, found),
-      )
-      .filter(
-        (violation: PayloadViolation | undefined): violation is PayloadViolation =>
-          violation !== undefined,
-      ),
+      .map((found: number): PayloadViolation | undefined => userAccessViolationAt(source, call, found))
+      .filter((violation: PayloadViolation | undefined): violation is PayloadViolation => violation !== undefined),
   )
 
 const OVERRIDE_ACCESS: RegExp = /overrideAccess\s*:\s*true/g
@@ -269,11 +230,7 @@ const findOverrideAccess = (source: string): readonly PayloadViolation[] =>
 const ENDPOINT_PATH: RegExp = /^src\/(?:endpoints\/|app\/(?:.*\/)?route\.[jt]s$)/u
 
 // A route must prove access enforcement rather than inherit Payload's privileged default.
-const endpointAccessViolationAt = (
-  source: string,
-  call: string,
-  found: number,
-): PayloadViolation | undefined => {
+const endpointAccessViolationAt = (source: string, call: string, found: number): PayloadViolation | undefined => {
   if (!PAYLOAD_RECEIVER.test(source.slice(0, found))) {
     return undefined
   }
@@ -307,20 +264,18 @@ const RELATIVE_IMPORT: RegExp = /\b(?:from|import)\s*(?:\(\s*)?['"](\.\.\/[^'"]*
 const RELATIVE_IMPORT_EXEMPT: RegExp = /^(?:\.\.\/)+(?:helpers|importMap)(?:\/|$)/
 
 const findDeepRelativeImports = (source: string): readonly PayloadViolation[] =>
-  [...source.matchAll(RELATIVE_IMPORT)].flatMap(
-    (match: RegExpExecArray): readonly PayloadViolation[] => {
-      const specifier: string = match[1] ?? ''
-      return RELATIVE_IMPORT_EXEMPT.test(specifier)
-        ? []
-        : [
-            {
-              line: lineOf(source, match.index),
-              rule: 'no-deep-relative-imports',
-              reason: `use the "@/" path alias instead of the parent-relative import "${specifier}"`,
-            },
-          ]
-    },
-  )
+  [...source.matchAll(RELATIVE_IMPORT)].flatMap((match: RegExpExecArray): readonly PayloadViolation[] => {
+    const specifier: string = match[1] ?? ''
+    return RELATIVE_IMPORT_EXEMPT.test(specifier)
+      ? []
+      : [
+          {
+            line: lineOf(source, match.index),
+            rule: 'no-deep-relative-imports',
+            reason: `use the "@/" path alias instead of the parent-relative import "${specifier}"`,
+          },
+        ]
+  })
 
 /**
  * The rules that are about the language rather than about Payload.
@@ -376,10 +331,7 @@ export const findPayloadViolations = (source: string): readonly PayloadViolation
  * @param source the file's text.
  * @returns one violation per Local API call that leaves the decision to the default.
  */
-export const findEndpointViolations = (
-  filePath: string,
-  source: string,
-): readonly PayloadViolation[] => {
+export const findEndpointViolations = (filePath: string, source: string): readonly PayloadViolation[] => {
   if (!ENDPOINT_PATH.test(filePath)) {
     return []
   }
@@ -388,12 +340,7 @@ export const findEndpointViolations = (
   const code: string = stripComments(source)
   return LOCAL_API_CALLS.flatMap((call: string): readonly PayloadViolation[] =>
     occurrences(code, call)
-      .map((found: number): PayloadViolation | undefined =>
-        endpointAccessViolationAt(code, call, found),
-      )
-      .filter(
-        (violation: PayloadViolation | undefined): violation is PayloadViolation =>
-          violation !== undefined,
-      ),
+      .map((found: number): PayloadViolation | undefined => endpointAccessViolationAt(code, call, found))
+      .filter((violation: PayloadViolation | undefined): violation is PayloadViolation => violation !== undefined),
   )
 }

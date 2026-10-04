@@ -26,9 +26,7 @@ const readFields = (directory: string): PackageFields => {
   const parsed: unknown = JSON.parse(readText(manifest))
   const fields: Record<string, string> = asStringRecord(asRecord(parsed))
   const required: readonly string[] = ['name', 'description', 'homepage', 'license']
-  const missing: readonly string[] = required.filter(
-    (key: string): boolean => (fields[key] ?? '') === '',
-  )
+  const missing: readonly string[] = required.filter((key: string): boolean => (fields[key] ?? '') === '')
   if (missing.length > 0) {
     throw new Error(`${manifest} declares no ${missing.join(', ')}`)
   }
@@ -54,15 +52,7 @@ const opening = (fields: PackageFields): readonly string[] => {
         'This package is published as part of `ploaness` and is not meant to be depended on ' +
           'directly. Install `ploaness`, which re-exports what a project needs.',
       ]
-    : [
-        '## Install',
-        '',
-        '```sh',
-        'pnpm add -D ploaness',
-        'pnpm ploaness init',
-        'pnpm ploaness verify',
-        '```',
-      ]
+    : ['## Install', '', '```sh', 'pnpm add -D ploaness', 'pnpm ploaness init', 'pnpm ploaness verify', '```']
 }
 
 const render = (fields: PackageFields): string =>

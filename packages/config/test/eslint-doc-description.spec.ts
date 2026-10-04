@@ -76,9 +76,7 @@ describe('a documenting comment must say something', () => {
   })
 
   it('rejects a block that carries only tags', () => {
-    expect(ruleIds('/**\n * @returns nothing much\n */\nexport const one = () => 1')).toEqual([
-      RULE,
-    ])
+    expect(ruleIds('/**\n * @returns nothing much\n */\nexport const one = () => 1')).toEqual([RULE])
   })
 
   it('accepts a block that describes what the symbol is', () => {
@@ -111,13 +109,10 @@ describe('the assertion message is allowed through in both shipped configs', () 
   it.each([
     ['payload', PAYLOAD_BLOCKS],
     ['library', LIBRARY_BLOCKS],
-  ])(
-    'allows expect a failure message in the %s config',
-    (name: string, blocks: readonly FlatBlock[]) => {
-      expect(
-        resolvedSetting(blocks, 'vitest/valid-expect'),
-        `vitest/valid-expect in ${name}`,
-      ).toEqual(['error', { maxArgs: 2 }])
-    },
-  )
+  ])('allows expect a failure message in the %s config', (name: string, blocks: readonly FlatBlock[]) => {
+    expect(resolvedSetting(blocks, 'vitest/valid-expect'), `vitest/valid-expect in ${name}`).toEqual([
+      'error',
+      { maxArgs: 2 },
+    ])
+  })
 })

@@ -20,8 +20,7 @@ import { sync } from './sync.js'
 
 // Every stub is rendered from the same table the wiring rule reads. Writing either side's literal by
 // hand is what once scaffolded a project the gate then failed.
-const reexportStub = (specifier: string): string =>
-  `import ploaness from '${specifier}'\n\nexport default ploaness\n`
+const reexportStub = (specifier: string): string => `import ploaness from '${specifier}'\n\nexport default ploaness\n`
 
 // The indent every JSON file ploaness writes uses, matching the shipped formatter setting.
 const JSON_INDENT: number = 2
@@ -34,11 +33,7 @@ const biomeStub = (member: Member, kind: MemberKind, targets: MemberWiringTarget
       // A nested configuration has to say it is not a root, or Biome refuses the whole tree.
       ...(member.path !== ROOT_MEMBER_PATH && { root: false }),
       extends: [targets.biomeExtends],
-      files: requiredBiomeFiles(
-        member.settings.sourceRoots,
-        kind,
-        member.settings.generatedArtefacts,
-      ),
+      files: requiredBiomeFiles(member.settings.sourceRoots, kind, member.settings.generatedArtefacts),
     },
     null,
     JSON_INDENT,
@@ -47,15 +42,9 @@ const biomeStub = (member: Member, kind: MemberKind, targets: MemberWiringTarget
 // Only a Payload member has a Payload config to alias. The rest of the map is the project's own, which
 // is why `paths` is one of the few compiler options a member may set for itself.
 const pathAliases = (kind: MemberKind): Readonly<Record<string, readonly string[]>> =>
-  kind === 'payload'
-    ? { '@/*': ['./src/*'], '@payload-config': ['./src/payload.config.ts'] }
-    : { '@/*': ['./src/*'] }
+  kind === 'payload' ? { '@/*': ['./src/*'], '@payload-config': ['./src/payload.config.ts'] } : { '@/*': ['./src/*'] }
 
-const tsconfigStub = (
-  kind: MemberKind,
-  targets: MemberWiringTargets,
-  nestedMembers: readonly string[],
-): string =>
+const tsconfigStub = (kind: MemberKind, targets: MemberWiringTargets, nestedMembers: readonly string[]): string =>
   `${JSON.stringify(
     {
       extends: targets.tsconfigExtends,
@@ -117,9 +106,7 @@ export const init = (repository: Repository): number => {
   const isSolo: boolean = repository.members.length <= 1
   const notes: readonly string[] = [
     ...patchPackageJson(repository),
-    ...repository.members.flatMap((member: Member): readonly string[] =>
-      memberNotes(member, isSolo),
-    ),
+    ...repository.members.flatMap((member: Member): readonly string[] => memberNotes(member, isSolo)),
   ]
   for (const note of notes) {
     console.info(`  ${note}`)

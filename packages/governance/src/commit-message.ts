@@ -9,24 +9,12 @@ import { findTypographyViolations, type TypographyViolation } from './banned-typ
 // The governing standard's own list, in its own order. `revert` is deliberately absent: git writes a
 // revert commit with a `Revert "..."` subject, and the standard requires that subject be replaced by a
 // conforming one by hand rather than given a type of its own.
-const TYPES: readonly string[] = [
-  'build',
-  'chore',
-  'ci',
-  'docs',
-  'feat',
-  'fix',
-  'perf',
-  'refactor',
-  'test',
-]
+const TYPES: readonly string[] = ['build', 'chore', 'ci', 'docs', 'feat', 'fix', 'perf', 'refactor', 'test']
 const TYPES_LABEL: string = TYPES.join(', ')
 // Built from TYPES rather than written out again. The two were separate literals, and they drifted:
 // the alternation is what actually decided a verdict, so a type removed from the list above stayed
 // accepted here. A pattern derived from the list cannot disagree with it.
-const HEADER_PATTERN: RegExp = new RegExp(
-  String.raw`^(?:${TYPES.join('|')})(?:\([a-z0-9-]+\))?: .+$`,
-)
+const HEADER_PATTERN: RegExp = new RegExp(String.raw`^(?:${TYPES.join('|')})(?:\([a-z0-9-]+\))?: .+$`)
 // The standard says the subject "contains none of these words", so the match is unanchored. It was
 // anchored to the first word, which accepted `fix: clear the tmp directory` - a subject the standard
 // rejects. The list is the standard's own; `update` and `change` are not on it and are not added,
@@ -87,9 +75,7 @@ const descriptionOf = (header: string): string => {
 const validateHeaderFormat = (header: string): readonly string[] =>
   HEADER_PATTERN.test(header)
     ? []
-    : [
-        `invalid header "${header}": expected "<type>(<scope>): <description>", type one of ${TYPES_LABEL}`,
-      ]
+    : [`invalid header "${header}": expected "<type>(<scope>): <description>", type one of ${TYPES_LABEL}`]
 
 // One predicate per rule, each returning the problem it found or nothing. The alternative - pushing
 // into a mutable list - reads the same but hides how many rules there are behind a wall of ifs.
@@ -100,8 +86,7 @@ const SUBJECT_RULES: readonly SubjectRule[] = [
     header.length > MAX_HEADER_LENGTH
       ? `header is ${String(header.length)} chars; keep it at most ${String(MAX_HEADER_LENGTH)}`
       : undefined,
-  (header: string): string | undefined =>
-    header.endsWith('.') ? 'header must not end with a period' : undefined,
+  (header: string): string | undefined => (header.endsWith('.') ? 'header must not end with a period' : undefined),
   (_header: string, description: string): string | undefined =>
     description.length < MIN_DESCRIPTION_LENGTH
       ? `description "${description}" is too short; be specific (>= ${String(MIN_DESCRIPTION_LENGTH)} chars)`
@@ -149,10 +134,7 @@ const agentReferenceProblems = (message: ParsedMessage): readonly string[] =>
  * @param isBodyRequired whether the change is non-trivial and therefore must carry an explanatory body.
  * @returns an empty array when the message passes.
  */
-export const validateMessage = (
-  message: ParsedMessage,
-  isBodyRequired: boolean,
-): readonly string[] => [
+export const validateMessage = (message: ParsedMessage, isBodyRequired: boolean): readonly string[] => [
   ...validateHeaderFormat(message.header),
   ...validateSubjectQuality(message.header),
   ...validateBody(message.body, isBodyRequired),
@@ -171,9 +153,7 @@ const toCount = (raw: string | undefined): number => {
  * @returns the number of changed files and the sum of added plus deleted lines (binary rows count 0).
  */
 export const parseNumstat = (numstat: string): DiffStat => {
-  const rows: readonly string[] = numstat
-    .split('\n')
-    .filter((row: string): boolean => row.length > 0)
+  const rows: readonly string[] = numstat.split('\n').filter((row: string): boolean => row.length > 0)
   const lines: number = rows.reduce((total: number, row: string): number => {
     const [added, deleted] = row.split('\t', NUMSTAT_COLUMNS)
     return total + toCount(added) + toCount(deleted)

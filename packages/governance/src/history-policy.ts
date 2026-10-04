@@ -54,8 +54,7 @@ const UNOWNED_NAMESPACES: ReadonlySet<string> = new Set<string>(['refs/notes/', 
  * @param revision one revision argument, as passed to `git log`.
  * @returns the namespaces it selects; empty when the argument names no namespace.
  */
-export const namespacesReachedBy = (revision: string): readonly string[] =>
-  NAMESPACES_BY_REVISION[revision] ?? []
+export const namespacesReachedBy = (revision: string): readonly string[] => NAMESPACES_BY_REVISION[revision] ?? []
 
 /**
  * Decide whether a ref namespace holds history this repository owns.

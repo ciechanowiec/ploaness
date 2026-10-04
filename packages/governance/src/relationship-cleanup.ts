@@ -30,21 +30,18 @@ interface FoundCollection {
   readonly line: number
 }
 
-const declaresTrue = (field: string, key: string): boolean =>
-  TRUE_VALUE.test(depthOneValue(field, key) ?? '')
+const declaresTrue = (field: string, key: string): boolean => TRUE_VALUE.test(depthOneValue(field, key) ?? '')
 
 // The slug a `relationTo` names, and only when it names exactly one. An array is the polymorphic form,
 // which Payload stores in the join table instead and which therefore carries no column to constrain.
 const singleTarget = (field: string): string | undefined =>
   QUOTED_VALUE.exec(depthOneValue(field, 'relationTo') ?? '')?.[1]
 
-const slugOf = (body: string): string | undefined =>
-  QUOTED_VALUE.exec(depthOneValue(body, 'slug') ?? '')?.[1]
+const slugOf = (body: string): string | undefined => QUOTED_VALUE.exec(depthOneValue(body, 'slug') ?? '')?.[1]
 
 // A collection with drafts enabled gets no null constraint anywhere, so none of its required fields can
 // reach the contradiction.
-const declaresDrafts = (body: string): boolean =>
-  DRAFTS_ENABLED.test(depthOneValue(body, 'versions') ?? '')
+const declaresDrafts = (body: string): boolean => DRAFTS_ENABLED.test(depthOneValue(body, 'versions') ?? '')
 
 // Which literal in a file IS a collection is `payload-configs.ts`'s question, and this rule asks it
 // there rather than carrying a second copy of the answer. A global is dropped: it has no relationship
@@ -61,9 +58,7 @@ const collectionsIn = (file: SpecSource): readonly FoundCollection[] =>
     .filter((found: FoundPayloadConfig): boolean => found.kind.kind === 'collection')
     .flatMap((found: FoundPayloadConfig): readonly FoundCollection[] => {
       const slug: string | undefined = slugOf(found.body)
-      return slug === undefined
-        ? []
-        : [{ path: file.path, slug, body: found.body, line: found.line }]
+      return slug === undefined ? [] : [{ path: file.path, slug, body: found.body, line: found.line }]
     })
 
 // Every field of one collection that puts a NOT NULL column against another collection's primary key.
@@ -80,9 +75,7 @@ const constrainedTargets = (collection: FoundCollection): readonly string[] => {
     )
       .map((at: number): string | undefined => {
         const field: string | undefined = enclosingLiteral(collection.body, at)
-        return field === undefined || !isConstrained(field, fieldType)
-          ? undefined
-          : singleTarget(field)
+        return field === undefined || !isConstrained(field, fieldType) ? undefined : singleTarget(field)
       })
       .filter((slug: string | undefined): slug is string => slug !== undefined),
   )
@@ -115,24 +108,17 @@ const reason = (target: string): string =>
  * @param files every source file the gate collected, as a path and its text.
  * @returns one violation per unguarded relationship, located in the file that declares it.
  */
-export const findUnguardedRelationships = (
-  files: readonly SpecSource[],
-): readonly LocatedViolation[] => {
-  const collections: readonly FoundCollection[] = files.flatMap(
-    (file: SpecSource): readonly FoundCollection[] => collectionsIn(file),
+export const findUnguardedRelationships = (files: readonly SpecSource[]): readonly LocatedViolation[] => {
+  const collections: readonly FoundCollection[] = files.flatMap((file: SpecSource): readonly FoundCollection[] =>
+    collectionsIn(file),
   )
   const bySlug: ReadonlyMap<string, FoundCollection> = new Map(
-    collections.map((collection: FoundCollection): [string, FoundCollection] => [
-      collection.slug,
-      collection,
-    ]),
+    collections.map((collection: FoundCollection): [string, FoundCollection] => [collection.slug, collection]),
   )
   return collections.flatMap((collection: FoundCollection): readonly LocatedViolation[] =>
     constrainedTargets(collection)
       .map((slug: string): FoundCollection | undefined => bySlug.get(slug))
-      .filter(
-        (target: FoundCollection | undefined): target is FoundCollection => target !== undefined,
-      )
+      .filter((target: FoundCollection | undefined): target is FoundCollection => target !== undefined)
       .filter((target: FoundCollection): boolean => !declaresCleanup(target))
       .map(
         (target: FoundCollection): LocatedViolation => ({

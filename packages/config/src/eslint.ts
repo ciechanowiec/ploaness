@@ -12,11 +12,7 @@
 // passes is verbose, explicit and readable by construction.
 
 import nextPlugin from '@next/eslint-plugin-next'
-import {
-  APPLICATION_JSX_IGNORES,
-  ENVIRONMENT_READ_EXEMPTIONS,
-  REEXPORT_CONFIG_FILES,
-} from '@ploaness/governance'
+import { APPLICATION_JSX_IGNORES, ENVIRONMENT_READ_EXEMPTIONS, REEXPORT_CONFIG_FILES } from '@ploaness/governance'
 //
 // The framework-neutral half - the caps, the explicitness rules, the naming ban, the suppression
 // discipline, the mock ban - lives in ./eslint-core.js and is shared with the ploaness repository's own
@@ -234,12 +230,7 @@ export default compose(
   //    the like) into src/access or src/lib, where unit tests cover it, and import it by reference.
   //    Scoped by directory so a new config folder is governed automatically.
   {
-    files: [
-      'src/collections/**/*.ts',
-      'src/globals/**/*.ts',
-      'src/fields/**/*.ts',
-      'src/blocks/**/*.ts',
-    ],
+    files: ['src/collections/**/*.ts', 'src/globals/**/*.ts', 'src/fields/**/*.ts', 'src/blocks/**/*.ts'],
     rules: {
       'no-restricted-syntax': [
         ...NO_INHERITANCE,
@@ -371,11 +362,7 @@ export default compose(
   {
     files: ['tests/e2e/**/*.ts', 'tests/e2e/**/*.tsx'],
     rules: {
-      'no-restricted-syntax': [
-        ...NO_INHERITANCE,
-        ...SECURITY_RESTRICTIONS,
-        ...NO_NETWORK_GUARD_ESCAPE,
-      ],
+      'no-restricted-syntax': [...NO_INHERITANCE, ...SECURITY_RESTRICTIONS, ...NO_NETWORK_GUARD_ESCAPE],
     },
   },
 

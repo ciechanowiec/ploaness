@@ -64,8 +64,7 @@ export const pairedAssets = (assets: readonly ManagedAsset[]): readonly PairedAs
   assets
     .filter(
       (asset: ManagedAsset): boolean =>
-        (asset.disposition === 'PINNED' || asset.disposition === 'SEED') &&
-        !ASSET_AUTHORED_PATHS.has(asset.path),
+        (asset.disposition === 'PINNED' || asset.disposition === 'SEED') && !ASSET_AUTHORED_PATHS.has(asset.path),
     )
     .map(
       (asset: ManagedAsset): PairedAsset => ({
@@ -95,9 +94,7 @@ const driftReason = (state: PairedAssetState): string | undefined => {
  * @param states both sides of every pair, already read.
  * @returns one drift per disagreeing pair; empty means every consumer receives what this repository holds.
  */
-export const findPairedAssetDrift = (
-  states: readonly PairedAssetState[],
-): readonly PairedAssetDrift[] =>
+export const findPairedAssetDrift = (states: readonly PairedAssetState[]): readonly PairedAssetDrift[] =>
   states.flatMap((state: PairedAssetState): readonly PairedAssetDrift[] => {
     const reason: string | undefined = driftReason(state)
     return reason === undefined ? [] : [{ rootPath: state.pair.rootPath, reason }]

@@ -45,8 +45,7 @@ describe('the shipped asset bodies', () => {
 
   it('carries the governing standard, which is the contract every consumer is held to', () => {
     const guideline: PairedAssetState | undefined = states.find(
-      (state: PairedAssetState): boolean =>
-        state.pair.rootPath === 'README-guideline-software-project.adoc',
+      (state: PairedAssetState): boolean => state.pair.rootPath === 'README-guideline-software-project.adoc',
     )
     expect(guideline?.assetContent).toBe(guideline?.rootContent)
   })

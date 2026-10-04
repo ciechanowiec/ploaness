@@ -1,8 +1,4 @@
-import {
-  DETERMINISTIC_SEQUENCE,
-  harnessSetupFile,
-  testReporters,
-} from '@ploaness/config/vitest-core'
+import { DETERMINISTIC_SEQUENCE, harnessSetupFile, testReporters } from '@ploaness/config/vitest-core'
 import { defineConfig } from 'vitest/config'
 
 // ploaness governs itself. The governance layer is pure, so it is measured on line and branch coverage

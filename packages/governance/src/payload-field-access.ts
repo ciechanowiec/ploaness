@@ -22,8 +22,7 @@ const PRIVILEGED_FIELD_NAMES: ReadonlySet<string> = new Set([
 
 const REQUIRED_OPERATIONS: readonly string[] = ['create', 'update']
 
-const quotedValue = (value: string | undefined): string | undefined =>
-  /^\s*['"`]([^'"`]+)['"`]/.exec(value ?? '')?.[1]
+const quotedValue = (value: string | undefined): string | undefined => /^\s*['"`]([^'"`]+)['"`]/.exec(value ?? '')?.[1]
 
 const isAuthCollection = (config: FoundPayloadConfig): boolean => {
   if (config.kind.kind !== 'collection') {
@@ -58,11 +57,6 @@ const violationFor = (field: FoundFieldLiteral): PayloadViolation | undefined =>
 export const findUnprotectedPrivilegedFields = (source: string): readonly PayloadViolation[] =>
   payloadConfigsIn(source)
     .filter((config: FoundPayloadConfig): boolean => isAuthCollection(config))
-    .flatMap((config: FoundPayloadConfig): readonly FoundFieldLiteral[] =>
-      directFieldsIn(source, config),
-    )
+    .flatMap((config: FoundPayloadConfig): readonly FoundFieldLiteral[] => directFieldsIn(source, config))
     .map((field: FoundFieldLiteral): PayloadViolation | undefined => violationFor(field))
-    .filter(
-      (violation: PayloadViolation | undefined): violation is PayloadViolation =>
-        violation !== undefined,
-    )
+    .filter((violation: PayloadViolation | undefined): violation is PayloadViolation => violation !== undefined)

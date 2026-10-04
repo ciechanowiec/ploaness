@@ -15,11 +15,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
-  asRecord,
-  jsxAnalysisPatterns,
-  replacedBiomeAccessibilityRules,
-} from '@ploaness/governance'
+import { asRecord, jsxAnalysisPatterns, replacedBiomeAccessibilityRules } from '@ploaness/governance'
 
 const here: string = path.dirname(fileURLToPath(import.meta.url))
 // The indent every JSON file in this repository is written with.
@@ -38,10 +34,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 // Child wins, but a section present in both is merged rather than replaced: the core carries
 // `linter.rules` and the framework half carries `linter.domains`, and a shallow overwrite would drop
 // every rule while reporting success.
-const merge = (
-  base: Record<string, unknown>,
-  overlay: Record<string, unknown>,
-): Record<string, unknown> => {
+const merge = (base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown> => {
   const merged: Record<string, unknown> = { ...base }
   for (const [key, value] of Object.entries(overlay)) {
     const existing: unknown = merged[key]
@@ -92,18 +85,11 @@ console.info(`ploaness: inlined biome.json (${String(Object.keys(generated).leng
 // package exports map nor a chain it cannot resolve.
 const sharedTsconfig: Record<string, unknown> = flatten('@ploaness/config/tsconfig')
 if (typeof sharedTsconfig['extends'] === 'string') {
-  throw new TypeError(
-    'the shipped tsconfig still carries an `extends`; flattening did not resolve it',
-  )
+  throw new TypeError('the shipped tsconfig still carries an `extends`; flattening did not resolve it')
 }
-writeFileSync(
-  path.join(here, 'tsconfig.json'),
-  `${JSON.stringify(sharedTsconfig, null, JSON_INDENT)}\n`,
-)
+writeFileSync(path.join(here, 'tsconfig.json'), `${JSON.stringify(sharedTsconfig, null, JSON_INDENT)}\n`)
 const compilerOptions: Record<string, unknown> = asRecord(sharedTsconfig['compilerOptions'])
-console.info(
-  `ploaness: inlined tsconfig.json (${String(Object.keys(compilerOptions).length)} compiler options)`,
-)
+console.info(`ploaness: inlined tsconfig.json (${String(Object.keys(compilerOptions).length)} compiler options)`)
 
 // The library halves ship as they are: each is already self-contained, and a member with no framework
 // extends it directly.

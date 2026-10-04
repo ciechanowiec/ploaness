@@ -1,19 +1,13 @@
 // Compare Payload anonymous grants with explicit entity and field declarations, including stale exceptions.
 import { isArray, readKey } from './json-shapes.js'
-import {
-  COLLECTION_OPERATIONS,
-  READ_VERSIONS_OPERATION,
-  UNLOCK_OPERATION,
-} from './payload-defaults.js'
+import { COLLECTION_OPERATIONS, READ_VERSIONS_OPERATION, UNLOCK_OPERATION } from './payload-defaults.js'
 import type { PublicAccess } from './settings.js'
 
 /**
  * One operation's verdict as Payload sends it: `true` for an unconstrained grant, `{ permission: true,
  * where }` for a constrained one, and absent for a denial, which Payload deletes from the response.
  */
-export type ReportedPermission =
-  | boolean
-  | { readonly permission?: boolean; readonly where?: unknown }
+export type ReportedPermission = boolean | { readonly permission?: boolean; readonly where?: unknown }
 
 /**
  * A `fields` map as Payload sends it, or the bare `true` its sanitisation collapses a fully permitted
@@ -72,9 +66,7 @@ const EVERY_FIELD: string = '*'
 const PATH_SEPARATOR: string = '.'
 
 /** Whether Payload reported this operation as permitted, in either of the two shapes it sends. */
-export const isPermitted = (
-  permission: ReportedFields | ReportedPermission | undefined,
-): boolean => {
+export const isPermitted = (permission: ReportedFields | ReportedPermission | undefined): boolean => {
   if (permission === undefined || typeof permission === 'boolean') {
     return permission === true
   }
@@ -92,34 +84,22 @@ export const isPermitted = (
  * the path that reaches it (`playerFleet.shipKind`) rather than by its own name alone, which would
  * collide between two arrays sharing a field name.
  */
-const fieldPathsFor = (
-  fields: ReportedFields | undefined,
-  operation: string,
-  prefix: string,
-): readonly string[] => {
+const fieldPathsFor = (fields: ReportedFields | undefined, operation: string, prefix: string): readonly string[] => {
   if (fields === undefined) {
     return []
   }
   if (typeof fields === 'boolean') {
     return fields ? [`${prefix}${EVERY_FIELD}`] : []
   }
-  return Object.entries(fields).flatMap(
-    ([name, reported]: readonly [string, ReportedEntity]): readonly string[] => [
-      ...(isPermitted(reported[operation]) ? [`${prefix}${name}`] : []),
-      ...fieldPathsFor(reported.fields, operation, `${prefix}${name}${PATH_SEPARATOR}`),
-    ],
-  )
+  return Object.entries(fields).flatMap(([name, reported]: readonly [string, ReportedEntity]): readonly string[] => [
+    ...(isPermitted(reported[operation]) ? [`${prefix}${name}`] : []),
+    ...fieldPathsFor(reported.fields, operation, `${prefix}${name}${PATH_SEPARATOR}`),
+  ])
 }
 
-const grantsForOperation = (
-  entity: string,
-  permissions: ReportedEntity,
-  operation: string,
-): readonly Granted[] => [
+const grantsForOperation = (entity: string, permissions: ReportedEntity, operation: string): readonly Granted[] => [
   { entity, operation },
-  ...fieldPathsFor(permissions.fields, operation, '').map(
-    (field: string): Granted => ({ entity, operation, field }),
-  ),
+  ...fieldPathsFor(permissions.fields, operation, '').map((field: string): Granted => ({ entity, operation, field })),
 ]
 
 // The field map is walked only for an operation the ENTITY grants, and that is a correctness rule
@@ -129,16 +109,13 @@ const grantsForOperation = (
 // caller. Judging those would name permissions nobody holds, and a project cannot close a finding that
 // describes no exposure - so it would close it by declaring it, which teaches exactly the wrong habit.
 const grantsForEntity = (entity: string, permissions: ReportedEntity): readonly Granted[] =>
-  JUDGED_OPERATIONS.filter((operation: string): boolean =>
-    isPermitted(permissions[operation]),
-  ).flatMap((operation: string): readonly Granted[] =>
-    grantsForOperation(entity, permissions, operation),
+  JUDGED_OPERATIONS.filter((operation: string): boolean => isPermitted(permissions[operation])).flatMap(
+    (operation: string): readonly Granted[] => grantsForOperation(entity, permissions, operation),
   )
 
 const grantsIn = (entities: Readonly<Record<string, ReportedEntity>>): readonly Granted[] =>
-  Object.entries(entities).flatMap(
-    ([entity, permissions]: readonly [string, ReportedEntity]): readonly Granted[] =>
-      grantsForEntity(entity, permissions),
+  Object.entries(entities).flatMap(([entity, permissions]: readonly [string, ReportedEntity]): readonly Granted[] =>
+    grantsForEntity(entity, permissions),
   )
 
 /** Every permission an access report grants, across collections and globals alike. */
@@ -267,9 +244,7 @@ const SUBTREE_DECLARATION: RegExp = /^([^*]+)\.\*\*$/
 
 const coversPath = (declared: string, field: string): boolean => {
   const prefix: string | undefined = SUBTREE_DECLARATION.exec(declared)?.[1]
-  return prefix === undefined
-    ? declared === field
-    : field === prefix || field.startsWith(`${prefix}${PATH_SEPARATOR}`)
+  return prefix === undefined ? declared === field : field === prefix || field.startsWith(`${prefix}${PATH_SEPARATOR}`)
 }
 
 const coversField = (entry: PublicAccess, field: string): boolean =>
@@ -304,10 +279,7 @@ export const undeclaredGrants = (
     .map((granted: Granted): string => describeGrant(granted))
 
 const isGranted = (entry: PublicAccess, granted: readonly Granted[]): boolean =>
-  granted.some(
-    (grant: Granted): boolean =>
-      grant.entity === entry.entity && grant.operation === entry.operation,
-  )
+  granted.some((grant: Granted): boolean => grant.entity === entry.entity && grant.operation === entry.operation)
 
 const isCovering = (entry: PublicAccess, declared: string, granted: readonly Granted[]): boolean =>
   granted.some(

@@ -79,9 +79,7 @@ const ALLOWED: ReadonlySet<string> = new Set<string>([...PERMISSIVE, ...WEAK_COP
 // least three ways. The allowlist is matched on a folded id so a casing difference is not a licence
 // decision. A `WITH` exception (`GPL-2.0 WITH Classpath-exception-2.0`) names the same licence plus a
 // grant, so the licence half decides; a `+` suffix means "or later", which is the same licence too.
-const ALLOWED_FOLDED: ReadonlySet<string> = new Set(
-  [...ALLOWED].map((id: string): string => id.toLowerCase()),
-)
+const ALLOWED_FOLDED: ReadonlySet<string> = new Set([...ALLOWED].map((id: string): string => id.toLowerCase()))
 // Anchored on a single space run rather than a nested quantifier: `\s+WITH\s+(?:\S.*)?$` backtracks
 // super-linearly on a long id, and an expression comes from a registry rather than from this repository.
 const WITH_EXCEPTION: RegExp = /\sWITH\s[\s\S]*$/i
@@ -139,8 +137,7 @@ const splitOutside = (expression: string, operator: string): readonly string[] =
   const points: readonly number[] = splitPoints(expression, operator)
   const ends: readonly number[] = [...points, expression.length]
   return [0, ...points.map((point: number): number => point + operator.length)].map(
-    (start: number, index: number): string =>
-      expression.slice(start, ends[index] ?? expression.length),
+    (start: number, index: number): string => expression.slice(start, ends[index] ?? expression.length),
   )
 }
 
@@ -179,9 +176,7 @@ export const isLicenseAllowed = (expression: string): boolean => {
     return alternatives.some((part: string): boolean => isLicenseAllowed(part))
   }
   const conjuncts: readonly string[] = splitOutside(clean, AND)
-  return conjuncts.length > 1
-    ? conjuncts.every((part: string): boolean => isLicenseAllowed(part))
-    : isAllowedId(clean)
+  return conjuncts.length > 1 ? conjuncts.every((part: string): boolean => isLicenseAllowed(part)) : isAllowedId(clean)
 }
 
 export interface LicensedPackage {
@@ -190,7 +185,5 @@ export interface LicensedPackage {
 }
 
 // Return the packages whose license is not permitted by policy; an empty array means a clean tree.
-export const findLicenseViolations = (
-  packages: readonly LicensedPackage[],
-): readonly LicensedPackage[] =>
+export const findLicenseViolations = (packages: readonly LicensedPackage[]): readonly LicensedPackage[] =>
   packages.filter((package_: LicensedPackage): boolean => !isLicenseAllowed(package_.license))

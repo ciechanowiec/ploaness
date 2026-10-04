@@ -61,8 +61,7 @@ export type Compose = (...blocks: readonly unknown[]) => readonly FlatConfigBloc
 
 // Narrowing rather than a property read: `rules` arrives as `unknown` out of the index signature above,
 // and a layer that carries none is passed through untouched.
-const isRuleTable = (value: unknown): value is RuleTable =>
-  typeof value === 'object' && value !== null
+const isRuleTable = (value: unknown): value is RuleTable => typeof value === 'object' && value !== null
 
 const COMPLEXITY_MAX: number = 8
 const MAX_PARAMS: number = 4
@@ -231,12 +230,10 @@ export const withoutWarnings = (layer: object): FlatConfigBlock => {
     ? {
         ...layer,
         rules: Object.fromEntries(
-          Object.entries(rules).map(
-            ([id, setting]: readonly [string, unknown]): readonly [string, unknown] => [
-              id,
-              escalate(setting),
-            ],
-          ),
+          Object.entries(rules).map(([id, setting]: readonly [string, unknown]): readonly [string, unknown] => [
+            id,
+            escalate(setting),
+          ]),
         ),
       }
     : { ...layer }
@@ -261,9 +258,7 @@ export const baseLayers: readonly FlatConfigBlock[] = [
  * @param parserOptions the typescript-eslint parser options.
  * @returns a flat-config block.
  */
-export const typeAwareParsing = (
-  parserOptions: Readonly<Record<string, unknown>>,
-): FlatConfigBlock => ({
+export const typeAwareParsing = (parserOptions: Readonly<Record<string, unknown>>): FlatConfigBlock => ({
   languageOptions: { parserOptions },
 })
 
@@ -275,10 +270,7 @@ export const guidelineRules: RuleTable = {
   // Require an explicit type annotation on every `const`/`let` (not just boundaries), so the
   // declared type is written rather than left to inference. Arrow-function consts are exempt -
   // their signature is already covered by explicit-function-return-type.
-  '@typescript-eslint/typedef': [
-    'error',
-    { variableDeclaration: true, variableDeclarationIgnoreFunction: true },
-  ],
+  '@typescript-eslint/typedef': ['error', { variableDeclaration: true, variableDeclarationIgnoreFunction: true }],
   // Conflicts with the explicit philosophy: typedef requires annotations, this rule would strip
   // the "trivially inferable" ones (e.g. `const x: string = '...'`). We want them written.
   '@typescript-eslint/no-inferrable-types': 'off',
@@ -358,10 +350,7 @@ export const guidelineRules: RuleTable = {
   'max-params': ['error', MAX_PARAMS],
   'max-depth': ['error', MAX_DEPTH],
   'max-lines': ['error', { max: MAX_LINES_PER_FILE, skipBlankLines: true, skipComments: true }],
-  'max-lines-per-function': [
-    'error',
-    { max: MAX_LINES_PER_FUNCTION, skipBlankLines: true, skipComments: true },
-  ],
+  'max-lines-per-function': ['error', { max: MAX_LINES_PER_FUNCTION, skipBlankLines: true, skipComments: true }],
 
   // Bare numbers. The governing standard bans a number outside the declaration of a named constant,
   // and allows "a short structural-value allowlist, such as 0 and 1". -1 earns its place beside them
@@ -563,10 +552,7 @@ export const guidelineRules: RuleTable = {
   // three-line block, and would also rewrite the `GENERATED AUTOMATICALLY BY PAYLOAD` /
   // `DO NOT MODIFY` headers that Payload writes into the `src/app/(payload)` scaffolding.
   'unicorn/single-line-block-comment-style': 'off',
-  'unicorn/filename-case': [
-    'error',
-    { cases: { camelCase: true, pascalCase: true, kebabCase: true } },
-  ],
+  'unicorn/filename-case': ['error', { cases: { camelCase: true, pascalCase: true, kebabCase: true } }],
 
   // JSDoc: require a doc *block* on public helpers (below), but never the per-`@param root0`
   // ceremony that destructured arrow signatures produce. Keep the correctness checks on.
@@ -705,15 +691,13 @@ const NO_FAST_CHECK_SEED: readonly RestrictedSyntax[] = [
 // wrapped incompletely. The selectors make every escape attempt a finding before the suite runs.
 const NO_NETWORK_GUARD_ESCAPE: readonly RestrictedSyntax[] = [
   {
-    selector:
-      'ImportDeclaration[source.value=/^(?:node:)?(?:child_process|cluster|dgram|worker_threads)$/]',
+    selector: 'ImportDeclaration[source.value=/^(?:node:)?(?:child_process|cluster|dgram|worker_threads)$/]',
     message:
       'Tests may not import datagram, process, or worker APIs, because they run outside the network ' +
       'guard. Use a real component on this machine from the guarded test runtime.',
   },
   {
-    selector:
-      'ImportExpression[source.value=/^(?:node:)?(?:child_process|cluster|dgram|worker_threads)$/]',
+    selector: 'ImportExpression[source.value=/^(?:node:)?(?:child_process|cluster|dgram|worker_threads)$/]',
     message:
       'Tests may not dynamically import datagram, process, or worker APIs, because they run outside ' +
       'the network guard.',
@@ -722,34 +706,27 @@ const NO_NETWORK_GUARD_ESCAPE: readonly RestrictedSyntax[] = [
     selector:
       "CallExpression[callee.name='require']" +
       '[arguments.0.value=/^(?:node:)?(?:child_process|cluster|dgram|worker_threads)$/]',
-    message:
-      'Tests may not require datagram, process, or worker APIs, because they run outside the network ' +
-      'guard.',
+    message: 'Tests may not require datagram, process, or worker APIs, because they run outside the network guard.',
   },
   {
     selector:
       "CallExpression[callee.object.name='process'][callee.property.name='getBuiltinModule']" +
       '[arguments.0.value=/^(?:node:)?(?:child_process|cluster|dgram|worker_threads)$/]',
-    message:
-      'Tests may not load datagram, process, or worker builtins, because they run outside the network ' +
-      'guard.',
+    message: 'Tests may not load datagram, process, or worker builtins, because they run outside the network guard.',
   },
   {
     selector: 'NewExpression[callee.name=/^(?:SharedWorker|Worker)$/]',
-    message:
-      'Tests may not create a worker, because its isolated runtime does not carry the network guard.',
+    message: 'Tests may not create a worker, because its isolated runtime does not carry the network guard.',
   },
   {
-    selector:
-      "AssignmentExpression[left.object.property.name='prototype'][left.property.name='connect']",
+    selector: "AssignmentExpression[left.object.property.name='prototype'][left.property.name='connect']",
     message:
       'Do not reinstall a socket method. A test reaches no network beyond the machine it runs on, ' +
       "and the guard that decides that is the harness's.",
   },
   {
     selector: "AssignmentExpression[left.object.name='globalThis'][left.property.name='fetch']",
-    message:
-      'Do not replace the global fetch. Point the test at a real component on this machine instead.',
+    message: 'Do not replace the global fetch. Point the test at a real component on this machine instead.',
   },
   // The bare assignment is not the only way to replace it, and it is the least likely one to be
   // reached for by someone working around the guard on purpose. `globalThis.fetch` is the one property
@@ -759,20 +736,17 @@ const NO_NETWORK_GUARD_ESCAPE: readonly RestrictedSyntax[] = [
     selector:
       "CallExpression[callee.object.name='Object'][callee.property.name='defineProperty']" +
       "[arguments.0.name='globalThis'][arguments.1.value='fetch']",
-    message:
-      'Do not redefine the global fetch. Point the test at a real component on this machine instead.',
+    message: 'Do not redefine the global fetch. Point the test at a real component on this machine instead.',
   },
   {
     selector:
       "CallExpression[callee.object.name='Reflect'][callee.property.name='set']" +
       "[arguments.0.name='globalThis'][arguments.1.value='fetch']",
-    message:
-      'Do not replace the global fetch. Point the test at a real component on this machine instead.',
+    message: 'Do not replace the global fetch. Point the test at a real component on this machine instead.',
   },
   {
     selector: "AssignmentExpression[left.object.name='global'][left.property.name='fetch']",
-    message:
-      'Do not replace the global fetch. Point the test at a real component on this machine instead.',
+    message: 'Do not replace the global fetch. Point the test at a real component on this machine instead.',
   },
 ]
 
@@ -781,23 +755,20 @@ const NO_NETWORK_GUARD_ESCAPE: readonly RestrictedSyntax[] = [
 // `describe.shuffle` is deliberately absent from this list: it only strengthens.
 const NO_TEST_ORDER_ESCAPE: readonly RestrictedSyntax[] = [
   {
-    selector:
-      "MemberExpression[object.name=/^(?:it|test|describe|suite)$/][property.name='sequential']",
+    selector: "MemberExpression[object.name=/^(?:it|test|describe|suite)$/][property.name='sequential']",
     message:
       'Do not pin one test to declaration order. A test reaches its verdict whatever order the suite ' +
       'runs in; if this one cannot, the coupling is the defect.',
   },
   {
-    selector:
-      "MemberExpression[object.name=/^(?:it|test|describe|suite)$/][property.name='concurrent']",
+    selector: "MemberExpression[object.name=/^(?:it|test|describe|suite)$/][property.name='concurrent']",
     message:
       'Do not run tests concurrently. Interleaving makes order-coupling harder to see rather than ' +
       'impossible to have.',
   },
   {
     selector: "CallExpression[callee.object.name='vi'][callee.property.name='setConfig']",
-    message:
-      "Do not reconfigure the runner from a spec. The sequence and its seed are the harness's.",
+    message: "Do not reconfigure the runner from a spec. The sequence and its seed are the harness's.",
   },
 ]
 
@@ -932,10 +903,7 @@ const immutableData = (accessors: readonly string[]): Linter.RuleEntry => [
 ]
 
 /** No `let`, no in-place mutation. The caller supplies the files and the generated-role exemptions. */
-export const immutabilityBlock = (
-  files: readonly string[],
-  ignores: readonly string[],
-): FlatConfigBlock => ({
+export const immutabilityBlock = (files: readonly string[], ignores: readonly string[]): FlatConfigBlock => ({
   files,
   ignores,
   plugins: { functional },

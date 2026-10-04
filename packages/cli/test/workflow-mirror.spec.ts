@@ -40,12 +40,8 @@ describe('the actionlint filesystem view', () => {
       write(root, files[0] ?? '', 'name: workflow\n')
       write(root, files[1] ?? '', binary)
       withWorkflowMirror(root, files, (mirror: string): void => {
-        expect(readFileSync(path.join(mirror, '.github/workflows/check.yml'), 'utf8')).toBe(
-          'name: workflow\n',
-        )
-        expect(
-          new Uint8Array(readFileSync(path.join(mirror, 'automation/action/main.bin'))),
-        ).toEqual(binary)
+        expect(readFileSync(path.join(mirror, '.github/workflows/check.yml'), 'utf8')).toBe('name: workflow\n')
+        expect(new Uint8Array(readFileSync(path.join(mirror, 'automation/action/main.bin')))).toEqual(binary)
         expect(existsSync(path.join(mirror, '.git'))).toBe(true)
       })
     })
@@ -67,9 +63,7 @@ describe('the actionlint filesystem view', () => {
       symlinkSync('entry.js', path.join(root, 'linked.js'))
       withWorkflowMirror(root, ['entry.js', 'linked.js'], (mirror: string): void => {
         expect(readlinkSync(path.join(mirror, 'linked.js'))).toBe('entry.js')
-        expect(readFileSync(path.join(mirror, 'linked.js'), 'utf8')).toBe(
-          'export const action = true\n',
-        )
+        expect(readFileSync(path.join(mirror, 'linked.js'), 'utf8')).toBe('export const action = true\n')
       })
     })
   })
@@ -97,9 +91,9 @@ describe('the actionlint filesystem view', () => {
     'refuses a path outside the repository: %s',
     (candidate: string): void => {
       withRoot((root: string): void => {
-        expect((): string =>
-          withWorkflowMirror(root, [candidate], (mirror: string): string => mirror),
-        ).toThrow('Workflow input is outside the repository')
+        expect((): string => withWorkflowMirror(root, [candidate], (mirror: string): string => mirror)).toThrow(
+          'Workflow input is outside the repository',
+        )
       })
     },
   )

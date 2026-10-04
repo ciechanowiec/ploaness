@@ -11,12 +11,7 @@
 
 import { HARNESS_PACKAGE, isHarnessPackage } from './harness-package.js'
 import { readKey } from './json-shapes.js'
-import {
-  declaresTopLevelKey,
-  topLevelListItems,
-  topLevelMappingEntries,
-  topLevelScalar,
-} from './yaml-blocks.js'
+import { declaresTopLevelKey, topLevelListItems, topLevelMappingEntries, topLevelScalar } from './yaml-blocks.js'
 
 /**
  * The install-config keys that can redefine a resolved version.
@@ -25,12 +20,7 @@ import {
  * escape from a pin rather than a workspace-wide one. It carried its own copy of this list, in a module
  * that already imports this one - two arrays that had to stay equal, in the same gate.
  */
-export const OVERRIDE_KEYS: readonly string[] = [
-  'overrides',
-  'resolutions',
-  'patchedDependencies',
-  'packageExtensions',
-]
+export const OVERRIDE_KEYS: readonly string[] = ['overrides', 'resolutions', 'patchedDependencies', 'packageExtensions']
 
 /** The key naming the dependencies permitted to run an install script. */
 const ALLOWLIST_KEY: string = 'onlyBuiltDependencies'
@@ -68,10 +58,7 @@ export const findOverrides = (workspaceFile: string): readonly OverrideEntry[] =
  * @param packageJson the parsed package.json, where pnpm also accepts the key.
  * @returns true when the allowlist is declared in either place.
  */
-export const declaresInstallScriptAllowlist = (
-  workspaceFile: string,
-  packageJson: unknown,
-): boolean => {
+export const declaresInstallScriptAllowlist = (workspaceFile: string, packageJson: unknown): boolean => {
   return (
     declaresTopLevelKey(workspaceFile, ALLOWLIST_KEY) ||
     Array.isArray(readKey(readKey(packageJson, 'pnpm'), ALLOWLIST_KEY))

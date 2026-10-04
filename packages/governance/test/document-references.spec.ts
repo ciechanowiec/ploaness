@@ -15,10 +15,7 @@ const existenceCheckOver =
 
 const scripts: ReadonlySet<string> = new Set<string>(['verify', 'lint:arch', 'test:int'])
 
-const run = (
-  markdown: string,
-  existingFiles: readonly string[] = [],
-): readonly DocumentViolation[] =>
+const run = (markdown: string, existingFiles: readonly string[] = []): readonly DocumentViolation[] =>
   findDocumentReferenceViolations({
     markdown,
     scriptNames: scripts,
@@ -89,9 +86,7 @@ describe('findDocumentReferenceViolations - scripts', () => {
 
 describe('findDocumentReferenceViolations - paths', () => {
   it('accepts a full-path file that exists', () => {
-    expect(
-      run('See `scripts/check-documentation.ts`.', ['scripts/check-documentation.ts']),
-    ).toEqual([])
+    expect(run('See `scripts/check-documentation.ts`.', ['scripts/check-documentation.ts'])).toEqual([])
   })
 
   it('flags a full-path file that does not exist', () => {
@@ -144,10 +139,7 @@ describe('reserved words', () => {
   })
 })
 
-const runWithPackages = (
-  markdown: string,
-  packageNames: readonly string[],
-): readonly DocumentViolation[] =>
+const runWithPackages = (markdown: string, packageNames: readonly string[]): readonly DocumentViolation[] =>
   findDocumentReferenceViolations({
     markdown,
     scriptNames: scripts,
@@ -191,10 +183,7 @@ describe('findAgentDocuments', () => {
   })
 
   it('readsEveryMembersOwnInstructionFiles', () => {
-    const found: readonly DocumentLocation[] = findAgentDocuments(
-      ['cms', 'fe'],
-      (): boolean => true,
-    )
+    const found: readonly DocumentLocation[] = findAgentDocuments(['cms', 'fe'], (): boolean => true)
     expect(found.map((location: DocumentLocation): string => location.file)).toEqual([
       'AGENTS.md',
       'CLAUDE.md',
@@ -217,10 +206,7 @@ describe('findAgentDocuments', () => {
   // candidate twice and every finding in it would be reported twice.
   it('doesNotReadTheRootTwiceWhenItIsAlsoAMember', () => {
     const found: readonly DocumentLocation[] = findAgentDocuments(['.'], (): boolean => true)
-    expect(found.map((location: DocumentLocation): string => location.file)).toEqual([
-      'AGENTS.md',
-      'CLAUDE.md',
-    ])
+    expect(found.map((location: DocumentLocation): string => location.file)).toEqual(['AGENTS.md', 'CLAUDE.md'])
   })
 
   it('dropsAFileTheRepositoryDoesNotHave', () => {

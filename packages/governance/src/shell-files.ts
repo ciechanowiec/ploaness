@@ -31,9 +31,7 @@ export const isShellShebang = (firstLine: string): boolean => {
   }
   const command: string = found.groups?.['command'] ?? ''
   // `#!/usr/bin/env bash` names the interpreter in the argument; everything else names it in the path.
-  const interpreter: string = command.endsWith(ENV_COMMAND)
-    ? (found.groups?.['argument'] ?? '')
-    : basenameOf(command)
+  const interpreter: string = command.endsWith(ENV_COMMAND) ? (found.groups?.['argument'] ?? '') : basenameOf(command)
   return SHELL_INTERPRETERS.has(interpreter)
 }
 
@@ -64,10 +62,7 @@ export const requiresShebangRead = (file: string): boolean => !basenameOf(file).
  * @param firstLineOf reads one file's first line; called only for paths that could be shell.
  * @returns the scripts, ordered so a report reads the same on every machine.
  */
-export const shellScriptsIn = (
-  tracked: readonly string[],
-  firstLineOf: (file: string) => string,
-): readonly string[] =>
+export const shellScriptsIn = (tracked: readonly string[], firstLineOf: (file: string) => string): readonly string[] =>
   tracked
     .filter((file: string): boolean => isShellScript(file) || requiresShebangRead(file))
     .filter((file: string): boolean => {
@@ -108,9 +103,7 @@ const endsHeredoc = (line: string, delimiter: string): boolean => line.trim() ==
 
 const blanketDirectiveAt = (line: string, index: number): ShellDirective | undefined => {
   const codes: string | undefined = DISABLE_DIRECTIVE.exec(line)?.groups?.['codes']
-  return codes !== undefined && BLANKET_CODES.test(codes)
-    ? { line: index + FIRST_LINE, directive: codes }
-    : undefined
+  return codes !== undefined && BLANKET_CODES.test(codes) ? { line: index + FIRST_LINE, directive: codes } : undefined
 }
 
 const afterLine = (state: DirectiveScan, line: string, index: number): DirectiveScan => {
@@ -135,7 +128,6 @@ export const findBlanketShellDirectives = (text: string): readonly ShellDirectiv
   text
     .split('\n')
     .reduce<DirectiveScan>(
-      (state: DirectiveScan, line: string, index: number): DirectiveScan =>
-        afterLine(state, line, index),
+      (state: DirectiveScan, line: string, index: number): DirectiveScan => afterLine(state, line, index),
       { delimiter: undefined, found: [] },
     ).found

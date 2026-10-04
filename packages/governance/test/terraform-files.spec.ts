@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  checkovConfigsIn,
-  isCheckovConfigFile,
-  isTerraformFile,
-  terraformFilesIn,
-} from '../src/terraform-files.js'
+import { checkovConfigsIn, isCheckovConfigFile, isTerraformFile, terraformFilesIn } from '../src/terraform-files.js'
 
 describe('isTerraformFile', () => {
   it.each(['infra/main.tf', 'infra/envs/prod/variables.tf', 'infra/envs/prod/terraform.tfvars'])(

@@ -1,28 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { pureLogicRule } from '../src/architecture-layers.js'
 
-const ruleFor = (roots: readonly string[]): Record<string, unknown> | undefined =>
-  pureLogicRule(roots)
+const ruleFor = (roots: readonly string[]): Record<string, unknown> | undefined => pureLogicRule(roots)
 
 // The rule is rendered as opaque analyzer data, so a spec reads it back by asserting the shape it
 // declares. Asserting is what a spec may do that production code may not.
-const clauseValue = (
-  rule: Record<string, unknown> | undefined,
-  side: 'from' | 'to',
-  key: string,
-): string => {
-  const clause: Record<string, string | undefined> = (rule?.[side] ?? {}) as Record<
-    string,
-    string | undefined
-  >
+const clauseValue = (rule: Record<string, unknown> | undefined, side: 'from' | 'to', key: string): string => {
+  const clause: Record<string, string | undefined> = (rule?.[side] ?? {}) as Record<string, string | undefined>
   return clause[key] ?? ''
 }
 
 const pathOf = (rule: Record<string, unknown> | undefined, side: 'from' | 'to'): string =>
   clauseValue(rule, side, 'path')
 
-const pathNotOf = (rule: Record<string, unknown> | undefined): string =>
-  clauseValue(rule, 'to', 'pathNot')
+const pathNotOf = (rule: Record<string, unknown> | undefined): string => clauseValue(rule, 'to', 'pathNot')
 
 describe('pureLogicRule', () => {
   it('keeps the shipped Payload floor when a project declares nothing extra', () => {
@@ -55,13 +46,7 @@ describe('pureLogicRule', () => {
   // the project wrote. It was not: a glob-shaped root took the analyzer down with no finding attached,
   // and a route-group directory silently matched a different path than the one declared.
   it('renders a valid expression for every root a project could declare', () => {
-    for (const root of [
-      'src/config',
-      'src/config/**',
-      'src/app/(payload)',
-      'src/a+b',
-      'src/x[1]',
-    ]) {
+    for (const root of ['src/config', 'src/config/**', 'src/app/(payload)', 'src/a+b', 'src/x[1]']) {
       expect(() => new RegExp(pathOf(ruleFor([root]), 'from'))).not.toThrow()
     }
   })

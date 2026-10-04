@@ -76,31 +76,23 @@ describe('findPairedAssetDrift', () => {
   })
 
   it('reports a body that has fallen behind its root file', () => {
-    const found: readonly PairedAssetDrift[] = findPairedAssetDrift([
-      state({ assetContent: '24\n' }),
-    ])
+    const found: readonly PairedAssetDrift[] = findPairedAssetDrift([state({ assetContent: '24\n' })])
     expect(found).toHaveLength(1)
     expect(found[0]?.reason).toContain('no longer matches')
   })
 
   it('names the root file, so the report says which source to regenerate from', () => {
-    const found: readonly PairedAssetDrift[] = findPairedAssetDrift([
-      state({ assetContent: '24\n' }),
-    ])
+    const found: readonly PairedAssetDrift[] = findPairedAssetDrift([state({ assetContent: '24\n' })])
     expect(found[0]?.rootPath).toBe('.nvmrc')
   })
 
   it('reports a body that was never generated', () => {
-    const found: readonly PairedAssetDrift[] = findPairedAssetDrift([
-      state({ assetContent: undefined }),
-    ])
+    const found: readonly PairedAssetDrift[] = findPairedAssetDrift([state({ assetContent: undefined })])
     expect(found[0]?.reason).toContain('is missing')
   })
 
   it('reports a pair whose root file is gone, rather than silently shipping the stale body', () => {
-    const found: readonly PairedAssetDrift[] = findPairedAssetDrift([
-      state({ rootContent: undefined }),
-    ])
+    const found: readonly PairedAssetDrift[] = findPairedAssetDrift([state({ rootContent: undefined })])
     expect(found[0]?.reason).toContain('no root file')
   })
 

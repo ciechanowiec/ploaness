@@ -30,9 +30,7 @@ const fixtureOf = (value: unknown): NativeCase => {
 }
 
 const checkCase = (fixture: NativeCase, executable: string): void => {
-  const previous: string | undefined = existsSync(fixture.file)
-    ? readFileSync(fixture.file, 'utf8')
-    : undefined
+  const previous: string | undefined = existsSync(fixture.file) ? readFileSync(fixture.file, 'utf8') : undefined
   mkdirSync(path.dirname(fixture.file), { recursive: true })
   writeFileSync(fixture.file, `${fixture.code}\n`)
   try {
@@ -43,11 +41,7 @@ const checkCase = (fixture: NativeCase, executable: string): void => {
     const output: string = `${result.stdout}${result.stderr}`
     const expectedStatus: number = fixture.expected.length === 0 ? 0 : 1
     const marker: string = expectedStatus === 0 ? '[PASS] oxlint' : '[FAIL] oxlint'
-    if (
-      result.status !== expectedStatus ||
-      !output.includes(marker) ||
-      !output.includes(fixture.expected)
-    ) {
+    if (result.status !== expectedStatus || !output.includes(marker) || !output.includes(fixture.expected)) {
       throw new Error(`${fixture.name}: expected ${marker} ${fixture.expected}\n${output}`)
     }
   } finally {

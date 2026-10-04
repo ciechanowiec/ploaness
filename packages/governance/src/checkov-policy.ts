@@ -48,8 +48,7 @@ export const CHECKOV_CHECKS: readonly CheckovCheck[] = [
  * beside this asserts the catalogue is not empty.
  * @returns the enabled identifiers, comma separated.
  */
-export const checkovCheckList = (): string =>
-  CHECKOV_CHECKS.map((check: CheckovCheck): string => check.id).join(',')
+export const checkovCheckList = (): string => CHECKOV_CHECKS.map((check: CheckovCheck): string => check.id).join(',')
 
 // The tally checkov prints after a scan. Its compact output spends several lines on each failed check
 // and a few on headers, so counting lines would report defects that are not there.
@@ -87,10 +86,7 @@ export type ProviderStanding = 'utility' | 'unsupported' | 'audited'
  * guess. The `unsupported` entries were confirmed absent from the pinned image with `--list`, and are
  * re-confirmed when the pin moves.
  */
-export const PROVIDERS_WITHOUT_CHECKS: ReadonlyMap<string, ProviderStanding> = new Map<
-  string,
-  ProviderStanding
->([
+export const PROVIDERS_WITHOUT_CHECKS: ReadonlyMap<string, ProviderStanding> = new Map<string, ProviderStanding>([
   // Declares no cloud resource, so there is nothing for an analyzer to judge.
   ['random', 'utility'],
   ['null', 'utility'],
@@ -146,10 +142,7 @@ export interface ProviderClassification {
 export const curatedProviders = (): ReadonlySet<string> =>
   new Set(CHECKOV_CHECKS.map((check: CheckovCheck): string => check.provider))
 
-const standingOf = (
-  provider: string,
-  curated: ReadonlySet<string>,
-): keyof ProviderClassification =>
+const standingOf = (provider: string, curated: ReadonlySet<string>): keyof ProviderClassification =>
   curated.has(provider) ? 'curated' : (PROVIDERS_WITHOUT_CHECKS.get(provider) ?? 'unclassified')
 
 /**
@@ -159,8 +152,8 @@ const standingOf = (
  */
 export const classifyProviders = (detected: readonly string[]): ProviderClassification => {
   const curated: ReadonlySet<string> = curatedProviders()
-  const unique: readonly string[] = [...new Set(detected)].toSorted(
-    (left: string, right: string): number => left.localeCompare(right),
+  const unique: readonly string[] = [...new Set(detected)].toSorted((left: string, right: string): number =>
+    left.localeCompare(right),
   )
   const standing = (wanted: keyof ProviderClassification): readonly string[] =>
     unique.filter((provider: string): boolean => standingOf(provider, curated) === wanted)

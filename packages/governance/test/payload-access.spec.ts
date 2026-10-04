@@ -9,8 +9,7 @@ import {
   findUnrestrictedUploads,
 } from '../src/payload-access.js'
 
-const COMPLETE_ACCESS: string =
-  'access: { create: isAdmin, read: isAdmin, update: isAdmin, delete: isAdmin },'
+const COMPLETE_ACCESS: string = 'access: { create: isAdmin, read: isAdmin, update: isAdmin, delete: isAdmin },'
 
 // An auth collection owes a fifth operation, and a versioned one owes a sixth. The fixtures below
 // declare them so that a case about hardening or about drafts reports the rule it is named for alone.
@@ -36,21 +35,15 @@ const rulesOf = (source: string): readonly string[] =>
 // failure indistinguishable from a pass, which is the only kind that survives unnoticed.
 describe('which declarations are judged at all', () => {
   it('judges the plain type annotation', () => {
-    expect(rulesOf("const A: CollectionConfig = { slug: 'a' }")).toEqual([
-      'require-complete-access',
-    ])
+    expect(rulesOf("const A: CollectionConfig = { slug: 'a' }")).toEqual(['require-complete-access'])
   })
 
   it('judges an annotation carrying a type argument', () => {
-    expect(rulesOf("const A: CollectionConfig<'a'> = { slug: 'a' }")).toEqual([
-      'require-complete-access',
-    ])
+    expect(rulesOf("const A: CollectionConfig<'a'> = { slug: 'a' }")).toEqual(['require-complete-access'])
   })
 
   it('judges the satisfies form, whose type follows its value', () => {
-    expect(rulesOf("const A = { slug: 'a' } satisfies CollectionConfig")).toEqual([
-      'require-complete-access',
-    ])
+    expect(rulesOf("const A = { slug: 'a' } satisfies CollectionConfig")).toEqual(['require-complete-access'])
   })
 
   it('judges a satisfies form whose value contains an arrow function', () => {
@@ -203,8 +196,7 @@ describe('no-anonymous-draft-reads', () => {
   const drafts: string = 'versions: { drafts: true },'
 
   it('reports an unconditionally true read on a drafting collection', () => {
-    const open: string =
-      'access: { read: () => true, create: x, update: x, delete: x, readVersions: x }'
+    const open: string = 'access: { read: () => true, create: x, update: x, delete: x, readVersions: x }'
     const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} ${open} }`
     expect(rulesOf(source)).toEqual(['no-anonymous-draft-reads'])
   })
@@ -298,16 +290,14 @@ describe('require-upload-restrictions', () => {
 describe('the always-true form a governed project actually writes', () => {
   it('reports a typed always-true read on a drafting collection', () => {
     const drafts: string = 'versions: { drafts: true },'
-    const open: string =
-      'access: { read: (): boolean => true, create: x, update: x, delete: x, readVersions: x }'
+    const open: string = 'access: { read: (): boolean => true, create: x, update: x, delete: x, readVersions: x }'
     const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} ${open} }`
     expect(rulesOf(source)).toEqual(['no-anonymous-draft-reads'])
   })
 
   it('still accepts a typed rule that returns false', () => {
     const drafts: string = 'versions: { drafts: true },'
-    const closed: string =
-      'access: { read: (): boolean => false, create: x, update: x, delete: x, readVersions: x }'
+    const closed: string = 'access: { read: (): boolean => false, create: x, update: x, delete: x, readVersions: x }'
     const source: string = `const A: CollectionConfig = { slug: 'a', ${drafts} ${closed} }`
     expect(rulesOf(source)).toEqual([])
   })
@@ -344,8 +334,7 @@ describe('require-svg-response-headers', () => {
   })
 
   it('accepts a list written in double quotes across several lines', () => {
-    const upload: string =
-      'mimeTypes: [\n  "image/png",\n  "application/pdf",\n],\n  staticDir: "media"'
+    const upload: string = 'mimeTypes: [\n  "image/png",\n  "application/pdf",\n],\n  staticDir: "media"'
     expect(rulesOf(uploading(upload))).toEqual([])
   })
 
@@ -403,16 +392,13 @@ describe('require-svg-response-headers', () => {
   })
 
   it('tells an unreadable list what would make it readable', () => {
-    const reason: string | undefined = findUndecidedSvgHeaders(
-      uploading('mimeTypes: IMAGE_TYPES'),
-    )[0]?.reason
+    const reason: string | undefined = findUndecidedSvgHeaders(uploading('mimeTypes: IMAGE_TYPES'))[0]?.reason
     expect(reason).toContain('write the list inline')
     expect(reason).toContain('modifyResponseHeaders')
   })
 
   it('names the empty list for what it admits', () => {
-    const reason: string | undefined = findUndecidedSvgHeaders(uploading('mimeTypes: []'))[0]
-      ?.reason
+    const reason: string | undefined = findUndecidedSvgHeaders(uploading('mimeTypes: []'))[0]?.reason
     expect(reason).toContain('empty mimeTypes list admits every type')
   })
 })

@@ -20,16 +20,11 @@ export const GENERATED_ARTEFACTS: readonly string[] = [
  * @returns the Edit and Write denials the runtime settings must carry.
  */
 export const requiredDenyRules = (artefacts: readonly string[]): readonly string[] =>
-  artefacts.flatMap((artefact: string): readonly string[] => [
-    `Edit(${artefact})`,
-    `Write(${artefact})`,
-  ])
+  artefacts.flatMap((artefact: string): readonly string[] => [`Edit(${artefact})`, `Write(${artefact})`])
 
 const stringsAt = (settings: unknown, section: string, key: string): readonly string[] => {
   const inner: unknown = readKey(readKey(settings, section), key)
-  return isArray(inner)
-    ? inner.filter((entry: unknown): entry is string => typeof entry === 'string')
-    : []
+  return isArray(inner) ? inner.filter((entry: unknown): entry is string => typeof entry === 'string') : []
 }
 
 /**
@@ -38,10 +33,7 @@ const stringsAt = (settings: unknown, section: string, key: string): readonly st
  * @param artefacts the repo-relative paths a generator owns.
  * @returns the settings to write, preserving every key the project owns.
  */
-export const applyDenyRules = (
-  existing: unknown,
-  artefacts: readonly string[],
-): Record<string, unknown> => {
+export const applyDenyRules = (existing: unknown, artefacts: readonly string[]): Record<string, unknown> => {
   const base: Record<string, unknown> = { ...asRecord(existing) }
   const permissions: Record<string, unknown> = { ...asRecord(base['permissions']) }
   const deny: readonly string[] = stringsAt(base, 'permissions', 'deny')
@@ -92,12 +84,7 @@ export const findDenialViolations = (
  * @param artefacts the member-relative paths a generator owns.
  * @returns every repo-relative path the runtime must deny, in member order.
  */
-export const deniedPathsFor = (
-  memberPaths: readonly string[],
-  artefacts: readonly string[],
-): readonly string[] =>
+export const deniedPathsFor = (memberPaths: readonly string[], artefacts: readonly string[]): readonly string[] =>
   memberPaths.flatMap((memberPath: string): readonly string[] =>
-    artefacts.map((artefact: string): string =>
-      memberPath === '.' ? artefact : `${memberPath}/${artefact}`,
-    ),
+    artefacts.map((artefact: string): string => (memberPath === '.' ? artefact : `${memberPath}/${artefact}`)),
   )

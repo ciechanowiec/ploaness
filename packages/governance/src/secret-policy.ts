@@ -15,8 +15,7 @@ const FIRST_PRINTABLE: number = 0x20
 const HEX_RADIX: number = 16
 const UNICODE_ESCAPE_DIGITS: number = 4
 
-const asHex = (codePoint: number): string =>
-  codePoint.toString(HEX_RADIX).padStart(UNICODE_ESCAPE_DIGITS, '0')
+const asHex = (codePoint: number): string => codePoint.toString(HEX_RADIX).padStart(UNICODE_ESCAPE_DIGITS, '0')
 
 const NAMED_ESCAPES: ReadonlyMap<string, string> = new Map([
   ['\\', '\\\\'],

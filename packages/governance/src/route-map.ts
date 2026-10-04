@@ -12,22 +12,11 @@ export interface DeclaredRoute {
 
 // Next.js reads a page from any of these; `pageExtensions` can add more, which is one of the reasons
 // the module comment above declines to guess at a configured project.
-const PAGE_FILES: ReadonlySet<string> = new Set<string>([
-  'page.tsx',
-  'page.ts',
-  'page.jsx',
-  'page.js',
-  'page.mdx',
-])
+const PAGE_FILES: ReadonlySet<string> = new Set<string>(['page.tsx', 'page.ts', 'page.jsx', 'page.js', 'page.mdx'])
 
 // A root layout is required of a Next.js application and of nothing else, so it is what tells an app
 // directory apart from a directory that happens to be called `app`.
-const ROOT_LAYOUTS: ReadonlySet<string> = new Set<string>([
-  'layout.tsx',
-  'layout.ts',
-  'layout.jsx',
-  'layout.js',
-])
+const ROOT_LAYOUTS: ReadonlySet<string> = new Set<string>(['layout.tsx', 'layout.ts', 'layout.jsx', 'layout.js'])
 
 // `src/app` first, because that is where a Payload application puts it and where a stray top-level
 // `app/` is least likely to be mistaken for one.
@@ -48,9 +37,7 @@ const isRootLayout = (path: string, root: string): boolean => {
     return false
   }
   const segments: readonly string[] = path.slice(prefix.length).split(SEGMENT_SEPARATOR)
-  const addressed: readonly string[] = segments.filter(
-    (segment: string): boolean => !isRouteGroup(segment),
-  )
+  const addressed: readonly string[] = segments.filter((segment: string): boolean => !isRouteGroup(segment))
   return addressed.length === 1 && ROOT_LAYOUTS.has(addressed[0] ?? '')
 }
 
@@ -63,9 +50,7 @@ const isRootLayout = (path: string, root: string): boolean => {
  * @returns the app directory, or nothing when the member declares no routes.
  */
 export const appRootOf = (paths: readonly string[]): string | undefined =>
-  APP_ROOTS.find((root: string): boolean =>
-    paths.some((path: string): boolean => isRootLayout(path, root)),
-  )
+  APP_ROOTS.find((root: string): boolean => paths.some((path: string): boolean => isRootLayout(path, root)))
 
 // A segment wholly inside parentheses is a route group: it organises the tree and contributes nothing
 // to the address. `(.)photo` is not one - it is an intercepting route, and it opens with a parenthesis
@@ -76,8 +61,7 @@ const isRouteGroup = (segment: string): boolean => segment.startsWith('(') && se
 // one of these declares no independently reachable address: on a hard navigation the INTERCEPTED route
 // renders instead, and that route has a declaration of its own. So the file is skipped rather than
 // mapped to an address no server serves.
-const isIntercepting = (segment: string): boolean =>
-  segment.startsWith('(') && !segment.endsWith(')')
+const isIntercepting = (segment: string): boolean => segment.startsWith('(') && !segment.endsWith(')')
 
 // A slot of a parallel route. Its own `page` file is the slot's default content, rendered by the
 // parent's layout rather than at an address of its own, so the segment is dropped and the address that
@@ -87,8 +71,7 @@ const isParallelSlot = (segment: string): boolean => segment.startsWith('@')
 // Next.js serves nothing from a folder whose name opens with an underscore.
 const isPrivate = (segment: string): boolean => segment.startsWith('_')
 
-const isDynamicSegment = (segment: string): boolean =>
-  segment.startsWith('[') && segment.endsWith(']')
+const isDynamicSegment = (segment: string): boolean => segment.startsWith('[') && segment.endsWith(']')
 
 /**
  * Strip a trailing slash, so an address written with one and an address written without are one.
@@ -113,9 +96,7 @@ export const declaredRouteOf = (file: string): DeclaredRoute | undefined => {
     return undefined
   }
   const directories: readonly string[] = parts.slice(0, -1)
-  if (
-    directories.some((segment: string): boolean => isPrivate(segment) || isIntercepting(segment))
-  ) {
+  if (directories.some((segment: string): boolean => isPrivate(segment) || isIntercepting(segment))) {
     return undefined
   }
   const addressed: readonly string[] = directories.filter(
@@ -123,10 +104,7 @@ export const declaredRouteOf = (file: string): DeclaredRoute | undefined => {
   )
   return {
     file,
-    route:
-      addressed.length === 0
-        ? ROOT_ROUTE
-        : `${SEGMENT_SEPARATOR}${addressed.join(SEGMENT_SEPARATOR)}`,
+    route: addressed.length === 0 ? ROOT_ROUTE : `${SEGMENT_SEPARATOR}${addressed.join(SEGMENT_SEPARATOR)}`,
     isDynamic: addressed.some((segment: string): boolean => isDynamicSegment(segment)),
   }
 }
@@ -140,10 +118,7 @@ export const declaredRouteOf = (file: string): DeclaredRoute | undefined => {
  * @param appRoot the app directory, as `appRootOf` chose it.
  * @returns one entry per declared address, in the order the paths were given.
  */
-export const declaredRoutesOf = (
-  paths: readonly string[],
-  appRoot: string,
-): readonly DeclaredRoute[] => {
+export const declaredRoutesOf = (paths: readonly string[], appRoot: string): readonly DeclaredRoute[] => {
   const prefix: string = `${appRoot}${SEGMENT_SEPARATOR}`
   const declared: readonly DeclaredRoute[] = paths.flatMap((file: string): DeclaredRoute[] => {
     if (!file.startsWith(prefix)) {
@@ -182,8 +157,7 @@ const segmentsOf = (route: string): readonly string[] =>
 
 const isCatchAll = (segment: string): boolean => segment.startsWith('[...') && segment.endsWith(']')
 
-const isOptionalCatchAll = (segment: string): boolean =>
-  segment.startsWith('[[...') && segment.endsWith(']]')
+const isOptionalCatchAll = (segment: string): boolean => segment.startsWith('[[...') && segment.endsWith(']]')
 
 // Segment by segment, because a catch-all is the only one whose width is not one and Next.js allows it
 // only in the last position. Written as a recursion rather than a regular expression: the address a

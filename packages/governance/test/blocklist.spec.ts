@@ -39,9 +39,13 @@ describe('parseImageReference', (): void => {
       'docker.io/library/mongo',
       'index.docker.io/library/mongo:7',
     ]
-    expect(
-      spellings.map((raw: string): string => parseImageReference(raw).repository),
-    ).toStrictEqual(['mongo', 'mongo', 'mongo', 'mongo', 'mongo'])
+    expect(spellings.map((raw: string): string => parseImageReference(raw).repository)).toStrictEqual([
+      'mongo',
+      'mongo',
+      'mongo',
+      'mongo',
+      'mongo',
+    ])
   })
 
   it('keepsAForeignRegistryHostAndDropsTheDockerHubOne', (): void => {
@@ -135,9 +139,7 @@ describe('refuseImage', (): void => {
 
   it('namesAReplacementForEveryEntry', (): void => {
     expect(
-      BLOCKED_IMAGES.every(
-        (entry: BlockedImage): boolean => entry.replacement.length > 0 && entry.reason.length > 0,
-      ),
+      BLOCKED_IMAGES.every((entry: BlockedImage): boolean => entry.replacement.length > 0 && entry.reason.length > 0),
     ).toBe(true)
   })
 })
@@ -194,15 +196,13 @@ describe('refuseSystemPackages', (): void => {
       '    ghostscript \\',
       '    imagemagick',
     ].join('\n')
-    expect(
-      refuseSystemPackages(dockerfile).map((refusal: Refusal): string => refusal.subject),
-    ).toStrictEqual(['ghostscript'])
+    expect(refuseSystemPackages(dockerfile).map((refusal: Refusal): string => refusal.subject)).toStrictEqual([
+      'ghostscript',
+    ])
   })
 
   it('passesADockerfileThatInstallsNothingRefused', (): void => {
-    expect(
-      refuseSystemPackages('FROM node:22\nRUN apk add --no-cache libc6-compat\n'),
-    ).toStrictEqual([])
+    expect(refuseSystemPackages('FROM node:22\nRUN apk add --no-cache libc6-compat\n')).toStrictEqual([])
   })
 })
 
@@ -230,17 +230,13 @@ describe('refuseInstalledPackages', (): void => {
       { name: 'ua-parser-js', versions: ['1.0.40', '2.0.3'] },
       { name: 'pg', versions: ['8.23.0'] },
     ])
-    expect(refusals.map((refusal: Refusal): string => refusal.subject)).toStrictEqual([
-      'ua-parser-js@2.0.3',
-    ])
+    expect(refusals.map((refusal: Refusal): string => refusal.subject)).toStrictEqual(['ua-parser-js@2.0.3'])
   })
 })
 
 describe('scopeFreshness', (): void => {
   it('keepsTheBoundShortOfARefusedNewestRelease', (): void => {
-    const scope: FreshnessScope = scopeFreshness([
-      status('ua-parser-js', '2.0.3', 'AGPL-3.0-or-later'),
-    ])
+    const scope: FreshnessScope = scopeFreshness([status('ua-parser-js', '2.0.3', 'AGPL-3.0-or-later')])
     expect(scope.measurable).toStrictEqual([])
     expect(scope.refused[0]?.note).toContain('refused')
   })
@@ -252,10 +248,7 @@ describe('scopeFreshness', (): void => {
   })
 
   it('measuresEverythingElse', (): void => {
-    const statuses: readonly DependencyStatus[] = [
-      status('pg', '8.23.0', 'MIT'),
-      status('unlabelled', '2.0.0'),
-    ]
+    const statuses: readonly DependencyStatus[] = [status('pg', '8.23.0', 'MIT'), status('unlabelled', '2.0.0')]
     expect(scopeFreshness(statuses)).toStrictEqual({ measurable: statuses, refused: [] })
   })
 })

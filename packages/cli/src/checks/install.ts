@@ -29,9 +29,6 @@ export const installScripts = (repo: Repo): GateResult =>
 export const releaseAge = (repo: Repo): GateResult => {
   const findings: readonly string[] = findReleaseAgeViolations(repo.workspaceFile)
   return findings.length > 0
-    ? failed(
-        `${String(findings.length)} release-age setting(s) weaken the floor pnpm enforces`,
-        findings,
-      )
+    ? failed(`${String(findings.length)} release-age setting(s) weaken the floor pnpm enforces`, findings)
     : passed('the release-age floor is strict, and only the harness is excluded from it')
 }

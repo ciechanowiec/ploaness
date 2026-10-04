@@ -43,9 +43,7 @@ const ENABLED: ReadonlySet<unknown> = new Set(['error', 2, 'warn', 1])
 
 const isOn = (setting: unknown): boolean => ENABLED.has(severityOf(setting))
 
-const resolveRules = async (
-  config: readonly Linter.Config[],
-): Promise<Readonly<Record<string, unknown>>> => {
+const resolveRules = async (config: readonly Linter.Config[]): Promise<Readonly<Record<string, unknown>>> => {
   const eslint: ESLint = new ESLint({
     overrideConfigFile: true,
     baseConfig: [...config],
@@ -63,9 +61,7 @@ const onInEveryConfig = async (rule: string): Promise<Readonly<Record<string, bo
   Object.fromEntries(
     await Promise.all(
       Object.entries(shippedConfigs).map(
-        async ([name, config]: [string, readonly Linter.Config[]]): Promise<
-          readonly [string, boolean]
-        > => {
+        async ([name, config]: [string, readonly Linter.Config[]]): Promise<readonly [string, boolean]> => {
           const rules: Readonly<Record<string, unknown>> = await resolveRules(config)
           return [name, isOn(rules[rule])]
         },
@@ -74,9 +70,7 @@ const onInEveryConfig = async (rule: string): Promise<Readonly<Record<string, bo
   )
 
 const everyConfig = <Value>(value: Value): Readonly<Record<string, Value>> =>
-  Object.fromEntries(
-    Object.keys(shippedConfigs).map((name: string): readonly [string, Value] => [name, value]),
-  )
+  Object.fromEntries(Object.keys(shippedConfigs).map((name: string): readonly [string, Value] => [name, value]))
 
 describe('the DOM fixers that break a non-browser DOM', () => {
   it('leaves appendChild alone in every config', async () => {

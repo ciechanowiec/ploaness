@@ -5,16 +5,7 @@ import { type OxlintRule, oxlintRules } from './oxlint-policy.js'
 import { analysisBoundaries } from './workspace-policy.js'
 
 /** Authored JavaScript and TypeScript, including configuration and hidden tooling. */
-export const OXLINT_EXTENSIONS: readonly string[] = [
-  '.ts',
-  '.tsx',
-  '.mts',
-  '.cts',
-  '.js',
-  '.jsx',
-  '.mjs',
-  '.cjs',
-]
+export const OXLINT_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']
 
 const OUTPUTS: readonly string[] = [
   '**/node_modules/**',
@@ -32,12 +23,7 @@ export const oxlintSourceFiles = (
   generated: readonly string[],
   siblings: readonly string[],
 ): readonly string[] => {
-  const ignored: readonly string[] = [
-    ...OUTPUTS,
-    ...GENERATED_ARTEFACTS,
-    ...generated,
-    ...analysisBoundaries(siblings),
-  ]
+  const ignored: readonly string[] = [...OUTPUTS, ...GENERATED_ARTEFACTS, ...generated, ...analysisBoundaries(siblings)]
   return [...new Set(files)].filter(
     (file: string): boolean =>
       hasExtension(file, OXLINT_EXTENSIONS) &&
@@ -53,13 +39,8 @@ export interface OxlintGroup {
 }
 
 /** Partition already-selected source; libraries retain Biome ownership of accessibility. */
-export const oxlintGroups = (
-  files: readonly string[],
-  hasAppRuntime: boolean,
-): readonly OxlintGroup[] => {
-  const jsx: ReadonlySet<string> = new Set(
-    hasAppRuntime ? jsxAccessibilityFiles(files, [], []) : [],
-  )
+export const oxlintGroups = (files: readonly string[], hasAppRuntime: boolean): readonly OxlintGroup[] => {
+  const jsx: ReadonlySet<string> = new Set(hasAppRuntime ? jsxAccessibilityFiles(files, [], []) : [])
   return [
     { files: files.filter((file: string): boolean => !jsx.has(file)), rules: oxlintRules(false) },
     { files: files.filter((file: string): boolean => jsx.has(file)), rules: oxlintRules(true) },

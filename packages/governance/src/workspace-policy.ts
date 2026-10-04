@@ -49,8 +49,7 @@ export const findRepositoryRoot = (
     return workspace
   }
   const checkout: string | undefined = ancestors.find(
-    (directory: string): boolean =>
-      hasEntry(directory, '.git') && hasEntry(directory, 'package.json'),
+    (directory: string): boolean => hasEntry(directory, '.git') && hasEntry(directory, 'package.json'),
   )
   return checkout ?? ancestors[0] ?? ROOT_MEMBER_PATH
 }
@@ -74,9 +73,7 @@ const isSelected = (patterns: readonly string[], directory: string): boolean => 
     .some((pattern: string): boolean => matchesGlob(pattern, directory))
   const isExcluded: boolean = patterns
     .filter((pattern: string): boolean => pattern.startsWith(EXCLUSION_MARKER))
-    .some((pattern: string): boolean =>
-      matchesGlob(pattern.slice(EXCLUSION_MARKER.length), directory),
-    )
+    .some((pattern: string): boolean => matchesGlob(pattern.slice(EXCLUSION_MARKER.length), directory))
   return isIncluded && !isExcluded
 }
 
@@ -96,8 +93,7 @@ export const selectProjects = (
 ): readonly string[] => [
   ...(directoriesWithManifest.includes(ROOT_MEMBER_PATH) ? [ROOT_MEMBER_PATH] : []),
   ...directoriesWithManifest.filter(
-    (directory: string): boolean =>
-      directory !== ROOT_MEMBER_PATH && isSelected(patterns, directory),
+    (directory: string): boolean => directory !== ROOT_MEMBER_PATH && isSelected(patterns, directory),
   ),
 ]
 
@@ -114,16 +110,14 @@ const declaresPackage = (packageJson: unknown, packageName: string): boolean =>
  * @param packageJson the project's parsed manifest.
  * @returns true when ploaness is a declared dependency.
  */
-export const isGovernedProject = (packageJson: unknown): boolean =>
-  declaresPackage(packageJson, HARNESS_PACKAGE)
+export const isGovernedProject = (packageJson: unknown): boolean => declaresPackage(packageJson, HARNESS_PACKAGE)
 
 /**
  * Whether a project's manifest declares Payload, which decides the third scope.
  * @param packageJson the project's parsed manifest.
  * @returns true when payload is a declared dependency.
  */
-export const isPayloadProject = (packageJson: unknown): boolean =>
-  declaresPackage(packageJson, PAYLOAD_PACKAGE)
+export const isPayloadProject = (packageJson: unknown): boolean => declaresPackage(packageJson, PAYLOAD_PACKAGE)
 
 /**
  * What kind of package a member is, which decides the configurations it receives.
@@ -178,9 +172,7 @@ export const findGovernedMembers = (projects: readonly ProjectManifest[]): reado
 // carries.
 const isCoveredBy = (member: MemberShape, projectPath: string): boolean =>
   member.sourceRoots.some((root: string): boolean =>
-    projectPath.startsWith(
-      member.path === ROOT_MEMBER_PATH ? `${root}/` : `${member.path}/${root}/`,
-    ),
+    projectPath.startsWith(member.path === ROOT_MEMBER_PATH ? `${root}/` : `${member.path}/${root}/`),
   )
 
 /**
@@ -199,13 +191,8 @@ export const findUngovernedProjects = (
 ): readonly string[] =>
   projects
     .filter((project: ProjectManifest): boolean => {
-      const isMember: boolean = members.some(
-        (member: MemberShape): boolean => member.path === project.path,
-      )
-      return !(
-        isMember ||
-        members.some((member: MemberShape): boolean => isCoveredBy(member, project.path))
-      )
+      const isMember: boolean = members.some((member: MemberShape): boolean => member.path === project.path)
+      return !(isMember || members.some((member: MemberShape): boolean => isCoveredBy(member, project.path)))
     })
     .map(
       (project: ProjectManifest): string =>
@@ -305,14 +292,8 @@ export type EslintRunMode = 'fix' | 'report'
  * @param mode whether this run writes fixes or renders a verdict.
  * @returns the full argument list, the target first.
  */
-export const eslintArguments = (
-  siblingPaths: readonly string[],
-  mode: EslintRunMode,
-): readonly string[] => [
+export const eslintArguments = (siblingPaths: readonly string[], mode: EslintRunMode): readonly string[] => [
   '.',
   mode === 'fix' ? '--fix' : '--max-warnings=0',
-  ...analysisBoundaries(siblingPaths).flatMap((pattern: string): readonly string[] => [
-    '--ignore-pattern',
-    pattern,
-  ]),
+  ...analysisBoundaries(siblingPaths).flatMap((pattern: string): readonly string[] => ['--ignore-pattern', pattern]),
 ]

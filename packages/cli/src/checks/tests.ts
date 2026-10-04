@@ -8,23 +8,11 @@ import {
   carriesSourceCode,
   diagnoseBuildFailure,
   hasExtension,
+  VERIFICATION_ENVIRONMENT_VARIABLE,
 } from '@ploaness/governance'
-import {
-  type Context,
-  hasOwnRuntime,
-  type Member,
-  resolveProjectTool,
-  workingTreeFiles,
-} from '../context.js'
-import {
-  asFindings,
-  failed,
-  fromRun,
-  type GateResult,
-  passed,
-  type RunResult,
-  run,
-} from '../exec.js'
+import { browserServerProblems } from '../browser-servers.js'
+import { type Context, hasOwnRuntime, type Member, resolveProjectTool, workingTreeFiles } from '../context.js'
+import { asFindings, failed, fromRun, type GateResult, passed, type RunResult, run } from '../exec.js'
 
 // A Payload suite needs a database before it can boot, and how the project obtains one is a fact ploaness
 // cannot know. The project declares it; the thresholds and the gate itself stay ploaness's.
@@ -49,7 +37,10 @@ const wrapped = (context: Context, interpreterArguments: readonly string[]): Inv
   }
 }
 
-const withPretest = (context: Context, gate: () => GateResult): GateResult => {
+const withPretest = <Outcome extends GateResult | Promise<GateResult>>(
+  context: Context,
+  gate: () => Outcome,
+): GateResult | Outcome => {
   const pretest: RunResult | undefined = runPretest(context)
   return pretest !== undefined && pretest.code !== 0
     ? failed('the declared pretest command failed', asFindings(pretest.output))
@@ -57,15 +48,9 @@ const withPretest = (context: Context, gate: () => GateResult): GateResult => {
 }
 
 // Resolution failure is an answer, not an exception to catch three times over.
-const resolveProjectToolOrUndefined = (
-  context: Context,
-  tool: string,
-  binary?: string,
-): string | undefined => {
+const resolveProjectToolOrUndefined = (context: Context, tool: string, binary?: string): string | undefined => {
   try {
-    return binary === undefined
-      ? resolveProjectTool(context, tool)
-      : resolveProjectTool(context, tool, binary)
+    return binary === undefined ? resolveProjectTool(context, tool) : resolveProjectTool(context, tool, binary)
   } catch {
     return undefined
   }
@@ -76,10 +61,8 @@ const resolveProjectToolOrUndefined = (
 // empty include - reporting a package with nothing to test as one that failed to test it. A member
 // holding code and no suite is untouched by this and still fails.
 const hasSourceToTest = (context: Member): boolean =>
-  carriesSourceCode(
-    workingTreeFiles(context.root),
-    context.settings.sourceRoots,
-    (filePath: string) => hasExtension(filePath, CODE_EXTENSIONS),
+  carriesSourceCode(workingTreeFiles(context.root), context.settings.sourceRoots, (filePath: string) =>
+    hasExtension(filePath, CODE_EXTENSIONS),
   )
 
 export const tests = (context: Member): GateResult =>
@@ -105,7 +88,7 @@ export const tests = (context: Member): GateResult =>
   })
 
 /** Run the Playwright end-to-end suite. */
-export const endToEnd = (context: Context): GateResult => {
+export const endToEnd = async (context: Context): Promise<GateResult> => {
   // A library has no browser to drive, and `assets` already withholds the managed specs from one on the
   // same test. Without this the two gates contradicted each other: the catalogue correctly gave a
   // library no `playwright.config.ts`, and this gate then failed it for the file's absence.
@@ -120,26 +103,28 @@ export const endToEnd = (context: Context): GateResult => {
       'run `ploaness init` to write it, then `ploaness sync` to materialise the managed specs',
     ])
   }
-  return withPretest(context, (): GateResult => {
-    const playwright: string | undefined = resolveProjectToolOrUndefined(
-      context,
-      '@playwright/test',
-      'playwright',
-    )
+  return await withPretest(context, async (): Promise<GateResult> => {
+    const problems: readonly string[] = await browserServerProblems([
+      context.settings.serverUrl,
+      ...context.settings.auxiliaryServers.map((server): string => server.url),
+    ])
+    if (problems.length > 0) {
+      return failed('the end-to-end suite requires fresh browser servers', problems)
+    }
+    const playwright: string | undefined = resolveProjectToolOrUndefined(context, '@playwright/test', 'playwright')
     if (playwright === undefined) {
       return failed('@playwright/test could not be resolved from the project', [
         'the project must declare @playwright/test itself, because its specs import it directly',
       ])
     }
-    const invocation: Invocation = wrapped(context, [
-      playwright,
-      'test',
-      '--config=playwright.config.ts',
-    ])
+    const invocation: Invocation = wrapped(context, [playwright, 'test', '--config=playwright.config.ts'])
     return fromRun(
       run(invocation.command, invocation.commandArguments, {
         cwd: context.root,
-        env: { NODE_OPTIONS: '--no-deprecation --import=tsx/esm' },
+        env: {
+          NODE_OPTIONS: '--no-deprecation --import=tsx/esm',
+          [VERIFICATION_ENVIRONMENT_VARIABLE]: '1',
+        },
       }),
       'the end-to-end suite passes',
       'the end-to-end suite failed',
@@ -167,17 +152,11 @@ export const build = (context: Context): GateResult => {
         NODE_OPTIONS: '--no-deprecation --max-old-space-size=8000',
       },
     })
-    const outcome: GateResult = fromRun(
-      result,
-      'the production build succeeds',
-      'the production build failed',
-    )
+    const outcome: GateResult = fromRun(result, 'the production build succeeds', 'the production build failed')
     // Appended rather than substituted. The build's own output is what a reader needs first; the
     // diagnosis explains a message that names the wrong layer, and says nothing about output it does
     // not recognise.
     const diagnosis: readonly string[] = outcome.ok ? [] : diagnoseBuildFailure(result.output)
-    return diagnosis.length === 0
-      ? outcome
-      : { ...outcome, findings: [...outcome.findings, ...diagnosis] }
+    return diagnosis.length === 0 ? outcome : { ...outcome, findings: [...outcome.findings, ...diagnosis] }
   })
 }

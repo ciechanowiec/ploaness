@@ -73,9 +73,7 @@ describe('checkAsset', () => {
   })
 
   it('rejects a missing managed file', () => {
-    expect(checkAsset(pinned, state({ isPresent: false, actual: undefined }))?.reason).toContain(
-      'missing',
-    )
+    expect(checkAsset(pinned, state({ isPresent: false, actual: undefined }))?.reason).toContain('missing')
   })
 
   it('accepts a seeded file the project has since edited', () => {
@@ -96,9 +94,7 @@ const drifted = (): AssetState => state({ actual: 'edited' })
 
 describe('findAssetViolations', () => {
   it('skips a path the project has taken over', () => {
-    const assets: readonly ManagedAsset[] = [
-      { path: 'CLAUDE.md', disposition: 'PINNED', scope: 'REPOSITORY' },
-    ]
+    const assets: readonly ManagedAsset[] = [{ path: 'CLAUDE.md', disposition: 'PINNED', scope: 'REPOSITORY' }]
     expect(findAssetViolations(assets, [], drifted)).toHaveLength(1)
     expect(findAssetViolations(assets, ['CLAUDE.md'], drifted)).toEqual([])
   })
@@ -106,12 +102,8 @@ describe('findAssetViolations', () => {
 
 describe('syncAction', () => {
   it('always rewrites a pinned file so drift is repaired', () => {
-    expect(syncAction({ path: 'a', disposition: 'PINNED', scope: 'REPOSITORY' }, true)).toBe(
-      'write',
-    )
-    expect(syncAction({ path: 'a', disposition: 'PINNED', scope: 'REPOSITORY' }, false)).toBe(
-      'write',
-    )
+    expect(syncAction({ path: 'a', disposition: 'PINNED', scope: 'REPOSITORY' }, true)).toBe('write')
+    expect(syncAction({ path: 'a', disposition: 'PINNED', scope: 'REPOSITORY' }, false)).toBe('write')
   })
 
   it('writes a seed file only when it is absent', () => {
@@ -120,12 +112,8 @@ describe('syncAction', () => {
   })
 
   it('deletes a forbidden path that exists', () => {
-    expect(syncAction({ path: 'a', disposition: 'FORBIDDEN', scope: 'REPOSITORY' }, true)).toBe(
-      'delete',
-    )
-    expect(syncAction({ path: 'a', disposition: 'FORBIDDEN', scope: 'REPOSITORY' }, false)).toBe(
-      'skip',
-    )
+    expect(syncAction({ path: 'a', disposition: 'FORBIDDEN', scope: 'REPOSITORY' }, true)).toBe('delete')
+    expect(syncAction({ path: 'a', disposition: 'FORBIDDEN', scope: 'REPOSITORY' }, false)).toBe('skip')
   })
 })
 
@@ -321,11 +309,7 @@ describe('where a managed path applies', () => {
   })
 
   it('gives a Payload member every sweep', () => {
-    expect(forMember()).toEqual([
-      'tests/e2e/a11y.e2e.spec.ts',
-      'tests/e2e/access-boundary.e2e.spec.ts',
-      'knip.json',
-    ])
+    expect(forMember()).toEqual(['tests/e2e/a11y.e2e.spec.ts', 'tests/e2e/access-boundary.e2e.spec.ts', 'knip.json'])
   })
 
   it('withholds the access-boundary sweep from an application with no Payload', () => {

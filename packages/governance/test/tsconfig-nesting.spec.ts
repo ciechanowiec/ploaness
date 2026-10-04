@@ -7,11 +7,7 @@
 // Deriving it from the member list is what makes the two halves agree: `ploaness init` writes what the
 // rule asks for, and neither can name a member the other does not.
 import { describe, expect, it } from 'vitest'
-import {
-  LIBRARY_TSCONFIG_PATHS,
-  REQUIRED_TSCONFIG_PATHS,
-  tsconfigPathsFor,
-} from '../src/wiring-policy.js'
+import { LIBRARY_TSCONFIG_PATHS, REQUIRED_TSCONFIG_PATHS, tsconfigPathsFor } from '../src/wiring-policy.js'
 
 // Read once rather than indexed at each assertion: the field is optional on the shared shape, and
 // narrowing it inline is what the formatter kept turning into a non-null assertion.
@@ -35,9 +31,7 @@ describe('tsconfigPathsFor', () => {
   })
 
   it('leaves the include untouched, because a member still compiles all of its own sources', () => {
-    expect(tsconfigPathsFor(LIBRARY_TSCONFIG_PATHS, ['cms'])['include']).toEqual(
-      LIBRARY_TSCONFIG_PATHS['include'],
-    )
+    expect(tsconfigPathsFor(LIBRARY_TSCONFIG_PATHS, ['cms'])['include']).toEqual(LIBRARY_TSCONFIG_PATHS['include'])
   })
 
   it('keeps the base exclusions rather than replacing them', () => {

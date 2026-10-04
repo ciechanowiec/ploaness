@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { findLayoutDefects, LAYOUT_MINIMUM_GAP } from '../src/layout-defects.js'
-import type {
-  LayoutBorder,
-  LayoutNode,
-  LayoutRect,
-  LayoutSnapshot,
-} from '../src/layout-snapshot.js'
+import type { LayoutBorder, LayoutNode, LayoutRect, LayoutSnapshot } from '../src/layout-snapshot.js'
 
 // Text that collides with other text, text its own box cuts off, and a page wider than its viewport,
 // each stated as the numbers the browser reports.
@@ -19,9 +14,7 @@ const rect = (left: number, top: number, right: number, bottom: number): LayoutR
   bottom,
 })
 
-const nodeOf = (
-  fields: Partial<LayoutNode> & Pick<LayoutNode, 'index' | 'parent'>,
-): LayoutNode => ({
+const nodeOf = (fields: Partial<LayoutNode> & Pick<LayoutNode, 'index' | 'parent'>): LayoutNode => ({
   label: `p#n${String(fields.index)}`,
   tag: 'p',
   rects: [],
@@ -77,10 +70,7 @@ const defectsOf = (nodes: readonly LayoutNode[], scrollWidth: number = 390): rea
 
 // A heading pulled up over the paragraph beneath it by a negative margin: the two text runs share
 // `overlap` pixel rows.
-const collidingText = (
-  overlap: number,
-  second: Partial<LayoutNode> = {},
-): readonly LayoutNode[] => [
+const collidingText = (overlap: number, second: Partial<LayoutNode> = {}): readonly LayoutNode[] => [
   BODY,
   nodeOf({
     index: 1,
@@ -226,17 +216,13 @@ describe('text its own box cuts off', () => {
   })
 
   it('accepts an ellipsis whose full text is in the title', () => {
-    expect(
-      defectsOf(label(240, { textOverflow: 'ellipsis', title: 'Borussia Mönchengladbach' })),
-    ).toEqual([])
+    expect(defectsOf(label(240, { textOverflow: 'ellipsis', title: 'Borussia Mönchengladbach' }))).toEqual([])
   })
 
   it('accepts a line clamp whose full text is in the accessible name', () => {
-    expect(
-      defectsOf(
-        label(200, { scrollHeight: 60, lineClamp: '2', ariaLabel: 'Borussia Mönchengladbach' }),
-      ),
-    ).toEqual([])
+    expect(defectsOf(label(200, { scrollHeight: 60, lineClamp: '2', ariaLabel: 'Borussia Mönchengladbach' }))).toEqual(
+      [],
+    )
   })
 
   it('fails an ellipsis that names its full text nowhere', () => {

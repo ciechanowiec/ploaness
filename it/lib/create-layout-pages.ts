@@ -34,8 +34,7 @@ const tabs = (groupClass: string, attributes: string): string => `
   <div className="panel"><p>Saturday, three matches.</p></div>
 </div>`
 
-const ATTACHED: string =
-  'data-ploaness-layout="attached" data-ploaness-layout-reason="the tab list joins its panel"'
+const ATTACHED: string = 'data-ploaness-layout="attached" data-ploaness-layout-reason="the tab list joins its panel"'
 
 const CLEAN: string = '<p>Nothing on this page touches anything else.</p>'
 
@@ -54,8 +53,7 @@ const DEFECT_PAGES: Readonly<Record<string, string>> = {
 
 const REPAIRED_PAGES: Readonly<Record<string, string>> = {
   verify: verifyPage('page page-narrow spaced'),
-  truncated:
-    '<p><span className="truncated" title="Borussia Mönchengladbach">Borussia Mönchengladbach</span></p>',
+  truncated: '<p><span className="truncated" title="Borussia Mönchengladbach">Borussia Mönchengladbach</span></p>',
   attached: tabs('tabs', ATTACHED),
   clean: CLEAN,
 }
@@ -90,20 +88,12 @@ const pageModule = (heading: string, body: string): string =>
 const linkItem = (route: string): string => `<li><a href="/${route}">${route}</a></li>`
 
 const homeModule = (routes: readonly string[]): string =>
-  pageModule(
-    'Layout contract',
-    `<ul>${routes.map((route: string): string => linkItem(route)).join('')}</ul>`,
-  )
+  pageModule('Layout contract', `<ul>${routes.map((route: string): string => linkItem(route)).join('')}</ul>`)
 
 // The verify page carries its own heading, so it is written without the wrapper's.
 const routeModule = (route: string, body: string): string =>
   route === 'verify'
-    ? [
-        'export default function Page(): React.JSX.Element {',
-        `  return <main>${body}</main>`,
-        '}',
-        '',
-      ].join('\n')
+    ? ['export default function Page(): React.JSX.Element {', `  return <main>${body}</main>`, '}', ''].join('\n')
     : pageModule(route, body)
 
 const ITEM_MODULE: string = [

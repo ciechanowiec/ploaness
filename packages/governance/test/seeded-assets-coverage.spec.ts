@@ -21,10 +21,7 @@ const specDirectory: string = path.dirname(fileURLToPath(import.meta.url))
 
 // The shipped catalogue itself, not a fixture. A fixture would let the two lists drift apart while
 // this spec went on passing against a manifest nobody installs.
-const MANIFEST: string = readFileSync(
-  path.join(specDirectory, '..', '..', 'assets', 'manifest.tsv'),
-  'utf8',
-)
+const MANIFEST: string = readFileSync(path.join(specDirectory, '..', '..', 'assets', 'manifest.tsv'), 'utf8')
 
 // The defaults a project inherits before it declares anything of its own. A project's own additions
 // are irrelevant here: this asks what ploaness demands of a consumer that declared nothing.
@@ -43,8 +40,8 @@ const isExcluded = (filePath: string): boolean =>
 
 const parsed: ParsedManifest = parseManifest(MANIFEST)
 
-const writtenAssets: readonly ManagedAsset[] = parsed.assets.filter(
-  (asset: ManagedAsset): boolean => WRITTEN.has(asset.disposition),
+const writtenAssets: readonly ManagedAsset[] = parsed.assets.filter((asset: ManagedAsset): boolean =>
+  WRITTEN.has(asset.disposition),
 )
 
 describe('an asset ploaness writes into a consumer', () => {

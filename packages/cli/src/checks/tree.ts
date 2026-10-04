@@ -32,9 +32,7 @@ export const treeSnapshot = (context: Context): GateResult => {
  */
 export const treeVerify = (context: Context): GateResult => {
   if (snapshot === undefined) {
-    return failed('no tree snapshot was taken', [
-      'run complete verification to establish tree integrity',
-    ])
+    return failed('no tree snapshot was taken', ['run complete verification to establish tree integrity'])
   }
   const current: string = workingTreeFingerprint(context.root)
   return current === snapshot

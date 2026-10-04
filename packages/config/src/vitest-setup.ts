@@ -81,8 +81,7 @@ const guard = (original: Intercepted, toAttempt: ToAttempt): Intercepted =>
       const result: unknown = Reflect.apply(target, receiver, callArguments)
       return result
     },
-    has: (target: Intercepted, key: string | symbol): boolean =>
-      key === GUARD_MARK || Reflect.has(target, key),
+    has: (target: Intercepted, key: string | symbol): boolean => key === GUARD_MARK || Reflect.has(target, key),
   })
 
 // Installed non-writable and non-configurable, so a project setup file or a spec body cannot put the
@@ -156,12 +155,7 @@ install(dns.promises, 'lookup', toLookupAttempt)
 // this block exists to close, one constructor away. The prototypes are guarded too.
 // Named without a presence check: both constructors are declared by node's own types, so an optional
 // chain here would be a defence against a shape the runtime cannot have and the compiler already denies.
-const resolverOwners: readonly object[] = [
-  dns,
-  dns.promises,
-  dns.Resolver.prototype,
-  dns.promises.Resolver.prototype,
-]
+const resolverOwners: readonly object[] = [dns, dns.promises, dns.Resolver.prototype, dns.promises.Resolver.prototype]
 
 for (const method of RESOLVER_METHODS) {
   for (const owner of resolverOwners) {

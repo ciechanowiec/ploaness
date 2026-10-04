@@ -13,10 +13,7 @@ const CLAUSE_COUNT: number = 2
 const RULES: readonly string[] = oxlintRuleNames(oxlintRules(true))
 
 const LEGACY_RULES: ReadonlySet<string> = new Set(
-  [...RULES].flatMap((rule: string): readonly string[] => [
-    rule,
-    rule.slice(rule.indexOf('/') + 1),
-  ]),
+  [...RULES].flatMap((rule: string): readonly string[] => [rule, rule.slice(rule.indexOf('/') + 1)]),
 )
 
 const commentBody = (text: string): string =>
@@ -48,8 +45,7 @@ const directiveProblems = (body: string, applicable: readonly string[]): readonl
 }
 
 const isLegacySuppression = (body: string): boolean => {
-  const isLegacy: boolean =
-    body.startsWith(`${LEGACY}-${DISABLE}`) || body.startsWith(`${LEGACY}-enable`)
+  const isLegacy: boolean = body.startsWith(`${LEGACY}-${DISABLE}`) || body.startsWith(`${LEGACY}-enable`)
   const declaration: string = (body.split('--', CLAUSE_COUNT)[0] ?? '').trim()
   const isBlanket: boolean = [
     `${LEGACY}-enable`,
@@ -67,10 +63,7 @@ const isLegacySuppression = (body: string): boolean => {
 /** A narrow directive for another ESLint rule remains that analyzer's responsibility. */
 export const isEslintOwnedSuppression = (comment: SourceComment): boolean => {
   const body: string = commentBody(comment.text)
-  return (
-    (body.startsWith(`${LEGACY}-${DISABLE}`) || body.startsWith(`${LEGACY}-enable`)) &&
-    !isLegacySuppression(body)
-  )
+  return (body.startsWith(`${LEGACY}-${DISABLE}`) || body.startsWith(`${LEGACY}-enable`)) && !isLegacySuppression(body)
 }
 
 /**
@@ -91,8 +84,6 @@ export const oxlintSuppressionProblems = (
       )
     }
     return isLegacySuppression(body)
-      ? [
-          `line ${String(comment.line)}: use a named, explained Oxlint line suppression for native-owned rules`,
-        ]
+      ? [`line ${String(comment.line)}: use a named, explained Oxlint line suppression for native-owned rules`]
       : []
   })

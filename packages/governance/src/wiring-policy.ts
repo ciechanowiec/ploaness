@@ -1,13 +1,6 @@
 import { GENERATED_ARTEFACTS } from './generated-denial.js'
 import { findSilencedAdvisories } from './install-policy.js'
-import {
-  asRecord,
-  asStringRecord,
-  declaredDependencies,
-  isArray,
-  type ParsedJson,
-  parseJsonc,
-} from './json-shapes.js'
+import { asRecord, asStringRecord, declaredDependencies, isArray, type ParsedJson, parseJsonc } from './json-shapes.js'
 import { type DeclaredExclusion, findConvenienceExclusions } from './settings.js'
 import { escapeForRegex } from './text-escapes.js'
 import {
@@ -19,6 +12,9 @@ import {
 } from './version-policy.js'
 import type { WiringViolation } from './wiring-violation.js'
 import type { MemberKind } from './workspace-policy.js'
+
+/** Internal launch marker: verification owns its browser servers even outside CI. */
+export const VERIFICATION_ENVIRONMENT_VARIABLE: string = 'PLOANESS_VERIFICATION'
 // Anti-bypass policy: the module that exists because npm has no lifecycle.
 //
 // A build tool that bound its checks to fixed phases would make this unnecessary: the checks would run
@@ -165,14 +161,7 @@ export const requiredBiomeFiles = (
  * keeps ownership of their contents.
  */
 export const REQUIRED_TSCONFIG_PATHS: Readonly<Record<string, readonly string[]>> = {
-  include: [
-    'next-env.d.ts',
-    '**/*.ts',
-    '**/*.tsx',
-    '**/*.mts',
-    '.next/types/**/*.ts',
-    '.next/dev/types/**/*.ts',
-  ],
+  include: ['next-env.d.ts', '**/*.ts', '**/*.tsx', '**/*.mts', '.next/types/**/*.ts', '.next/dev/types/**/*.ts'],
   exclude: ['node_modules'],
 }
 
@@ -208,9 +197,7 @@ export const tsconfigPathsFor = (
   base: Readonly<Record<string, readonly string[]>>,
   nestedMembers: readonly string[],
 ): Readonly<Record<string, readonly string[]>> =>
-  nestedMembers.length === 0
-    ? base
-    : { ...base, exclude: [...(base['exclude'] ?? []), ...nestedMembers] }
+  nestedMembers.length === 0 ? base : { ...base, exclude: [...(base['exclude'] ?? []), ...nestedMembers] }
 
 /**
  * Everything a member of one kind must point at.
@@ -277,13 +264,7 @@ const ALLOWED_TSCONFIG_COMPILER_OPTIONS: ReadonlySet<string> = new Set([
 // caught the thing it meant to - a project's own GritQL rules shadowing the shipped ones - and also any
 // unrelated directory that happened to share the name. What actually shadows is the key that loads
 // them, and a project declaring it is replacing ploaness's rules for that section like any other.
-const OWNED_BIOME_SECTIONS: readonly string[] = [
-  'linter',
-  'formatter',
-  'javascript',
-  'assist',
-  'plugins',
-]
+const OWNED_BIOME_SECTIONS: readonly string[] = ['linter', 'formatter', 'javascript', 'assist', 'plugins']
 
 const checkDependency = (packageJson: Record<string, unknown>): readonly WiringViolation[] =>
   Object.hasOwn(declaredDependencies(packageJson), 'ploaness')
@@ -300,20 +281,18 @@ const checkExactEntries = (
   required: Readonly<Record<string, string>>,
   locationPrefix: string,
 ): readonly WiringViolation[] =>
-  Object.entries(required).flatMap(
-    ([name, body]: readonly [string, string]): readonly WiringViolation[] => {
-      const found: string | undefined = actual[name]
-      if (found === body) {
-        return []
-      }
-      return [
-        {
-          location: `${locationPrefix}.${name}`,
-          reason: `is ${describeFound(found)} but ploaness requires "${body}"`,
-        },
-      ]
-    },
-  )
+  Object.entries(required).flatMap(([name, body]: readonly [string, string]): readonly WiringViolation[] => {
+    const found: string | undefined = actual[name]
+    if (found === body) {
+      return []
+    }
+    return [
+      {
+        location: `${locationPrefix}.${name}`,
+        reason: `is ${describeFound(found)} but ploaness requires "${body}"`,
+      },
+    ]
+  })
 
 // A flat ESLint config is an array, so a consumer can append a block that switches rules back off after
 // the harness config has been spread in. Requiring the file to be a bare re-export makes any addition
@@ -328,9 +307,7 @@ const COMMENT_OR_BLANK: RegExp = /^\s*(?:\/\/.*)?$/
 // A config file the harness owns may contain nothing but an import of the shipped value and its
 // default re-export. Anything more is a local block that overrides what ploaness supplies.
 const reexportPattern = (specifier: string): RegExp =>
-  new RegExp(
-    String.raw`^import\s+(\w+)\s+from\s+['"]${escapeForRegex(specifier)}['"];?\s*export\s+default\s+\1;?$`,
-  )
+  new RegExp(String.raw`^import\s+(\w+)\s+from\s+['"]${escapeForRegex(specifier)}['"];?\s*export\s+default\s+\1;?$`)
 
 // Line endings are normalised before anything reads a line. `.` does not cross a `\r`, so on a CRLF
 // checkout every comment line survived the filter and every re-export check failed on a file that was
@@ -364,11 +341,7 @@ export const REEXPORT_CONFIG_FILES: readonly string[] = [
   'playwright.config.ts',
 ]
 
-const checkReexport = (
-  config: string | undefined,
-  file: string,
-  specifier: string,
-): readonly WiringViolation[] => {
+const checkReexport = (config: string | undefined, file: string, specifier: string): readonly WiringViolation[] => {
   if (config === undefined) {
     return [{ location: file, reason: `missing; must re-export ${specifier}` }]
   }
@@ -393,10 +366,7 @@ const checkReexport = (
 const listOf = (value: unknown): readonly string[] =>
   isArray(value) ? value.map((entry: unknown): string => JSON.stringify(entry)) : []
 
-const describeBiomeDrift = (
-  declared: unknown,
-  required: Readonly<Record<string, unknown>>,
-): string => {
+const describeBiomeDrift = (declared: unknown, required: Readonly<Record<string, unknown>>): string => {
   const declaredIncludes: readonly string[] = listOf(asRecord(declared)['includes'])
   const requiredIncludes: readonly string[] = listOf(required['includes'])
   const missing: readonly string[] = requiredIncludes.filter(
@@ -420,10 +390,7 @@ const describeBiomeDrift = (
 // A nested Biome configuration must declare itself not to be a root, or Biome refuses the whole tree
 // with "found a nested root configuration". The member cannot inherit the answer: `root` describes the
 // file that declares it, so the shipped config saying `root: false` says nothing about a consumer's.
-const checkBiomeRoot = (
-  parsed: Record<string, unknown>,
-  isNestedMember: boolean,
-): readonly WiringViolation[] =>
+const checkBiomeRoot = (parsed: Record<string, unknown>, isNestedMember: boolean): readonly WiringViolation[] =>
   !isNestedMember || parsed['root'] === false
     ? []
     : [
@@ -459,8 +426,8 @@ const checkBiome = (
             reason: `must declare "extends": ["${biomeExtends}"]`,
           },
         ]
-  const overriddenSections: readonly WiringViolation[] = OWNED_BIOME_SECTIONS.filter(
-    (section: string): boolean => Object.hasOwn(parsed, section),
+  const overriddenSections: readonly WiringViolation[] = OWNED_BIOME_SECTIONS.filter((section: string): boolean =>
+    Object.hasOwn(parsed, section),
   ).map(
     (section: string): WiringViolation => ({
       location: `biome.json ${section}`,
@@ -476,12 +443,7 @@ const checkBiome = (
             reason: describeBiomeDrift(parsed['files'], requiredFiles),
           },
         ]
-  return [
-    ...missingExtends,
-    ...checkBiomeRoot(parsed, isNestedMember),
-    ...overriddenSections,
-    ...wrongFiles,
-  ]
+  return [...missingExtends, ...checkBiomeRoot(parsed, isNestedMember), ...overriddenSections, ...wrongFiles]
 }
 
 const checkTsconfig = (
@@ -490,9 +452,7 @@ const checkTsconfig = (
   nestedMembers: readonly string[],
 ): readonly WiringViolation[] => {
   if (config === undefined) {
-    return [
-      { location: 'tsconfig.json', reason: `missing; must extend ${targets.tsconfigExtends}` },
-    ]
+    return [{ location: 'tsconfig.json', reason: `missing; must extend ${targets.tsconfigExtends}` }]
   }
   const read: ParsedJson = parseJsonc(config)
   if (read.problem !== undefined) {
@@ -508,9 +468,7 @@ const checkTsconfig = (
             reason: `must declare "extends": "${targets.tsconfigExtends}"`,
           },
         ]
-  const overriddenOptions: readonly WiringViolation[] = Object.keys(
-    asRecord(parsed['compilerOptions']),
-  )
+  const overriddenOptions: readonly WiringViolation[] = Object.keys(asRecord(parsed['compilerOptions']))
     .filter((key: string): boolean => !ALLOWED_TSCONFIG_COMPILER_OPTIONS.has(key))
     .map(
       (key: string): WiringViolation => ({
@@ -518,12 +476,9 @@ const checkTsconfig = (
         reason: 'ploaness owns this compiler option; remove the local override',
       }),
     )
-  const wrongPaths: readonly WiringViolation[] = Object.entries(
-    tsconfigPathsFor(targets.tsconfigPaths, nestedMembers),
-  )
+  const wrongPaths: readonly WiringViolation[] = Object.entries(tsconfigPathsFor(targets.tsconfigPaths, nestedMembers))
     .filter(
-      ([key, value]: readonly [string, unknown]): boolean =>
-        JSON.stringify(parsed[key]) !== JSON.stringify(value),
+      ([key, value]: readonly [string, unknown]): boolean => JSON.stringify(parsed[key]) !== JSON.stringify(value),
     )
     .map(
       ([key, value]: readonly [string, unknown]): WiringViolation => ({
@@ -609,17 +564,11 @@ export interface PackageWiringInputs {
  * @param inputs the repository-level files to judge.
  * @returns one violation per defect, in a stable order.
  */
-export const findRepositoryWiringViolations = (
-  inputs: RepositoryWiringInputs,
-): readonly WiringViolation[] => {
+export const findRepositoryWiringViolations = (inputs: RepositoryWiringInputs): readonly WiringViolation[] => {
   const packageJson: Record<string, unknown> = asRecord(inputs.packageJson)
   return [
     ...checkDependency(packageJson),
-    ...checkExactEntries(
-      asStringRecord(packageJson['scripts']),
-      REQUIRED_SCRIPTS,
-      'package.json scripts',
-    ),
+    ...checkExactEntries(asStringRecord(packageJson['scripts']), REQUIRED_SCRIPTS, 'package.json scripts'),
     ...findRepositoryVersionViolations(packageJson, {
       expected: inputs.expectedTestLibraries,
       requiredPackageManager: inputs.requiredPackageManager,
@@ -643,9 +592,7 @@ export const findRepositoryWiringViolations = (
  * @param inputs the member's files to judge.
  * @returns one violation per defect, in a stable order.
  */
-export const findPackageWiringViolations = (
-  inputs: PackageWiringInputs,
-): readonly WiringViolation[] => {
+export const findPackageWiringViolations = (inputs: PackageWiringInputs): readonly WiringViolation[] => {
   const packageJson: Record<string, unknown> = asRecord(inputs.packageJson)
   const targets: MemberWiringTargets = wiringTargetsFor(inputs.kind)
   return [
@@ -662,17 +609,8 @@ export const findPackageWiringViolations = (
     ...checkReexport(inputs.vitestConfig, 'vitest.config.mts', targets.vitestSpecifier),
     ...(targets.playwrightSpecifier === undefined
       ? []
-      : checkReexport(
-          inputs.playwrightConfig,
-          'playwright.config.ts',
-          targets.playwrightSpecifier,
-        )),
-    ...checkBiome(
-      inputs.biomeConfig,
-      inputs.requiredBiomeFiles,
-      targets.biomeExtends,
-      inputs.isNestedMember,
-    ),
+      : checkReexport(inputs.playwrightConfig, 'playwright.config.ts', targets.playwrightSpecifier)),
+    ...checkBiome(inputs.biomeConfig, inputs.requiredBiomeFiles, targets.biomeExtends, inputs.isNestedMember),
     ...checkTsconfig(inputs.tsconfig, targets, inputs.nestedMembers),
   ]
 }

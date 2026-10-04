@@ -5,22 +5,9 @@
 // containerised analyzers, so this gate adds a rule rather than a dependency.
 import { readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
-import {
-  CONTAINER_IMAGES,
-  findBlanketShellDirectives,
-  type ShellDirective,
-  shellScriptsIn,
-} from '@ploaness/governance'
+import { CONTAINER_IMAGES, findBlanketShellDirectives, type ShellDirective, shellScriptsIn } from '@ploaness/governance'
 import { type Context, workingTreeFiles } from '../context.js'
-import {
-  asFindings,
-  failed,
-  type GateResult,
-  passed,
-  type RunResult,
-  run,
-  withOutput,
-} from '../exec.js'
+import { asFindings, failed, type GateResult, passed, type RunResult, run, withOutput } from '../exec.js'
 import { acquireImage, dockerFault } from './container-run.js'
 
 const SHELLCHECK_IMAGE: string = CONTAINER_IMAGES.shellcheck
@@ -65,10 +52,7 @@ const shellcheckFault = (result: RunResult): GateResult | undefined =>
 
 /** Run the pinned ShellCheck over every tracked shell script. */
 export const shell = (context: Context): GateResult => {
-  const scripts: readonly string[] = shellScriptsIn(
-    workingTreeFiles(context.root),
-    firstLineReader(context.root),
-  )
+  const scripts: readonly string[] = shellScriptsIn(workingTreeFiles(context.root), firstLineReader(context.root))
   // No script means no container: a project that ships none never needs the image at all.
   if (scripts.length === 0) {
     return passed('the project ships no shell script')
@@ -85,18 +69,7 @@ export const shell = (context: Context): GateResult => {
   // stands, because a check has two verdicts and neither of them is a warning.
   const result: RunResult = run(
     'docker',
-    [
-      'run',
-      '--rm',
-      '-v',
-      `${context.root}:/mnt:ro`,
-      '--workdir',
-      '/mnt',
-      SHELLCHECK_IMAGE,
-      '--norc',
-      '--',
-      ...scripts,
-    ],
+    ['run', '--rm', '-v', `${context.root}:/mnt:ro`, '--workdir', '/mnt', SHELLCHECK_IMAGE, '--norc', '--', ...scripts],
     { cwd: context.root },
   )
   const faulted: GateResult | undefined =

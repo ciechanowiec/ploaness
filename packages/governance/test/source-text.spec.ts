@@ -232,8 +232,6 @@ describe('enclosingLiteral', () => {
   // equality test on the offset reported nothing for all of them.
   it('recovers the literal from an offset pointing at a quoted value', () => {
     const source: string = "{ fields: [{ name: 'a', type: 'relationship' }] }"
-    expect(enclosingLiteral(source, source.indexOf("'relationship'"))).toBe(
-      "{ name: 'a', type: 'relationship' }",
-    )
+    expect(enclosingLiteral(source, source.indexOf("'relationship'"))).toBe("{ name: 'a', type: 'relationship' }")
   })
 })

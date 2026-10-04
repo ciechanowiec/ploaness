@@ -54,8 +54,7 @@ const lineBoxesOf = (node: LayoutNode): readonly LayoutRect[] =>
   node.textRects.map((rect: LayoutRect): LayoutRect => lineBoxOf(rect, node.lineHeight))
 
 const isIntersecting = (first: LayoutRect, second: LayoutRect): boolean =>
-  Math.min(first.right, second.right) - Math.max(first.left, second.left) >
-    TEXT_OVERLAP_TOLERANCE &&
+  Math.min(first.right, second.right) - Math.max(first.left, second.left) > TEXT_OVERLAP_TOLERANCE &&
   Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > TEXT_OVERLAP_TOLERANCE
 
 const hasCollidingText = (first: LayoutNode, second: LayoutNode): boolean =>
@@ -110,8 +109,7 @@ const declaresTruncation = (node: LayoutNode): boolean =>
   node.textOverflow === 'ellipsis' || (node.lineClamp !== 'none' && node.lineClamp !== '')
 
 const hasFullTextName = (node: LayoutNode): boolean =>
-  node.text.length > 0 &&
-  [node.title, node.ariaLabel].some((name: string): boolean => name.includes(node.text))
+  node.text.length > 0 && [node.title, node.ariaLabel].some((name: string): boolean => name.includes(node.text))
 
 /**
  * Every element whose own text its box cuts off.
@@ -138,9 +136,7 @@ export const findClippedText = (snapshot: LayoutSnapshot): readonly ClipFinding[
 
 const rightEdge = (node: LayoutNode): number =>
   Math.max(
-    ...node.rects
-      .filter((rect: LayoutRect): boolean => hasArea(rect))
-      .map((rect: LayoutRect): number => rect.right),
+    ...node.rects.filter((rect: LayoutRect): boolean => hasArea(rect)).map((rect: LayoutRect): number => rect.right),
   )
 
 const isWiderThan = (node: LayoutNode, width: number): boolean =>

@@ -94,10 +94,7 @@ export const expectNoAxeDefects = (scan: AxeResults, label: string): void => {
 export const expectSweptPage = async (page: Page): Promise<void> => {
   await settleForScan(page)
   const builder: AxeBuilder = await scopedAxe(page)
-  expectNoAxeDefects(
-    await builder.analyze(),
-    `default-state a11y on ${new URL(page.url()).pathname}`,
-  )
+  expectNoAxeDefects(await builder.analyze(), `default-state a11y on ${new URL(page.url()).pathname}`)
   await expectNoLayoutDefects(page)
 }
 
@@ -135,9 +132,7 @@ const filesUnder = (root: string, relative: string): readonly string[] => {
     if (entry.isDirectory()) {
       return filesUnder(root, child)
     }
-    return READ_EXTENSIONS.some((extension: string): boolean => child.endsWith(extension))
-      ? [child]
-      : []
+    return READ_EXTENSIONS.some((extension: string): boolean => child.endsWith(extension)) ? [child] : []
   })
 }
 

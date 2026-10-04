@@ -1,12 +1,7 @@
 // Read the consumer's settings from the working directory, where its tools are invoked.
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import {
-  ploanessBlock,
-  readMemberSettings,
-  readSettings,
-  type Settings,
-} from '@ploaness/governance'
+import { ploanessBlock, readMemberSettings, readSettings, type Settings } from '@ploaness/governance'
 
 // A project whose package.json cannot be read gets the defaults, which are the strict end of every
 // setting. Failing to parse must never be the thing that loosens a threshold.

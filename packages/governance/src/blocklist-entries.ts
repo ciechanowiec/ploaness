@@ -51,25 +51,19 @@ const MONGODB_REPLACEMENT: string = 'the postgres image with @payloadcms/db-post
 
 const REDIS_REASON: string =
   'Redis 7.4 onward is RSALv2, SSPLv1 or AGPLv3, none of which is a permissive open-source licence'
-const REDIS_REPLACEMENT: string =
-  'valkey/valkey, which the redis and ioredis clients speak to unchanged'
+const REDIS_REPLACEMENT: string = 'valkey/valkey, which the redis and ioredis clients speak to unchanged'
 
-const ELASTIC_REASON: string =
-  'Elastic binaries are Elastic License 2.0 from 7.11, and this exists only to reach them'
+const ELASTIC_REASON: string = 'Elastic binaries are Elastic License 2.0 from 7.11, and this exists only to reach them'
 const ELASTIC_REPLACEMENT: string =
   'opensearchproject/opensearch and opensearchproject/opensearch-dashboards with @opensearch-project/opensearch'
 
-const MINIO_REASON: string =
-  'MinIO is AGPL and its community edition is archived, with no images and no security fixes'
+const MINIO_REASON: string = 'MinIO is AGPL and its community edition is archived, with no images and no security fixes'
 const OBJECT_STORAGE_REPLACEMENT: string = 'rustfs/rustfs or chrislusf/seaweedfs'
 
-const HASHICORP_REASON: string =
-  'HashiCorp relicensed to the Business Source License, which is not open source'
-const HASHICORP_REPLACEMENT: string =
-  'openbao/openbao for Vault, ghcr.io/opentofu/opentofu for Terraform'
+const HASHICORP_REASON: string = 'HashiCorp relicensed to the Business Source License, which is not open source'
+const HASHICORP_REPLACEMENT: string = 'openbao/openbao for Vault, ghcr.io/opentofu/opentofu for Terraform'
 
-const PROPRIETARY_DATABASE_REASON: string =
-  'a proprietary database server, for which Payload has no adapter'
+const PROPRIETARY_DATABASE_REASON: string = 'a proprietary database server, for which Payload has no adapter'
 const POSTGRES_REPLACEMENT: string = 'the postgres image'
 
 const GHOSTSCRIPT_REASON: string = 'Ghostscript is AGPL, and this is a thin wrapper around it'
@@ -224,8 +218,7 @@ export const BLOCKED_IMAGES: readonly BlockedImage[] = [
   },
   {
     repository: 'bitnami/*',
-    reason:
-      'the Bitnami catalogue was deleted in 2025, so a tag here cannot be pulled reproducibly',
+    reason: 'the Bitnami catalogue was deleted in 2025, so a tag here cannot be pulled reproducibly',
     replacement: 'the upstream official image of the same service',
   },
   {
@@ -284,8 +277,7 @@ export const BLOCKED_IMAGES: readonly BlockedImage[] = [
 export const BLOCKED_PACKAGES: readonly BlockedPackage[] = [
   {
     name: 'eslint-plugin-jsx-a11y',
-    reason:
-      'the retired JSX accessibility analyzer duplicates checks owned by the ploaness Oxlint gate',
+    reason: 'the retired JSX accessibility analyzer duplicates checks owned by the ploaness Oxlint gate',
     replacement: 'the harness-owned oxlint gate; remove the legacy plugin dependency',
   },
   {
@@ -313,8 +305,7 @@ export const BLOCKED_PACKAGES: readonly BlockedPackage[] = [
   },
   {
     name: '@elastic/eui',
-    reason:
-      'Elastic UI is dual-licensed SSPL and Elastic License 2.0, neither of which is permissive',
+    reason: 'Elastic UI is dual-licensed SSPL and Elastic License 2.0, neither of which is permissive',
     replacement: '@payloadcms/ui',
   },
   { name: 'elastic-apm-node', reason: ELASTIC_REASON, replacement: '@opentelemetry/sdk-node' },

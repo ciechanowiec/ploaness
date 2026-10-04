@@ -22,9 +22,7 @@ const driftOf = (artefact: RegeneratedArtefact): readonly string[] => {
   // An untracked artefact regenerates from a configuration nobody can review, which is a worse fault
   // than drift rather than a milder one.
   if (!artefact.isTracked) {
-    return [
-      `${artefact.target} is not tracked by git, so no committed version exists to compare against`,
-    ]
+    return [`${artefact.target} is not tracked by git, so no committed version exists to compare against`]
   }
   return artefact.before === artefact.after ? [] : [`${artefact.target} changed when regenerated`]
 }

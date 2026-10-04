@@ -52,9 +52,7 @@ const isOn = (setting: unknown): boolean => ENABLED.has(severityOf(setting))
 // Read through `calculateConfigForFile` rather than from the blocks, because two of these rules arrive
 // from a preset rather than from a table this package writes. A source read would find them absent and
 // conclude they were off, which is the opposite of the truth.
-const resolveRules = async (
-  config: readonly Linter.Config[],
-): Promise<Readonly<Record<string, unknown>>> => {
+const resolveRules = async (config: readonly Linter.Config[]): Promise<Readonly<Record<string, unknown>>> => {
   const eslint: ESLint = new ESLint({
     overrideConfigFile: true,
     baseConfig: [...config],
@@ -72,9 +70,7 @@ const onInEveryConfig = async (rule: string): Promise<Readonly<Record<string, bo
   Object.fromEntries(
     await Promise.all(
       Object.entries(shippedConfigs).map(
-        async ([name, config]: [string, readonly Linter.Config[]]): Promise<
-          readonly [string, boolean]
-        > => {
+        async ([name, config]: [string, readonly Linter.Config[]]): Promise<readonly [string, boolean]> => {
           const rules: Readonly<Record<string, unknown>> = await resolveRules(config)
           return [name, isOn(rules[rule])]
         },
@@ -83,22 +79,16 @@ const onInEveryConfig = async (rule: string): Promise<Readonly<Record<string, bo
   )
 
 const everyConfig = <Value>(value: Value): Readonly<Record<string, Value>> =>
-  Object.fromEntries(
-    Object.keys(shippedConfigs).map((name: string): readonly [string, Value] => [name, value]),
-  )
+  Object.fromEntries(Object.keys(shippedConfigs).map((name: string): readonly [string, Value] => [name, value]))
 
 // What one snippet reports under the SHIPPED setting, keyed by config. The setting is read back out of
 // each config rather than written here, because a literal repeated in a spec asserts only that it equals
 // itself; fed to the linter, it asserts what a consumer's own file will be told.
-const voidFindingsInEveryConfig = async (
-  code: string,
-): Promise<Readonly<Record<string, readonly string[]>>> =>
+const voidFindingsInEveryConfig = async (code: string): Promise<Readonly<Record<string, readonly string[]>>> =>
   Object.fromEntries(
     await Promise.all(
       Object.entries(shippedConfigs).map(
-        async ([name, config]: [string, readonly Linter.Config[]]): Promise<
-          readonly [string, readonly string[]]
-        > => {
+        async ([name, config]: [string, readonly Linter.Config[]]): Promise<readonly [string, readonly string[]]> => {
           const rules: Readonly<Record<string, unknown>> = await resolveRules(config)
           const setting: unknown = rules[NO_VOID]
           if (!Array.isArray(setting)) {
@@ -162,9 +152,7 @@ describe('the formatter that runs beside the linter', () => {
   // Biome cannot see the ESLint config and ESLint cannot see Biome's, so nothing but a spec spanning
   // both can notice that one tool has re-banned what the other now requires.
   it('does not re-ban the marker anywhere in the shared Biome configuration', () => {
-    const shared: unknown = JSON.parse(
-      readFileSync(path.join(packageRoot, 'biome-core.json'), 'utf8'),
-    )
+    const shared: unknown = JSON.parse(readFileSync(path.join(packageRoot, 'biome-core.json'), 'utf8'))
     expect(containsVoidBan(shared)).toBe(false)
   })
 })

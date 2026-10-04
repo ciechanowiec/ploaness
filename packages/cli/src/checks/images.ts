@@ -67,14 +67,10 @@ const tagsFrom = async (
   soFar: readonly string[],
 ): Promise<readonly string[]> => {
   const names: readonly string[] = tagNames(
-    await fetchJson(
-      `${repoUrl(reference)}/tags?page_size=${String(PAGE_SIZE)}&page=${String(page)}`,
-    ),
+    await fetchJson(`${repoUrl(reference)}/tags?page_size=${String(PAGE_SIZE)}&page=${String(page)}`),
   )
   const collected: readonly string[] = [...soFar, ...names]
-  return names.length < PAGE_SIZE || page >= MAX_PAGES
-    ? collected
-    : await tagsFrom(reference, page + 1, collected)
+  return names.length < PAGE_SIZE || page >= MAX_PAGES ? collected : await tagsFrom(reference, page + 1, collected)
 }
 
 const digestOf = async (reference: ContainerReference, tag: string): Promise<string> => {
@@ -99,13 +95,7 @@ const describe = async (verdict: ContainerVerdict): Promise<readonly string[]> =
   const update: readonly string[] =
     newer === undefined
       ? []
-      : [
-          describeContainerUpdate(
-            verdict.reference,
-            newer,
-            await digestOf(verdict.reference, newer.raw),
-          ),
-        ]
+      : [describeContainerUpdate(verdict.reference, newer, await digestOf(verdict.reference, newer.raw))]
   const drift: readonly string[] = verdict.hasDrifted
     ? [describeContainerDrift(verdict.reference, verdict.currentDigest)]
     : []
@@ -117,14 +107,12 @@ const describe = async (verdict: ContainerVerdict): Promise<readonly string[]> =
  * @returns the report lines, or the failure that stopped the registry from answering.
  */
 export const imageFreshness = async (): Promise<ImageReport> => {
-  const declared: readonly (ContainerReference | undefined)[] = Object.entries(
-    CONTAINER_IMAGES,
-  ).map(([tool, reference]: readonly [string, string]): ContainerReference | undefined =>
-    parseContainerReference(tool, reference),
+  const declared: readonly (ContainerReference | undefined)[] = Object.entries(CONTAINER_IMAGES).map(
+    ([tool, reference]: readonly [string, string]): ContainerReference | undefined =>
+      parseContainerReference(tool, reference),
   )
   const pinned: readonly ContainerReference[] = declared.filter(
-    (reference: ContainerReference | undefined): reference is ContainerReference =>
-      reference !== undefined,
+    (reference: ContainerReference | undefined): reference is ContainerReference => reference !== undefined,
   )
   if (pinned.length !== declared.length) {
     return {
@@ -137,17 +125,13 @@ export const imageFreshness = async (): Promise<ImageReport> => {
   }
   try {
     const inspected: readonly ContainerInspection[] = await Promise.all(
-      pinned.map(
-        async (reference: ContainerReference): Promise<ContainerInspection> => inspect(reference),
-      ),
+      pinned.map(async (reference: ContainerReference): Promise<ContainerInspection> => inspect(reference)),
     )
     const verdicts: readonly ContainerVerdict[] = inspected.map(
       (inspection: ContainerInspection): ContainerVerdict => judgeContainer(inspection),
     )
     const described: readonly (readonly string[])[] = await Promise.all(
-      verdicts.map(
-        async (verdict: ContainerVerdict): Promise<readonly string[]> => describe(verdict),
-      ),
+      verdicts.map(async (verdict: ContainerVerdict): Promise<readonly string[]> => describe(verdict)),
     )
     return { scanned: pinned.length, lines: described.flat(), failure: undefined }
   } catch (error: unknown) {

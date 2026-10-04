@@ -7,14 +7,7 @@
 // the endpoint opens exactly when the credential is unset. The safe shape is the same in every context:
 // reject absence first, then compare the supplied credential.
 import type { PayloadViolation } from './payload-source.js'
-import {
-  balancedArguments,
-  type Folded,
-  lineOf,
-  maskLiterals,
-  type ScanStep,
-  scanDelimited,
-} from './source-text.js'
+import { balancedArguments, type Folded, lineOf, maskLiterals, type ScanStep, scanDelimited } from './source-text.js'
 
 const GUARDED_IF: RegExp = /\bif\s*\(\s*([a-z_$][\w$]*(?:\s*\.\s*[a-z_$][\w$]*)*)\s*&&/gi
 
@@ -62,24 +55,22 @@ const hasRejectionAfter = (masked: string, close: number): boolean => {
 /** Report credential guards whose rejection disappears when the credential is absent. */
 export const findFailOpenSecretGuards = (source: string): readonly PayloadViolation[] => {
   const masked: string = maskLiterals(source)
-  return [...masked.matchAll(GUARDED_IF)].flatMap(
-    (match: RegExpExecArray): readonly PayloadViolation[] => {
-      const credential: string = (match[1] ?? '').replaceAll(/\s/g, '')
-      const open: number = masked.indexOf('(', match.index)
-      const close: number | undefined = conditionClose(masked, open)
-      return close !== undefined && isCredential(credential) && hasRejectionAfter(masked, close)
-        ? [
-            {
-              line: lineOf(source, match.index),
-              rule: 'no-fail-open-secret-guard',
-              reason:
-                `reject a missing ${credential} before comparing it; guarded by its own truthiness, ` +
-                'the rejection is skipped when the credential is absent',
-            },
-          ]
-        : []
-    },
-  )
+  return [...masked.matchAll(GUARDED_IF)].flatMap((match: RegExpExecArray): readonly PayloadViolation[] => {
+    const credential: string = (match[1] ?? '').replaceAll(/\s/g, '')
+    const open: number = masked.indexOf('(', match.index)
+    const close: number | undefined = conditionClose(masked, open)
+    return close !== undefined && isCredential(credential) && hasRejectionAfter(masked, close)
+      ? [
+          {
+            line: lineOf(source, match.index),
+            rule: 'no-fail-open-secret-guard',
+            reason:
+              `reject a missing ${credential} before comparing it; guarded by its own truthiness, ` +
+              'the rejection is skipped when the credential is absent',
+          },
+        ]
+      : []
+  })
 }
 
 const IF_STATEMENT: RegExp = /\bif\s*\(/g
@@ -94,10 +85,7 @@ const topLevelOperators = (condition: string, operator: string): readonly number
     condition,
     0,
     (found: readonly number[], step: ScanStep): Folded<readonly number[]> => ({
-      state:
-        step.depth === 0 && condition.startsWith(operator, step.index)
-          ? [...found, step.index]
-          : found,
+      state: step.depth === 0 && condition.startsWith(operator, step.index) ? [...found, step.index] : found,
       stop: false,
     }),
     [],
@@ -107,8 +95,7 @@ const splitTopLevel = (condition: string, operator: string): readonly string[] =
   const cuts: readonly number[] = topLevelOperators(condition, operator)
   const ends: readonly number[] = [...cuts, condition.length]
   return [0, ...cuts.map((cut: number): number => cut + OPERATOR_WIDTH)].map(
-    (start: number, position: number): string =>
-      condition.slice(start, ends[position] ?? condition.length).trim(),
+    (start: number, position: number): string => condition.slice(start, ends[position] ?? condition.length).trim(),
   )
 }
 
@@ -122,8 +109,8 @@ const ABSENCE_SHAPES: readonly RegExp[] = [
 ]
 
 const absentNameIn = (disjunct: string): string | undefined => {
-  const matched: RegExpExecArray | undefined = ABSENCE_SHAPES.map(
-    (shape: RegExp): RegExpExecArray | null => shape.exec(disjunct),
+  const matched: RegExpExecArray | undefined = ABSENCE_SHAPES.map((shape: RegExp): RegExpExecArray | null =>
+    shape.exec(disjunct),
   ).find((found: RegExpExecArray | null): found is RegExpExecArray => found !== null)
   return matched?.[1]?.replaceAll(/\s/g, '').replaceAll('?.', '.')
 }
@@ -144,9 +131,7 @@ const acceptedAbsence = (condition: string): string | undefined => {
   )
   return names.includes(undefined)
     ? undefined
-    : names.find(
-        (name: string | undefined): name is string => name !== undefined && isCredential(name),
-      )
+    : names.find((name: string | undefined): name is string => name !== undefined && isCredential(name))
 }
 
 // The returned VALUE decides, not the presence of a return: `if (!secret) { return unauthorized() }`
@@ -170,26 +155,24 @@ const hasAcceptanceAfter = (masked: string, close: number): boolean => {
  */
 export const findAbsentSecretAcceptances = (source: string): readonly PayloadViolation[] => {
   const masked: string = maskLiterals(source)
-  return [...masked.matchAll(IF_STATEMENT)].flatMap(
-    (match: RegExpExecArray): readonly PayloadViolation[] => {
-      const open: number = masked.indexOf('(', match.index)
-      const condition: string | undefined = balancedArguments(masked, open)
-      if (condition === undefined) {
-        return []
-      }
-      const credential: string | undefined = acceptedAbsence(condition)
-      return credential !== undefined && hasAcceptanceAfter(masked, open + condition.length + 1)
-        ? [
-            {
-              line: lineOf(source, match.index),
-              rule: 'no-absent-secret-acceptance',
-              reason:
-                `refuse the caller when ${credential} is absent; this admits them instead, so the ` +
-                'endpoint is open exactly when the credential is unset and no request is ever ' +
-                'refused - reject the absence and report the misconfiguration',
-            },
-          ]
-        : []
-    },
-  )
+  return [...masked.matchAll(IF_STATEMENT)].flatMap((match: RegExpExecArray): readonly PayloadViolation[] => {
+    const open: number = masked.indexOf('(', match.index)
+    const condition: string | undefined = balancedArguments(masked, open)
+    if (condition === undefined) {
+      return []
+    }
+    const credential: string | undefined = acceptedAbsence(condition)
+    return credential !== undefined && hasAcceptanceAfter(masked, open + condition.length + 1)
+      ? [
+          {
+            line: lineOf(source, match.index),
+            rule: 'no-absent-secret-acceptance',
+            reason:
+              `refuse the caller when ${credential} is absent; this admits them instead, so the ` +
+              'endpoint is open exactly when the credential is unset and no request is ever ' +
+              'refused - reject the absence and report the misconfiguration',
+          },
+        ]
+      : []
+  })
 }

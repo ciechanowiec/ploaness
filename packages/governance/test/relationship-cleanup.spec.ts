@@ -34,19 +34,14 @@ const holder = (field: string, extra = ''): SpecSource => ({
 }`,
 })
 
-const REQUIRED_RELATIONSHIP: string =
-  "{ name: 'player', type: 'relationship', relationTo: 'users', required: true }"
+const REQUIRED_RELATIONSHIP: string = "{ name: 'player', type: 'relationship', relationTo: 'users', required: true }"
 
 const rulesOf = (...files: readonly SpecSource[]): readonly string[] =>
-  findUnguardedRelationships(files).map(
-    (located: LocatedViolation): string => located.violation.rule,
-  )
+  findUnguardedRelationships(files).map((located: LocatedViolation): string => located.violation.rule)
 
 describe('require-relationship-cleanup', () => {
   it('reports a required relationship whose target takes nothing down with it', () => {
-    expect(rulesOf(holder(REQUIRED_RELATIONSHIP), UNGUARDED_TARGET)).toEqual([
-      'require-relationship-cleanup',
-    ])
+    expect(rulesOf(holder(REQUIRED_RELATIONSHIP), UNGUARDED_TARGET)).toEqual(['require-relationship-cleanup'])
   })
 
   it('accepts the same relationship once the target declares a beforeDelete hook', () => {
@@ -98,13 +93,11 @@ describe('require-relationship-cleanup leaves alone what the adapter never const
     },
     {
       shape: 'is hasMany, so it lives in the join table',
-      field:
-        "{ name: 'players', type: 'relationship', relationTo: 'users', hasMany: true, required: true }",
+      field: "{ name: 'players', type: 'relationship', relationTo: 'users', hasMany: true, required: true }",
     },
     {
       shape: 'names several collections, which is stored the same way',
-      field:
-        "{ name: 'owner', type: 'relationship', relationTo: ['users', 'teams'], required: true }",
+      field: "{ name: 'owner', type: 'relationship', relationTo: ['users', 'teams'], required: true }",
     },
     {
       shape: 'carries an admin condition, which drops the null constraint',
@@ -117,9 +110,7 @@ describe('require-relationship-cleanup leaves alone what the adapter never const
 
   // Drafts disable the null constraint across the whole collection.
   it('accepts a required relationship on a collection with drafts enabled', () => {
-    expect(
-      rulesOf(holder(REQUIRED_RELATIONSHIP, '\n  versions: { drafts: true },'), UNGUARDED_TARGET),
-    ).toEqual([])
+    expect(rulesOf(holder(REQUIRED_RELATIONSHIP, '\n  versions: { drafts: true },'), UNGUARDED_TARGET)).toEqual([])
   })
 
   // A collection this file set does not declare - one a plugin contributes - cannot be judged.
@@ -133,8 +124,7 @@ describe('require-relationship-cleanup reads the shapes a project actually write
     const field: string = "{ name: 'hero', type: 'upload', relationTo: 'media', required: true }"
     const media: SpecSource = {
       path: 'src/collections/Media.ts',
-      source:
-        "export const Media: CollectionConfig = { slug: 'media', upload: { mimeTypes: ['image/*'] } }",
+      source: "export const Media: CollectionConfig = { slug: 'media', upload: { mimeTypes: ['image/*'] } }",
     }
     expect(rulesOf(holder(field), media)).toEqual(['require-relationship-cleanup'])
   })

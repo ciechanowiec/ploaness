@@ -2,38 +2,24 @@ import { describe, expect, it } from 'vitest'
 import { findUnprotectedPrivilegedFields } from '../src/payload-field-access.js'
 import type { PayloadViolation } from '../src/payload-source.js'
 
-const COLLECTION_ACCESS: string =
-  'access: { create: admins, read: admins, update: admins, delete: admins },'
+const COLLECTION_ACCESS: string = 'access: { create: admins, read: admins, update: admins, delete: admins },'
 
-const collectionWith = (
-  field: string,
-  auth: string = 'auth: { maxLoginAttempts: 5, lockTime: 600 },',
-): string =>
+const collectionWith = (field: string, auth: string = 'auth: { maxLoginAttempts: 5, lockTime: 600 },'): string =>
   `const Users: CollectionConfig = { slug: 'users', ${auth} ${COLLECTION_ACCESS} fields: [${field}] }`
 
 const rulesOf = (source: string): readonly string[] =>
-  findUnprotectedPrivilegedFields(source).map(
-    (violation: PayloadViolation): string => violation.rule,
-  )
+  findUnprotectedPrivilegedFields(source).map((violation: PayloadViolation): string => violation.rule)
 
 const protectedField = (name: string): string =>
   `{ name: '${name}', type: 'text', access: { create: admins, update: admins } }`
 
 describe('require-privileged-field-access', () => {
-  it.each([
-    'role',
-    'roles',
-    'isAdmin',
-    'isStaff',
-    'permission',
-    'permissions',
-    'capability',
-    'capabilities',
-  ])('requires create and update access for %s', (name: string) => {
-    expect(rulesOf(collectionWith(`{ name: '${name}', type: 'text' }`))).toEqual([
-      'require-privileged-field-access',
-    ])
-  })
+  it.each(['role', 'roles', 'isAdmin', 'isStaff', 'permission', 'permissions', 'capability', 'capabilities'])(
+    'requires create and update access for %s',
+    (name: string) => {
+      expect(rulesOf(collectionWith(`{ name: '${name}', type: 'text' }`))).toEqual(['require-privileged-field-access'])
+    },
+  )
 
   it('accepts a privileged field that declares both operations', () => {
     expect(rulesOf(collectionWith(protectedField('roles')))).toEqual([])
@@ -59,8 +45,7 @@ describe('require-privileged-field-access', () => {
   })
 
   it('does not let a spread stand in for an absent operation', () => {
-    const field: string =
-      "{ name: 'roles', type: 'text', access: { ...baseAccess, update: admins } }"
+    const field: string = "{ name: 'roles', type: 'text', access: { ...baseAccess, update: admins } }"
     expect(rulesOf(collectionWith(field))).toEqual(['require-privileged-field-access'])
   })
 })
@@ -85,8 +70,7 @@ describe('the privilege rule boundary', () => {
   })
 
   it('does not read a nested subfield as a top-level account authority', () => {
-    const field: string =
-      "{ name: 'profile', type: 'group', fields: [{ name: 'roles', type: 'text' }] }"
+    const field: string = "{ name: 'profile', type: 'group', fields: [{ name: 'roles', type: 'text' }] }"
     expect(rulesOf(collectionWith(field))).toEqual([])
   })
 

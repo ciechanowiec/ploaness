@@ -69,9 +69,7 @@ const toRoute = (href: string, origin: string): string | null => {
     return null
   }
   const routePath: string = url.pathname
-  const isSkipped: boolean = SKIPPED_ROUTE_PREFIXES.some((prefix: string): boolean =>
-    routePath.startsWith(prefix),
-  )
+  const isSkipped: boolean = SKIPPED_ROUTE_PREFIXES.some((prefix: string): boolean => routePath.startsWith(prefix))
   return isSkipped || STATIC_ASSET.test(routePath) ? null : routePath
 }
 
@@ -225,18 +223,11 @@ const probeHitTarget = async (control: Locator): Promise<HitTargetProbe> =>
 // element paints none. The focus pass, which is the state that actually matters for a skip link, still
 // runs. A control that DOES paint and is covered anyway is a defect in the page, and is reported as one
 // rather than skipped - the sweep's own rule, applied where it belongs.
-const scanInteractiveStates = async (
-  page: Page,
-  label: string,
-  selector: string,
-): Promise<void> => {
+const scanInteractiveStates = async (page: Page, label: string, selector: string): Promise<void> => {
   const controls: readonly Locator[] = await page.locator(selector).all()
   for (const control of controls) {
     const reach: HitTargetClassification = classifyHitTarget(await probeHitTarget(control))
-    expect(
-      reach.verdict,
-      `${label}: a control cannot be reached by a pointer - ${reach.reason}`,
-    ).not.toBe('obscured')
+    expect(reach.verdict, `${label}: a control cannot be reached by a pointer - ${reach.reason}`).not.toBe('obscured')
     if (reach.verdict === 'hoverable') {
       await control.hover()
       await expectNoContrastViolation(page, `hover contrast on ${label}`)
@@ -266,19 +257,12 @@ const scanRoute = async (page: Page, origin: string, route: string): Promise<voi
 // Every route is measured before any is scanned with axe, and its findings are collected rather than
 // asserted one route at a time. An axe failure stops the sweep at its route; a layout defect does not
 // stop anything, so a run reports every layout defect on the site at once.
-const sweepLayout = async (
-  page: Page,
-  origin: string,
-  routes: readonly string[],
-): Promise<readonly string[]> =>
-  await routes.reduce(
-    async (found: Promise<readonly string[]>, route: string): Promise<readonly string[]> => {
-      const earlier: readonly string[] = await found
-      await page.goto(`${origin}${route}`)
-      return [...earlier, ...(await layoutDefectsOf(page))]
-    },
-    Promise.resolve<readonly string[]>([]),
-  )
+const sweepLayout = async (page: Page, origin: string, routes: readonly string[]): Promise<readonly string[]> =>
+  await routes.reduce(async (found: Promise<readonly string[]>, route: string): Promise<readonly string[]> => {
+    const earlier: readonly string[] = await found
+    await page.goto(`${origin}${route}`)
+    return [...earlier, ...(await layoutDefectsOf(page))]
+  }, Promise.resolve<readonly string[]>([]))
 
 test.describe('Accessibility and layout sweep', () => {
   test('every reachable public page passes axe in default, hover, and focus states, and its layout holds', async ({
@@ -300,10 +284,7 @@ test.describe('Accessibility and layout sweep', () => {
     // than a broken crawl. The seed answering separates them - a server that is down, or a root that
     // errors, still fails - and it is derived from what the application does rather than declared, so
     // there is nothing here for a project to claim falsely.
-    expect(
-      discovery.hasSeedAnswered,
-      `the crawl could not start: ${SEED_ROUTE} did not answer`,
-    ).toBe(true)
+    expect(discovery.hasSeedAnswered, `the crawl could not start: ${SEED_ROUTE} did not answer`).toBe(true)
     expect(
       discovery.isCapped,
       `a11y sweep reached the ${String(MAX_SWEEP_ROUTES)}-route cap; raise the harness limit only after ` +
@@ -332,9 +313,7 @@ test.describe('Accessibility and layout sweep', () => {
     // Narrowed from the ceiling armed above, now that the route count is known.
     test.setTimeout(Math.min(routes.length * MILLISECONDS_PER_ROUTE, MAX_SWEEP_MILLISECONDS))
     // Soft, so the accessibility pass below still runs and reports when the layout pass has failed.
-    expect
-      .soft(await sweepLayout(page, origin, routes), 'layout defects on the swept routes')
-      .toEqual([])
+    expect.soft(await sweepLayout(page, origin, routes), 'layout defects on the swept routes').toEqual([])
     // The chrome is identical site-wide, so sweep its interactive states once, on the first route.
     await page.goto(`${origin}${first}`)
     await settleForScan(page)

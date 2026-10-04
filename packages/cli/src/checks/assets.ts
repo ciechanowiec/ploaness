@@ -1,14 +1,6 @@
 // The managed-file gate and the `ploaness sync` implementation. Both read the same catalogue, so the
 // gate can never disagree with the command that repairs it.
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   type AssetHost,
@@ -28,13 +20,7 @@ import {
   syncAction,
   type UnmanagedAsset,
 } from '@ploaness/governance'
-import {
-  type Context,
-  type Member,
-  type Repository,
-  shippedDirectory,
-  workingTreeFiles,
-} from '../context.js'
+import { type Context, type Member, type Repository, shippedDirectory, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 const assetsRoot = (): string => shippedDirectory('@ploaness/assets')
@@ -46,8 +32,7 @@ const catalogue = (): ParsedManifest => parseManifest(readManifestText())
 // Shipped bodies carry a `.asset` suffix because npm rewrites or strips certain dotfiles when it packs a
 // tarball: a shipped `.npmrc` is dropped outright and a shipped `.gitignore` is renamed. Suffixing every
 // body keeps the catalogue honest about what a consumer will actually receive.
-const bodyPath = (assetPath: string): string =>
-  path.join(assetsRoot(), 'files', `${assetPath}.asset`)
+const bodyPath = (assetPath: string): string => path.join(assetsRoot(), 'files', `${assetPath}.asset`)
 
 const shippedBody = (assetPath: string): string | undefined => {
   const source: string = bodyPath(assetPath)
@@ -61,14 +46,8 @@ const BODILESS: ReadonlySet<string> = new Set<string>(['FORBIDDEN', 'REFERENCE']
 
 const packagingDefects = (assets: readonly ManagedAsset[]): readonly string[] =>
   assets
-    .filter(
-      (asset: ManagedAsset): boolean =>
-        !(BODILESS.has(asset.disposition) || existsSync(bodyPath(asset.path))),
-    )
-    .map(
-      (asset: ManagedAsset): string =>
-        `${asset.path}: the catalogue lists it but ploaness ships no body for it`,
-    )
+    .filter((asset: ManagedAsset): boolean => !(BODILESS.has(asset.disposition) || existsSync(bodyPath(asset.path))))
+    .map((asset: ManagedAsset): string => `${asset.path}: the catalogue lists it but ploaness ships no body for it`)
 
 const unmanagedPaths = (context: Context): readonly string[] =>
   context.settings.unmanagedAssets.map((entry: UnmanagedAsset): string => entry.path)
@@ -95,9 +74,7 @@ const sitesOf = (repository: Repository, all: readonly ManagedAsset[]): readonly
   // A member sitting AT the repository root shares its directory, so a path that applies to both - any
   // forbidden one - would be judged twice and reported twice for a single file. The repository site has
   // already spoken for those.
-  const spokenFor: ReadonlySet<string> = new Set(
-    atRoot.map((asset: ManagedAsset): string => asset.path),
-  )
+  const spokenFor: ReadonlySet<string> = new Set(atRoot.map((asset: ManagedAsset): string => asset.path))
   const memberSite = (member: Member): AssetSite => {
     const applicable: readonly ManagedAsset[] = memberAssets(all, hostOf(member))
     return {
@@ -127,8 +104,7 @@ const stateOf =
     const target: string = path.join(root, assetPath)
     const isExists: boolean = existsSync(target)
     // A FORBIDDEN entry may name a directory, so only read a regular file.
-    const actual: string | undefined =
-      isExists && statSync(target).isFile() ? readFileSync(target, 'utf8') : undefined
+    const actual: string | undefined = isExists && statSync(target).isFile() ? readFileSync(target, 'utf8') : undefined
     return { isPresent: isExists, actual, expected: shippedBody(assetPath) }
   }
 
@@ -149,18 +125,14 @@ export const assets = (repository: Repository): GateResult => {
   const findings: readonly string[] = [
     ...sites.flatMap((site: AssetSite): readonly string[] =>
       findAssetViolations(site.assets, site.unmanaged, stateOf(site.root)).map(
-        (violation: AssetViolation): string =>
-          `${site.label}${violation.path}: ${violation.reason}`,
+        (violation: AssetViolation): string => `${site.label}${violation.path}: ${violation.reason}`,
       ),
     ),
     ...workingTreeFiles(repository.root)
       .filter(isOxlintConfig)
       .map((file: string): string => `${file}: Oxlint configuration is owned by ploaness`),
   ]
-  const checked: number = sites.reduce(
-    (total: number, site: AssetSite): number => total + site.assets.length,
-    0,
-  )
+  const checked: number = sites.reduce((total: number, site: AssetSite): number => total + site.assets.length, 0)
   return findings.length > 0
     ? failed(`${String(findings.length)} managed-file defect(s)`, findings)
     : passed(`${String(checked)} managed path(s) match the catalogue`)
@@ -180,10 +152,7 @@ export const managedPaths = (context: Context): ReadonlySet<string> => {
   const owned: ReadonlySet<string> = new Set(unmanagedPaths(context))
   return new Set(
     catalogue()
-      .assets.filter(
-        (asset: ManagedAsset): boolean =>
-          asset.disposition !== 'FORBIDDEN' && !owned.has(asset.path),
-      )
+      .assets.filter((asset: ManagedAsset): boolean => asset.disposition !== 'FORBIDDEN' && !owned.has(asset.path))
       .map((asset: ManagedAsset): string => asset.path),
   )
 }
@@ -194,16 +163,9 @@ export interface SyncChange {
   readonly action: 'wrote' | 'deleted' | 'spliced' | 'refused'
 }
 
-const spliceSection = (
-  assetPath: string,
-  target: string,
-  source: string,
-): SyncChange | undefined => {
+const spliceSection = (assetPath: string, target: string, source: string): SyncChange | undefined => {
   const current: string = existsSync(target) ? readFileSync(target, 'utf8') : ''
-  const spliced: string | undefined = applyManagedSection(
-    current,
-    readFileSync(source, 'utf8').trim(),
-  )
+  const spliced: string | undefined = applyManagedSection(current, readFileSync(source, 'utf8').trim())
   // Ambiguous markers are the one case sync will not touch: every guess it could make either duplicates
   // the block or swallows text the project owns, and both are worse than stopping.
   if (spliced === undefined) {

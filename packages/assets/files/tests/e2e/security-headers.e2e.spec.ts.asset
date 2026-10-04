@@ -39,10 +39,7 @@ const scriptSources = (policy: string): string | undefined =>
   directive(policy, 'script-src') ?? directive(policy, 'default-src')
 
 test.describe('Security headers', () => {
-  test('the application answers with a baseline of security headers', async ({
-    request,
-    baseURL,
-  }) => {
+  test('the application answers with a baseline of security headers', async ({ request, baseURL }) => {
     const origin: string = baseURL ?? ''
     expect(origin, 'the ploaness Playwright config must declare a server URL').not.toEqual('')
     const response: APIResponse = await request.get(origin)
@@ -70,19 +67,14 @@ test.describe('Security headers', () => {
 
     expect(
       headers[FRAME_OPTIONS] !== undefined || directive(policy, FRAME_ANCESTORS) !== undefined,
-      `the application must decide who may frame it, through ${FRAME_OPTIONS} or a ` +
-        `${FRAME_ANCESTORS} directive`,
+      `the application must decide who may frame it, through ${FRAME_OPTIONS} or a ${FRAME_ANCESTORS} directive`,
     ).toBe(true)
 
     const sources: string | undefined = scriptSources(policy)
-    expect(
-      sources,
-      'the policy must constrain script, through script-src or default-src',
-    ).toBeDefined()
+    expect(sources, 'the policy must constrain script, through script-src or default-src').toBeDefined()
     expect(
       sources ?? '',
-      `script must not be allowed from ${UNSAFE_INLINE}; it readmits the injection a policy ` +
-        'exists to stop',
+      `script must not be allowed from ${UNSAFE_INLINE}; it readmits the injection a policy exists to stop`,
     ).not.toContain(UNSAFE_INLINE)
   })
 })

@@ -44,9 +44,7 @@ describe('findSuppressions', () => {
   })
 
   it('does not count a biome block terminator, which its opener already counted', () => {
-    expect(findSuppressions('src/a.ts', `// ${ignore('biome')}-end lint/style/useConst`)).toEqual(
-      [],
-    )
+    expect(findSuppressions('src/a.ts', `// ${ignore('biome')}-end lint/style/useConst`)).toEqual([])
   })
 
   it('reports the line, so an over-budget project is told which suppression to reconsider', () => {
@@ -101,9 +99,7 @@ describe('findSuppressions over the directives that are not lint comments', () =
   // suppression are the same act - which is why this differs from the prose case above rather than
   // contradicting it.
   it('counts a gitleaks allowance whatever syntax the file comments in', () => {
-    expect(findSuppressions('src/a.ts', `const key = 'aaaa' # ${allow('gitleaks')}`)).toHaveLength(
-      1,
-    )
+    expect(findSuppressions('src/a.ts', `const key = 'aaaa' # ${allow('gitleaks')}`)).toHaveLength(1)
   })
 })
 
@@ -153,9 +149,7 @@ describe('judgeSuppressions', () => {
   })
 
   it('reports the distance left, so the trend is readable before the ceiling is reached', () => {
-    expect(judgeSuppressions(sites(1), LINES_PER_SUPPRESSION * 2, undefined).remaining).toBe(
-      BASE_ALLOWANCE + 2 - 1,
-    )
+    expect(judgeSuppressions(sites(1), LINES_PER_SUPPRESSION * 2, undefined).remaining).toBe(BASE_ALLOWANCE + 2 - 1)
   })
 
   it('never reports a negative distance once the ceiling is passed', () => {
@@ -192,14 +186,10 @@ describe('findSuppressions over the layout exemption attribute', () => {
   })
 
   it('counts the attribute as an object key a spread would carry', () => {
-    expect(
-      findSuppressions('src/tabs.ts', `const joined = { '${layoutAttribute}': 'attached' }`),
-    ).toHaveLength(1)
+    expect(findSuppressions('src/tabs.ts', `const joined = { '${layoutAttribute}': 'attached' }`)).toHaveLength(1)
   })
 
   it('does not count the reason attribute beside it', () => {
-    expect(
-      findSuppressions('src/Tabs.tsx', `  ${layoutAttribute}-reason="the tab joins its panel"`),
-    ).toEqual([])
+    expect(findSuppressions('src/Tabs.tsx', `  ${layoutAttribute}-reason="the tab joins its panel"`)).toEqual([])
   })
 })

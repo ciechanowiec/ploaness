@@ -16,8 +16,7 @@ const multilineDoc = (body: string): string => `${OPEN}\n ${ASTERISK} ${body}\n 
 
 const DECLARATION: string = 'export const value: number = 1'
 
-const scan = (...lines: readonly string[]): readonly DocBlock[] =>
-  findOrphanedDocBlocks(lines.join('\n'))
+const scan = (...lines: readonly string[]): readonly DocBlock[] => findOrphanedDocBlocks(lines.join('\n'))
 
 describe('findOrphanedDocBlocks, on a block another block follows', () => {
   it('flags a doc block followed immediately by another doc block', () => {
@@ -31,11 +30,7 @@ describe('findOrphanedDocBlocks, on a block another block follows', () => {
   })
 
   it('reports the opening and closing lines of a multi-line orphan', () => {
-    const result: readonly DocBlock[] = scan(
-      multilineDoc('orphan'),
-      doc('the real doc'),
-      DECLARATION,
-    )
+    const result: readonly DocBlock[] = scan(multilineDoc('orphan'), doc('the real doc'), DECLARATION)
     expect(result).toEqual([{ line: 1, endLine: 3 }])
   })
 

@@ -42,8 +42,7 @@ const WORKFLOW_DOCKER_ACTION: RegExp = /uses:[ \t]*['"]?docker:\/\/(?<value>[^\s
  * @param text the file body.
  * @returns one entry per logical line.
  */
-export const logicalLines = (text: string): readonly string[] =>
-  text.replaceAll(CONTINUATION, ' ').split('\n')
+export const logicalLines = (text: string): readonly string[] => text.replaceAll(CONTINUATION, ' ').split('\n')
 
 const contentLines = (text: string): readonly string[] =>
   logicalLines(text).filter((line: string): boolean => !COMMENT_LINE.test(line))
@@ -72,9 +71,7 @@ const readFrom = (rest: string | undefined): FromClause | undefined => {
 const substituteArguments = (reference: string, defaults: ReadonlyMap<string, string>): string =>
   [...defaults].reduce(
     (resolved: string, [name, value]: readonly [string, string]): string =>
-      resolved
-        .replaceAll(`\${${name}}`, (): string => value)
-        .replaceAll(`$${name}`, (): string => value),
+      resolved.replaceAll(`\${${name}}`, (): string => value).replaceAll(`$${name}`, (): string => value),
     reference,
   )
 
@@ -117,8 +114,7 @@ const recordFrom = (walk: DockerfileWalk, line: string): DockerfileWalk => {
  */
 export const imageReferencesInDockerfile = (text: string): readonly string[] =>
   contentLines(text).reduce(
-    (walk: DockerfileWalk, line: string): DockerfileWalk =>
-      recordArgument(walk, line) ?? recordFrom(walk, line),
+    (walk: DockerfileWalk, line: string): DockerfileWalk => recordArgument(walk, line) ?? recordFrom(walk, line),
     { defaults: new Map<string, string>(), stages: new Set<string>(), references: [] },
   ).references
 
@@ -144,9 +140,7 @@ export const systemPackagesInDockerfile = (text: string): readonly string[] =>
     const rest: string | undefined = RUN_LINE.exec(line)?.groups?.['rest']
     return rest === undefined
       ? []
-      : rest
-          .split(COMMAND_SEPARATOR)
-          .flatMap((command: string): readonly string[] => packagesInCommand(command))
+      : rest.split(COMMAND_SEPARATOR).flatMap((command: string): readonly string[] => packagesInCommand(command))
   })
 
 const workflowReferenceIn = (line: string): string | undefined => {
@@ -182,9 +176,7 @@ export interface ComposeImage {
  * @param json the output of `docker compose config --format json`.
  * @returns the pulled images by service name, or undefined when the text is not a compose model.
  */
-export const imageReferencesInComposeModel = (
-  json: string,
-): readonly ComposeImage[] | undefined => {
+export const imageReferencesInComposeModel = (json: string): readonly ComposeImage[] | undefined => {
   const model: unknown = parseJsonc(json).value
   if (!isRecord(model) || isArray(model) || !isRecord(model['services'])) {
     return undefined
@@ -195,9 +187,7 @@ export const imageReferencesInComposeModel = (
       const isBuilt: boolean = asRecord(definition)['build'] !== undefined
       return isBuilt || image.length === 0 ? [] : [{ service, image }]
     })
-    .toSorted((one: ComposeImage, other: ComposeImage): number =>
-      one.service.localeCompare(other.service),
-    )
+    .toSorted((one: ComposeImage, other: ComposeImage): number => one.service.localeCompare(other.service))
 }
 
 /**

@@ -61,13 +61,9 @@ const javascriptFindings = (context: Context, tracked: readonly string[]): reado
   tracked
     .filter(
       (file: string): boolean =>
-        hasExtension(file, JAVASCRIPT_EXTENSIONS) &&
-        !matchesRole(file, context.settings.javascriptAllowlist),
+        hasExtension(file, JAVASCRIPT_EXTENSIONS) && !matchesRole(file, context.settings.javascriptAllowlist),
     )
-    .map(
-      (file: string): string =>
-        `${file} hand-written JavaScript is banned; write TypeScript instead`,
-    )
+    .map((file: string): string => `${file} hand-written JavaScript is banned; write TypeScript instead`)
 
 // A documenting comment stranded above another one documents nothing, and the symbol it was written
 // for is left with no doc at all. It is scanned here rather than by the lint pass because
@@ -81,8 +77,7 @@ const orphanedDocFindings = (context: Context, tracked: readonly string[]): read
   tracked
     .filter(
       (file: string): boolean =>
-        hasExtension(file, DOCUMENTED_EXTENSIONS) &&
-        !matchesRole(file, context.settings.typographyExclusions),
+        hasExtension(file, DOCUMENTED_EXTENSIONS) && !matchesRole(file, context.settings.typographyExclusions),
     )
     .flatMap((file: string): readonly string[] => {
       const content: string = readFileSync(path.join(context.root, file), 'utf8')
@@ -106,8 +101,8 @@ const isRegularFile = (root: string, file: string): boolean => {
  * comments left above another comment rather than above what they document.
  */
 export const conventions = (context: Context): GateResult => {
-  const tracked: readonly string[] = workingTreeFiles(context.root).filter(
-    (file: string): boolean => isRegularFile(context.root, file),
+  const tracked: readonly string[] = workingTreeFiles(context.root).filter((file: string): boolean =>
+    isRegularFile(context.root, file),
   )
   const findings: readonly string[] = [
     ...typographyFindings(context, tracked),

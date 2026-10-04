@@ -40,14 +40,11 @@ const judgeReference = (location: string, reference: string): readonly string[] 
     return [describeRefusal(refusal, location)]
   }
   return isMutableImageReference(reference)
-    ? [
-        `${location}: ${reference} is not pinned to a tag, so what it pulls can change without the repository changing`,
-      ]
+    ? [`${location}: ${reference} is not pinned to a tag, so what it pulls can change without the repository changing`]
     : []
 }
 
-const readTracked = (context: Context, file: string): string =>
-  readFileSync(path.join(context.root, file), 'utf8')
+const readTracked = (context: Context, file: string): string => readFileSync(path.join(context.root, file), 'utf8')
 
 const judgeDockerfile = (context: Context, file: string): readonly string[] => {
   const text: string = readTracked(context, file)
@@ -60,8 +57,8 @@ const judgeDockerfile = (context: Context, file: string): readonly string[] => {
 }
 
 const judgeWorkflow = (context: Context, file: string): readonly string[] =>
-  imageReferencesInWorkflow(readTracked(context, file)).flatMap(
-    (reference: string): readonly string[] => judgeReference(file, reference),
+  imageReferencesInWorkflow(readTracked(context, file)).flatMap((reference: string): readonly string[] =>
+    judgeReference(file, reference),
   )
 
 // Rendered rather than read: compose interpolates from the `.env` beside the file and merges its
@@ -72,9 +69,7 @@ const renderCompose = (directory: string): RunResult => {
   const modern: RunResult = run('docker', ['compose', 'config', '--format', 'json'], {
     cwd: directory,
   })
-  return modern.code === 0
-    ? modern
-    : run('docker-compose', ['config', '--format', 'json'], { cwd: directory })
+  return modern.code === 0 ? modern : run('docker-compose', ['config', '--format', 'json'], { cwd: directory })
 }
 
 interface ComposeJudgement {
@@ -121,12 +116,7 @@ const judgeInventory = (context: Context): InventoryJudgement => {
   }
 }
 
-const describeTargets = (
-  dockerfiles: number,
-  workflows: number,
-  projects: number,
-  packages: number,
-): string =>
+const describeTargets = (dockerfiles: number, workflows: number, projects: number, packages: number): string =>
   `${String(dockerfiles)} Dockerfile(s), ${String(workflows)} workflow(s), ${String(projects)} compose ` +
   `project(s) and ${String(packages)} installed package(s) name nothing ploaness refuses`
 
@@ -161,7 +151,5 @@ export const blocklist = (context: Context): GateResult => {
   ]
   return findings.length > 0
     ? failed('software ploaness refuses is in use', findings)
-    : passed(
-        describeTargets(dockerfiles.length, workflows.length, projects.length, inventory.counted),
-      )
+    : passed(describeTargets(dockerfiles.length, workflows.length, projects.length, inventory.counted))
 }

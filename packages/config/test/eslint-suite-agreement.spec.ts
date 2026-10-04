@@ -109,9 +109,7 @@ const representativePath = (glob: string): string => {
 
 /** Every path the runner would collect, one per include glob across every suite the config declares. */
 const collectedPaths = (config: VitestConfig): readonly string[] => {
-  const globs: readonly string[] = suitesOf(config).flatMap(
-    (suite: Suite): readonly string[] => suite.include ?? [],
-  )
+  const globs: readonly string[] = suitesOf(config).flatMap((suite: Suite): readonly string[] => suite.include ?? [])
   if (globs.length === 0) {
     throw new TypeError('the config collects nothing')
   }
@@ -160,17 +158,13 @@ describe('every suite the runner collects', () => {
   it('is held to the test-integrity rules by the application configuration', async () => {
     const paths: readonly string[] = collectedPaths(SHIPPED_SUITES)
 
-    expect(await severitiesAt(payloadConfig, paths, INTEGRITY_RULE)).toStrictEqual(
-      atEveryPath(paths, ERROR),
-    )
+    expect(await severitiesAt(payloadConfig, paths, INTEGRITY_RULE)).toStrictEqual(atEveryPath(paths, ERROR))
   })
 
   it('is held to the test-integrity rules by the library configuration', async () => {
     const paths: readonly string[] = collectedPaths(LIBRARY_SUITES)
 
-    expect(await severitiesAt(libraryConfig, paths, INTEGRITY_RULE)).toStrictEqual(
-      atEveryPath(paths, ERROR),
-    )
+    expect(await severitiesAt(libraryConfig, paths, INTEGRITY_RULE)).toStrictEqual(atEveryPath(paths, ERROR))
   })
 
   // The load-bearing half. Both properties above would hold for a configuration that turned the rule on
@@ -188,19 +182,13 @@ describe('a component spec', () => {
   // the sweep would still pass if the component glob were dropped from the runner instead of added to
   // the linter. The directory is named here rather than derived, so this keeps asking after it.
   it('is held to the React Testing Library rules, which name it in their own comment', async () => {
-    const rules: Readonly<Record<string, unknown>> = await resolveRules(
-      payloadConfig,
-      COMPONENT_PATH,
-    )
+    const rules: Readonly<Record<string, unknown>> = await resolveRules(payloadConfig, COMPONENT_PATH)
 
     expect(severityOf(rules[TESTING_LIBRARY_RULE])).toBe(ERROR)
   })
 
   it('is held to the test-integrity rules as well, not merely to the user-facing ones', async () => {
-    const rules: Readonly<Record<string, unknown>> = await resolveRules(
-      payloadConfig,
-      COMPONENT_PATH,
-    )
+    const rules: Readonly<Record<string, unknown>> = await resolveRules(payloadConfig, COMPONENT_PATH)
 
     expect(severityOf(rules[INTEGRITY_RULE])).toBe(ERROR)
   })

@@ -27,9 +27,7 @@ const entry = (setting: string, pattern: string): DeclaredExclusion => ({
 describe('trackedDirectories', () => {
   it('yields every containing directory at every depth, once', () => {
     expect(
-      [...trackedDirectories(TRACKED)].sort((left: string, right: string): number =>
-        left.localeCompare(right),
-      ),
+      [...trackedDirectories(TRACKED)].sort((left: string, right: string): number => left.localeCompare(right)),
     ).toEqual(['scripts', 'src', 'src/config', 'src/lib'])
   })
 
@@ -40,16 +38,11 @@ describe('trackedDirectories', () => {
 
 describe('findUnreachedExclusionsBySetting', () => {
   it('accepts a pureLogicRoots entry naming a directory that holds a tracked file', () => {
-    expect(
-      findUnreachedExclusionsBySetting([entry('pureLogicRoots', 'src/config')], TRACKED),
-    ).toEqual([])
+    expect(findUnreachedExclusionsBySetting([entry('pureLogicRoots', 'src/config')], TRACKED)).toEqual([])
   })
 
   it('reports a pureLogicRoots entry naming a directory no tracked file lives under', () => {
-    const found: readonly string[] = findUnreachedExclusionsBySetting(
-      [entry('pureLogicRoots', 'src/domain')],
-      TRACKED,
-    )
+    const found: readonly string[] = findUnreachedExclusionsBySetting([entry('pureLogicRoots', 'src/domain')], TRACKED)
     expect(found).toHaveLength(1)
     expect(found[0]).toContain('src/domain')
   })
@@ -59,10 +52,7 @@ describe('findUnreachedExclusionsBySetting', () => {
     // judged correctly only because they were partitioned before matching.
     expect(
       findUnreachedExclusionsBySetting(
-        [
-          entry('pureLogicRoots', 'src/config'),
-          entry('generatedArtefacts', 'src/payload-types.ts'),
-        ],
+        [entry('pureLogicRoots', 'src/config'), entry('generatedArtefacts', 'src/payload-types.ts')],
         TRACKED,
       ),
     ).toEqual([])
@@ -71,42 +61,27 @@ describe('findUnreachedExclusionsBySetting', () => {
 
 describe('findUnreachedExclusionsBySetting, per setting', () => {
   it('still judges a file-shaped setting against the tracked files', () => {
-    expect(
-      findUnreachedExclusionsBySetting(
-        [entry('generatedArtefacts', 'src/payload-types.ts')],
-        TRACKED,
-      ),
-    ).toEqual([])
-    expect(
-      findUnreachedExclusionsBySetting([entry('generatedArtefacts', 'src/gone.ts')], TRACKED),
-    ).toHaveLength(1)
+    expect(findUnreachedExclusionsBySetting([entry('generatedArtefacts', 'src/payload-types.ts')], TRACKED)).toEqual([])
+    expect(findUnreachedExclusionsBySetting([entry('generatedArtefacts', 'src/gone.ts')], TRACKED)).toHaveLength(1)
   })
 
   it('judges coverageExclude against the measured files rather than every tracked file', () => {
     // README.md is tracked but outside COVERAGE_INCLUDE, so excluding it from the coverage report
     // records a decision with no effect - which every other setting would have called reachable.
-    expect(
-      findUnreachedExclusionsBySetting([entry('coverageExclude', 'README.md')], TRACKED),
-    ).toHaveLength(1)
-    expect(
-      findUnreachedExclusionsBySetting([entry('coverageExclude', 'src/config/fonts.ts')], TRACKED),
-    ).toEqual([])
+    expect(findUnreachedExclusionsBySetting([entry('coverageExclude', 'README.md')], TRACKED)).toHaveLength(1)
+    expect(findUnreachedExclusionsBySetting([entry('coverageExclude', 'src/config/fonts.ts')], TRACKED)).toEqual([])
   })
 
   it('tolerates a trailing slash on a directory setting, as the renderer does', () => {
     // pureLogicRule already accepted `src/config/` and this rule already reported it. Normalising in
     // one place is what stops the two disagreeing.
-    expect(
-      findUnreachedExclusionsBySetting([entry('pureLogicRoots', 'src/config/')], TRACKED),
-    ).toEqual([])
+    expect(findUnreachedExclusionsBySetting([entry('pureLogicRoots', 'src/config/')], TRACKED)).toEqual([])
   })
 
   it('reports a glob-shaped pureLogicRoots entry, which renders to a floor matching nothing', () => {
     // The value that used to be the only one satisfying this rule. It is spliced into a regular
     // expression by pureLogicRule, so it can never name a floor - and now it is said so rather than
     // silently honoured.
-    expect(
-      findUnreachedExclusionsBySetting([entry('pureLogicRoots', 'src/config/**')], TRACKED),
-    ).toHaveLength(1)
+    expect(findUnreachedExclusionsBySetting([entry('pureLogicRoots', 'src/config/**')], TRACKED)).toHaveLength(1)
   })
 })

@@ -5,11 +5,7 @@ import {
   oxlintAccessibilityConfig,
   replacedBiomeAccessibilityRules,
 } from '../src/jsx-accessibility.js'
-import {
-  isOxlintConfig,
-  jsxAccessibilityFiles,
-  jsxAnalysisPatterns,
-} from '../src/jsx-accessibility-scope.js'
+import { isOxlintConfig, jsxAccessibilityFiles, jsxAnalysisPatterns } from '../src/jsx-accessibility-scope.js'
 
 describe('one owner for application JSX accessibility', () => {
   it('maps every native check to exactly one delegated Biome rule', () => {
@@ -21,23 +17,17 @@ describe('one owner for application JSX accessibility', () => {
   })
 
   it('retains grid-cell semantics while rejecting redundant native button roles', () => {
-    const rules: Record<string, unknown> = oxlintAccessibilityConfig()['rules'] as Record<
-      string,
-      unknown
-    >
+    const rules: Record<string, unknown> = oxlintAccessibilityConfig()['rules'] as Record<string, unknown>
     expect(rules['jsx-a11y/no-redundant-roles']).toEqual(['error', { td: ['gridcell'] }])
     expect(rules['jsx-a11y/alt-text']).toBe('error')
     expect(replacedBiomeAccessibilityRules()['useAltText']).toBe('off')
   })
 
   it('selects new JSX source, including files outside the conventional src directory', () => {
-    expect(
-      jsxAccessibilityFiles(
-        ['src/New.tsx', 'widgets/Card.jsx', 'src/logic.ts', 'src/New.tsx'],
-        [],
-        [],
-      ),
-    ).toEqual(['src/New.tsx', 'widgets/Card.jsx'])
+    expect(jsxAccessibilityFiles(['src/New.tsx', 'widgets/Card.jsx', 'src/logic.ts', 'src/New.tsx'], [], [])).toEqual([
+      'src/New.tsx',
+      'widgets/Card.jsx',
+    ])
   })
 
   it('excludes generated code, caches, hidden tooling, and sibling members', () => {
@@ -52,9 +42,7 @@ describe('one owner for application JSX accessibility', () => {
       'fe/src/Card.tsx',
       'src/Own.tsx',
     ]
-    expect(jsxAccessibilityFiles(files, ['src/generated/**'], ['cms', 'fe'])).toEqual([
-      'src/Own.tsx',
-    ])
+    expect(jsxAccessibilityFiles(files, ['src/generated/**'], ['cms', 'fe'])).toEqual(['src/Own.tsx'])
   })
 
   it('leaves HTML and non-JSX source with their existing analyzer', () => {
@@ -66,20 +54,14 @@ describe('one owner for application JSX accessibility', () => {
     expect(patterns).toContain('!.*/**')
   })
 
-  it.each([
-    '.oxlintrc.json',
-    'src/.oxlintrc.jsonc',
-    '.oxlintignore',
-    'cms/oxlint.config.ts',
-    'deep/oxlint.config.mjs',
-  ])('refuses consumer analyzer configuration at %s', (file) => {
-    expect(isOxlintConfig(file)).toBe(true)
-  })
-
-  it.each(['src/oxlint-policy.ts', 'docs/oxlint.md', 'oxlint.json'])(
-    'permits ordinary source %s',
+  it.each(['.oxlintrc.json', 'src/.oxlintrc.jsonc', '.oxlintignore', 'cms/oxlint.config.ts', 'deep/oxlint.config.mjs'])(
+    'refuses consumer analyzer configuration at %s',
     (file) => {
-      expect(isOxlintConfig(file)).toBe(false)
+      expect(isOxlintConfig(file)).toBe(true)
     },
   )
+
+  it.each(['src/oxlint-policy.ts', 'docs/oxlint.md', 'oxlint.json'])('permits ordinary source %s', (file) => {
+    expect(isOxlintConfig(file)).toBe(false)
+  })
 })

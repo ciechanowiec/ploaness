@@ -33,10 +33,7 @@ const AGENT_REFERENCE_PATTERNS: readonly AgentReferencePattern[] = [
   },
   {
     // A session identifier an agent stamps on its work, e.g. "Claude-Session:" or "Codex-Session-Id:".
-    pattern: new RegExp(
-      String.raw`\b(?:${AGENT_NAMES}|agent|assistant)[- ]?session(?:[- ]?id)?\s*:`,
-      'i',
-    ),
+    pattern: new RegExp(String.raw`\b(?:${AGENT_NAMES}|agent|assistant)[- ]?session(?:[- ]?id)?\s*:`, 'i'),
     label: 'agent session identifier',
   },
   {
@@ -57,9 +54,8 @@ export interface AgentReferenceMatch {
 }
 
 const findMatchesInLine = (line: string, lineNumber: number): readonly AgentReferenceMatch[] =>
-  AGENT_REFERENCE_PATTERNS.flatMap(
-    (entry: AgentReferencePattern): readonly AgentReferenceMatch[] =>
-      entry.pattern.test(line) ? [{ line: lineNumber, label: entry.label }] : [],
+  AGENT_REFERENCE_PATTERNS.flatMap((entry: AgentReferencePattern): readonly AgentReferenceMatch[] =>
+    entry.pattern.test(line) ? [{ line: lineNumber, label: entry.label }] : [],
   )
 
 /**
@@ -71,6 +67,4 @@ const findMatchesInLine = (line: string, lineNumber: number): readonly AgentRefe
 export const findAgentReferences = (text: string): readonly AgentReferenceMatch[] =>
   text
     .split('\n')
-    .flatMap((line: string, index: number): readonly AgentReferenceMatch[] =>
-      findMatchesInLine(line, index + 1),
-    )
+    .flatMap((line: string, index: number): readonly AgentReferenceMatch[] => findMatchesInLine(line, index + 1))

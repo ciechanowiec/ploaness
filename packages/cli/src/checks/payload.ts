@@ -41,15 +41,7 @@ import {
   runEnvironment,
   workingTreeFiles,
 } from '../context.js'
-import {
-  asFindings,
-  failed,
-  type GateResult,
-  passed,
-  type RunResult,
-  runNode,
-  withOutput,
-} from '../exec.js'
+import { asFindings, failed, type GateResult, passed, type RunResult, runNode, withOutput } from '../exec.js'
 
 // Resolution failure is an answer rather than an exception the caller must catch.
 const resolveProjectToolOrUndefined = (context: Context, tool: string): string | undefined => {
@@ -120,10 +112,7 @@ export const payloadGenerated = (context: Context): GateResult => {
   )
   const drifted: readonly string[] = findGeneratedDrift(regenerated)
   return drifted.length > 0
-    ? failed('generated Payload artefacts drifted from the configuration', [
-        ...drifted,
-        'commit the regenerated files',
-      ])
+    ? failed('generated Payload artefacts drifted from the configuration', [...drifted, 'commit the regenerated files'])
     : passed('the generated Payload artefacts match the configuration')
 }
 
@@ -136,25 +125,16 @@ const PROBE_FILE: readonly string[] = ['dist', 'probes', 'payload-defaults.probe
 const PROBE_TIMEOUT_MS: number = 120_000
 
 const defaultAccessFileOf = (context: Context): string | undefined => {
-  const manifest: string | undefined = manifestPathFrom(
-    'payload',
-    path.join(context.root, 'package.json'),
-  )
-  return manifest === undefined
-    ? undefined
-    : path.join(path.dirname(manifest), ...DEFAULT_ACCESS_MODULE)
+  const manifest: string | undefined = manifestPathFrom('payload', path.join(context.root, 'package.json'))
+  return manifest === undefined ? undefined : path.join(path.dirname(manifest), ...DEFAULT_ACCESS_MODULE)
 }
 
 // The two defects the report can carry, named separately so the summary says which one was found
 // rather than counting them together under whichever wording came first.
 const summariseAccessFindings = (inherited: number, draftReads: number): string => {
   const parts: readonly string[] = [
-    ...(inherited > 0
-      ? [`${String(inherited)} collection(s) or global(s) inherit Payload's default access`]
-      : []),
-    ...(draftReads > 0
-      ? [`${String(draftReads)} drafts read(s) serve an unapproved document to a stranger`]
-      : []),
+    ...(inherited > 0 ? [`${String(inherited)} collection(s) or global(s) inherit Payload's default access`] : []),
+    ...(draftReads > 0 ? [`${String(draftReads)} drafts read(s) serve an unapproved document to a stranger`] : []),
   ]
   return parts.join('; ')
 }
@@ -214,13 +194,7 @@ export const payloadDefaults = (context: Member): GateResult => {
   }
   const result: RunResult = runNode(
     resolveTool('tsx'),
-    [
-      '--tsconfig',
-      tsconfig,
-      path.join(cliDirectory(), ...PROBE_FILE),
-      configFile,
-      defaultAccessFile,
-    ],
+    ['--tsconfig', tsconfig, path.join(cliDirectory(), ...PROBE_FILE), configFile, defaultAccessFile],
     {
       cwd: context.root,
       // The placeholders every analyzer that imports the project receives, then the project's own
@@ -269,8 +243,8 @@ const reported = (file: string, violation: PayloadViolation): string =>
 // it happens to be judged from.
 const crossFileFindings = (context: Member, files: readonly SpecSource[]): readonly string[] =>
   context.isPayload
-    ? [...findUnguardedRelationships(files), ...findBootstrapWrites(files)].map(
-        (located: LocatedViolation): string => reported(located.path, located.violation),
+    ? [...findUnguardedRelationships(files), ...findBootstrapWrites(files)].map((located: LocatedViolation): string =>
+        reported(located.path, located.violation),
       )
     : []
 
@@ -286,20 +260,16 @@ const configSources = (files: readonly SpecSource[]): readonly string[] =>
 // too - so a schema recorded under a directory the project named is found the same way as a default one.
 const migrationEvidenceOf = (context: Member, files: readonly SpecSource[]): MigrationEvidence => {
   const configs: readonly string[] = configSources(files)
-  const declaresPush: boolean = configs.some((code: string): boolean =>
-    declaresPushingAdapter(code),
-  )
+  const declaresPush: boolean = configs.some((code: string): boolean => declaresPushingAdapter(code))
   const declared: string | undefined = configs
     .map((code: string): string | undefined => declaredMigrationDirectoryIn(code))
     .find((found: string | undefined): found is string => found !== undefined)
   return {
     declaresPushingAdapter: declaresPush,
-    directories: migrationDirectoriesFor(declared).flatMap(
-      (relative: string): readonly MigrationDirectory[] => {
-        const directory: string = path.join(context.root, relative)
-        return existsSync(directory) ? [{ path: relative, names: readdirSync(directory) }] : []
-      },
-    ),
+    directories: migrationDirectoriesFor(declared).flatMap((relative: string): readonly MigrationDirectory[] => {
+      const directory: string = path.join(context.root, relative)
+      return existsSync(directory) ? [{ path: relative, names: readdirSync(directory) }] : []
+    }),
   }
 }
 
@@ -350,9 +320,7 @@ export const adminViews = (context: Member): GateResult => {
       source: readFileSync(path.join(context.root, file), 'utf8'),
     }),
   )
-  const specs: readonly SpecSource[] = files.filter((file: SpecSource): boolean =>
-    file.path.startsWith(SPEC_ROOT),
-  )
+  const specs: readonly SpecSource[] = files.filter((file: SpecSource): boolean => file.path.startsWith(SPEC_ROOT))
   // A configuration is looked for outside `tests/` alone, so that a fixture config written inside a
   // specification is not read as a view this project serves.
   const declared: readonly (readonly [SpecSource, readonly DeclaredAdminView[]])[] = files
@@ -369,8 +337,7 @@ export const adminViews = (context: Member): GateResult => {
     return failed(`${String(findings.length)} custom admin view(s) are not scanned`, findings)
   }
   const total: number = declared.reduce(
-    (count: number, [, views]: readonly [SpecSource, readonly DeclaredAdminView[]]): number =>
-      count + views.length,
+    (count: number, [, views]: readonly [SpecSource, readonly DeclaredAdminView[]]): number => count + views.length,
     0,
   )
   return passed(

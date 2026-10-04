@@ -75,9 +75,7 @@ describe('documentedEnvironmentNames', () => {
   })
 
   it('reads a name that is documented with no value', () => {
-    expect(documentedEnvironmentNames('GOOGLE_AI_STUDIO_API_KEY=')).toEqual([
-      'GOOGLE_AI_STUDIO_API_KEY',
-    ])
+    expect(documentedEnvironmentNames('GOOGLE_AI_STUDIO_API_KEY=')).toEqual(['GOOGLE_AI_STUDIO_API_KEY'])
   })
 
   it('accepts the exported form', () => {
@@ -92,9 +90,7 @@ describe('documentedEnvironmentNames', () => {
 
 describe('interpolatedEnvironmentNames', () => {
   it('reads a braced interpolation', () => {
-    expect(interpolatedEnvironmentNames(`published: ${interpolation('SMTP_PORT')}`)).toEqual([
-      'SMTP_PORT',
-    ])
+    expect(interpolatedEnvironmentNames(`published: ${interpolation('SMTP_PORT')}`)).toEqual(['SMTP_PORT'])
   })
 
   // A default supplies the value, so the name is resolvable with nothing declared anywhere and this
@@ -120,11 +116,7 @@ describe('interpolatedEnvironmentNames', () => {
 
 describe('workflowSuppliedNames', () => {
   it('reads a mapping key at any nesting depth', () => {
-    const workflow: string = [
-      '    env:',
-      '      SMTP_PORT: "1025"',
-      '      SMTP_HOST: 127.0.0.1',
-    ].join('\n')
+    const workflow: string = ['    env:', '      SMTP_PORT: "1025"', '      SMTP_HOST: 127.0.0.1'].join('\n')
     expect(workflowSuppliedNames(workflow)).toEqual(['SMTP_HOST', 'SMTP_PORT'])
   })
 
@@ -296,9 +288,7 @@ describe('inlinedEnvironmentNames', () => {
   })
 
   it('reads a bracketed access of a prefixed name', () => {
-    expect(inlinedEnvironmentNames("process.env['NEXT_PUBLIC_CMS_URL']")).toEqual([
-      'NEXT_PUBLIC_CMS_URL',
-    ])
+    expect(inlinedEnvironmentNames("process.env['NEXT_PUBLIC_CMS_URL']")).toEqual(['NEXT_PUBLIC_CMS_URL'])
   })
 
   // The design decision, pinned: admitting the dotted form INSIDE the prefix leaves the general rule
@@ -330,9 +320,7 @@ describe('declaredBuildArguments', () => {
 
   // A default SUPPLIES the value; it does not withhold the declaration, which is what this rule reads.
   it('reads a declaration that carries a default', () => {
-    expect(declaredBuildArguments('ARG NEXT_PUBLIC_CMS_URL=https://cms.example.org')).toEqual([
-      'NEXT_PUBLIC_CMS_URL',
-    ])
+    expect(declaredBuildArguments('ARG NEXT_PUBLIC_CMS_URL=https://cms.example.org')).toEqual(['NEXT_PUBLIC_CMS_URL'])
   })
 
   it('reads every name on a declaration that carries several', () => {
@@ -341,11 +329,7 @@ describe('declaredBuildArguments', () => {
 
   // `ARG` scope is per stage, and which stage runs the build is not a fact this text can establish.
   it('reads a declaration in any stage, because a stage is not a scope this rule resolves', () => {
-    const dockerfileBody: string = [
-      'FROM node AS deps',
-      'FROM deps AS build',
-      'ARG NEXT_PUBLIC_CMS_URL',
-    ].join('\n')
+    const dockerfileBody: string = ['FROM node AS deps', 'FROM deps AS build', 'ARG NEXT_PUBLIC_CMS_URL'].join('\n')
     expect(declaredBuildArguments(dockerfileBody)).toEqual(['NEXT_PUBLIC_CMS_URL'])
   })
 
@@ -387,9 +371,7 @@ describe('dockerfilesBuilding', () => {
   it('gives a nested member its own Dockerfile rather than its parent one', () => {
     const nested: DockerfileSource = dockerfile('apps/web/Dockerfile', 'FROM node')
     const parent: DockerfileSource = dockerfile('apps/Dockerfile', 'FROM node')
-    expect(dockerfilesBuilding('apps/web', ['apps', 'apps/web'], [nested, parent])).toEqual([
-      nested,
-    ])
+    expect(dockerfilesBuilding('apps/web', ['apps', 'apps/web'], [nested, parent])).toEqual([nested])
   })
 })
 

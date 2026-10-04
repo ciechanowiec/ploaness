@@ -25,8 +25,7 @@ export const PROSE_EXTENSIONS: readonly string[] = ['.md', '.adoc', '.txt']
  * @param bytes the file's leading content.
  * @returns true when a NUL byte appears in the probed span, which no text encoding produces.
  */
-export const isBinary = (bytes: Uint8Array): boolean =>
-  bytes.subarray(0, BINARY_PROBE_BYTES).includes(0)
+export const isBinary = (bytes: Uint8Array): boolean => bytes.subarray(0, BINARY_PROBE_BYTES).includes(0)
 
 /**
  * Decide whether a path carries one of the given extensions.
@@ -45,9 +44,7 @@ const matchesPattern = (filePath: string, pattern: RolePattern): boolean => {
     return new RegExp(pattern).test(filePath)
   }
   const prefix: string = `${pattern.memberPath}/`
-  return (
-    filePath.startsWith(prefix) && new RegExp(pattern.pattern).test(filePath.slice(prefix.length))
-  )
+  return filePath.startsWith(prefix) && new RegExp(pattern.pattern).test(filePath.slice(prefix.length))
 }
 
 /**
@@ -91,9 +88,7 @@ const asRegexToken = (token: string): string => {
  * @returns whether the whole path matches the whole pattern.
  */
 export const matchesGlob = (pattern: string, filePath: string): boolean =>
-  new RegExp(
-    `^${pattern.replaceAll(GLOB_TOKEN, (token: string): string => asRegexToken(token))}$`,
-  ).test(filePath)
+  new RegExp(`^${pattern.replaceAll(GLOB_TOKEN, (token: string): string => asRegexToken(token))}$`).test(filePath)
 
 /**
  * Decide whether a path holds code the Code Rules govern.

@@ -11,7 +11,7 @@
 // and every threshold, ban and pinned spec above is the same whatever they say.
 import { existsSync } from 'node:fs'
 import { defineConfig, devices } from '@playwright/test'
-import { portOf, runEnvironmentFiles } from '@ploaness/governance'
+import { canReuseBrowserServer, portOf, runEnvironmentFiles } from '@ploaness/governance'
 import { projectSettings } from './project-settings.js'
 
 // Read before anything else, because a spec module is what needs it. Playwright evaluates this config
@@ -26,6 +26,7 @@ for (const file of runEnvironmentFiles(existsSync)) {
 }
 
 const isContinuousIntegration: boolean = Boolean(process.env['CI'])
+const isReuseExistingServer: boolean = canReuseBrowserServer(process.env)
 
 // The web server is `next dev`, which compiles a route on its first request. The first hit to the heavy
 // Payload admin bundle can exceed the 30s Playwright default on a cold runner, so the budget gives
@@ -86,7 +87,7 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
     ...projectSettings.auxiliaryServers.map((server) => ({
       command: server.command,
       url: server.url,
-      reuseExistingServer: !isContinuousIntegration,
+      reuseExistingServer: isReuseExistingServer,
       // The same budget and the same reuse rule as the application: an auxiliary server is started by
       // the same runner on the same cold machine, so a shorter one would fail for the reason that one
       // is long.
@@ -101,15 +102,12 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
       // this member's `node_modules/.bin` - which is the member under test, so it is the right one.
       command: 'next dev',
       url: projectSettings.serverUrl,
-      reuseExistingServer: !isContinuousIntegration,
+      reuseExistingServer: isReuseExistingServer,
       timeout: SERVER_TIMEOUT_MS,
       // The port comes from the declared origin. Without it the server started on the framework's
       // default while the runner waited on the origin the project declared, so the one setting that
       // exists to describe a non-default port made the run hang instead of work.
-      env: withPort(
-        { NEXT_TELEMETRY_DISABLED: '1', NODE_OPTIONS: '--no-deprecation' },
-        declaredPort,
-      ),
+      env: withPort({ NEXT_TELEMETRY_DISABLED: '1', NODE_OPTIONS: '--no-deprecation' }, declaredPort),
     },
   ],
 })

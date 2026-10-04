@@ -29,30 +29,18 @@ const aws = (id: string, reason: string): CheckovCheck => ({ id, provider: 'aws'
 /** The AWS checks enabled at error severity. */
 export const AWS_CHECKS: readonly CheckovCheck[] = [
   // Identity and access.
-  aws(
-    'CKV_AWS_274',
-    'a role, user or group carries AdministratorAccess, so one environment can destroy another',
-  ),
-  aws(
-    'CKV_AWS_275',
-    'the same administrator policy reached through a data source rather than an attachment',
-  ),
+  aws('CKV_AWS_274', 'a role, user or group carries AdministratorAccess, so one environment can destroy another'),
+  aws('CKV_AWS_275', 'the same administrator policy reached through a data source rather than an attachment'),
   aws('CKV_AWS_1', 'a policy document grants every action on every resource'),
   aws('CKV_AWS_49', 'a policy document names "*" as a statement action'),
   aws('CKV_AWS_62', 'the same administrative grant written as an inline policy'),
   aws('CKV_AWS_63', 'the same wildcard action written as an inline policy'),
-  aws(
-    'CKV2_AWS_40',
-    'a policy grants every IAM action, which is administrator access under another name',
-  ),
+  aws('CKV2_AWS_40', 'a policy grants every IAM action, which is administrator access under another name'),
   aws('CKV2_AWS_56', 'a principal carries IAMFullAccess'),
   aws('CKV_AWS_283', 'a resource policy grants an action to every principal with no condition'),
   aws('CKV_AWS_41', 'a long-lived access key is written into a provider block'),
   aws('CKV_AWS_348', 'an access key is minted for the root user'),
-  aws(
-    'CKV_AWS_364',
-    'a service principal may invoke the function from any account, with no source ARN or account',
-  ),
+  aws('CKV_AWS_364', 'a service principal may invoke the function from any account, with no source ARN or account'),
   aws('CKV_AWS_33', 'a key policy grants a wildcard principal with no condition'),
   // Databases, caches and search.
   aws('CKV_AWS_17', 'the database is reachable from the public internet'),
@@ -80,14 +68,8 @@ export const AWS_CHECKS: readonly CheckovCheck[] = [
   aws('CKV2_AWS_49', 'a migration endpoint explicitly sets its SSL mode to none'),
   // Storage.
   aws('CKV_AWS_20', 'a bucket ACL grants public read, which serves unpublished media to anybody'),
-  aws(
-    'CKV_AWS_57',
-    'a bucket ACL grants public write, which is arbitrary upload to the site own origin',
-  ),
-  aws(
-    'CKV_AWS_70',
-    'a bucket policy names any principal, which is the policy spelling of the same exposure',
-  ),
+  aws('CKV_AWS_57', 'a bucket ACL grants public write, which is arbitrary upload to the site own origin'),
+  aws('CKV_AWS_70', 'a bucket policy names any principal, which is the policy spelling of the same exposure'),
   aws('CKV_AWS_375', 'a bucket ACL grant gives full control or ACL reads to every user'),
   aws('CKV2_AWS_43', 'a bucket ACL grant targets every authenticated AWS user'),
   aws('CKV_AWS_19', 'the bucket stores uploads unencrypted'),
@@ -105,22 +87,13 @@ export const AWS_CHECKS: readonly CheckovCheck[] = [
   aws('CKV_AWS_235', 'an image copy is unencrypted'),
   // Network.
   aws('CKV_AWS_277', 'a security group admits every port from the whole internet'),
-  aws(
-    'CKV_AWS_100',
-    'a node group sets an SSH key with no source security group, which AWS opens to the world',
-  ),
-  aws(
-    'CKV_AWS_79',
-    'instance metadata v1 is enabled, so any request forgery becomes credential theft',
-  ),
+  aws('CKV_AWS_100', 'a node group sets an SSH key with no source security group, which AWS opens to the world'),
+  aws('CKV_AWS_79', 'instance metadata v1 is enabled, so any request forgery becomes credential theft'),
   aws('CKV_AWS_371', 'the notebook instance allows instance metadata v1'),
   // Compute and build.
   aws('CKV_AWS_210', 'a batch container runs privileged'),
   aws('CKV_AWS_78', 'build artifact encryption is explicitly disabled'),
-  aws(
-    'CKV_AWS_386',
-    'an image lookup names no owner and a wildcard name, which is the substitution attack',
-  ),
+  aws('CKV_AWS_386', 'an image lookup names no owner and a wildcard name, which is the substitution attack'),
   aws('CKV_AWS_390', 'the cluster block on public access is switched off'),
   // The edge.
   aws('CKV_AWS_328', 'the load balancer runs request-desync mitigation in monitor mode only'),

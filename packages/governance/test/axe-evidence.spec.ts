@@ -9,13 +9,12 @@ describe('accessibility source evidence', () => {
     expect(containsRoute(source, '/profile')).toBe(false)
   })
 
-  it.each([
-    '// new AxeBuilder({ page }).analyze()',
-    '/* axe.run(document) */',
-    'const text = "AxeBuilder"',
-  ])('does not accept commented or quoted axe evidence: %s', (source: string) => {
-    expect(reachesAxe({ path: 'tests/e2e/profile.ts', source }, [])).toBe(false)
-  })
+  it.each(['// new AxeBuilder({ page }).analyze()', '/* axe.run(document) */', 'const text = "AxeBuilder"'])(
+    'does not accept commented or quoted axe evidence: %s',
+    (source: string) => {
+      expect(reachesAxe({ path: 'tests/e2e/profile.ts', source }, [])).toBe(false)
+    },
+  )
 
   it('does not borrow an unrelated helper with the same suffix', () => {
     const spec: SpecSource = {
@@ -23,9 +22,7 @@ describe('accessibility source evidence', () => {
       source: "import { scan } from '../helpers/a11y'",
     }
     expect(
-      reachesAxe(spec, [
-        { path: 'src/unrelated/helpers/a11y.ts', source: 'new AxeBuilder({ page }).analyze()' },
-      ]),
+      reachesAxe(spec, [{ path: 'src/unrelated/helpers/a11y.ts', source: 'new AxeBuilder({ page }).analyze()' }]),
     ).toBe(false)
   })
 
@@ -34,21 +31,18 @@ describe('accessibility source evidence', () => {
       path: 'tests/e2e/profile.ts',
       source: "// import { scan } from '../helpers/a11y'",
     }
-    expect(
-      reachesAxe(spec, [
-        { path: 'tests/helpers/a11y.ts', source: 'new AxeBuilder({ page }).analyze()' },
-      ]),
-    ).toBe(false)
+    expect(reachesAxe(spec, [{ path: 'tests/helpers/a11y.ts', source: 'new AxeBuilder({ page }).analyze()' }])).toBe(
+      false,
+    )
   })
 
   it.each(['../helpers/a11y.js', '../helpers/a11y', '../helpers/a11y.ts'])(
     'resolves an imported source helper through %s',
     (specifier: string) => {
       expect(
-        reachesAxe(
-          { path: 'tests/e2e/profile.ts', source: `import { scan } from '${specifier}'` },
-          [{ path: 'tests/helpers/a11y.ts', source: 'new AxeBuilder({ page }).analyze()' }],
-        ),
+        reachesAxe({ path: 'tests/e2e/profile.ts', source: `import { scan } from '${specifier}'` }, [
+          { path: 'tests/helpers/a11y.ts', source: 'new AxeBuilder({ page }).analyze()' },
+        ]),
       ).toBe(true)
     },
   )

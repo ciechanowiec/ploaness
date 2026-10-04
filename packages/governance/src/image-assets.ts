@@ -3,12 +3,10 @@ import { inflateSync } from 'node:zlib'
 
 const LATIN1: TextDecoder = new TextDecoder('latin1')
 
-const dataView = (bytes: Uint8Array): DataView =>
-  new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+const dataView = (bytes: Uint8Array): DataView => new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
 
 // Read a run of bytes as a Latin-1 string (each byte maps 1:1 to a code point), for magic-number headers.
-const asciiSlice = (bytes: Uint8Array, start: number, end: number): string =>
-  LATIN1.decode(bytes.subarray(start, end))
+const asciiSlice = (bytes: Uint8Array, start: number, end: number): string => LATIN1.decode(bytes.subarray(start, end))
 
 // The PNG signature, written as the byte string the format specification defines rather than as eight
 // bare numbers: a high bit, "PNG", then a CRLF/EOF/LF run that detects a transfer which mangled line
@@ -45,11 +43,7 @@ const walkPngChunks = (bytes: Uint8Array, view: DataView): PngChunkWalk => {
   /* eslint-enable functional/no-let -- the walk above is the only place this file mutates */
   while (offset + CHUNK_OVERHEAD_BYTES <= bytes.length) {
     const length: number = view.getUint32(offset)
-    const type: string = asciiSlice(
-      bytes,
-      offset + CHUNK_LENGTH_BYTES,
-      offset + CHUNK_PAYLOAD_OFFSET,
-    )
+    const type: string = asciiSlice(bytes, offset + CHUNK_LENGTH_BYTES, offset + CHUNK_PAYLOAD_OFFSET)
     const dataEnd: number = offset + CHUNK_PAYLOAD_OFFSET + length
     if (dataEnd + CHUNK_CRC_BYTES > bytes.length) {
       return { parts, error: `truncated PNG (chunk "${type}" runs past end of file)` }
@@ -104,8 +98,7 @@ const validateJpeg = (bytes: Uint8Array): string | null => {
   ) {
     return 'not a valid JPEG (bad SOI marker)'
   }
-  return bytes.at(SECOND_TO_LAST_BYTE) !== JPEG_MARKER_PREFIX ||
-    bytes.at(LAST_BYTE) !== JPEG_END_OF_IMAGE
+  return bytes.at(SECOND_TO_LAST_BYTE) !== JPEG_MARKER_PREFIX || bytes.at(LAST_BYTE) !== JPEG_END_OF_IMAGE
     ? 'truncated JPEG (missing EOI marker)'
     : null
 }
@@ -137,8 +130,7 @@ const validateWebp = (bytes: Uint8Array): string | null => {
   ) {
     return 'not a valid WebP (bad RIFF/WEBP header)'
   }
-  const declaredLength: number =
-    dataView(bytes).getUint32(RIFF_SIZE_OFFSET, true) + RIFF_SIZE_EXCLUDES_BYTES
+  const declaredLength: number = dataView(bytes).getUint32(RIFF_SIZE_OFFSET, true) + RIFF_SIZE_EXCLUDES_BYTES
   return declaredLength > bytes.length ? 'truncated WebP (RIFF size exceeds file length)' : null
 }
 
@@ -154,10 +146,7 @@ const ICO_COUNT_OFFSET: number = 4
 const ICO_ICON_TYPE: number = 1
 
 const validateIcoEntries = (bytes: Uint8Array, view: DataView, count: number): string | null => {
-  const entryIndexes: readonly number[] = Array.from(
-    { length: count },
-    (_: unknown, at: number): number => at,
-  )
+  const entryIndexes: readonly number[] = Array.from({ length: count }, (_: unknown, at: number): number => at)
   for (const index of entryIndexes) {
     const entry: number = ICO_HEADER_BYTES + index * ICO_DIR_ENTRY_BYTES
     if (entry + ICO_DIR_ENTRY_BYTES > bytes.length) {
@@ -205,8 +194,7 @@ const extensionOf = (filePath: string): string => {
 }
 
 /** Whether a path is an image asset this gate validates (by extension). */
-export const isSupportedImagePath = (filePath: string): boolean =>
-  Object.hasOwn(VALIDATORS, extensionOf(filePath))
+export const isSupportedImagePath = (filePath: string): boolean => Object.hasOwn(VALIDATORS, extensionOf(filePath))
 
 /**
  * Validate the bytes of one image, dispatched by the path's extension. Returns a human-readable reason
@@ -217,8 +205,7 @@ export const isSupportedImagePath = (filePath: string): boolean =>
  * @returns the failure reason, or null when the image is intact.
  */
 export const validateImageBytes = (filePath: string, bytes: Uint8Array): string | null => {
-  const validator: ((bytes: Uint8Array) => string | null) | undefined =
-    VALIDATORS[extensionOf(filePath)]
+  const validator: ((bytes: Uint8Array) => string | null) | undefined = VALIDATORS[extensionOf(filePath)]
   if (validator === undefined) {
     return null
   }

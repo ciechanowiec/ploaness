@@ -100,15 +100,11 @@ export const parseImageReference = (raw: string): ImageReference => {
  */
 export const isMutableImageReference = (raw: string): boolean => {
   const reference: ImageReference = parseImageReference(raw)
-  return (
-    reference.digest === undefined && (reference.tag === undefined || reference.tag === MUTABLE_TAG)
-  )
+  return reference.digest === undefined && (reference.tag === undefined || reference.tag === MUTABLE_TAG)
 }
 
 const matchesPattern = (pattern: string, name: string): boolean =>
-  pattern.endsWith(WILDCARD)
-    ? name.startsWith(pattern.slice(0, -WILDCARD.length))
-    : name === pattern
+  pattern.endsWith(WILDCARD) ? name.startsWith(pattern.slice(0, -WILDCARD.length)) : name === pattern
 
 const compareCore = (one: ParsedVersion, other: ParsedVersion): number =>
   one.major - other.major || one.minor - other.minor || one.patch - other.patch
@@ -118,8 +114,7 @@ const componentCount = (version: string): number =>
 
 // Undecidable is refused: a version that cannot be placed against the floor is not below it.
 const reachesFloor = (version: string | undefined, floor: string): boolean => {
-  const parsed: ParsedVersion | undefined =
-    version === undefined ? undefined : parseVersion(version)
+  const parsed: ParsedVersion | undefined = version === undefined ? undefined : parseVersion(version)
   const floorParsed: ParsedVersion | undefined = parseVersion(floor)
   return (
     version === undefined ||
@@ -133,10 +128,7 @@ const reachesFloor = (version: string | undefined, floor: string): boolean => {
 const isAllowedTag = (entry: BlockedImage, tag: string | undefined): boolean =>
   entry.allowedTag !== undefined && tag !== undefined && entry.allowedTag.test(tag)
 
-const refusalOf = (
-  subject: string,
-  entry: BlockedImage | BlockedPackage | BlockedSystemPackage,
-): Refusal => ({
+const refusalOf = (subject: string, entry: BlockedImage | BlockedPackage | BlockedSystemPackage): Refusal => ({
   subject,
   reason: entry.reason,
   replacement: entry.replacement,
@@ -155,9 +147,7 @@ export const refuseImage = (raw: string): Refusal | undefined => {
   if (entry === undefined || isAllowedTag(entry, reference.tag)) {
     return undefined
   }
-  return entry.from !== undefined && !reachesFloor(reference.tag, entry.from)
-    ? undefined
-    : refusalOf(raw, entry)
+  return entry.from !== undefined && !reachesFloor(reference.tag, entry.from) ? undefined : refusalOf(raw, entry)
 }
 
 /**
@@ -167,8 +157,8 @@ export const refuseImage = (raw: string): Refusal | undefined => {
  * @returns the refusal, or undefined when the package is not one ploaness refuses at that version.
  */
 export const refusePackage = (name: string, version: string): Refusal | undefined => {
-  const entry: BlockedPackage | undefined = BLOCKED_PACKAGES.find(
-    (candidate: BlockedPackage): boolean => matchesPattern(candidate.name, name),
+  const entry: BlockedPackage | undefined = BLOCKED_PACKAGES.find((candidate: BlockedPackage): boolean =>
+    matchesPattern(candidate.name, name),
   )
   if (entry === undefined) {
     return undefined
@@ -203,9 +193,7 @@ export interface InstalledPackage {
  * @param json the command's stdout.
  * @returns every installed package, or undefined when the text is not that inventory.
  */
-export const packagesInLicenseInventory = (
-  json: string,
-): readonly InstalledPackage[] | undefined => {
+export const packagesInLicenseInventory = (json: string): readonly InstalledPackage[] | undefined => {
   const inventory: unknown = parseJsonc(json).value
   if (!isRecord(inventory) || isArray(inventory)) {
     return undefined
@@ -226,9 +214,7 @@ export const packagesInLicenseInventory = (
  * @param packages the resolved set.
  * @returns one refusal per refused name and version, in inventory order.
  */
-export const refuseInstalledPackages = (
-  packages: readonly InstalledPackage[],
-): readonly Refusal[] =>
+export const refuseInstalledPackages = (packages: readonly InstalledPackage[]): readonly Refusal[] =>
   packages.flatMap((entry: InstalledPackage): readonly Refusal[] =>
     entry.versions.flatMap((version: string): readonly Refusal[] => {
       const refusal: Refusal | undefined = refusePackage(entry.name, version)

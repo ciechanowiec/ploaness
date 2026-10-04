@@ -27,8 +27,7 @@ const escaped = (text: string): string => text.replaceAll(REGEX_METACHARACTERS, 
 // they still are.
 const MODULE_SPECIFIER: RegExp = /\b(?:from|import)\s*(?:\(\s*)?['"][^'"]*['"]/gu
 
-const routeText = (source: string): string =>
-  withoutComments(source).replaceAll(MODULE_SPECIFIER, '')
+const routeText = (source: string): string => withoutComments(source).replaceAll(MODULE_SPECIFIER, '')
 
 /**
  * Whether a specification names one route.
@@ -65,27 +64,17 @@ const RELATIVE_IMPORT: RegExp = /\bfrom\s*['"](\.[^'"]*)['"]/gu
 
 // Resolve from the importing file, without accessing the filesystem. All candidates were already read.
 const matchesFile = (specifier: string, importer: string, candidate: string): boolean => {
-  const resolved: string = path.posix.normalize(
-    path.posix.join(path.posix.dirname(importer), specifier),
-  )
+  const resolved: string = path.posix.normalize(path.posix.join(path.posix.dirname(importer), specifier))
   const stem: string = resolved.replace(/\.[cm]?jsx?$/u, '')
   return [
     resolved,
-    ...['.ts', '.tsx', '.mts', '.cts', '/index.ts', '/index.tsx'].map(
-      (suffix: string): string => `${stem}${suffix}`,
-    ),
+    ...['.ts', '.tsx', '.mts', '.cts', '/index.ts', '/index.tsx'].map((suffix: string): string => `${stem}${suffix}`),
   ].includes(candidate)
 }
 
-const importedSources = (
-  spec: SpecSource,
-  everyFile: readonly SpecSource[],
-): readonly SpecSource[] =>
-  [...stripComments(spec.source).matchAll(RELATIVE_IMPORT)].flatMap(
-    (match: RegExpExecArray): SpecSource[] =>
-      everyFile.filter((candidate: SpecSource): boolean =>
-        matchesFile(match[1] ?? '', spec.path, candidate.path),
-      ),
+const importedSources = (spec: SpecSource, everyFile: readonly SpecSource[]): readonly SpecSource[] =>
+  [...stripComments(spec.source).matchAll(RELATIVE_IMPORT)].flatMap((match: RegExpExecArray): SpecSource[] =>
+    everyFile.filter((candidate: SpecSource): boolean => matchesFile(match[1] ?? '', spec.path, candidate.path)),
   )
 
 /**
@@ -111,12 +100,6 @@ export const reachesAxe = (spec: SpecSource, everyFile: readonly SpecSource[]): 
 export const reachesLayoutScan = (spec: SpecSource, everyFile: readonly SpecSource[]): boolean =>
   reachesMarker(spec, everyFile, LAYOUT_MARKERS)
 
-const reachesMarker = (
-  spec: SpecSource,
-  everyFile: readonly SpecSource[],
-  markers: readonly string[],
-): boolean =>
+const reachesMarker = (spec: SpecSource, everyFile: readonly SpecSource[], markers: readonly string[]): boolean =>
   carriesMarker(spec.source, markers) ||
-  importedSources(spec, everyFile).some((imported: SpecSource): boolean =>
-    carriesMarker(imported.source, markers),
-  )
+  importedSources(spec, everyFile).some((imported: SpecSource): boolean => carriesMarker(imported.source, markers))

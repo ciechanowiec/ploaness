@@ -42,10 +42,7 @@ export const BUNDLE_BUDGET_BYTES: number = BUDGET_KIB * BYTES_PER_KIB
 
 /** Sum the gzipped sizes of the built assets and compare the total against the budget. */
 export const evaluateBundle = (files: readonly BundleFile[], budgetBytes: number): BundleReport => {
-  const totalGzipBytes: number = files.reduce(
-    (sum: number, file: BundleFile): number => sum + file.gzipBytes,
-    0,
-  )
+  const totalGzipBytes: number = files.reduce((sum: number, file: BundleFile): number => sum + file.gzipBytes, 0)
   return {
     totalGzipBytes,
     budgetBytes,

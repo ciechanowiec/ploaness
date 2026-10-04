@@ -31,15 +31,10 @@ export const jsxAccessibilityFiles = (
   generated: readonly string[],
   siblings: readonly string[],
 ): readonly string[] => {
-  const ignored: readonly string[] = [
-    ...APPLICATION_JSX_IGNORES,
-    ...generated,
-    ...analysisBoundaries(siblings),
-  ]
+  const ignored: readonly string[] = [...APPLICATION_JSX_IGNORES, ...generated, ...analysisBoundaries(siblings)]
   return [...new Set(files)].filter(
     (file: string): boolean =>
-      hasExtension(file, JSX_EXTENSIONS) &&
-      !ignored.some((pattern: string): boolean => matchesGlob(pattern, file)),
+      hasExtension(file, JSX_EXTENSIONS) && !ignored.some((pattern: string): boolean => matchesGlob(pattern, file)),
   )
 }
 

@@ -48,8 +48,7 @@ const WORDING: Readonly<Record<DockerFailureKind, Wording>> = {
     remedies: ['start the Docker daemon and retry; nothing about the project has been judged yet'],
   },
   rateLimited: {
-    suffix:
-      'could not pull its analyzer image: the container registry is rate-limiting this network',
+    suffix: 'could not pull its analyzer image: the container registry is rate-limiting this network',
     remedies: [
       'Docker Hub caps anonymous pulls per IP, and a shared CI egress reaches that cap sooner than one machine does',
       'run `docker login` and retry, or retry once the window resets',
@@ -119,12 +118,7 @@ const MARKERS: readonly (readonly [DockerFailureKind, readonly string[]])[] = [
   ],
   [
     'manifestUnknown',
-    [
-      'manifest unknown',
-      'not found: manifest',
-      'repository does not exist',
-      'failed to resolve reference',
-    ],
+    ['manifest unknown', 'not found: manifest', 'repository does not exist', 'failed to resolve reference'],
   ],
 ]
 
@@ -139,10 +133,7 @@ const MARKERS: readonly (readonly [DockerFailureKind, readonly string[]])[] = [
  * @param invocation the finished `docker` invocation.
  * @returns the failure, or undefined when the image was acquired.
  */
-export const classifyImageFailure = (
-  gate: string,
-  invocation: ContainerRun,
-): DockerFailure | undefined => {
+export const classifyImageFailure = (gate: string, invocation: ContainerRun): DockerFailure | undefined => {
   if (invocation.code === 0) {
     return undefined
   }
@@ -168,10 +159,7 @@ export const classifyImageFailure = (
  * @param invocation the finished `docker run` or shell invocation.
  * @returns the failure, or undefined when the exit code is the tool's own verdict.
  */
-export const classifyContainerExit = (
-  gate: string,
-  invocation: ContainerRun,
-): DockerFailure | undefined => {
+export const classifyContainerExit = (gate: string, invocation: ContainerRun): DockerFailure | undefined => {
   if (invocation.code === COMMAND_NOT_FOUND) {
     return failureFor('absent', gate)
   }

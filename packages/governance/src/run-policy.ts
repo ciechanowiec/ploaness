@@ -27,8 +27,7 @@ export interface RunPoint {
  * @param point the gate's outcome and the mode the run is in.
  * @returns true when no later gate should run.
  */
-export const endsRun = (point: RunPoint): boolean =>
-  point.isFailure && (point.isEnforced || point.isPrecondition)
+export const endsRun = (point: RunPoint): boolean => point.isFailure && (point.isEnforced || point.isPrecondition)
 
 /**
  * Whether a member holds source code its suite could be about.
@@ -52,6 +51,5 @@ export const carriesSourceCode = (
 ): boolean =>
   trackedPaths.some(
     (filePath: string): boolean =>
-      isCode(filePath) &&
-      sourceRoots.some((root: string): boolean => filePath.startsWith(`${root}/`)),
+      isCode(filePath) && sourceRoots.some((root: string): boolean => filePath.startsWith(`${root}/`)),
   )

@@ -16,11 +16,7 @@ import type { WiringViolation } from '../src/wiring-violation.js'
 // The large spec beside this one pins WHAT each rule reports. This pins only that the partition holds,
 // against an input broken in as many ways at once as the two halves can each speak to.
 
-const BIOME_FILES: Readonly<Record<string, unknown>> = requiredBiomeFiles([
-  'src',
-  'tests',
-  'scripts',
-])
+const BIOME_FILES: Readonly<Record<string, unknown>> = requiredBiomeFiles(['src', 'tests', 'scripts'])
 
 // Broken on both sides at once: the harness undeclared, a neutered script, a floating version, a range,
 // a mismatched Payload package, the wrong package manager and engines, an override redefining a pin, a
@@ -123,11 +119,7 @@ describe('the repository and package halves partition the wiring contract', () =
   it('keeps the workspace file out of the package half entirely', () => {
     // The defect this refactor exists for, as a property rather than a case: a package-scope rule has no
     // way to reach an overrides block, so it can no longer vouch for a pin the root replaced.
-    expect(
-      packageHalf().filter((finding: string): boolean => finding.includes('pnpm-workspace.yaml')),
-    ).toEqual([])
-    expect(
-      repositoryHalf().some((finding: string): boolean => finding.includes('pnpm-workspace.yaml')),
-    ).toBe(true)
+    expect(packageHalf().filter((finding: string): boolean => finding.includes('pnpm-workspace.yaml'))).toEqual([])
+    expect(repositoryHalf().some((finding: string): boolean => finding.includes('pnpm-workspace.yaml'))).toBe(true)
   })
 })

@@ -120,9 +120,7 @@ describe('the accessibility sweep settings', () => {
   it('adds a declared route prefix to the shipped ones rather than replacing them', () => {
     const routes: readonly string[] = readSettings({
       ploaness: {
-        accessibilitySkipRoutes: [
-          { pattern: '/preview', reason: 'requires an authenticated session' },
-        ],
+        accessibilitySkipRoutes: [{ pattern: '/preview', reason: 'requires an authenticated session' }],
       },
     }).accessibilitySkipRoutes
     expect(routes).toContain('/preview')
@@ -158,9 +156,7 @@ const declare = (value: unknown): Settings => readSettings({ ploaness: { coverag
 
 describe('reading declared exclusions', () => {
   it('honours an entry that states a role', () => {
-    const settings: Settings = declare([
-      { pattern: 'src/migrations/**', reason: 'generated migrations' },
-    ])
+    const settings: Settings = declare([{ pattern: 'src/migrations/**', reason: 'generated migrations' }])
     expect(settings.coverageExclude).toContain('src/migrations/**')
   })
 
@@ -176,9 +172,7 @@ describe('reading declared exclusions', () => {
 
   it('still records an unhonoured entry, so a gate can report it', () => {
     const settings: Settings = declare(['src/migrations/**'])
-    expect(settings.declaredExclusions.map((found: DeclaredExclusion) => found.pattern)).toContain(
-      'src/migrations/**',
-    )
+    expect(settings.declaredExclusions.map((found: DeclaredExclusion) => found.pattern)).toContain('src/migrations/**')
   })
 
   it('names the setting an entry came from', () => {
@@ -233,9 +227,7 @@ describe('the auxiliary servers a project declares', () => {
         ],
       },
     })
-    expect(settings.auxiliaryServers).toEqual([
-      { command: 'storybook dev', url: 'http://localhost:6006' },
-    ])
+    expect(settings.auxiliaryServers).toEqual([{ command: 'storybook dev', url: 'http://localhost:6006' }])
   })
 
   it('reads nothing from a value that is not a list, so a typo starts no process', () => {
@@ -263,9 +255,7 @@ describe('pureLogicRoots assembly', () => {
   })
 
   it('strips a trailing slash, because the renderer appends one', () => {
-    expect(rootsFor([{ pattern: 'src/config/', reason: 'pure by construction' }])).toContain(
-      'src/config',
-    )
+    expect(rootsFor([{ pattern: 'src/config/', reason: 'pure by construction' }])).toContain('src/config')
   })
 
   it('honours no root that states no reason', () => {

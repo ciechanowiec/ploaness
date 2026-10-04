@@ -20,9 +20,7 @@ const readJson = (file: string): Record<string, unknown> =>
 
 const pins: Record<string, unknown> = readJson(path.join(configPackage, 'pins.json'))
 const rootManifest: Record<string, unknown> = readJson(path.join(workspaceRoot, 'package.json'))
-const fixtureManifest: Record<string, unknown> = readJson(
-  path.join(workspaceRoot, 'it', 'project', 'package.json'),
-)
+const fixtureManifest: Record<string, unknown> = readJson(path.join(workspaceRoot, 'it', 'project', 'package.json'))
 
 const enginesOf = (manifest: Record<string, unknown>): Record<string, string> =>
   (manifest['engines'] ?? {}) as Record<string, string>
@@ -57,12 +55,9 @@ describe('the pnpm version a consumer must declare', () => {
   it.each([
     ['this repository', rootManifest],
     ['the consumer fixture', fixtureManifest],
-  ])(
-    'is what %s declares as its engines.pnpm',
-    (_who: string, manifest: Record<string, unknown>) => {
-      expect(enginesOf(manifest)['pnpm']).toBe(pinnedPnpmVersion(pins['packageManager'] as string))
-    },
-  )
+  ])('is what %s declares as its engines.pnpm', (_who: string, manifest: Record<string, unknown>) => {
+    expect(enginesOf(manifest)['pnpm']).toBe(pinnedPnpmVersion(pins['packageManager'] as string))
+  })
 })
 
 describe('the Node floor ploaness pins', () => {
@@ -88,18 +83,14 @@ describe('the Node floor ploaness pins', () => {
 // that while it names the version ploaness itself resolves - and vitest's own range moves it without
 // asking, so the two were free to drift the moment the pin was written.
 const versionOfResolved = (specifier: string, from: string): string => {
-  const resolveFrom: NodeJS.Require = createRequire(
-    createRequire(from).resolve(`${specifier}/package.json`),
-  )
+  const resolveFrom: NodeJS.Require = createRequire(createRequire(from).resolve(`${specifier}/package.json`))
   const manifest: Record<string, unknown> = readJson(resolveFrom.resolve('vite/package.json'))
   return manifest['version'] as string
 }
 
 const groupVersions = (name: string): Record<string, string> => {
   const groups: readonly unknown[] = pins['groups'] as readonly unknown[]
-  const group: unknown = groups.find(
-    (entry: unknown): boolean => (entry as Record<string, unknown>)['name'] === name,
-  )
+  const group: unknown = groups.find((entry: unknown): boolean => (entry as Record<string, unknown>)['name'] === name)
   return (group as Record<string, unknown>)['versions'] as Record<string, string>
 }
 
@@ -126,8 +117,6 @@ const dependenciesOf = (manifest: Record<string, unknown>): Record<string, strin
 
 describe('the Next lint plugin ploaness declares', () => {
   it('is at the version of the next this file pins for every application', () => {
-    expect(dependenciesOf(configManifest)['@next/eslint-plugin-next']).toBe(
-      groupVersions('web')['next'],
-    )
+    expect(dependenciesOf(configManifest)['@next/eslint-plugin-next']).toBe(groupVersions('web')['next'])
   })
 })

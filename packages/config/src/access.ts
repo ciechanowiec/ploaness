@@ -54,9 +54,7 @@ export const PUBLIC_ACCESS: readonly PublicAccess[] = projectSettings.publicAcce
 export const datalessFields = async (): Promise<DatalessFields> => {
   try {
     const root: string = process.cwd()
-    const tsconfig: unknown = parseJsonc(
-      readFileSync(path.join(root, 'tsconfig.json'), 'utf8'),
-    ).value
+    const tsconfig: unknown = parseJsonc(readFileSync(path.join(root, 'tsconfig.json'), 'utf8')).value
     const configFile: string = path.join(root, payloadConfigPathOf(tsconfig))
     const configModule: unknown = await import(pathToFileURL(configFile).href)
     // Awaited either way: `buildConfig` returns a promise, and a plain object is read the same.

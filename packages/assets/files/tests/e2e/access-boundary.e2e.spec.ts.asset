@@ -37,27 +37,18 @@ import {
 const ACCESS_ENDPOINT: string = '/api/access'
 
 test.describe('Access boundary', () => {
-  test('an unauthenticated caller receives only the access the project declared', async ({
-    request,
-    baseURL,
-  }) => {
+  test('an unauthenticated caller receives only the access the project declared', async ({ request, baseURL }) => {
     const origin: string = baseURL ?? ''
     expect(origin, 'the ploaness Playwright config must declare a server URL').not.toEqual('')
     // Anonymous by construction rather than by arrangement: the request fixture carries no credential
     // unless the Playwright config sets a storageState, and that config is a bare re-export of the
     // harness's own, which a project cannot extend. So there is no login for this call to inherit.
     const anonymous: APIResponse = await request.get(`${origin}${ACCESS_ENDPOINT}`)
-    expect(
-      anonymous.ok(),
-      `${ACCESS_ENDPOINT} did not answer; every Payload application serves it`,
-    ).toBe(true)
+    expect(anonymous.ok(), `${ACCESS_ENDPOINT} did not answer; every Payload application serves it`).toBe(true)
     const report: AccessReport = (await anonymous.json()) as AccessReport
     const dataless: DatalessFields = await datalessFields()
 
-    expect(
-      report.canAccessAdmin ?? false,
-      'the admin panel must not admit an unauthenticated caller',
-    ).toBe(false)
+    expect(report.canAccessAdmin ?? false, 'the admin panel must not admit an unauthenticated caller').toBe(false)
 
     expect(
       undeclaredGrants(report, PUBLIC_ACCESS, dataless),

@@ -6,8 +6,7 @@ const NOW: number = Date.parse('2026-08-26T05:00:00.000Z')
 
 // Ages are expressed as hours before NOW so a case reads as the wait it describes, rather than as two
 // epoch numbers a reader has to subtract.
-const isHeldAt = (hoursAgo: number): boolean =>
-  isHeldByReleaseAge({ publishedAt: NOW - hoursAgo * HOUR, now: NOW })
+const isHeldAt = (hoursAgo: number): boolean => isHeldByReleaseAge({ publishedAt: NOW - hoursAgo * HOUR, now: NOW })
 
 describe('isHeldByReleaseAge', () => {
   it('holds a release published minutes ago', () => {

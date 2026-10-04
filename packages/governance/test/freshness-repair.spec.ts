@@ -38,10 +38,7 @@ const manifest = (name: string, isInherited: boolean): ManifestSource => ({
   isInherited,
 })
 
-const namesIn = (
-  sections: readonly FreshnessSection[],
-  repair: FreshnessRepair,
-): readonly string[] =>
+const namesIn = (sections: readonly FreshnessSection[], repair: FreshnessRepair): readonly string[] =>
   sections
     .filter((section: FreshnessSection): boolean => section.repair === repair)
     .flatMap((section: FreshnessSection): readonly string[] =>
@@ -99,17 +96,13 @@ describe('repairOf', () => {
 
 describe('isHarnessRepository', () => {
   it('recognises a tree that tracks the harness manifest', () => {
-    expect(isHarnessRepository([manifest('other', false), manifest(HARNESS_PACKAGE, false)])).toBe(
-      true,
-    )
+    expect(isHarnessRepository([manifest('other', false), manifest(HARNESS_PACKAGE, false)])).toBe(true)
   })
 
   // A consumer reaches the same manifest by inheritance, and that is exactly the case that must be
   // read as "not ploaness".
   it('does not count the harness manifest a consumer inherits', () => {
-    expect(
-      isHarnessRepository([manifest('consumer', false), manifest(HARNESS_PACKAGE, true)]),
-    ).toBe(false)
+    expect(isHarnessRepository([manifest('consumer', false), manifest(HARNESS_PACKAGE, true)])).toBe(false)
   })
 
   it('is false for a tree with no manifest at all', () => {
@@ -138,12 +131,8 @@ describe('sectionFreshnessReport', () => {
 
   it('returns every group in repair order, empty or not', () => {
     const sections: readonly FreshnessSection[] = sectionFreshnessReport([], consumer)
-    expect(sections.map((section: FreshnessSection): FreshnessRepair => section.repair)).toEqual(
-      REPAIR_ORDER,
-    )
-    expect(
-      sections.every((section: FreshnessSection): boolean => section.findings.length === 0),
-    ).toBe(true)
+    expect(sections.map((section: FreshnessSection): FreshnessRepair => section.repair)).toEqual(REPAIR_ORDER)
+    expect(sections.every((section: FreshnessSection): boolean => section.findings.length === 0)).toBe(true)
   })
 
   it('puts each finding in the group its repair names, keeping arrival order within a group', () => {
@@ -178,13 +167,8 @@ describe('sectionFreshnessReport', () => {
   })
 
   it('places the harness release itself in the project group', () => {
-    const [project]: readonly FreshnessSection[] = sectionFreshnessReport(
-      [makeFinding(HARNESS_PACKAGE)],
-      consumer,
-    )
-    expect(project?.findings.map((finding: FreshnessFinding): string => finding.name)).toEqual([
-      HARNESS_PACKAGE,
-    ])
+    const [project]: readonly FreshnessSection[] = sectionFreshnessReport([makeFinding(HARNESS_PACKAGE)], consumer)
+    expect(project?.findings.map((finding: FreshnessFinding): string => finding.name)).toEqual([HARNESS_PACKAGE])
   })
 })
 

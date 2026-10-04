@@ -44,15 +44,7 @@ import {
   type VulnerabilityReport,
 } from '@ploaness/governance'
 import { type Context, manifestPathFrom, readJson, workingTreeFiles } from '../context.js'
-import {
-  failed,
-  type GateResult,
-  passed,
-  type RunResult,
-  run,
-  TIMED_OUT_CODE,
-  withOutput,
-} from '../exec.js'
+import { failed, type GateResult, passed, type RunResult, run, TIMED_OUT_CODE, withOutput } from '../exec.js'
 import { type ImageReport, imageFreshness } from './images.js'
 import { harnessDecidedVersions } from './wiring.js'
 
@@ -77,13 +69,9 @@ export const licenses = (context: Context): GateResult => {
   // `stdout`, not `output`. pnpm writes ` WARN ` lines to stderr as a matter of course, and `output`
   // concatenates the two streams with no separator - so a warning about an unsupported engine made the
   // inventory unparseable and this gate blamed the parse rather than the warning.
-  const grouped: Record<string, readonly PnpmLicenseEntry[]> | undefined = parseLicenseInventory(
-    result.stdout,
-  )
+  const grouped: Record<string, readonly PnpmLicenseEntry[]> | undefined = parseLicenseInventory(result.stdout)
   if (grouped === undefined) {
-    return failed('the license inventory was not valid JSON', [
-      result.output.slice(0, MAX_REPORTED_CHARS),
-    ])
+    return failed('the license inventory was not valid JSON', [result.output.slice(0, MAX_REPORTED_CHARS)])
   }
   const packages: readonly LicensedPackage[] = Object.values(grouped)
     .flat()
@@ -147,19 +135,11 @@ const declaredName = (packageJson: unknown, fallback: string): string =>
 // manifests that decide which analyzer versions the project's gates actually run - none of which the
 // project's own tree holds, so a reader of the working tree alone could never see them. That is why a consumer's
 // update report was silent about a harness pin going stale while ploaness's own report was not.
-const inheritedManifests = (
-  context: Context,
-  own: readonly ManifestSource[],
-): readonly ManifestSource[] => {
+const inheritedManifests = (context: Context, own: readonly ManifestSource[]): readonly ManifestSource[] => {
   const alreadyRead: ReadonlySet<string> = new Set<string>(
-    own.map((manifest: ManifestSource): string =>
-      realPathOrSelf(path.join(context.root, manifest.path)),
-    ),
+    own.map((manifest: ManifestSource): string => realPathOrSelf(path.join(context.root, manifest.path))),
   )
-  const entry: string | undefined = manifestPathFrom(
-    HARNESS_PACKAGE,
-    path.join(context.root, MANIFEST_NAME),
-  )
+  const entry: string | undefined = manifestPathFrom(HARNESS_PACKAGE, path.join(context.root, MANIFEST_NAME))
   return inheritedManifestPaths(entry, HARNESS_RESOLVER)
     .filter((file: string): boolean => !alreadyRead.has(realPathOrSelf(file)))
     .map((file: string): ManifestSource => {
@@ -198,9 +178,7 @@ type Lookup =
   | { readonly kind: 'absent' }
   | { readonly kind: 'unreachable' }
 
-const parseLicenseInventory = (
-  output: string,
-): Record<string, readonly PnpmLicenseEntry[]> | undefined => {
+const parseLicenseInventory = (output: string): Record<string, readonly PnpmLicenseEntry[]> | undefined => {
   try {
     return JSON.parse(output) as Record<string, readonly PnpmLicenseEntry[]>
   } catch {
@@ -245,10 +223,7 @@ const attemptLookup = async (name: string): Promise<Lookup | undefined> => {
   return response.status === NOT_FOUND ? { kind: 'absent' } : undefined
 }
 
-const latestVersion = async (
-  name: string,
-  attemptsLeft: number = REGISTRY_ATTEMPTS,
-): Promise<Lookup> => {
+const latestVersion = async (name: string, attemptsLeft: number = REGISTRY_ATTEMPTS): Promise<Lookup> => {
   if (attemptsLeft <= 0) {
     return { kind: 'unreachable' }
   }
@@ -263,10 +238,7 @@ interface Sorted {
   readonly unpublished: readonly string[]
 }
 
-const sortLookups = (
-  coordinates: readonly DeclaredCoordinate[],
-  lookups: ReadonlyMap<string, Lookup>,
-): Sorted => {
+const sortLookups = (coordinates: readonly DeclaredCoordinate[], lookups: ReadonlyMap<string, Lookup>): Sorted => {
   const namesWhere = (kind: Lookup['kind']): readonly string[] =>
     [...lookups]
       .filter(([, lookup]: readonly [string, Lookup]): boolean => lookup.kind === kind)
@@ -339,8 +311,7 @@ const HARNESS_RELEASE_NOTE: string = ' - upgrading it is what moves every versio
 // ordinary update it would bury the one line saying the harness itself is overdue among a dozen saying
 // a patch release exists. What to DO about either is the heading's job, so neither line repeats it: a
 // note on every inherited row was what a consuming project reported as noise.
-const harnessNote = (finding: FreshnessFinding): string =>
-  isHarnessRelease(finding) ? HARNESS_RELEASE_NOTE : ''
+const harnessNote = (finding: FreshnessFinding): string => (isHarnessRelease(finding) ? HARNESS_RELEASE_NOTE : '')
 
 const describeReported = (finding: FreshnessFinding): string =>
   finding.verdict === 'fail'
@@ -364,18 +335,12 @@ const describeHeld = (finding: FreshnessFinding, hours: number | undefined): str
 const isHeldCandidate = (finding: FreshnessFinding, repair: FreshnessRepair): boolean =>
   finding.verdict === 'update' && repair === 'project'
 
-const describeLine = async (
-  finding: FreshnessFinding,
-  repair: FreshnessRepair,
-  now: number,
-): Promise<string> => {
+const describeLine = async (finding: FreshnessFinding, repair: FreshnessRepair, now: number): Promise<string> => {
   if (!isHeldCandidate(finding, repair)) {
     return describeReported(finding)
   }
   const age: ReleaseAge = { publishedAt: await publishedAt(finding.name, finding.latest), now }
-  return isHeldByReleaseAge(age)
-    ? describeHeld(finding, hoursPublished(age))
-    : describeReported(finding)
+  return isHeldByReleaseAge(age) ? describeHeld(finding, hoursPublished(age)) : describeReported(finding)
 }
 
 // The images ploaness pins are declared in the harness, so in a consumer they sit with the manifests
@@ -395,13 +360,10 @@ const describeSection = async (
   const described: readonly string[] = await mapWithConcurrency(
     section.findings,
     REGISTRY_CONCURRENCY,
-    async (finding: FreshnessFinding): Promise<string> =>
-      describeLine(finding, section.repair, now),
+    async (finding: FreshnessFinding): Promise<string> => describeLine(finding, section.repair, now),
   )
   const body: readonly string[] = [...described, ...images]
-  return body.length === 0
-    ? []
-    : [section.heading, ...body.map((line: string): string => `${INDENT}${line}`)]
+  return body.length === 0 ? [] : [section.heading, ...body.map((line: string): string => `${INDENT}${line}`)]
 }
 
 // A blank line between groups and nothing else, so a two-group report is two paragraphs rather than
@@ -409,9 +371,7 @@ const describeSection = async (
 const separated = (groups: readonly (readonly string[])[]): readonly string[] =>
   groups
     .filter((group: readonly string[]): boolean => group.length > 0)
-    .flatMap((group: readonly string[], index: number): readonly string[] =>
-      index === 0 ? group : ['', ...group],
-    )
+    .flatMap((group: readonly string[], index: number): readonly string[] => (index === 0 ? group : ['', ...group]))
 
 // The groups are described one after another rather than all at once, so the registry sees one
 // group's lookups at a time; only the project's own group asks it anything.
@@ -428,11 +388,7 @@ const describeUpdates = async (
       sectionFreshnessReport(reported, ownership),
       ONE_GROUP_AT_A_TIME,
       async (section: FreshnessSection): Promise<readonly string[]> =>
-        describeSection(
-          section,
-          section.repair === imageRepair(ownership) ? images.lines : [],
-          now,
-        ),
+        describeSection(section, section.repair === imageRepair(ownership) ? images.lines : [], now),
     ),
   )
 
@@ -453,17 +409,13 @@ const ownershipOf = (manifests: readonly ManifestSource[]): FreshnessOwnership =
 // the harness itself had generated.
 const lookUpEach = async (names: readonly string[]): Promise<ReadonlyMap<string, Lookup>> =>
   new Map(
-    await mapWithConcurrency(
-      names,
-      REGISTRY_CONCURRENCY,
-      async (name: string): Promise<readonly [string, Lookup]> => {
-        try {
-          return [name, await latestVersion(name)]
-        } catch {
-          return [name, { kind: 'unreachable' }]
-        }
-      },
-    ),
+    await mapWithConcurrency(names, REGISTRY_CONCURRENCY, async (name: string): Promise<readonly [string, Lookup]> => {
+      try {
+        return [name, await latestVersion(name)]
+      } catch {
+        return [name, { kind: 'unreachable' }]
+      }
+    }),
   )
 
 /**
@@ -496,9 +448,7 @@ const freshnessSummary = (
   report: FreshnessReport,
   images: ImageReport,
 ): string => {
-  const inherited: number = manifests.filter(
-    (manifest: ManifestSource): boolean => manifest.isInherited,
-  ).length
+  const inherited: number = manifests.filter((manifest: ManifestSource): boolean => manifest.isInherited).length
   const overdue: number = report.reported.filter(
     (finding: FreshnessFinding): boolean => finding.verdict === 'fail',
   ).length
@@ -521,10 +471,7 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
   const names: readonly string[] = [
     ...new Set(coordinates.map((coordinate: DeclaredCoordinate): string => coordinate.name)),
   ]
-  const { statuses, unreachable, unpublished }: Sorted = sortLookups(
-    coordinates,
-    await lookUpEach(names),
-  )
+  const { statuses, unreachable, unpublished }: Sorted = sortLookups(coordinates, await lookUpEach(names))
   if (unreachable.length > 0) {
     return failed('the npm registry was unreachable, so freshness cannot be proven', [
       `no "latest" resolved for: ${unreachable.slice(0, MAX_LISTED_NAMES).join(', ')}`,
@@ -542,29 +489,22 @@ export const dependencyFreshness = async (context: Context): Promise<GateResult>
   const scope: FreshnessScope = scopeFreshness(statuses)
   const notes: readonly string[] = [
     ...unpublished.map(
-      (name: string): string =>
-        `note ${name} is not on the public registry, so freshness is not measurable`,
+      (name: string): string => `note ${name} is not on the public registry, so freshness is not measurable`,
     ),
     ...scope.refused.map((entry: RefusedLatest): string => `note ${entry.note}`),
   ]
   const report: FreshnessReport = findFreshnessViolations(scope.measurable)
-  const updates: readonly string[] = await describeUpdates(
-    report.reported,
-    ownershipOf(manifests),
-    images,
-    Date.now(),
-  )
-  if (report.failures.length > 0) {
-    return failed(
-      `${String(report.failures.length)} dependency/dependencies are two or more majors behind`,
-      separated([
-        report.failures.map((finding: FreshnessFinding): string => describeFinding(finding)),
-        updates,
-        notes,
-      ]),
-    )
-  }
-  return passed(freshnessSummary(statuses, manifests, report, images), separated([updates, notes]))
+  const updates: readonly string[] = await describeUpdates(report.reported, ownershipOf(manifests), images, Date.now())
+  return report.failures.length > 0
+    ? failed(
+        `${String(report.failures.length)} dependency/dependencies are two or more majors behind`,
+        separated([
+          report.failures.map((finding: FreshnessFinding): string => describeFinding(finding)),
+          updates,
+          notes,
+        ]),
+      )
+    : passed(freshnessSummary(statuses, manifests, report, images), separated([updates, notes]))
 }
 
 // The npm-v6 audit shape `pnpm audit --json` emits: advisories keyed by id, each carrying the module,
@@ -654,10 +594,7 @@ export const vulnerabilities = (context: Context): GateResult => {
   // needs an answer.
   return withOutput(
     findings.length > 0
-      ? failed(
-          `${String(findings.length)} vulnerability finding(s) at or above ${report.threshold}`,
-          findings,
-        )
+      ? failed(`${String(findings.length)} vulnerability finding(s) at or above ${report.threshold}`, findings)
       : passed(
           `no vulnerability at or above ${report.threshold} across ${String(advisories.length)} advisory record(s)`,
         ),

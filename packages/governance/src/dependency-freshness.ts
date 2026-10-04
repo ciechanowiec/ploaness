@@ -153,11 +153,7 @@ interface Inheritance {
   readonly manifests: readonly string[]
 }
 
-const stepInto = (
-  walk: Inheritance,
-  manifestPath: string | undefined,
-  resolver: ManifestResolver,
-): Inheritance => {
+const stepInto = (walk: Inheritance, manifestPath: string | undefined, resolver: ManifestResolver): Inheritance => {
   if (manifestPath === undefined || walk.visited.has(manifestPath)) {
     return walk
   }
@@ -186,10 +182,7 @@ const stepInto = (
  * @param resolver how to reach and read a manifest.
  * @returns each inherited manifest path once, the entry first.
  */
-export const inheritedManifestPaths = (
-  entry: string | undefined,
-  resolver: ManifestResolver,
-): readonly string[] =>
+export const inheritedManifestPaths = (entry: string | undefined, resolver: ManifestResolver): readonly string[] =>
   stepInto({ visited: new Set<string>(), manifests: [] }, entry, resolver).manifests
 
 /**
@@ -208,9 +201,7 @@ export const inheritedManifestPaths = (
  * @param manifests the parsed manifests, each with the path that declares it.
  * @returns one coordinate per declaration.
  */
-export const collectCoordinates = (
-  manifests: readonly ManifestSource[],
-): readonly DeclaredCoordinate[] =>
+export const collectCoordinates = (manifests: readonly ManifestSource[]): readonly DeclaredCoordinate[] =>
   manifests.flatMap((manifest: ManifestSource): readonly DeclaredCoordinate[] =>
     Object.entries(declaredDependencies(manifest.packageJson)).map(
       ([name, current]: readonly [string, string]): DeclaredCoordinate => ({
@@ -247,8 +238,7 @@ interface JudgedStatus {
 
 // The one place the two questions are told apart: how far behind a coordinate is, and whether being
 // that far behind stops this build.
-const willStopTheBuild = (entry: JudgedStatus): boolean =>
-  entry.verdict === 'fail' && !entry.status.isInherited
+const willStopTheBuild = (entry: JudgedStatus): boolean => entry.verdict === 'fail' && !entry.status.isInherited
 
 /**
  * Partition dependency statuses by what each does to the build, dropping the `ok` ones.

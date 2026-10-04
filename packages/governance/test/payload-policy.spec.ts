@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import {
-  findEndpointViolations,
-  findPayloadViolations,
-  findSourceViolations,
-} from '../src/payload-policy.js'
+import { findEndpointViolations, findPayloadViolations, findSourceViolations } from '../src/payload-policy.js'
 import type { PayloadViolation } from '../src/payload-source.js'
 import { stripComments, topLevelSlice } from '../src/source-text.js'
 
-const rulesOf = (source: string): readonly string[] =>
-  findPayloadViolations(source).map((violation) => violation.rule)
+const rulesOf = (source: string): readonly string[] => findPayloadViolations(source).map((violation) => violation.rule)
 
 describe('topLevelSlice', () => {
   it('keeps depth-one keys and elides nested ones', () => {
@@ -35,19 +30,14 @@ describe('no-unbounded-find', () => {
   })
 
   it('reads a bound across several lines', () => {
-    const source: string = [
-      'await payload.find({',
-      "  collection: 'posts',",
-      '  depth: 1,',
-      '})',
-    ].join('\n')
+    const source: string = ['await payload.find({', "  collection: 'posts',", '  depth: 1,', '})'].join('\n')
     expect(rulesOf(source)).toEqual([])
   })
 
   it('does not accept a depth nested inside where', () => {
-    expect(
-      rulesOf("await payload.find({ collection: 'p', where: { depth: { equals: 1 } } })"),
-    ).toEqual(['no-unbounded-find'])
+    expect(rulesOf("await payload.find({ collection: 'p', where: { depth: { equals: 1 } } })")).toEqual([
+      'no-unbounded-find',
+    ])
   })
 
   it('ignores an unrelated array find', () => {
@@ -57,9 +47,7 @@ describe('no-unbounded-find', () => {
   // The request is threaded so this reports the bound alone. A call that omits both is the subject of
   // its own case under no-unthreaded-req.
   it('recognises the request-scoped payload instance', () => {
-    expect(rulesOf("await req.payload.find({ collection: 'posts', req })")).toEqual([
-      'no-unbounded-find',
-    ])
+    expect(rulesOf("await req.payload.find({ collection: 'posts', req })")).toEqual(['no-unbounded-find'])
   })
 
   it('reports options hidden in a variable', () => {
@@ -78,9 +66,7 @@ describe('no-unbounded-find', () => {
 // on the request-scoped instance, because that is the one call site where the request provably exists.
 describe('no-unthreaded-req', () => {
   it('flags a read reached through req.payload that does not carry req', () => {
-    expect(rulesOf("await req.payload.findGlobal({ slug: 'settings', depth: 0 })")).toEqual([
-      'no-unthreaded-req',
-    ])
+    expect(rulesOf("await req.payload.findGlobal({ slug: 'settings', depth: 0 })")).toEqual(['no-unthreaded-req'])
   })
 
   it('accepts req passed as the shorthand property it is normally written as', () => {
@@ -88,9 +74,7 @@ describe('no-unthreaded-req', () => {
   })
 
   it('accepts req passed explicitly', () => {
-    expect(
-      rulesOf("await req.payload.findGlobal({ slug: 'settings', depth: 0, req: req })"),
-    ).toEqual([])
+    expect(rulesOf("await req.payload.findGlobal({ slug: 'settings', depth: 0, req: req })")).toEqual([])
   })
 
   it('accepts req as the only key, with no comma to anchor on', () => {
@@ -110,18 +94,10 @@ describe('no-unthreaded-req', () => {
   })
 
   it('flags every operation that joins a transaction, writes included', () => {
-    expect(rulesOf("await req.payload.create({ collection: 'a', data })")).toEqual([
-      'no-unthreaded-req',
-    ])
-    expect(rulesOf("await req.payload.update({ collection: 'a', id, data })")).toEqual([
-      'no-unthreaded-req',
-    ])
-    expect(rulesOf("await req.payload.delete({ collection: 'a', id })")).toEqual([
-      'no-unthreaded-req',
-    ])
-    expect(rulesOf("await req.payload.updateGlobal({ slug: 'a', data })")).toEqual([
-      'no-unthreaded-req',
-    ])
+    expect(rulesOf("await req.payload.create({ collection: 'a', data })")).toEqual(['no-unthreaded-req'])
+    expect(rulesOf("await req.payload.update({ collection: 'a', id, data })")).toEqual(['no-unthreaded-req'])
+    expect(rulesOf("await req.payload.delete({ collection: 'a', id })")).toEqual(['no-unthreaded-req'])
+    expect(rulesOf("await req.payload.updateGlobal({ slug: 'a', data })")).toEqual(['no-unthreaded-req'])
   })
 })
 
@@ -129,9 +105,7 @@ describe('no-unthreaded-req', () => {
 // not be fooled by. Its own block, because a describe callback counts towards the line ceiling.
 describe('what no-unthreaded-req leaves alone', () => {
   it('reads the instance through a chain, as a hook that destructures nothing does', () => {
-    expect(rulesOf("await ctx.req.payload.findGlobal({ slug: 'settings', depth: 0 })")).toEqual([
-      'no-unthreaded-req',
-    ])
+    expect(rulesOf("await ctx.req.payload.findGlobal({ slug: 'settings', depth: 0 })")).toEqual(['no-unthreaded-req'])
   })
 
   // The half that keeps the rule honest. A script, a seed, or a Server Component holds an instance from
@@ -147,27 +121,19 @@ describe('what no-unthreaded-req leaves alone', () => {
   })
 
   it('is not fooled by a key that merely begins with req', () => {
-    expect(rulesOf("await req.payload.create({ collection: 'a', requestedBy: user })")).toEqual([
-      'no-unthreaded-req',
-    ])
+    expect(rulesOf("await req.payload.create({ collection: 'a', requestedBy: user })")).toEqual(['no-unthreaded-req'])
   })
 
   it('does not accept a req nested inside another key', () => {
-    expect(rulesOf("await req.payload.create({ collection: 'a', data: { req: 1 } })")).toEqual([
-      'no-unthreaded-req',
-    ])
+    expect(rulesOf("await req.payload.create({ collection: 'a', data: { req: 1 } })")).toEqual(['no-unthreaded-req'])
   })
 
   it('does not mistake a req value for the top-level req property', () => {
-    expect(rulesOf("await req.payload.create({ collection: 'a', request: req })")).toEqual([
-      'no-unthreaded-req',
-    ])
+    expect(rulesOf("await req.payload.create({ collection: 'a', request: req })")).toEqual(['no-unthreaded-req'])
   })
 
   it('requires readable options and effective request threading', () => {
-    expect(rulesOf('await req.payload.create(options)')).toEqual([
-      'require-explicit-payload-options',
-    ])
+    expect(rulesOf('await req.payload.create(options)')).toEqual(['require-explicit-payload-options'])
     expect(rulesOf("await req.payload.create({ ...base, collection: 'a' })")).toEqual([
       'no-unthreaded-req',
       'require-user-access-control',
@@ -192,43 +158,33 @@ describe('no-unthreaded-req operation coverage', () => {
     'restoreGlobalVersion',
     'restoreVersion',
   ])('covers the documented %s operation', (operation: string) => {
-    expect(rulesOf(`await req.payload.${operation}({ collection: 'a' })`)).toContain(
-      'no-unthreaded-req',
-    )
+    expect(rulesOf(`await req.payload.${operation}({ collection: 'a' })`)).toContain('no-unthreaded-req')
   })
 })
 
 describe('the single-document reads', () => {
   it('requires depth on findByID', () => {
-    expect(rulesOf("await payload.findByID({ collection: 'posts', id })")).toEqual([
-      'no-unbounded-findbyid',
-    ])
+    expect(rulesOf("await payload.findByID({ collection: 'posts', id })")).toEqual(['no-unbounded-findbyid'])
   })
 
   it('does not accept limit as a bound on findByID', () => {
-    expect(rulesOf("await payload.findByID({ collection: 'posts', id, limit: 1 })")).toEqual([
-      'no-unbounded-findbyid',
-    ])
+    expect(rulesOf("await payload.findByID({ collection: 'posts', id, limit: 1 })")).toEqual(['no-unbounded-findbyid'])
   })
 
   it('requires depth on findGlobal', () => {
-    expect(rulesOf("await payload.findGlobal({ slug: 'settings' })")).toEqual([
-      'no-unbounded-findglobal',
-    ])
+    expect(rulesOf("await payload.findGlobal({ slug: 'settings' })")).toEqual(['no-unbounded-findglobal'])
   })
 })
 
 describe('no-override-access', () => {
   it('flags an access-control override', () => {
-    expect(
-      rulesOf("await payload.find({ collection: 'p', depth: 0, overrideAccess: true })"),
-    ).toEqual(['no-override-access'])
+    expect(rulesOf("await payload.find({ collection: 'p', depth: 0, overrideAccess: true })")).toEqual([
+      'no-override-access',
+    ])
   })
 
   it('accepts an explicit false', () => {
-    expect(
-      rulesOf("await payload.find({ collection: 'p', depth: 0, overrideAccess: false })"),
-    ).toEqual([])
+    expect(rulesOf("await payload.find({ collection: 'p', depth: 0, overrideAccess: false })")).toEqual([])
   })
 
   // The message is the whole remediation an unreviewed agent gets, so it names what actually repairs
@@ -238,9 +194,7 @@ describe('no-override-access', () => {
       "await payload.find({ collection: 'p', depth: 0, limit: 1, overrideAccess: true })",
     )
     const reason: string =
-      violations.find(
-        (violation: PayloadViolation): boolean => violation.rule === 'no-override-access',
-      )?.reason ?? ''
+      violations.find((violation: PayloadViolation): boolean => violation.rule === 'no-override-access')?.reason ?? ''
     expect(reason).toContain('set overrideAccess: false')
     expect(reason).not.toContain('pass req')
   })
@@ -254,9 +208,7 @@ const sourceRulesOf = (source: string): readonly string[] =>
 
 describe('no-deep-relative-imports', () => {
   it('flags a parent-relative import', () => {
-    expect(sourceRulesOf("import { thing } from '../lib/thing'")).toEqual([
-      'no-deep-relative-imports',
-    ])
+    expect(sourceRulesOf("import { thing } from '../lib/thing'")).toEqual(['no-deep-relative-imports'])
   })
 
   it('accepts a same-directory import', () => {
@@ -273,9 +225,7 @@ describe('no-deep-relative-imports', () => {
   })
 
   it('reports a climb that lands inside source rather than on a helper root', () => {
-    expect(sourceRulesOf("import { seed } from '../../src/helpers/seed'")).toEqual([
-      'no-deep-relative-imports',
-    ])
+    expect(sourceRulesOf("import { seed } from '../../src/helpers/seed'")).toEqual(['no-deep-relative-imports'])
   })
 
   it('is not part of the framework rule set, which only a Payload package can break', () => {
@@ -283,8 +233,7 @@ describe('no-deep-relative-imports', () => {
   })
 })
 
-const COMPLETE_ACCESS: string =
-  'access: { create: admins, read: anyone, update: admins, delete: admins }'
+const COMPLETE_ACCESS: string = 'access: { create: admins, read: anyone, update: admins, delete: admins }'
 
 describe('require-complete-access', () => {
   it('flags a collection that declares no access', () => {
@@ -340,22 +289,19 @@ describe('require-complete-access on a global', () => {
   })
 
   it('flags a global that decides only read', () => {
-    const source: string =
-      "export const Header: GlobalConfig = { slug: 'header', access: { read: anyone } }"
+    const source: string = "export const Header: GlobalConfig = { slug: 'header', access: { read: anyone } }"
     expect(findPayloadViolations(source)[0]?.reason).toContain('update')
   })
 })
 
 describe('prose is never mistaken for code', () => {
   it('ignores a banned construct named in a line comment', () => {
-    const source: string =
-      '// no banned `overrideAccess: true` flag is needed here\nexport const x = 1'
+    const source: string = '// no banned `overrideAccess: true` flag is needed here\nexport const x = 1'
     expect(rulesOf(source)).toEqual([])
   })
 
   it('ignores a banned construct named in a block comment', () => {
-    const source: string =
-      "/*\n * Never write payload.find({ collection: 'p' }) unbounded.\n */\nexport const x = 1"
+    const source: string = "/*\n * Never write payload.find({ collection: 'p' }) unbounded.\n */\nexport const x = 1"
     expect(rulesOf(source)).toEqual([])
   })
 
@@ -366,11 +312,7 @@ describe('prose is never mistaken for code', () => {
   })
 
   it('reports the line of the code, not of the comment', () => {
-    const source: string = [
-      '// a preamble',
-      '// another line',
-      "await payload.find({ collection: 'p' })",
-    ].join('\n')
+    const source: string = ['// a preamble', '// another line', "await payload.find({ collection: 'p' })"].join('\n')
     expect(findPayloadViolations(source)[0]?.line).toBe(3)
   })
 
@@ -405,8 +347,7 @@ describe('stripComments', () => {
 
 // An auth collection owes `unlock` as well, so these fixtures declare it and each case below reports
 // the hardening rule it is named for rather than two rules at once.
-const AUTH_ACCESS: string =
-  'access: { create: admins, read: anyone, update: admins, delete: admins, unlock: admins }'
+const AUTH_ACCESS: string = 'access: { create: admins, read: anyone, update: admins, delete: admins, unlock: admins }'
 
 const withAuth = (auth: string): string =>
   `export const Users: CollectionConfig = { slug: 'users', ${AUTH_ACCESS}, auth: ${auth} }`
@@ -428,9 +369,7 @@ describe('require-auth-hardening', () => {
   })
 
   it('flags an auth block that caps attempts but never locks', () => {
-    expect(findPayloadViolations(withAuth('{ maxLoginAttempts: 5 }'))[0]?.reason).toContain(
-      'lockTime',
-    )
+    expect(findPayloadViolations(withAuth('{ maxLoginAttempts: 5 }'))[0]?.reason).toContain('lockTime')
   })
 
   it('leaves a collection without auth alone', () => {
@@ -503,8 +442,7 @@ const ENDPOINT: string = 'src/endpoints/reports.ts'
 
 describe('require-endpoint-access', () => {
   it('flags a route handler that leaves the access decision to the default', () => {
-    const source: string =
-      "await req.payload.find({ collection: 'media', req, depth: 0, limit: 10 })"
+    const source: string = "await req.payload.find({ collection: 'media', req, depth: 0, limit: 10 })"
     expect(endpointRulesOf(ENDPOINT, source)).toEqual(['require-endpoint-access'])
   })
 
@@ -516,8 +454,7 @@ describe('require-endpoint-access', () => {
 
   // A variable can carry true, so only an explicit false establishes access enforcement.
   it('refuses an access value hidden in shorthand', () => {
-    const source: string =
-      "await req.payload.find({ collection: 'media', depth: 0, limit: 10, overrideAccess })"
+    const source: string = "await req.payload.find({ collection: 'media', depth: 0, limit: 10, overrideAccess })"
     expect(endpointRulesOf(ENDPOINT, source)).toEqual(['require-endpoint-access'])
   })
 

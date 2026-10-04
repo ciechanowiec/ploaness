@@ -18,9 +18,7 @@ const parsed: Record<string, unknown> = asRecord(JSON.parse(readFileSync(file, '
 // `src/**` imports it - failed here rather than in the gate it was written to exercise.
 const BLOCKS: readonly string[] = ['dependencies', 'devDependencies']
 
-const holder: string | undefined = BLOCKS.find((block: string): boolean =>
-  Object.hasOwn(asRecord(parsed[block]), name),
-)
+const holder: string | undefined = BLOCKS.find((block: string): boolean => Object.hasOwn(asRecord(parsed[block]), name))
 
 if (holder === undefined) {
   // Silently removing nothing left the fixture identical to the pass case, so the gate it is meant to

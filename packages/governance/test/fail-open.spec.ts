@@ -9,9 +9,7 @@ import { type Advisory, judgeVulnerabilities } from '../src/vulnerability-policy
 import { findWiringViolations, type WiringInputs } from '../src/wiring-policy.js'
 
 const namesIn = (body: string): readonly string[] =>
-  findOverrides(['overrides:', ...body.split('\n')].join('\n')).map(
-    (entry: OverrideEntry): string => entry.packageName,
-  )
+  findOverrides(['overrides:', ...body.split('\n')].join('\n')).map((entry: OverrideEntry): string => entry.packageName)
 
 // A YAML value carries colons of its own. Splitting the line at the LAST one read `react: npm:preact`
 // as a package called "react: npm", which matched nothing in the pinned set - so every alias form,
@@ -38,9 +36,7 @@ describe('an override whose value contains a colon', () => {
   })
 
   it('carries the specifier through, so a rule can tell a version from an artefact', () => {
-    const entries: readonly OverrideEntry[] = findOverrides(
-      ['overrides:', '  react: npm:preact@10.0.0'].join('\n'),
-    )
+    const entries: readonly OverrideEntry[] = findOverrides(['overrides:', '  react: npm:preact@10.0.0'].join('\n'))
     expect(entries[0]?.specifier).toBe('npm:preact@10.0.0')
   })
 })
@@ -177,21 +173,17 @@ describe('a re-export config the harness owns', () => {
   })
 
   it('accepts it with CRLF line endings', () => {
-    expect(reasonsFor({ eslintConfig: Eslint.replaceAll('\n', '\r\n') }).join(' ')).not.toContain(
-      'eslint.config.mjs',
-    )
+    expect(reasonsFor({ eslintConfig: Eslint.replaceAll('\n', '\r\n') }).join(' ')).not.toContain('eslint.config.mjs')
   })
 
   it('accepts a line-comment preamble', () => {
-    expect(reasonsFor({ eslintConfig: `// generated\n${Eslint}` }).join(' ')).not.toContain(
-      'eslint.config.mjs',
-    )
+    expect(reasonsFor({ eslintConfig: `// generated\n${Eslint}` }).join(' ')).not.toContain('eslint.config.mjs')
   })
 
   it('accepts a block-comment preamble, which a generator writes', () => {
-    expect(
-      reasonsFor({ eslintConfig: `/* generated\n   by a tool */\n${Eslint}` }).join(' '),
-    ).not.toContain('eslint.config.mjs')
+    expect(reasonsFor({ eslintConfig: `/* generated\n   by a tool */\n${Eslint}` }).join(' ')).not.toContain(
+      'eslint.config.mjs',
+    )
   })
 
   it('still reports a local block appended after the re-export', () => {

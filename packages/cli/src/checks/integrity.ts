@@ -20,10 +20,7 @@ export const imageAssets = (context: Context): GateResult => {
     .filter(isSupportedImagePath)
     .filter((file: string): boolean => existsSync(path.join(context.root, file)))
   const findings: readonly string[] = images.flatMap((file: string): readonly string[] => {
-    const reason: string | null = validateImageBytes(
-      file,
-      readFileSync(path.join(context.root, file)),
-    )
+    const reason: string | null = validateImageBytes(file, readFileSync(path.join(context.root, file)))
     return reason === null ? [] : [`${file}: ${reason}`]
   })
   return findings.length > 0

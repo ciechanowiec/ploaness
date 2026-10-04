@@ -28,15 +28,7 @@ import {
   terraformFilesIn,
 } from '@ploaness/governance'
 import { type Context, workingTreeFiles } from '../context.js'
-import {
-  asFindings,
-  failed,
-  type GateResult,
-  passed,
-  type RunResult,
-  run,
-  withOutput,
-} from '../exec.js'
+import { asFindings, failed, type GateResult, passed, type RunResult, run, withOutput } from '../exec.js'
 import { acquireImage, dockerFault } from './container-run.js'
 
 const CHECKOV_IMAGE: string = CONTAINER_IMAGES.checkov
@@ -94,9 +86,7 @@ const firstDeclarations = (
   declarations.filter(
     (declaration: FileDeclaration, index: number): boolean =>
       providers.includes(declaration.provider) &&
-      declarations.findIndex((other: FileDeclaration): boolean =>
-        matchesFileAndProvider(other, declaration),
-      ) === index,
+      declarations.findIndex((other: FileDeclaration): boolean => matchesFileAndProvider(other, declaration)) === index,
   )
 
 // Refusing to guess is the point. The repair sits in ploaness rather than in the project, and the
@@ -121,16 +111,10 @@ const unclassifiedFailure = (
 // Why no analyzer ran, in the summary's own words. Only the standings actually present are named.
 const standingClause = (standing: ProviderClassification): string => {
   const clauses: readonly string[] = [
-    ...(standing.unsupported.length === 0
-      ? []
-      : [`the analyzer ships no check for ${listed(standing.unsupported)}`]),
-    ...(standing.audited.length === 0
-      ? []
-      : [`no check for ${listed(standing.audited)} met the rubric`]),
+    ...(standing.unsupported.length === 0 ? [] : [`the analyzer ships no check for ${listed(standing.unsupported)}`]),
+    ...(standing.audited.length === 0 ? [] : [`no check for ${listed(standing.audited)} met the rubric`]),
   ]
-  return clauses.length === 0
-    ? `only utility providers are declared (${listed(standing.utility)})`
-    : clauses.join('; ')
+  return clauses.length === 0 ? `only utility providers are declared (${listed(standing.utility)})` : clauses.join('; ')
 }
 
 // `21 aws curated check(s)`, or `21 aws and 30 google curated check(s)`: the count of what could have
@@ -141,9 +125,7 @@ const checkClause = (curated: readonly string[]): string =>
     .join(' and ')} curated check(s)`
 
 const patternVerdict = (patterns: readonly string[], summary: string): GateResult =>
-  patterns.length === 0
-    ? passed(summary)
-    : failed(`${String(patterns.length)} infrastructure defect(s)`, patterns)
+  patterns.length === 0 ? passed(summary) : failed(`${String(patterns.length)} infrastructure defect(s)`, patterns)
 
 // checkov reserves 1 for a failed check. Every higher status is the tool stopping before it decided
 // anything, and reading that as "the infrastructure is fine" - or as a defect - are both wrong.
@@ -203,11 +185,7 @@ const runCheckov = (context: Context): RunResult =>
     { cwd: context.root },
   )
 
-const analyze = (
-  context: Context,
-  patterns: readonly string[],
-  passSummary: string,
-): GateResult => {
+const analyze = (context: Context, patterns: readonly string[], passSummary: string): GateResult => {
   const unavailable: GateResult | undefined = acquireImage(context, CHECKOV_IMAGE, INFRA_GATE)
   if (unavailable !== undefined) {
     return withPatternFindings(unavailable, patterns)
@@ -221,11 +199,7 @@ const analyze = (
 // The summary counts defects, not lines. checkov's output is reported in full beneath, but it spends
 // several lines on each failed check, so the count comes from the tally it prints. Exit 1 with no
 // tally is output this gate cannot read, and is failed as such rather than counted.
-const analyzerVerdict = (
-  result: RunResult,
-  patterns: readonly string[],
-  passSummary: string,
-): GateResult => {
+const analyzerVerdict = (result: RunResult, patterns: readonly string[], passSummary: string): GateResult => {
   if (result.code !== CHECKOV_FINDINGS) {
     return patternVerdict(patterns, passSummary)
   }
@@ -255,10 +229,7 @@ const judge = (
   const files: string = `${String(sources.length)} infrastructure file(s)`
   const resources: number = resourceCountOf(declarations)
   if (resources === 0) {
-    return patternVerdict(
-      patterns,
-      `${files} declare no resource this harness can judge; the pattern rules pass`,
-    )
+    return patternVerdict(patterns, `${files} declare no resource this harness can judge; the pattern rules pass`)
   }
   return standing.curated.length === 0
     ? patternVerdict(patterns, `${files} pass the pattern rules; ${standingClause(standing)}`)

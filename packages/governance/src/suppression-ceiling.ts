@@ -84,8 +84,7 @@ export interface SuppressionReport {
 // suppression - and counting those would charge a repository for explaining its own policy.
 const COMMENT_OPENER: string = String.raw`(?:\/\/|\/\*|^\s*\*|^\s*#)\s*`
 
-const opensWith = (line: string, token: string): boolean =>
-  new RegExp(`${COMMENT_OPENER}${token}`).test(line)
+const opensWith = (line: string, token: string): boolean => new RegExp(`${COMMENT_OPENER}${token}`).test(line)
 
 // The one suppression form that is not a comment convention. gitleaks reads a line for this literal and
 // skips the line that carries it, whatever syntax the surrounding file comments in, so anchoring it to a
@@ -96,10 +95,7 @@ const BARE_TOKENS: readonly string[] = [`gitleaks:${ALLOW}`]
 
 // The attribute as JSX or HTML writes it (`name=`), and as an object key a spread would carry
 // (`'name':`). Its reason attribute shares the prefix and is not matched: a hyphen follows the name.
-const LAYOUT_EXEMPTION: RegExp = new RegExp(
-  String.raw`${LAYOUT_EXEMPTION_ATTRIBUTE}(?:=|['"]\s*:)`,
-  'u',
-)
+const LAYOUT_EXEMPTION: RegExp = new RegExp(String.raw`${LAYOUT_EXEMPTION_ATTRIBUTE}(?:=|['"]\s*:)`, 'u')
 
 const tokenOnLine = (line: string): string | undefined => {
   if (CLOSING_TOKENS.some((closing: string): boolean => opensWith(line, closing))) {
@@ -138,10 +134,7 @@ export const countSourceLines = (text: string): number =>
  * @param declaredMaximum a project's own stricter cap, or undefined when it declares none.
  * @returns the ceiling, which a declared maximum may lower and can never raise.
  */
-export const suppressionCeiling = (
-  sourceLines: number,
-  declaredMaximum: number | undefined,
-): number => {
+export const suppressionCeiling = (sourceLines: number, declaredMaximum: number | undefined): number => {
   const earned: number = BASE_ALLOWANCE + Math.floor(sourceLines / LINES_PER_SUPPRESSION)
   return declaredMaximum === undefined ? earned : Math.min(earned, declaredMaximum)
 }

@@ -106,15 +106,16 @@ describe('asOptionalText', () => {
 
 describe('declaredDependencies', () => {
   it('merges both dependency blocks into one reading', () => {
-    expect(
-      declaredDependencies({ dependencies: { next: '16.3.2' }, devDependencies: { pg: '8.23.0' } }),
-    ).toEqual({ next: '16.3.2', pg: '8.23.0' })
+    expect(declaredDependencies({ dependencies: { next: '16.3.2' }, devDependencies: { pg: '8.23.0' } })).toEqual({
+      next: '16.3.2',
+      pg: '8.23.0',
+    })
   })
 
   it('lets the development block decide a name declared in both', () => {
-    expect(
-      declaredDependencies({ dependencies: { pg: '8.0.0' }, devDependencies: { pg: '8.23.0' } }),
-    ).toEqual({ pg: '8.23.0' })
+    expect(declaredDependencies({ dependencies: { pg: '8.0.0' }, devDependencies: { pg: '8.23.0' } })).toEqual({
+      pg: '8.23.0',
+    })
   })
 
   it('drops a declaration whose version is not text, which no manifest can install', () => {
@@ -130,9 +131,9 @@ describe('declaredDependencies and the optional block', () => {
   it('reads a package declared only as optional', () => {
     // An optional dependency is an installed one whose absence is tolerated, so every version rule
     // applies to it. Left out, it was the one block a stale version could sit in unnoticed.
-    expect(
-      declaredDependencies({ optionalDependencies: { '@img/sharp-linux-x64': '0.35.3' } }),
-    ).toEqual({ '@img/sharp-linux-x64': '0.35.3' })
+    expect(declaredDependencies({ optionalDependencies: { '@img/sharp-linux-x64': '0.35.3' } })).toEqual({
+      '@img/sharp-linux-x64': '0.35.3',
+    })
   })
 
   it('does not read peer dependencies, which are a requirement rather than an install', () => {
@@ -145,10 +146,10 @@ describe('declaredDependencies and the optional block', () => {
       devDependencies: { vitest: '4.1.11' },
       optionalDependencies: { sharp: '0.35.3' },
     })
-    expect(
-      Object.keys(declared).sort((left: string, right: string): number =>
-        left.localeCompare(right),
-      ),
-    ).toEqual(['payload', 'sharp', 'vitest'])
+    expect(Object.keys(declared).sort((left: string, right: string): number => left.localeCompare(right))).toEqual([
+      'payload',
+      'sharp',
+      'vitest',
+    ])
   })
 })

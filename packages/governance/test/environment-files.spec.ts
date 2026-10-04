@@ -13,8 +13,7 @@ const existenceCheckOver =
   (candidate: string): boolean =>
     paths.includes(candidate)
 
-const filesPresent = (paths: readonly string[]): readonly string[] =>
-  runEnvironmentFiles(existenceCheckOver(paths))
+const filesPresent = (paths: readonly string[]): readonly string[] => runEnvironmentFiles(existenceCheckOver(paths))
 
 describe('runEnvironmentFiles', () => {
   it('reads nothing when the project keeps no environment file', () => {
@@ -75,18 +74,16 @@ describe('runEnvironmentOverrides', () => {
   // file value handed through as an override would beat the CI secret that was there first.
   it('withholds a name the run already carries, so a real variable outranks every file', () => {
     expect(
-      runEnvironmentOverrides({ DATABASE_URL: 'postgres://ci' }, [
-        { DATABASE_URL: 'postgres://checked-in' },
-      ]),
+      runEnvironmentOverrides({ DATABASE_URL: 'postgres://ci' }, [{ DATABASE_URL: 'postgres://checked-in' }]),
     ).toEqual({})
   })
 
   // The joint with runEnvironmentFiles: that function's ORDER is this function's precedence, so the
   // two are only correct together.
   it('lets the file named first win a name two files declare', () => {
-    expect(
-      runEnvironmentOverrides({}, [{ SERVER_URL: 'from-local' }, { SERVER_URL: 'from-env' }]),
-    ).toEqual({ SERVER_URL: 'from-local' })
+    expect(runEnvironmentOverrides({}, [{ SERVER_URL: 'from-local' }, { SERVER_URL: 'from-env' }])).toEqual({
+      SERVER_URL: 'from-local',
+    })
   })
 
   it('carries the names only one file declares alongside a contested one', () => {

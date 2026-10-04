@@ -22,10 +22,7 @@ describe('actual source comments', () => {
 
   it('finds comments inside a template expression as well as after a statement', () => {
     const source: string = `const value = \`value: \${/* ${DIRECTIVE} */ 1}\`; // end`
-    expect(sourceComments(source).map((comment) => comment.text)).toEqual([
-      `/* ${DIRECTIVE} */`,
-      '// end',
-    ])
+    expect(sourceComments(source).map((comment) => comment.text)).toEqual([`/* ${DIRECTIVE} */`, '// end'])
   })
 
   it('reads a final comment after the last statement', () => {
@@ -47,13 +44,10 @@ describe('filename-aware source parsing', () => {
     },
   )
 
-  it.each(['source.tsx', 'source.jsx'])(
-    'distinguishes JSX data from JSX comments in %s',
-    (file) => {
-      const source: string = `const view = <div>// ${DIRECTIVE}\n{/* actual */}</div>`
-      expect(sourceComments(source, file)).toEqual([{ line: 2, text: '/* actual */' }])
-    },
-  )
+  it.each(['source.tsx', 'source.jsx'])('distinguishes JSX data from JSX comments in %s', (file) => {
+    const source: string = `const view = <div>// ${DIRECTIVE}\n{/* actual */}</div>`
+    expect(sourceComments(source, file)).toEqual([{ line: 2, text: '/* actual */' }])
+  })
 
   it.each(['source.js', 'source.mjs', 'source.cjs'])(
     'reads JavaScript comments without treating strings as directives in %s',

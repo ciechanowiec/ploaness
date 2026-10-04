@@ -27,11 +27,9 @@ describe('classifyImageFailure', (): void => {
   })
 
   it('namesAnAbsentDockerBinary', (): void => {
-    expect(
-      kindOf(
-        classifyImageFailure(GATE, { code: COMMAND_NOT_FOUND, output: 'spawnSync docker ENOENT' }),
-      ),
-    ).toBe('absent')
+    expect(kindOf(classifyImageFailure(GATE, { code: COMMAND_NOT_FOUND, output: 'spawnSync docker ENOENT' }))).toBe(
+      'absent',
+    )
   })
 
   it('namesAStoppedDaemonRatherThanAMissingBinary', (): void => {
@@ -39,8 +37,7 @@ describe('classifyImageFailure', (): void => {
       kindOf(
         classifyImageFailure(GATE, {
           code: 1,
-          output:
-            'Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?',
+          output: 'Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?',
         }),
       ),
     ).toBe('daemonDown')
@@ -136,15 +133,13 @@ describe('classifyImageFailure, beyond the network causes', (): void => {
   })
 
   it('fallsBackToUnstartableForAnUnrecognisedDockerError', (): void => {
-    expect(kindOf(classifyImageFailure(GATE, { code: 1, output: 'something new' }))).toBe(
-      'unstartable',
-    )
+    expect(kindOf(classifyImageFailure(GATE, { code: 1, output: 'something new' }))).toBe('unstartable')
   })
 
   it('opensTheSummaryWithTheGateThatFailed', (): void => {
-    expect(
-      classifyImageFailure('the workflow gate', { code: 1, output: 'toomanyrequests' })?.summary,
-    ).toMatch(/^the workflow gate /)
+    expect(classifyImageFailure('the workflow gate', { code: 1, output: 'toomanyrequests' })?.summary).toMatch(
+      /^the workflow gate /,
+    )
   })
 })
 
@@ -181,10 +176,8 @@ describe('classifyContainerExit', (): void => {
   })
 
   it('namesAnAbsentDockerBinaryFromTheShellsExitCode', (): void => {
-    expect(
-      kindOf(
-        classifyContainerExit(GATE, { code: COMMAND_NOT_FOUND, output: 'sh: docker: not found' }),
-      ),
-    ).toBe('absent')
+    expect(kindOf(classifyContainerExit(GATE, { code: COMMAND_NOT_FOUND, output: 'sh: docker: not found' }))).toBe(
+      'absent',
+    )
   })
 })

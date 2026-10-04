@@ -16,8 +16,7 @@ import {
   reportVerdict,
 } from '../report.js'
 
-const asMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
+const asMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
 // The union is narrowed exactly here, once. Everywhere else a gate is a gate; this is the one place
 // that has to know a repository-scope gate is handed the repository and a member-scope gate its member.
@@ -57,18 +56,11 @@ const timeGate = async (planned: PlannedGate, repo: Repo): Promise<GateOutcome> 
 // The identifier column is sized to the widest gate in this run rather than to a fixed constant, so
 // adding a longer gate identifier cannot silently push the summaries out of alignment.
 const identifierWidth = (planned: readonly PlannedGate[]): number =>
-  planned.reduce(
-    (widest: number, step: PlannedGate): number => Math.max(widest, step.gate.id.length),
-    0,
-  )
+  planned.reduce((widest: number, step: PlannedGate): number => Math.max(widest, step.gate.id.length), 0)
 
 // A sequence with an exit rather than a plain map, because a run does not always reach the end. The
 // rule that decides is `endsRun`, in governance; this supplies the outcome and the mode.
-const runPlan = async (
-  planned: readonly PlannedGate[],
-  repo: Repo,
-  width: number,
-): Promise<readonly GateOutcome[]> => {
+const runPlan = async (planned: readonly PlannedGate[], repo: Repo, width: number): Promise<readonly GateOutcome[]> => {
   const [step, ...rest] = planned
   if (step === undefined) {
     return []

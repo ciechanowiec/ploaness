@@ -81,12 +81,9 @@ describe('CHECKOV_CHECKS', () => {
     'CKV_AZURE_190',
     'CKV_AZURE_3',
     'CKV_AZURE_91',
-  ])(
-    'leaves %s off, because it fails a correct file on the current azurerm provider',
-    (id: string) => {
-      expect(CHECKOV_CHECKS.map((check: CheckovCheck): string => check.id)).not.toContain(id)
-    },
-  )
+  ])('leaves %s off, because it fails a correct file on the current azurerm provider', (id: string) => {
+    expect(CHECKOV_CHECKS.map((check: CheckovCheck): string => check.id)).not.toContain(id)
+  })
 
   // Left off because each refuses a correct Google Cloud configuration: a public Cloud SQL address
   // whose repair is not one argument, a private-endpoint cluster with no authorised-networks block,
@@ -101,12 +98,9 @@ describe('CHECKOV_CHECKS', () => {
     'CKV_GCP_102',
     'CKV_GCP_113',
     'CKV_DIO_4',
-  ])(
-    'leaves %s off, because it refuses a correct Google Cloud or small-cloud file',
-    (id: string) => {
-      expect(CHECKOV_CHECKS.map((check: CheckovCheck): string => check.id)).not.toContain(id)
-    },
-  )
+  ])('leaves %s off, because it refuses a correct Google Cloud or small-cloud file', (id: string) => {
+    expect(CHECKOV_CHECKS.map((check: CheckovCheck): string => check.id)).not.toContain(id)
+  })
 })
 
 describe('checkovCheckList', () => {
@@ -125,11 +119,9 @@ describe('checkovCheckList', () => {
 
 describe('failedCheckCount', () => {
   it('reads the tally off the scan summary', () => {
-    expect(
-      failedCheckCount(
-        'terraform scan results:\nPassed checks: 83, Failed checks: 1, Skipped checks: 0\n',
-      ),
-    ).toBe(1)
+    expect(failedCheckCount('terraform scan results:\nPassed checks: 83, Failed checks: 1, Skipped checks: 0\n')).toBe(
+      1,
+    )
   })
 
   it('reads a tally of none', () => {
@@ -185,13 +177,7 @@ describe('classifyProviders', () => {
   })
 
   it('names each provider once, ordered, in one standing each', () => {
-    const standing: ProviderClassification = classifyProviders([
-      'random',
-      'aws',
-      'random',
-      'hcloud',
-      'aws',
-    ])
+    const standing: ProviderClassification = classifyProviders(['random', 'aws', 'random', 'hcloud', 'aws'])
     expect(standing).toEqual({
       curated: ['aws'],
       utility: ['random'],
@@ -215,8 +201,8 @@ describe('classifyProviders', () => {
 describe('the provider standings', () => {
   // A provider listed as having no checks while the catalogue enables one would be reported two ways.
   it('never list a curated provider as being without checks', () => {
-    const contradictory: readonly string[] = [...PROVIDERS_WITHOUT_CHECKS.keys()].filter(
-      (provider: string): boolean => curatedProviders().has(provider),
+    const contradictory: readonly string[] = [...PROVIDERS_WITHOUT_CHECKS.keys()].filter((provider: string): boolean =>
+      curatedProviders().has(provider),
     )
     expect(contradictory).toEqual([])
   })

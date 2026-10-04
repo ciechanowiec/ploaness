@@ -78,11 +78,9 @@ export const providerDeclarationsIn = (source: string): readonly ProviderDeclara
  * @returns each provider once, ordered so a report reads the same on every machine.
  */
 export const providersOf = (declarations: readonly ProviderDeclaration[]): readonly string[] =>
-  [
-    ...new Set(
-      declarations.map((declaration: ProviderDeclaration): string => declaration.provider),
-    ),
-  ].toSorted((left: string, right: string): number => left.localeCompare(right))
+  [...new Set(declarations.map((declaration: ProviderDeclaration): string => declaration.provider))].toSorted(
+    (left: string, right: string): number => left.localeCompare(right),
+  )
 
 /**
  * How many resources and data sources the declarations carry - what an analyzer has to judge. A
@@ -91,6 +89,4 @@ export const providersOf = (declarations: readonly ProviderDeclaration[]): reado
  * @returns the count of resource and data declarations.
  */
 export const resourceCountOf = (declarations: readonly ProviderDeclaration[]): number =>
-  declarations.filter(
-    (declaration: ProviderDeclaration): boolean => declaration.kind !== 'provider',
-  ).length
+  declarations.filter((declaration: ProviderDeclaration): boolean => declaration.kind !== 'provider').length

@@ -18,20 +18,13 @@ import {
   requiredBiomeFiles,
   type SkillViolation,
 } from '@ploaness/governance'
-import {
-  type Context,
-  type Member,
-  type Repository as Repo,
-  shippedDirectory,
-  workingTreeFiles,
-} from '../context.js'
+import { type Context, type Member, type Repository as Repo, shippedDirectory, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 const declaredScripts = (context: Context): Record<string, unknown> =>
   asRecord(asRecord(context.packageJson)['scripts'])
 
-const biomeFilesJson = (context: Context): string =>
-  JSON.stringify(requiredBiomeFiles(context.settings.sourceRoots))
+const biomeFilesJson = (context: Context): string => JSON.stringify(requiredBiomeFiles(context.settings.sourceRoots))
 
 // A doc is read against its OWN member and against the repository, never against one alone. A member
 // doc legitimately names a command the root declares - "run `verify:unmanaged` at the root" - and the
@@ -45,13 +38,11 @@ const namesFrom = (
   repository: Repo,
   owner: Member | undefined,
   read: (context: Context) => readonly string[],
-): ReadonlySet<string> =>
-  new Set([...read(repository), ...(owner === undefined ? [] : read(owner))])
+): ReadonlySet<string> => new Set([...read(repository), ...(owner === undefined ? [] : read(owner))])
 
 const scriptNames = (context: Context): readonly string[] => Object.keys(declaredScripts(context))
 
-const dependencyNames = (context: Context): readonly string[] =>
-  Object.keys(declaredDependencies(context.packageJson))
+const dependencyNames = (context: Context): readonly string[] => Object.keys(declaredDependencies(context.packageJson))
 
 /**
  * Every npm script and full-path file the agent docs name must still exist.
@@ -59,34 +50,28 @@ const dependencyNames = (context: Context): readonly string[] =>
  * @param reservedWords words that look like a script but name something else, such as a gate. The
  *   registry supplies them, so this module does not have to import it back and create a cycle.
  */
-export const documentation = (
-  repository: Repo,
-  reservedWords: ReadonlySet<string> = new Set<string>(),
-): GateResult => {
-  const existsAt = (relativePath: string): boolean =>
-    existsSync(path.join(repository.root, relativePath))
+export const documentation = (repository: Repo, reservedWords: ReadonlySet<string> = new Set<string>()): GateResult => {
+  const existsAt = (relativePath: string): boolean => existsSync(path.join(repository.root, relativePath))
   const documents: readonly DocumentLocation[] = findAgentDocuments(
     repository.members.map((member: Member): string => member.path),
     existsAt,
   )
-  const findings: readonly string[] = documents.flatMap(
-    (document: DocumentLocation): readonly string[] => {
-      const owner: Member | undefined = ownerOf(repository, document.directory)
-      return findDocumentReferenceViolations({
-        markdown: readFileSync(path.join(repository.root, document.file), 'utf8'),
-        scriptNames: namesFrom(repository, owner, scriptNames),
-        packageNames: namesFrom(repository, owner, dependencyNames),
-        // A path is tried inside the owning member first, then at the repository root, for the same
-        // reason the script names are unioned.
-        isExistingFile: (relativePath: string): boolean =>
-          existsAt(path.join(document.directory, relativePath)) || existsAt(relativePath),
-        reservedWords,
-      }).map(
-        (violation: DocumentViolation): string =>
-          `${document.file}: ${violation.reference} (${violation.kind}) ${violation.reason}`,
-      )
-    },
-  )
+  const findings: readonly string[] = documents.flatMap((document: DocumentLocation): readonly string[] => {
+    const owner: Member | undefined = ownerOf(repository, document.directory)
+    return findDocumentReferenceViolations({
+      markdown: readFileSync(path.join(repository.root, document.file), 'utf8'),
+      scriptNames: namesFrom(repository, owner, scriptNames),
+      packageNames: namesFrom(repository, owner, dependencyNames),
+      // A path is tried inside the owning member first, then at the repository root, for the same
+      // reason the script names are unioned.
+      isExistingFile: (relativePath: string): boolean =>
+        existsAt(path.join(document.directory, relativePath)) || existsAt(relativePath),
+      reservedWords,
+    }).map(
+      (violation: DocumentViolation): string =>
+        `${document.file}: ${violation.reference} (${violation.kind}) ${violation.reason}`,
+    )
+  })
   return findings.length > 0
     ? failed(`${String(findings.length)} stale reference(s) in the agent docs`, findings)
     : passed(`references in ${String(documents.length)} agent doc(s) resolve`)
@@ -121,10 +106,7 @@ const mandatedReferences = (context: Context): ReadonlySet<string> =>
 // pattern is written - the partition itself lives in `governance`, where it is spec'd against file lists
 // no repository has to be built to produce. What is left here is the one read it needs.
 const deadExclusions = (context: Context): readonly string[] =>
-  findUnreachedExclusionsBySetting(
-    context.settings.declaredExclusions,
-    workingTreeFiles(context.root),
-  )
+  findUnreachedExclusionsBySetting(context.settings.declaredExclusions, workingTreeFiles(context.root))
 
 /**
  * A concrete source file carved out of a tool config must still exist on disk, and a declared exclusion
@@ -132,20 +114,15 @@ const deadExclusions = (context: Context): readonly string[] =>
  * nothing leaves the report reading exactly as it would have read without it.
  */
 export const configReferences = (context: Context): GateResult => {
-  const isExistingFile = (relativePath: string): boolean =>
-    existsSync(path.join(context.root, relativePath))
+  const isExistingFile = (relativePath: string): boolean => existsSync(path.join(context.root, relativePath))
   const mandated: ReadonlySet<string> = mandatedReferences(context)
-  const dangling: readonly string[] = configTargets(context).flatMap(
-    (configPath: string): readonly string[] =>
-      findMissingConfigReferences(
-        extractLiteralSourcePaths(readFileSync(configPath, 'utf8')),
-        isExistingFile,
-      )
-        .filter((violation: ConfigReferenceViolation): boolean => !mandated.has(violation.path))
-        .map(
-          (violation: ConfigReferenceViolation): string =>
-            `${path.basename(configPath)}: ${violation.path} (${violation.reason})`,
-        ),
+  const dangling: readonly string[] = configTargets(context).flatMap((configPath: string): readonly string[] =>
+    findMissingConfigReferences(extractLiteralSourcePaths(readFileSync(configPath, 'utf8')), isExistingFile)
+      .filter((violation: ConfigReferenceViolation): boolean => !mandated.has(violation.path))
+      .map(
+        (violation: ConfigReferenceViolation): string =>
+          `${path.basename(configPath)}: ${violation.path} (${violation.reason})`,
+      ),
   )
   const findings: readonly string[] = [...dangling, ...deadExclusions(context)]
   return findings.length > 0
@@ -162,10 +139,7 @@ export const skills = (context: Context): GateResult => {
       findSkillManifestViolations({
         content: readFileSync(path.join(context.root, relativePath), 'utf8'),
         directoryName: path.basename(path.dirname(relativePath)),
-      }).map(
-        (violation: SkillViolation): string =>
-          `${relativePath} [${violation.rule}] ${violation.reason}`,
-      ),
+      }).map((violation: SkillViolation): string => `${relativePath} [${violation.rule}] ${violation.reason}`),
     )
   return findings.length > 0
     ? failed(`${String(findings.length)} skill frontmatter violation(s)`, findings)

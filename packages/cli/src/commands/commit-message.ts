@@ -34,9 +34,7 @@ const checkPending = (context: Context, file: string): number => {
     return reportProblems([`no such file: ${file}`], 'the commit message could not be read')
   }
   const problems: readonly string[] = commitMessageProblems(context, readFileSync(file, 'utf8'))
-  return problems.length > 0
-    ? reportProblems(problems, `${String(problems.length)} commit-message problem(s)`)
-    : 0
+  return problems.length > 0 ? reportProblems(problems, `${String(problems.length)} commit-message problem(s)`) : 0
 }
 
 /**
@@ -47,11 +45,7 @@ const checkPending = (context: Context, file: string): number => {
  * @param value the revision range, when mode is `--range`.
  * @returns the process exit code.
  */
-export const commitMessage = (
-  context: Context,
-  mode: string | undefined,
-  value: string | undefined,
-): number => {
+export const commitMessage = (context: Context, mode: string | undefined, value: string | undefined): number => {
   if (mode === undefined) {
     console.error('usage: ploaness commit-message <message-file> | --range <base>..<head> | --all')
     return 1

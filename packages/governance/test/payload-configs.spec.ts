@@ -8,11 +8,7 @@
 // because the search ran on to the next literal in the file, they were judged against text nobody wrote
 // as a config. The false-positive cases below are that defect, held down.
 import { describe, expect, it } from 'vitest'
-import {
-  directFieldsIn,
-  type FoundPayloadConfig,
-  payloadConfigsIn,
-} from '../src/payload-configs.js'
+import { directFieldsIn, type FoundPayloadConfig, payloadConfigsIn } from '../src/payload-configs.js'
 
 /** What each found configuration is, shortly enough to compare a whole file's worth at once. */
 const describeConfig = (found: FoundPayloadConfig): string => `${found.kind.kind}:${found.body}`
@@ -32,8 +28,7 @@ const isAnchored = (source: string): boolean =>
 // The forms exercised below are not configurations, and each used to be read as one. The trailing
 // literal is what made the old reader dangerous rather than merely noisy: the unbounded forward search
 // ran past the end of the statement and judged THAT literal as the collection.
-const andALaterLiteral = (declaration: string): string =>
-  `${declaration}\nconst unrelated = { anything: true }\n`
+const andALaterLiteral = (declaration: string): string => `${declaration}\nconst unrelated = { anything: true }\n`
 
 const firstConfig = (source: string): FoundPayloadConfig => {
   const [found]: readonly FoundPayloadConfig[] = payloadConfigsIn(source)
@@ -45,9 +40,7 @@ const firstConfig = (source: string): FoundPayloadConfig => {
 
 describe('payloadConfigsIn', () => {
   it('reads the literal an annotation is written in front of', () => {
-    expect(foundIn(`const Posts: CollectionConfig = { slug: 'posts' }`)).toEqual([
-      "collection:{ slug: 'posts' }",
-    ])
+    expect(foundIn(`const Posts: CollectionConfig = { slug: 'posts' }`)).toEqual(["collection:{ slug: 'posts' }"])
   })
 
   it('reads the literal a trailing satisfies is written behind', () => {
@@ -100,9 +93,7 @@ describe('payloadConfigsIn', () => {
   })
 
   it('does not read a literal passed as an argument to a call', () => {
-    expect(
-      foundIn(andALaterLiteral(`const Jobs: CollectionConfig = withAccess({ slug: 'j' })`)),
-    ).toEqual([])
+    expect(foundIn(andALaterLiteral(`const Jobs: CollectionConfig = withAccess({ slug: 'j' })`))).toEqual([])
   })
 
   it('does not read a literal that merely follows an annotation on an identifier', () => {
@@ -110,17 +101,11 @@ describe('payloadConfigsIn', () => {
   })
 
   it('does not read a parameter annotation', () => {
-    expect(
-      foundIn(
-        andALaterLiteral(`const check = (config: CollectionConfig): void => { look(config) }`),
-      ),
-    ).toEqual([])
+    expect(foundIn(andALaterLiteral(`const check = (config: CollectionConfig): void => { look(config) }`))).toEqual([])
   })
 
   it('does not read an interface member', () => {
-    expect(foundIn(andALaterLiteral(`interface Deps { readonly base: CollectionConfig }`))).toEqual(
-      [],
-    )
+    expect(foundIn(andALaterLiteral(`interface Deps { readonly base: CollectionConfig }`))).toEqual([])
   })
 
   it('does not read a type alias member', () => {
@@ -154,22 +139,15 @@ describe('directFieldsIn', () => {
 
   it('reads each object written directly in the fields array', () => {
     expect(
-      directFieldsIn(withFields, firstConfig(withFields)).map(
-        (field: { readonly body: string }): string => field.body,
-      ),
-    ).toEqual([
-      `{ name: 'title', type: 'text' }`,
-      `{ name: 'body', type: 'richText', admin: { position: 'sidebar' } }`,
-    ])
+      directFieldsIn(withFields, firstConfig(withFields)).map((field: { readonly body: string }): string => field.body),
+    ).toEqual([`{ name: 'title', type: 'text' }`, `{ name: 'body', type: 'richText', admin: { position: 'sidebar' } }`])
   })
 
   // The line numbers come from `bodyStart` plus an offset inside the body, so an anchor that pointed at
   // a different literal reported every field against a line in that one.
   it('reports each field against the line it is written on', () => {
     expect(
-      directFieldsIn(withFields, firstConfig(withFields)).map(
-        (field: { readonly line: number }): number => field.line,
-      ),
+      directFieldsIn(withFields, firstConfig(withFields)).map((field: { readonly line: number }): number => field.line),
     ).toEqual([4, 5])
   })
 

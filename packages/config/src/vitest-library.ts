@@ -8,12 +8,7 @@
 import { COVERAGE_INCLUDE } from '@ploaness/governance'
 import { defineConfig } from 'vitest/config'
 import { projectSettings as settings } from './project-settings.js'
-import {
-  COVERAGE_THRESHOLD,
-  DETERMINISTIC_SEQUENCE,
-  harnessSetupFile,
-  projectSetupFiles,
-} from './vitest-core.js'
+import { COVERAGE_THRESHOLD, DETERMINISTIC_SEQUENCE, harnessSetupFile, projectSetupFiles } from './vitest-core.js'
 
 const declared: ReturnType<typeof defineConfig> = defineConfig({
   resolve: { tsconfigPaths: true },

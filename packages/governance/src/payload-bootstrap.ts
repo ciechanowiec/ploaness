@@ -33,8 +33,8 @@ const MUTATION_NAMES: ReadonlySet<string> = new Set([
  * in step, and the two would disagree the first time Payload gained an operation. A read at boot is
  * legitimate and deliberately absent from this set.
  */
-export const LOCAL_API_MUTATIONS: readonly string[] = LOCAL_API_CALLS.filter(
-  (call: string): boolean => MUTATION_NAMES.has(call.slice(1, -1)),
+export const LOCAL_API_MUTATIONS: readonly string[] = LOCAL_API_CALLS.filter((call: string): boolean =>
+  MUTATION_NAMES.has(call.slice(1, -1)),
 )
 
 /** The body of a configuration's boot hook, and the line its configuration begins on. */
@@ -137,15 +137,12 @@ const directoryOf = (filePath: string): string => {
 
 // `.` and `..` resolved without node:path, which keeps this layer free of every runtime module.
 const flattened = (segments: readonly string[]): readonly string[] =>
-  segments.reduce<readonly string[]>(
-    (kept: readonly string[], segment: string): readonly string[] => {
-      if (segment === '' || segment === '.') {
-        return kept
-      }
-      return segment === '..' ? kept.slice(0, -1) : [...kept, segment]
-    },
-    [],
-  )
+  segments.reduce<readonly string[]>((kept: readonly string[], segment: string): readonly string[] => {
+    if (segment === '' || segment === '.') {
+      return kept
+    }
+    return segment === '..' ? kept.slice(0, -1) : [...kept, segment]
+  }, [])
 
 // The path a specifier names before an extension is tried. A package specifier resolves to nothing,
 // which is what keeps the rule inside the member's own source.
@@ -168,10 +165,7 @@ export const candidatePathsFor = (specifier: string, fromPath: string): readonly
   const base: string | undefined = resolvedBase(specifier, fromPath)
   return base === undefined
     ? []
-    : [
-        ...SOURCE_EXTENSIONS.map((extension: string): string => `${base}${extension}`),
-        `${base}/index.ts`,
-      ]
+    : [...SOURCE_EXTENSIONS.map((extension: string): string => `${base}${extension}`), `${base}/index.ts`]
 }
 
 // The body of one named export, so a module holding an unrelated writer beside the function the hook
@@ -181,8 +175,7 @@ const declarationOf = (name: string): RegExp =>
 
 const bodyAfter = (source: string, at: number): string | undefined => {
   const open: number = source.indexOf('(', at)
-  const parameters: string | undefined =
-    open === NOT_FOUND ? undefined : balancedArguments(source, open)
+  const parameters: string | undefined = open === NOT_FOUND ? undefined : balancedArguments(source, open)
   const from: number = parameters === undefined ? at : open + parameters.length + 1
   const brace: number = source.indexOf('{', from)
   return brace === NOT_FOUND ? undefined : balancedArguments(source, brace)

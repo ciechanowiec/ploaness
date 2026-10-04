@@ -45,8 +45,7 @@ const tsconfigStub = (): string =>
     JSON_INDENT,
   )}\n`
 
-const reexport = (specifier: string): string =>
-  `import ploaness from '${specifier}'\n\nexport default ploaness\n`
+const reexport = (specifier: string): string => `import ploaness from '${specifier}'\n\nexport default ploaness\n`
 
 const scaffolded = (): WiringInputs => ({
   packageJson: {
@@ -84,9 +83,7 @@ describe('what init scaffolds is what wiring requires', () => {
       ...scaffolded(),
       [key]: undefined,
     })
-    expect(
-      violations.map((violation: WiringViolation): string => violation.location).join(' '),
-    ).toContain(file)
+    expect(violations.map((violation: WiringViolation): string => violation.location).join(' ')).toContain(file)
   })
 
   // The specifiers are the values the two sides have to agree about, so a change to either that is not
@@ -101,20 +98,15 @@ describe('what init scaffolds is what wiring requires', () => {
     expect(findWiringViolations({ ...scaffolded(), tsconfig })).not.toEqual([])
   })
 
-  it.each(Object.keys(REQUIRED_SCRIPTS))(
-    'requires the %s script the scaffolder writes',
-    (name: string) => {
-      const scripts: Record<string, string> = { ...REQUIRED_SCRIPTS, [name]: 'echo ok' }
-      const packageJson: Record<string, unknown> = { dependencies: { ploaness: '1.0.0' }, scripts }
-      const violations: readonly WiringViolation[] = findWiringViolations({
-        ...scaffolded(),
-        packageJson,
-      })
-      expect(
-        violations.map((violation: WiringViolation): string => violation.location).join(' '),
-      ).toContain(name)
-    },
-  )
+  it.each(Object.keys(REQUIRED_SCRIPTS))('requires the %s script the scaffolder writes', (name: string) => {
+    const scripts: Record<string, string> = { ...REQUIRED_SCRIPTS, [name]: 'echo ok' }
+    const packageJson: Record<string, unknown> = { dependencies: { ploaness: '1.0.0' }, scripts }
+    const violations: readonly WiringViolation[] = findWiringViolations({
+      ...scaffolded(),
+      packageJson,
+    })
+    expect(violations.map((violation: WiringViolation): string => violation.location).join(' ')).toContain(name)
+  })
 })
 
 describe('generated roles in Biome wiring', () => {

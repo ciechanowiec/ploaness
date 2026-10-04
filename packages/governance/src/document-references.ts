@@ -43,8 +43,7 @@ const PNPM_RUN: RegExp = /pnpm run [a-z][a-z0-9:_-]*/g
 // mention of the new name quietly stop being checked, and the gate then passed having dropped the
 // reference rather than resolved it. A family is what a whitelist here is for; a specific script name
 // is what it must never be.
-const SCRIPT_TOKEN: RegExp =
-  /^(?:verify(?::full)?|format|knip|(?:lint|test|generate|ensure|with|seed):[a-z][a-z:-]*)$/
+const SCRIPT_TOKEN: RegExp = /^(?:verify(?::full)?|format|knip|(?:lint|test|generate|ensure|with|seed):[a-z][a-z:-]*)$/
 const PATH_EXTENSION: RegExp = /\.(?:tsx?|mts|cts|mjs|cjs|js|jsonc?|ya?ml|md|css|scss|grit)$/
 const PNPM_RUN_PREFIX: string = 'pnpm run '
 
@@ -80,10 +79,7 @@ const specifierPackage = (token: string): string => {
   return first.startsWith('@') ? `${first}/${second}` : first
 }
 
-const extractPathReferences = (
-  markdown: string,
-  packageNames: ReadonlySet<string>,
-): ReadonlySet<string> => {
+const extractPathReferences = (markdown: string, packageNames: ReadonlySet<string>): ReadonlySet<string> => {
   const paths: readonly string[] = backtickTokens(markdown)
     .filter((token: string): boolean => token.includes('/') && !token.includes(' '))
     .map((token: string): string => stripTrailingGlob(token))
@@ -96,15 +92,9 @@ const extractPathReferences = (
  * Return every documentation reference that no longer resolves: a named script absent from
  * package.json, or a full-path file that does not exist. An empty array means the docs are in sync.
  */
-export const findDocumentReferenceViolations = (
-  inputs: DocumentReferenceInputs,
-): readonly DocumentViolation[] => {
-  const scriptViolations: readonly DocumentViolation[] = [
-    ...extractScriptReferences(inputs.markdown),
-  ]
-    .filter(
-      (name: string): boolean => !(inputs.scriptNames.has(name) || inputs.reservedWords.has(name)),
-    )
+export const findDocumentReferenceViolations = (inputs: DocumentReferenceInputs): readonly DocumentViolation[] => {
+  const scriptViolations: readonly DocumentViolation[] = [...extractScriptReferences(inputs.markdown)]
+    .filter((name: string): boolean => !(inputs.scriptNames.has(name) || inputs.reservedWords.has(name)))
     .map(
       (name: string): DocumentViolation => ({
         reference: name,
@@ -113,9 +103,7 @@ export const findDocumentReferenceViolations = (
       }),
     )
 
-  const pathViolations: readonly DocumentViolation[] = [
-    ...extractPathReferences(inputs.markdown, inputs.packageNames),
-  ]
+  const pathViolations: readonly DocumentViolation[] = [...extractPathReferences(inputs.markdown, inputs.packageNames)]
     .filter((path: string): boolean => !inputs.isExistingFile(path))
     .map(
       (path: string): DocumentViolation => ({
@@ -165,8 +153,6 @@ export const findAgentDocuments = (
 ): readonly DocumentLocation[] =>
   [ROOT_MEMBER_PATH, ...memberPaths.filter((path: string): boolean => path !== ROOT_MEMBER_PATH)]
     .flatMap((directory: string): readonly DocumentLocation[] =>
-      DOCUMENT_FILES.map(
-        (file: string): DocumentLocation => ({ file: joinPath(directory, file), directory }),
-      ),
+      DOCUMENT_FILES.map((file: string): DocumentLocation => ({ file: joinPath(directory, file), directory })),
     )
     .filter((location: DocumentLocation): boolean => isExistingFile(location.file))

@@ -58,8 +58,7 @@ const COLOURS: Readonly<Record<string, string>> = {
 const hasRichOutput = (): boolean => {
   return (
     process.env['NO_COLOR'] === undefined &&
-    (process.env['FORCE_COLOR'] !== undefined ||
-      (process.env['TERM'] !== 'dumb' && process.stdout.isTTY))
+    (process.env['FORCE_COLOR'] !== undefined || (process.env['TERM'] !== 'dumb' && process.stdout.isTTY))
   )
 }
 
@@ -78,15 +77,13 @@ const line = (text: string): void => {
   write(`${text}\n`)
 }
 
-const paint = (text: string, colour: string): string =>
-  IS_RICH ? `${colour}${text}${RESET}` : text
+const paint = (text: string, colour: string): string => (IS_RICH ? `${colour}${text}${RESET}` : text)
 
 const verdictOf = (result: GateResult): string => (result.ok ? PASS : FAIL)
 
 const MILLISECONDS_PER_SECOND: number = 1000
 
-const elapsed = (milliseconds: number): string =>
-  `${(milliseconds / MILLISECONDS_PER_SECOND).toFixed(1)}s`
+const elapsed = (milliseconds: number): string => `${(milliseconds / MILLISECONDS_PER_SECOND).toFixed(1)}s`
 
 const SECONDS_PER_MINUTE: number = 60
 
@@ -242,14 +239,9 @@ export const reportVerdict = (
   outcomes: readonly GateOutcome[],
   isExtended: boolean,
   isEnforced: boolean,
-  totalDurationMs: number = outcomes.reduce(
-    (sum: number, outcome: GateOutcome): number => sum + outcome.durationMs,
-    0,
-  ),
+  totalDurationMs: number = outcomes.reduce((sum: number, outcome: GateOutcome): number => sum + outcome.durationMs, 0),
 ): number => {
-  const failures: readonly GateOutcome[] = outcomes.filter(
-    (outcome: GateOutcome): boolean => !outcome.result.ok,
-  )
+  const failures: readonly GateOutcome[] = outcomes.filter((outcome: GateOutcome): boolean => !outcome.result.ok)
   const counts: string = [
     `${String(tally(outcomes, PASS))} passed`,
     `${String(failures.length)} failed`,
@@ -272,9 +264,7 @@ export const reportVerdict = (
   const failedText: string = `${mode} failed: ${names}.`
   line(`  ${paint(failedText, RED)}`)
   if (!isEnforced) {
-    line(
-      `  ${paint('Report-only mode is active, so the exit code is 0. This is not a pass.', DIM)}`,
-    )
+    line(`  ${paint('Report-only mode is active, so the exit code is 0. This is not a pass.', DIM)}`)
     return 0
   }
   return 1

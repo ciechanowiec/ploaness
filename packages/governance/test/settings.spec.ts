@@ -15,9 +15,7 @@ describe('readSettings', () => {
   it('adds project exclusions to the defaults rather than replacing them', () => {
     const settings: Settings = readSettings({
       ploaness: {
-        typographyExclusions: [
-          { pattern: '^vendor/', reason: 'third-party sources, vendored as-is' },
-        ],
+        typographyExclusions: [{ pattern: '^vendor/', reason: 'third-party sources, vendored as-is' }],
       },
     })
     expect(settings.typographyExclusions).toContain('^vendor/')
@@ -31,32 +29,19 @@ describe('readSettings', () => {
   it('ignores an unmanaged entry that records no reason', () => {
     const settings: Settings = readSettings({
       ploaness: {
-        unmanagedAssets: [
-          { path: 'CLAUDE.md' },
-          { path: '.editorconfig', reason: 'the monorepo root owns it' },
-        ],
+        unmanagedAssets: [{ path: 'CLAUDE.md' }, { path: '.editorconfig', reason: 'the monorepo root owns it' }],
       },
     })
-    expect(settings.unmanagedAssets).toEqual([
-      { path: '.editorconfig', reason: 'the monorepo root owns it' },
-    ])
+    expect(settings.unmanagedAssets).toEqual([{ path: '.editorconfig', reason: 'the monorepo root owns it' }])
   })
 
   it('falls back to the default when a value has the wrong type', () => {
-    expect(readSettings({ ploaness: { bundleBudgetBytes: 'big' } }).bundleBudgetBytes).toBe(
-      BUNDLE_BUDGET_BYTES,
-    )
-    expect(readSettings({ ploaness: { sourceRoots: 'src' } }).sourceRoots).toEqual([
-      'src',
-      'tests',
-      'scripts',
-    ])
+    expect(readSettings({ ploaness: { bundleBudgetBytes: 'big' } }).bundleBudgetBytes).toBe(BUNDLE_BUDGET_BYTES)
+    expect(readSettings({ ploaness: { sourceRoots: 'src' } }).sourceRoots).toEqual(['src', 'tests', 'scripts'])
   })
 
   it('rejects a non-positive bundle budget', () => {
-    expect(readSettings({ ploaness: { bundleBudgetBytes: 0 } }).bundleBudgetBytes).toBe(
-      BUNDLE_BUDGET_BYTES,
-    )
+    expect(readSettings({ ploaness: { bundleBudgetBytes: 0 } }).bundleBudgetBytes).toBe(BUNDLE_BUDGET_BYTES)
   })
 })
 
@@ -65,15 +50,15 @@ describe('readSettings', () => {
 // itself to less than the harness asks and never to more.
 describe('the bundle ceiling clamps in one direction only', () => {
   it('honours a smaller declared bundle budget', () => {
-    expect(
-      readSettings({ ploaness: { bundleBudgetBytes: BUNDLE_BUDGET_BYTES - 1 } }).bundleBudgetBytes,
-    ).toBe(BUNDLE_BUDGET_BYTES - 1)
+    expect(readSettings({ ploaness: { bundleBudgetBytes: BUNDLE_BUDGET_BYTES - 1 } }).bundleBudgetBytes).toBe(
+      BUNDLE_BUDGET_BYTES - 1,
+    )
   })
 
   it('ignores a larger declared bundle budget, so the ceiling can only be lowered', () => {
-    expect(
-      readSettings({ ploaness: { bundleBudgetBytes: BUNDLE_BUDGET_BYTES + 1 } }).bundleBudgetBytes,
-    ).toBe(BUNDLE_BUDGET_BYTES)
+    expect(readSettings({ ploaness: { bundleBudgetBytes: BUNDLE_BUDGET_BYTES + 1 } }).bundleBudgetBytes).toBe(
+      BUNDLE_BUDGET_BYTES,
+    )
   })
 
   // The analysis environment exists so a static gate can IMPORT a Payload config, which validates
@@ -107,9 +92,7 @@ describe('analysisEnv', () => {
   })
 
   it('ignores a malformed analysisEnv entirely', () => {
-    expect(
-      readSettings({ ploaness: { analysisEnv: 'nope' } }).analysisEnv['PAYLOAD_SECRET'],
-    ).toBeDefined()
+    expect(readSettings({ ploaness: { analysisEnv: 'nope' } }).analysisEnv['PAYLOAD_SECRET']).toBeDefined()
   })
 })
 
@@ -151,47 +134,33 @@ describe('vulnerability settings', () => {
   // returns rather than being quietly excused.
   it('drops an exception with no reason', () => {
     const { reason: _reason, ...rest } = entry
-    expect(
-      readSettings({ ploaness: { vulnerabilityAllowlist: [rest] } }).vulnerabilityAllowlist,
-    ).toEqual([])
+    expect(readSettings({ ploaness: { vulnerabilityAllowlist: [rest] } }).vulnerabilityAllowlist).toEqual([])
   })
 
   it('drops an exception with no addition date', () => {
     const { addedOn: _addedOn, ...rest } = entry
-    expect(
-      readSettings({ ploaness: { vulnerabilityAllowlist: [rest] } }).vulnerabilityAllowlist,
-    ).toEqual([])
+    expect(readSettings({ ploaness: { vulnerabilityAllowlist: [rest] } }).vulnerabilityAllowlist).toEqual([])
   })
 
   it('drops an exception whose date is not a date', () => {
     const malformed: Record<string, unknown> = { ...entry, addedOn: 'last tuesday' }
-    expect(
-      readSettings({ ploaness: { vulnerabilityAllowlist: [malformed] } }).vulnerabilityAllowlist,
-    ).toEqual([])
+    expect(readSettings({ ploaness: { vulnerabilityAllowlist: [malformed] } }).vulnerabilityAllowlist).toEqual([])
   })
 
   it('drops an entry that is not an object', () => {
-    expect(
-      readSettings({ ploaness: { vulnerabilityAllowlist: ['GHSA-1'] } }).vulnerabilityAllowlist,
-    ).toEqual([])
+    expect(readSettings({ ploaness: { vulnerabilityAllowlist: ['GHSA-1'] } }).vulnerabilityAllowlist).toEqual([])
   })
 
   it('drops a whole allowlist that is not a list', () => {
-    expect(
-      readSettings({ ploaness: { vulnerabilityAllowlist: 'GHSA-1' } }).vulnerabilityAllowlist,
-    ).toEqual([])
+    expect(readSettings({ ploaness: { vulnerabilityAllowlist: 'GHSA-1' } }).vulnerabilityAllowlist).toEqual([])
   })
 
   it('reads a declared severity', () => {
-    expect(readSettings({ ploaness: { vulnerabilitySeverity: 'low' } }).vulnerabilitySeverity).toBe(
-      'low',
-    )
+    expect(readSettings({ ploaness: { vulnerabilitySeverity: 'low' } }).vulnerabilitySeverity).toBe('low')
   })
 
   it('leaves the severity undeclared when it is not a string', () => {
-    expect(
-      readSettings({ ploaness: { vulnerabilitySeverity: 3 } }).vulnerabilitySeverity,
-    ).toBeUndefined()
+    expect(readSettings({ ploaness: { vulnerabilitySeverity: 3 } }).vulnerabilitySeverity).toBeUndefined()
   })
 })
 
@@ -202,9 +171,7 @@ describe('secretAllowlist', () => {
   }
 
   it('reads a fully recorded exception', () => {
-    expect(readSettings({ ploaness: { secretAllowlist: [entry] } }).secretAllowlist).toEqual([
-      entry,
-    ])
+    expect(readSettings({ ploaness: { secretAllowlist: [entry] } }).secretAllowlist).toEqual([entry])
   })
 
   it('drops an exception with no reason, so a typo re-exposes the finding', () => {
@@ -244,9 +211,9 @@ describe('publicAccess', () => {
   })
 
   it('reads an entry naming the entity, the operation and the reason', () => {
-    expect(
-      declaredBy([{ entity: 'media', operation: 'read', reason: 'the site own images' }]),
-    ).toEqual([{ entity: 'media', operation: 'read', reason: 'the site own images', fields: [] }])
+    expect(declaredBy([{ entity: 'media', operation: 'read', reason: 'the site own images' }])).toEqual([
+      { entity: 'media', operation: 'read', reason: 'the site own images', fields: [] },
+    ])
   })
 
   // Dropped rather than half-honoured, in the direction that restores the finding: a typo must
@@ -338,27 +305,19 @@ describe('the accessibility route budget clamps in one direction only', () => {
   const shipped: number = readSettings({}).accessibilityRouteBudget
 
   it('honours a smaller declared route budget', () => {
-    expect(
-      readSettings({ ploaness: { accessibilityRouteBudget: shipped - 1 } })
-        .accessibilityRouteBudget,
-    ).toBe(shipped - 1)
+    expect(readSettings({ ploaness: { accessibilityRouteBudget: shipped - 1 } }).accessibilityRouteBudget).toBe(
+      shipped - 1,
+    )
   })
 
   it('ignores a larger declared route budget, so the ceiling can only be lowered', () => {
-    expect(
-      readSettings({ ploaness: { accessibilityRouteBudget: shipped + 1 } })
-        .accessibilityRouteBudget,
-    ).toBe(shipped)
+    expect(readSettings({ ploaness: { accessibilityRouteBudget: shipped + 1 } }).accessibilityRouteBudget).toBe(shipped)
   })
 
   it('falls back to the shipped ceiling for a value that is not a positive integer', () => {
     // A typo must never widen a rule, which for this key means never lifting the cap.
-    expect(
-      readSettings({ ploaness: { accessibilityRouteBudget: 0 } }).accessibilityRouteBudget,
-    ).toBe(shipped)
-    expect(
-      readSettings({ ploaness: { accessibilityRouteBudget: 'lots' } }).accessibilityRouteBudget,
-    ).toBe(shipped)
+    expect(readSettings({ ploaness: { accessibilityRouteBudget: 0 } }).accessibilityRouteBudget).toBe(shipped)
+    expect(readSettings({ ploaness: { accessibilityRouteBudget: 'lots' } }).accessibilityRouteBudget).toBe(shipped)
   })
 })
 
@@ -366,16 +325,13 @@ describe('the layout sweep settings', () => {
   const shipped: Settings = readSettings({})
 
   it('honours a larger minimum gap, which judges more layouts as touching', () => {
-    expect(
-      readSettings({ ploaness: { layoutMinimumGap: shipped.layoutMinimumGap + 4 } })
-        .layoutMinimumGap,
-    ).toBe(shipped.layoutMinimumGap + 4)
+    expect(readSettings({ ploaness: { layoutMinimumGap: shipped.layoutMinimumGap + 4 } }).layoutMinimumGap).toBe(
+      shipped.layoutMinimumGap + 4,
+    )
   })
 
   it('ignores a smaller minimum gap, which would buy a pass', () => {
-    expect(readSettings({ ploaness: { layoutMinimumGap: 1 } }).layoutMinimumGap).toBe(
-      shipped.layoutMinimumGap,
-    )
+    expect(readSettings({ ploaness: { layoutMinimumGap: 1 } }).layoutMinimumGap).toBe(shipped.layoutMinimumGap)
   })
 
   it('keeps a declared viewport and drops one missing a dimension', () => {

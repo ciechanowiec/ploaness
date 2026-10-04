@@ -81,14 +81,10 @@ const parseFrontmatter = (content: string): Frontmatter => {
   }
   const lines: readonly string[] = (match[1] ?? '').split('\n')
   const entries: readonly (readonly [string, string])[] = lines
-    .map((line: string, index: number): readonly [RegExpExecArray | null, number] => [
-      TOP_LEVEL_KEY.exec(line),
-      index,
-    ])
+    .map((line: string, index: number): readonly [RegExpExecArray | null, number] => [TOP_LEVEL_KEY.exec(line), index])
     .filter(
-      (
-        entry: readonly [RegExpExecArray | null, number],
-      ): entry is readonly [RegExpExecArray, number] => entry[0] !== null,
+      (entry: readonly [RegExpExecArray | null, number]): entry is readonly [RegExpExecArray, number] =>
+        entry[0] !== null,
     )
     .map((entry: readonly [RegExpExecArray, number]): readonly [string, string] => [
       entry[0][1] ?? '',
@@ -145,9 +141,7 @@ const checkKeys = (keyNames: readonly string[]): readonly SkillViolation[] =>
  * name that does not match its directory, a description that omits a when-to-use clause, or an unknown
  * key. An empty array means the skill's frontmatter contract is sound.
  */
-export const findSkillManifestViolations = (
-  inputs: SkillManifestInputs,
-): readonly SkillViolation[] => {
+export const findSkillManifestViolations = (inputs: SkillManifestInputs): readonly SkillViolation[] => {
   const frontmatter: Frontmatter = parseFrontmatter(inputs.content)
   if (!frontmatter.present) {
     return [{ rule: 'frontmatter', reason: 'file must open with valid "---" frontmatter' }]

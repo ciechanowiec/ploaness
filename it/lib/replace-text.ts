@@ -5,8 +5,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 
 const ARGUMENT_OFFSET: number = 2
 
-const [file, needle, replacement]: readonly (string | undefined)[] =
-  process.argv.slice(ARGUMENT_OFFSET)
+const [file, needle, replacement]: readonly (string | undefined)[] = process.argv.slice(ARGUMENT_OFFSET)
 if (file === undefined || needle === undefined || replacement === undefined) {
   throw new Error('usage: replace-text.ts <file> <needle> <replacement>')
 }

@@ -73,16 +73,11 @@ const dockerfileSources = (repository: Repo): readonly DockerfileSource[] =>
 // The files whose reads a build inlines: the validated module, and the framework configuration at the
 // member's own root. Per member, because an image is built per member - what one member's build inlines
 // says nothing about the arguments a sibling's image declares.
-const BUILD_SOURCE_FILES: readonly string[] = [
-  VALIDATED_ENVIRONMENT_MODULE,
-  ...BUILD_CONFIGURATION_FILES,
-]
+const BUILD_SOURCE_FILES: readonly string[] = [VALIDATED_ENVIRONMENT_MODULE, ...BUILD_CONFIGURATION_FILES]
 
 const builds = (repository: Repo): readonly ImageBuild[] => {
   const dockerfiles: readonly DockerfileSource[] = dockerfileSources(repository)
-  const memberPaths: readonly string[] = repository.members.map(
-    (member: Member): string => member.path,
-  )
+  const memberPaths: readonly string[] = repository.members.map((member: Member): string => member.path)
   return repository.members.map(
     (member: Member): ImageBuild => ({
       sources: BUILD_SOURCE_FILES.map((relative: string): string | undefined =>
@@ -93,8 +88,7 @@ const builds = (repository: Repo): readonly ImageBuild[] => {
   )
 }
 
-const describe = (violation: EnvironmentViolation): string =>
-  `${violation.name}: ${violation.reason}`
+const describe = (violation: EnvironmentViolation): string => `${violation.name}: ${violation.reason}`
 
 /**
  * Every environment variable the repository declares in one place reaches the others it has to.

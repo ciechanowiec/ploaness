@@ -84,9 +84,7 @@ describe('the Core Web Vitals preset in the application config', CONFIG_LOAD, ()
 
   it('raises every one of them to error, because the preset leaves most at warn', async () => {
     const rules: Readonly<Record<string, unknown>> = await resolveRules(payloadConfig, PAGE_FILE)
-    const belowError: readonly string[] = shippedRules.filter(
-      (id: string): boolean => severityOf(rules[id]) !== ERROR,
-    )
+    const belowError: readonly string[] = shippedRules.filter((id: string): boolean => severityOf(rules[id]) !== ERROR)
 
     expect(belowError).toStrictEqual([])
   })
@@ -98,10 +96,7 @@ describe('the Core Web Vitals preset in the application config', CONFIG_LOAD, ()
   })
 
   it('leaves a component test alone, whose markup is rendered but never served', async () => {
-    const rules: Readonly<Record<string, unknown>> = await resolveRules(
-      payloadConfig,
-      COMPONENT_SPEC_FILE,
-    )
+    const rules: Readonly<Record<string, unknown>> = await resolveRules(payloadConfig, COMPONENT_SPEC_FILE)
 
     expect(mountedRules(rules)).toStrictEqual([])
   })

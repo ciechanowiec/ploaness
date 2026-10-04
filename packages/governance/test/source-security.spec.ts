@@ -22,33 +22,23 @@ describe('no-fail-open-secret-guard', () => {
   )
 
   it('reports a single-statement rejection as well as a block', () => {
-    expect(rulesOf('if (secret && supplied !== secret) return unauthorized()')).toEqual([
-      'no-fail-open-secret-guard',
-    ])
+    expect(rulesOf('if (secret && supplied !== secret) return unauthorized()')).toEqual(['no-fail-open-secret-guard'])
   })
 
   it('stops a single statement at its newline', () => {
-    const source: string = [
-      'if (secret && supplied !== secret) return unauthorized()',
-      'continueWork()',
-    ].join('\n')
+    const source: string = ['if (secret && supplied !== secret) return unauthorized()', 'continueWork()'].join('\n')
     expect(rulesOf(source)).toEqual(['no-fail-open-secret-guard'])
   })
 
   it('reports a throwing rejection', () => {
-    expect(
-      rulesOf("if (authToken && supplied !== authToken) throw new Error('forbidden')"),
-    ).toEqual(['no-fail-open-secret-guard'])
+    expect(rulesOf("if (authToken && supplied !== authToken) throw new Error('forbidden')")).toEqual([
+      'no-fail-open-secret-guard',
+    ])
   })
 
   it('reports the line on which the guard begins', () => {
     const findings: readonly PayloadViolation[] = findFailOpenSecretGuards(
-      [
-        'const value = 1',
-        'if (secret && supplied !== secret) {',
-        '  return unauthorized()',
-        '}',
-      ].join('\n'),
+      ['const value = 1', 'if (secret && supplied !== secret) {', '  return unauthorized()', '}'].join('\n'),
     )
     expect(findings[0]?.line).toBe(2)
   })
@@ -64,9 +54,7 @@ describe('fail-closed and unrelated conditions', () => {
   })
 
   it('accepts an explicit absence comparison', () => {
-    expect(rulesOf('if (secret === undefined && enabled) { return configurationError() }')).toEqual(
-      [],
-    )
+    expect(rulesOf('if (secret === undefined && enabled) { return configurationError() }')).toEqual([])
   })
 
   it('does not mistake a token count for a credential', () => {
@@ -116,22 +104,16 @@ describe('no-absent-secret-acceptance', () => {
   it.each(['secret', 'cronSecret', 'authToken', 'apiKey', 'environment.CRON_SECRET'])(
     'reports an acceptance guarded by the absence of %s',
     (credential: string) => {
-      expect(acceptancesOf(`if (!${credential}) { return true }`)).toEqual([
-        'no-absent-secret-acceptance',
-      ])
+      expect(acceptancesOf(`if (!${credential}) { return true }`)).toEqual(['no-absent-secret-acceptance'])
     },
   )
 
   it('reports a loose comparison against null', () => {
-    expect(acceptancesOf('if (secret == null) { return true }')).toEqual([
-      'no-absent-secret-acceptance',
-    ])
+    expect(acceptancesOf('if (secret == null) { return true }')).toEqual(['no-absent-secret-acceptance'])
   })
 
   it('reports an optionally chained credential', () => {
-    expect(acceptancesOf('if (!config?.apiKey) { return true }')).toEqual([
-      'no-absent-secret-acceptance',
-    ])
+    expect(acceptancesOf('if (!config?.apiKey) { return true }')).toEqual(['no-absent-secret-acceptance'])
   })
 
   it('reports a single-statement acceptance as well as a block', () => {
@@ -146,9 +128,7 @@ describe('no-absent-secret-acceptance', () => {
   })
 
   it('names the credential in the finding, so the repair is unambiguous', () => {
-    const findings: readonly PayloadViolation[] = findAbsentSecretAcceptances(
-      'if (!cronSecret) { return true }',
-    )
+    const findings: readonly PayloadViolation[] = findAbsentSecretAcceptances('if (!cronSecret) { return true }')
     expect(findings[0]?.reason).toContain('cronSecret')
   })
 })

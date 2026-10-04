@@ -19,9 +19,7 @@ describe('CONTAINER_IMAGES', () => {
   // shape every container gate takes rather than a special case made for this one.
   it('declares an image for every containerised analyzer', () => {
     expect(
-      Object.keys(CONTAINER_IMAGES).toSorted((left: string, right: string): number =>
-        left.localeCompare(right),
-      ),
+      Object.keys(CONTAINER_IMAGES).toSorted((left: string, right: string): number => left.localeCompare(right)),
     ).toEqual(['actionlint', 'checkov', 'gitleaks', 'hadolint', 'shellcheck'])
   })
 })

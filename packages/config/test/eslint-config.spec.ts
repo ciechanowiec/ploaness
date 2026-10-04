@@ -27,14 +27,11 @@ const lintConfigSnippet = (code: string): readonly LintMessage[] =>
 
 // The source rather than the build output. Both carry these strings, and the assertion is about the
 // config this repository authors; `dist` is derived from it by a compiler that does not rewrite literals.
-const shippedConfig = (): string =>
-  readFileSync(path.join(specDirectory, '..', 'src', 'eslint.ts'), 'utf8')
+const shippedConfig = (): string => readFileSync(path.join(specDirectory, '..', 'src', 'eslint.ts'), 'utf8')
 
 describe('no-inline-config-logic gate', () => {
   it('rejects an arrow function inlined as a config value', () => {
-    const messages: readonly LintMessage[] = lintConfigSnippet(
-      'const Users = { access: { read: () => true } }',
-    )
+    const messages: readonly LintMessage[] = lintConfigSnippet('const Users = { access: { read: () => true } }')
     expect(messages).toHaveLength(1)
     expect(messages[0]?.ruleId).toBe('no-restricted-syntax')
   })
@@ -47,9 +44,7 @@ describe('no-inline-config-logic gate', () => {
   })
 
   it('accepts behavior referenced by an imported identifier (the extracted form)', () => {
-    const messages: readonly LintMessage[] = lintConfigSnippet(
-      'const C = { access: { read: anyone, create: admins } }',
-    )
+    const messages: readonly LintMessage[] = lintConfigSnippet('const C = { access: { read: anyone, create: admins } }')
     expect(messages).toHaveLength(0)
   })
 

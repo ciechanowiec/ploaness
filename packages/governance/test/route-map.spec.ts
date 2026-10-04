@@ -134,10 +134,7 @@ describe('every address a file tree declares', () => {
   })
 
   it('carries the whole path of the file that declared it', () => {
-    const declared: readonly DeclaredRoute[] = declaredRoutesOf(
-      ['src/app/(frontend)/welcome/page.tsx'],
-      'src/app',
-    )
+    const declared: readonly DeclaredRoute[] = declaredRoutesOf(['src/app/(frontend)/welcome/page.tsx'], 'src/app')
     expect(declared[0]?.file).toBe('src/app/(frontend)/welcome/page.tsx')
   })
 

@@ -25,9 +25,7 @@ import { projectSettings } from './project-settings.js'
 import { settleForScan } from './settle.js'
 
 /** The viewports every layout scan runs at, the harness's own first. */
-export const LAYOUT_SCAN_VIEWPORTS: readonly LayoutViewport[] = layoutViewportsWith(
-  projectSettings.layoutViewports,
-)
+export const LAYOUT_SCAN_VIEWPORTS: readonly LayoutViewport[] = layoutViewportsWith(projectSettings.layoutViewports)
 
 // The browser surface the page code touches, declared rather than taken from lib.dom for the reason
 // `settle.ts` records. These names resolve in the page at run time.
@@ -86,12 +84,7 @@ interface LayoutTools {
   readonly bordersOf: (style: PageStyle) => LayoutBorders
   readonly lineHeightOf: (style: PageStyle) => number
   readonly labelOf: (element: PageElement, tools: LayoutTools) => string
-  readonly describe: (
-    element: PageElement,
-    index: number,
-    parent: number,
-    tools: LayoutTools,
-  ) => LayoutNode
+  readonly describe: (element: PageElement, index: number, parent: number, tools: LayoutTools) => LayoutNode
 }
 
 const roundRects = (rects: ArrayLike<PageRect>): readonly LayoutRect[] =>
@@ -108,8 +101,7 @@ const roundRects = (rects: ArrayLike<PageRect>): readonly LayoutRect[] =>
 const ownText = (element: PageElement): readonly PageText[] => {
   const textNodeType: number = 3
   return Array.from(element.childNodes).filter(
-    (child: PageText): boolean =>
-      child.nodeType === textNodeType && (child.textContent ?? '').trim().length > 0,
+    (child: PageText): boolean => child.nodeType === textNodeType && (child.textContent ?? '').trim().length > 0,
   )
 }
 
@@ -157,12 +149,7 @@ const labelOf = (element: PageElement, tools: LayoutTools): string => {
   return text.length === 0 ? `${tag}${name}` : `${tag}${name} "${text.slice(0, maxText)}"`
 }
 
-const describe = (
-  element: PageElement,
-  index: number,
-  parent: number,
-  tools: LayoutTools,
-): LayoutNode => {
+const describe = (element: PageElement, index: number, parent: number, tools: LayoutTools): LayoutNode => {
   const style: PageStyle = getComputedStyle(element)
   const read = (property: string): string => style.getPropertyValue(property)
   const isClipping: boolean = ['hidden', 'clip'].some((value: string): boolean =>
@@ -208,18 +195,12 @@ type MeasuredPage = Omit<LayoutSnapshot, 'route'>
 // `<svg>` element is measured and what it draws inside is not.
 const measureDocument = (tools: LayoutTools): MeasuredPage => {
   const svgNamespace: string = 'http://www.w3.org/2000/svg'
-  const elements: readonly PageElement[] = [
-    document.body,
-    ...Array.from(document.body.querySelectorAll('*')),
-  ].filter(
+  const elements: readonly PageElement[] = [document.body, ...Array.from(document.body.querySelectorAll('*'))].filter(
     (element: PageElement): boolean =>
       element.namespaceURI !== svgNamespace || element.parentElement?.namespaceURI !== svgNamespace,
   )
   const positions: ReadonlyMap<PageElement, number> = new Map(
-    elements.map((element: PageElement, index: number): readonly [PageElement, number] => [
-      element,
-      index,
-    ]),
+    elements.map((element: PageElement, index: number): readonly [PageElement, number] => [element, index]),
   )
   const root: PageElement = document.documentElement
   return {

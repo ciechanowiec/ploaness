@@ -40,10 +40,6 @@ const fileState = (root: string, file: string): readonly (string | number)[] => 
 export const workingTreeFingerprint = (root: string): string =>
   createHash('sha256')
     .update(
-      JSON.stringify(
-        workingTreeFiles(root).map((file: string): readonly (string | number)[] =>
-          fileState(root, file),
-        ),
-      ),
+      JSON.stringify(workingTreeFiles(root).map((file: string): readonly (string | number)[] => fileState(root, file))),
     )
     .digest('hex')

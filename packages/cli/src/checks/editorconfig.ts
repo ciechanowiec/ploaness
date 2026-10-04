@@ -8,7 +8,6 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import {
-  type EditorconfigRules,
   type EditorconfigViolation,
   findEditorconfigViolations,
   isBinary,
@@ -34,15 +33,13 @@ export const editorconfig = (context: Context): GateResult => {
       `${CONFIG_FILE} is a managed file; restore it with \`ploaness sync\``,
     ])
   }
-  const rules: EditorconfigRules = parseEditorconfig(readFileSync(configPath, 'utf8'))
+  const config: string = readFileSync(configPath, 'utf8')
   // An enumerated path is not always a regular file: a symlink and a submodule gitlink both appear here,
   // and reading either throws rather than yielding text.
-  const tracked: readonly string[] = workingTreeFiles(context.root).filter(
-    (file: string): boolean => {
-      const full: string = path.join(context.root, file)
-      return existsSync(full) && statSync(full).isFile()
-    },
-  )
+  const tracked: readonly string[] = workingTreeFiles(context.root).filter((file: string): boolean => {
+    const full: string = path.join(context.root, file)
+    return existsSync(full) && statSync(full).isFile()
+  })
 
   // Select first, then judge: the two steps read separately and neither accumulates into a mutable box.
   const readable: readonly ReadFile[] = tracked
@@ -53,12 +50,9 @@ export const editorconfig = (context: Context): GateResult => {
   const findings: readonly string[] = readable.flatMap((entry: ReadFile): readonly string[] =>
     findEditorconfigViolations(
       entry.bytes.toString('utf8'),
-      rules,
+      parseEditorconfig(config, entry.file),
       isLineCapEnforced(entry.file, context.settings.generatedArtefacts),
-    ).map(
-      (violation: EditorconfigViolation): string =>
-        `${entry.file}:${String(violation.line)} ${violation.reason}`,
-    ),
+    ).map((violation: EditorconfigViolation): string => `${entry.file}:${String(violation.line)} ${violation.reason}`),
   )
   const checked: number = readable.length
 

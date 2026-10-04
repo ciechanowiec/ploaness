@@ -50,9 +50,7 @@ describe('findDefiniteIncomplete', () => {
   it('reports an exactly equal foreground and background', () => {
     const findings: readonly string[] = findDefiniteIncomplete([equalRatioResult('.skip-link')])
     expect(findings).toHaveLength(1)
-    expect(findings[0]).toBe(
-      'color-contrast on .skip-link: Element has a 1:1 contrast ratio with the background',
-    )
+    expect(findings[0]).toBe('color-contrast on .skip-link: Element has a 1:1 contrast ratio with the background')
   })
 
   it('stays silent on an incomplete axe genuinely could not decide', () => {
@@ -64,9 +62,7 @@ describe('findDefiniteIncomplete', () => {
       backgroundImageResult(),
       equalRatioResult('.site-footer a'),
     ])
-    expect(findings).toEqual([
-      'color-contrast on .site-footer a: Element has a 1:1 contrast ratio with the background',
-    ])
+    expect(findings).toEqual(['color-contrast on .site-footer a: Element has a 1:1 contrast ratio with the background'])
   })
 
   it('reads a check filed under all or none, not only under any', () => {
@@ -117,9 +113,7 @@ describe('findDefiniteIncomplete on incomplete input', () => {
       id: 'color-contrast',
       nodes: [{ target: ['a'], any: [{ data: { messageKey: 'equalRatio' } }] }],
     }
-    expect(findDefiniteIncomplete([noMessage])[0]).toBe(
-      'color-contrast on a: axe reported no message',
-    )
+    expect(findDefiniteIncomplete([noMessage])[0]).toBe('color-contrast on a: axe reported no message')
   })
 
   it('names an element it cannot identify rather than reporting an empty target', () => {

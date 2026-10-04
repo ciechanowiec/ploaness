@@ -1,10 +1,4 @@
-import {
-  containsBuiltRoute,
-  containsRoute,
-  reachesAxe,
-  reachesLayoutScan,
-  type SpecSource,
-} from './axe-coverage.js'
+import { containsBuiltRoute, containsRoute, reachesAxe, reachesLayoutScan, type SpecSource } from './axe-coverage.js'
 import { type DeclaredRoute, matchesRoute, staticPrefixOf } from './route-map.js'
 
 // The pages the accessibility sweep never reached, and nobody was told about.
@@ -76,9 +70,7 @@ const isDrivenBy = (spec: SpecSource, route: DeclaredRoute): boolean =>
     : containsRoute(spec.source, route.route)
 
 const unsweptRoute = (sweep: RouteSweep, route: DeclaredRoute): UnsweptRoute[] => {
-  const driving: readonly SpecSource[] = sweep.specs.filter((spec: SpecSource): boolean =>
-    isDrivenBy(spec, route),
-  )
+  const driving: readonly SpecSource[] = sweep.specs.filter((spec: SpecSource): boolean => isDrivenBy(spec, route))
   if (driving.length === 0) {
     return [
       {

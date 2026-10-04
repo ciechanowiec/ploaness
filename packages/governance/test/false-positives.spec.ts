@@ -16,27 +16,21 @@ import { findSkillManifestViolations } from '../src/skill-manifest.js'
 const EM_DASH_CODE_POINT: number = 0x2014
 const EM_DASH: string = String.fromCodePoint(EM_DASH_CODE_POINT)
 
-const manifest = (description: string): string =>
-  `---\nname: my-skill\ndescription: ${description}\n---\n\n# Body\n`
+const manifest = (description: string): string => `---\nname: my-skill\ndescription: ${description}\n---\n\n# Body\n`
 
 const violationsOf = (content: string): readonly string[] =>
-  findSkillManifestViolations({ content, directoryName: 'my-skill' }).map(
-    (violation): string => violation.rule,
-  )
+  findSkillManifestViolations({ content, directoryName: 'my-skill' }).map((violation): string => violation.rule)
 
-const withKey = (line: string): string =>
-  `---\nname: my-skill\ndescription: Use when asked.\n${line}\n---\n\n# Body\n`
+const withKey = (line: string): string => `---\nname: my-skill\ndescription: Use when asked.\n${line}\n---\n\n# Body\n`
 
-const rendered = (reason: string): string =>
-  renderGitleaksConfig([{ path: 'tests/a.json', reason }])
+const rendered = (reason: string): string => renderGitleaksConfig([{ path: 'tests/a.json', reason }])
 
 // Every rule that reads a line was written against `\n`. A repository cloned with `core.autocrlf=true`
 // carries `\r\n`, and `.` does not cross a `\r` - so each of these reported a defect whose message
 // named something other than the one character that actually differed.
 describe('a file whose lines end in CRLF', () => {
   it('does not turn a valid commit header into an invalid one', () => {
-    const message: string =
-      'feat: add the freshness reader\r\n\r\nA body that explains the why.\r\n'
+    const message: string = 'feat: add the freshness reader\r\n\r\nA body that explains the why.\r\n'
     expect(validateMessage(parseMessage(message), true)).toEqual([])
   })
 
@@ -111,19 +105,14 @@ describe('a skill description', () => {
 // Keys Claude Code accepts. Reporting one as unknown is the rule telling a project to delete something
 // that works.
 describe('a skill frontmatter key', () => {
-  it.each(['model: opus', 'argument-hint: <file>', 'disable-model-invocation: true'])(
-    'accepts %j',
-    (line: string) => {
-      expect(
-        findSkillManifestViolations({ content: withKey(line), directoryName: 'my-skill' }),
-      ).toEqual([])
-    },
-  )
+  it.each(['model: opus', 'argument-hint: <file>', 'disable-model-invocation: true'])('accepts %j', (line: string) => {
+    expect(findSkillManifestViolations({ content: withKey(line), directoryName: 'my-skill' })).toEqual([])
+  })
 
   it('still reports a key that is genuinely not part of the contract', () => {
-    expect(
-      findSkillManifestViolations({ content: withKey('colour: blue'), directoryName: 'my-skill' }),
-    ).toEqual([{ rule: 'keys', reason: 'unknown frontmatter key "colour"' }])
+    expect(findSkillManifestViolations({ content: withKey('colour: blue'), directoryName: 'my-skill' })).toEqual([
+      { rule: 'keys', reason: 'unknown frontmatter key "colour"' },
+    ])
   })
 })
 
@@ -183,9 +172,7 @@ describe('a rendered scanner configuration', () => {
 
   it('escapes a control character the document has no named escape for', () => {
     const Bell: number = 0x07
-    expect(rendered(`first${String.fromCodePoint(Bell)}second`)).toContain(
-      String.raw`first\u0007second`,
-    )
+    expect(rendered(`first${String.fromCodePoint(Bell)}second`)).toContain(String.raw`first\u0007second`)
   })
 
   it('keeps the description on one line whatever the reason contains', () => {
@@ -202,9 +189,7 @@ describe('a line carrying a banned character more than once', () => {
   })
 
   it('reports each at its own column', () => {
-    expect(
-      findTypographyViolations(`a ${EM_DASH} b ${EM_DASH} c`).map((violation) => violation.column),
-    ).toEqual([3, 7])
+    expect(findTypographyViolations(`a ${EM_DASH} b ${EM_DASH} c`).map((violation) => violation.column)).toEqual([3, 7])
   })
 
   // `indexOf` counts UTF-16 units, so a column after an astral character named a position the editor

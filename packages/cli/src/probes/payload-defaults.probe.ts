@@ -52,9 +52,7 @@ const defaultAccessSource: string = String(defaultAccess)
 // absent permission but an open one, indistinguishable at runtime from Payload's own default. Payload
 // fills every operation but `readVersions` in during sanitisation, which is the one this reaches.
 const isInherited = (rule: unknown): boolean =>
-  rule === undefined ||
-  rule === defaultAccess ||
-  (typeof rule === 'function' && String(rule) === defaultAccessSource)
+  rule === undefined || rule === defaultAccess || (typeof rule === 'function' && String(rule) === defaultAccessSource)
 
 const configModule: unknown = await import(pathToFileURL(configFile).href)
 // Awaited either way: `buildConfig` returns a promise, and a configuration handed over as a plain
@@ -87,9 +85,7 @@ const entryOf = (entity: unknown, kind: PayloadSubjectKind): InheritedAccessEntr
   })
   return {
     slug,
-    inherited: operations.filter((operation: string): boolean =>
-      isInherited(readKey(access, operation)),
-    ),
+    inherited: operations.filter((operation: string): boolean => isInherited(readKey(access, operation))),
   }
 }
 
@@ -97,8 +93,7 @@ const entryOf = (entity: unknown, kind: PayloadSubjectKind): InheritedAccessEntr
 // reaches for anything else throws, and a throw is reported rather than read as a denial.
 type AccessRule = (arguments_: { readonly req: { readonly user: null } }) => unknown
 
-const hasDrafts = (entity: unknown): boolean =>
-  Boolean(readKey(readKey(entity, 'versions'), 'drafts'))
+const hasDrafts = (entity: unknown): boolean => Boolean(readKey(readKey(entity, 'versions'), 'drafts'))
 
 // A predicate rather than an assertion, for the reason `isArray` is one: calling a value narrowed only
 // to `Function` hands back `any`, and an assertion is what type coverage counts against the harness.
@@ -138,13 +133,8 @@ const draftReadsOf = async (
   )
 
 const report: InheritedAccessReport = {
-  collections: collections.map(
-    (collection: unknown): InheritedAccessEntry => entryOf(collection, 'collection'),
-  ),
-  draftReads: [
-    ...(await draftReadsOf(collections, 'collection')),
-    ...(await draftReadsOf(globals, 'global')),
-  ],
+  collections: collections.map((collection: unknown): InheritedAccessEntry => entryOf(collection, 'collection')),
+  draftReads: [...(await draftReadsOf(collections, 'collection')), ...(await draftReadsOf(globals, 'global'))],
   globals: globals.map((global: unknown): InheritedAccessEntry => entryOf(global, 'global')),
 }
 

@@ -37,8 +37,7 @@ const readManifests = (): readonly Manifest[] =>
       }
     })
 
-const isHarnessPackage = (name: string): boolean =>
-  name === META_PACKAGE || name.startsWith(HARNESS_SCOPE)
+const isHarnessPackage = (name: string): boolean => name === META_PACKAGE || name.startsWith(HARNESS_SCOPE)
 
 // A sibling declared at anything but the release version. `workspace:*` is among what this rejects and
 // that is not an oversight: a published tarball carrying that protocol resolves for nobody.
@@ -53,9 +52,7 @@ const crossReferenceFindings = (manifest: Manifest, release: string): readonly s
 
 const manifestFindings = (manifests: readonly Manifest[], release: string): readonly string[] =>
   manifests.flatMap((manifest: Manifest): readonly string[] => [
-    ...(manifest.version === release
-      ? []
-      : [`${manifest.file} is version "${manifest.version}", not "${release}"`]),
+    ...(manifest.version === release ? [] : [`${manifest.file} is version "${manifest.version}", not "${release}"`]),
     ...crossReferenceFindings(manifest, release),
   ])
 
@@ -91,17 +88,13 @@ const GUIDE_ATTRIBUTE: RegExp = /^:ploaness-version:\s*(\S+)$/m
 const guideFindings = (release: string): readonly string[] => {
   const file: string = 'README.adoc'
   const declared: string | undefined = GUIDE_ATTRIBUTE.exec(readText(file))?.[1]
-  return declared === release
-    ? []
-    : [`${file} sets :ploaness-version: to "${String(declared)}", not "${release}"`]
+  return declared === release ? [] : [`${file} sets :ploaness-version: to "${String(declared)}", not "${release}"`]
 }
 
 // What `npm pack` names a package's tarball, which is the form the publish list is written in: the
 // scope becomes a prefix. Derived rather than listed, so a seventh package needs no edit here.
 const tarballName = (packageName: string): string =>
-  packageName.startsWith(HARNESS_SCOPE)
-    ? `ploaness-${packageName.slice(HARNESS_SCOPE.length)}`
-    : packageName
+  packageName.startsWith(HARNESS_SCOPE) ? `ploaness-${packageName.slice(HARNESS_SCOPE.length)}` : packageName
 
 // One roster, and what it is missing. Reported in both directions: a package the list has forgotten is
 // the defect this was written for, and a name no package answers to is a list left behind by a rename,
@@ -155,9 +148,7 @@ const knipFindings = (manifests: readonly Manifest[]): readonly string[] => {
 }
 
 const manifests: readonly Manifest[] = readManifests()
-const meta: Manifest | undefined = manifests.find(
-  (manifest: Manifest): boolean => manifest.name === META_PACKAGE,
-)
+const meta: Manifest | undefined = manifests.find((manifest: Manifest): boolean => manifest.name === META_PACKAGE)
 if (meta === undefined) {
   throw new Error(`no package named "${META_PACKAGE}" under packages/`)
 }
@@ -178,10 +169,7 @@ if (versionFindings.length > 0) {
 
 // Reported after the versions rather than beside them, because the two answer different questions and a
 // reader repairing one is not repairing the other.
-const rosterViolations: readonly string[] = [
-  ...workflowFindings(manifests),
-  ...knipFindings(manifests),
-]
+const rosterViolations: readonly string[] = [...workflowFindings(manifests), ...knipFindings(manifests)]
 
 if (rosterViolations.length > 0) {
   throw new Error(

@@ -26,23 +26,13 @@ export interface PlanStep {
 // A package-scope gate asks about every member; a payload-scope gate asks only about the members that
 // are Payload applications. Derived from what the member declares rather than from anything it opts
 // into, so a project cannot silence the Payload rules by describing itself differently.
-const membersFor = (
-  gate: GateDescriptor,
-  members: readonly MemberDescriptor[],
-): readonly MemberDescriptor[] =>
-  gate.scope === 'payload'
-    ? members.filter((member: MemberDescriptor): boolean => member.isPayload)
-    : members
+const membersFor = (gate: GateDescriptor, members: readonly MemberDescriptor[]): readonly MemberDescriptor[] =>
+  gate.scope === 'payload' ? members.filter((member: MemberDescriptor): boolean => member.isPayload) : members
 
-const stepsFor = (
-  gate: GateDescriptor,
-  members: readonly MemberDescriptor[],
-): readonly PlanStep[] =>
+const stepsFor = (gate: GateDescriptor, members: readonly MemberDescriptor[]): readonly PlanStep[] =>
   gate.scope === 'repository'
     ? [{ gateId: gate.id, member: undefined }]
-    : membersFor(gate, members).map(
-        (member: MemberDescriptor): PlanStep => ({ gateId: gate.id, member: member.path }),
-      )
+    : membersFor(gate, members).map((member: MemberDescriptor): PlanStep => ({ gateId: gate.id, member: member.path }))
 
 /**
  * Expand the gate registry into the ordered invocations one run performs.

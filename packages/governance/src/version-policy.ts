@@ -1,12 +1,7 @@
 // Hold declared package versions and install overrides to the harness-owned version policy.
 
 import { HARNESS_PACKAGE, isHarnessPackage } from './harness-package.js'
-import {
-  findOverrides,
-  OVERRIDE_KEYS,
-  type OverrideEntry,
-  packageNameOf,
-} from './install-policy.js'
+import { findOverrides, OVERRIDE_KEYS, type OverrideEntry, packageNameOf } from './install-policy.js'
 import { asOptionalText, asRecord, asStringRecord, declaredDependencies } from './json-shapes.js'
 import { pinnedPnpmVersion } from './toolchain-pins.js'
 import type { WiringViolation } from './wiring-violation.js'
@@ -18,9 +13,7 @@ const blockOf = (packageJson: Record<string, unknown>, name: string): string | u
   if (Object.hasOwn(asStringRecord(packageJson['dependencies']), name)) {
     return 'dependencies'
   }
-  return Object.hasOwn(asStringRecord(packageJson['devDependencies']), name)
-    ? 'devDependencies'
-    : undefined
+  return Object.hasOwn(asStringRecord(packageJson['devDependencies']), name) ? 'devDependencies' : undefined
 }
 
 /**
@@ -31,8 +24,7 @@ const blockOf = (packageJson: Record<string, unknown>, name: string): string | u
  * @param found the declared value, or undefined when the key is absent.
  * @returns `missing`, or the value in quotes.
  */
-export const describeFound = (found: string | undefined): string =>
-  found === undefined ? 'missing' : `"${found}"`
+export const describeFound = (found: string | undefined): string => (found === undefined ? 'missing' : `"${found}"`)
 
 // The harness's own packages, pointed at a local artefact. A consumer verifying ploaness before it is
 // published resolves them from a tarball, and that is the arrangement `it/verify.sh` exists to exercise
@@ -59,9 +51,7 @@ const overrideViolation = (
     return [
       {
         location,
-        reason:
-          'redefines a version ploaness pins; remove it, because the pin decides what the ' +
-          'gates run against',
+        reason: 'redefines a version ploaness pins; remove it, because the pin decides what the gates run against',
       },
     ]
   }
@@ -137,16 +127,15 @@ const checkEngines = (
   required: Readonly<Record<string, string>>,
 ): readonly WiringViolation[] => {
   const declared: Record<string, string> = asStringRecord(packageJson['engines'])
-  return Object.entries(required).flatMap(
-    ([name, range]: readonly [string, string]): readonly WiringViolation[] =>
-      declared[name] === range
-        ? []
-        : [
-            {
-              location: `package.json engines.${name}`,
-              reason: `is ${describeFound(declared[name])} but ploaness requires "${range}"`,
-            },
-          ],
+  return Object.entries(required).flatMap(([name, range]: readonly [string, string]): readonly WiringViolation[] =>
+    declared[name] === range
+      ? []
+      : [
+          {
+            location: `package.json engines.${name}`,
+            reason: `is ${describeFound(declared[name])} but ploaness requires "${range}"`,
+          },
+        ],
   )
 }
 
@@ -169,9 +158,7 @@ const checkVersionEscapes = (
   expected: Readonly<Record<string, string>>,
 ): readonly WiringViolation[] =>
   escapeEntries(packageJson)
-    .filter(([, entry]: readonly string[]): boolean =>
-      Object.hasOwn(expected, packageNameOf(entry ?? '')),
-    )
+    .filter(([, entry]: readonly string[]): boolean => Object.hasOwn(expected, packageNameOf(entry ?? '')))
     .map(
       ([key, entry]: readonly string[]): WiringViolation => ({
         location: `package.json ${key ?? ''}.${entry ?? ''}`,
@@ -216,8 +203,7 @@ const isExactVersion = (specifier: string): boolean => {
   }
   return (
     NON_REGISTRY.test(specifier) ||
-    (!(RANGE_OPERATOR.test(specifier) || RANGE_UNION.test(specifier)) &&
-      EXACT_VERSION.test(specifier))
+    (!(RANGE_OPERATOR.test(specifier) || RANGE_UNION.test(specifier)) && EXACT_VERSION.test(specifier))
   )
 }
 
@@ -249,8 +235,7 @@ const PAYLOAD_SCOPE: string = '@payloadcms/'
  * @param packageName the declared name.
  * @returns true for anything under Payload's scope.
  */
-export const isPayloadFamilyPackage = (packageName: string): boolean =>
-  packageName.startsWith(PAYLOAD_SCOPE)
+export const isPayloadFamilyPackage = (packageName: string): boolean => packageName.startsWith(PAYLOAD_SCOPE)
 
 /**
  * The package whose presence makes a project a Payload application.
@@ -340,31 +325,29 @@ const checkTestLibraries = (
   required: ReadonlySet<string>,
 ): readonly WiringViolation[] => {
   const declared: Record<string, string> = declaredDependencies(packageJson)
-  return Object.entries(expected).flatMap(
-    ([name, version]: readonly [string, string]): readonly WiringViolation[] => {
-      const found: string | undefined = declared[name]
-      if (found === undefined) {
-        return required.has(name)
-          ? [
-              {
-                location: `package.json ${name}`,
-                reason: `missing; ploaness pins it, so the project must declare it at ${version}`,
-              },
-            ]
-          : []
-      }
-      return found === version
-        ? []
-        : [
+  return Object.entries(expected).flatMap(([name, version]: readonly [string, string]): readonly WiringViolation[] => {
+    const found: string | undefined = declared[name]
+    if (found === undefined) {
+      return required.has(name)
+        ? [
             {
-              location: `package.json ${blockOf(packageJson, name) ?? ''}.${name}`,
-              reason:
-                `is "${found}" but ploaness pins it at "${version}"; ` +
-                'a range lets an upstream release change a verdict',
+              location: `package.json ${name}`,
+              reason: `missing; ploaness pins it, so the project must declare it at ${version}`,
             },
           ]
-    },
-  )
+        : []
+    }
+    return found === version
+      ? []
+      : [
+          {
+            location: `package.json ${blockOf(packageJson, name) ?? ''}.${name}`,
+            reason:
+              `is "${found}" but ploaness pins it at "${version}"; ` +
+              'a range lets an upstream release change a verdict',
+          },
+        ]
+  })
 }
 
 /** What the repository as a whole must declare, and the invariants those declarations imply. */
@@ -412,11 +395,7 @@ export const findRepositoryVersionViolations = (
       requiredPackageManager: inputs.requiredPackageManager,
     }),
   ),
-  ...checkPinnedOverridesAcross(
-    inputs.workspaceFile,
-    inputs.expected,
-    inputs.declaredAcrossMembers,
-  ),
+  ...checkPinnedOverridesAcross(inputs.workspaceFile, inputs.expected, inputs.declaredAcrossMembers),
 ]
 
 /**

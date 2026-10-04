@@ -37,21 +37,15 @@ describe('sensitive-data-logged', () => {
   })
 
   it('accepts an explicit redaction boundary', () => {
-    expect(messagesContaining('console.info(redact(user.token))', 'sensitive-data-logged')).toEqual(
-      [],
-    )
+    expect(messagesContaining('console.info(redact(user.token))', 'sensitive-data-logged')).toEqual([])
   })
 
   it('accepts a literal already marked as redacted', () => {
-    expect(
-      messagesContaining("console.info({ token: '[redacted]' })", 'sensitive-data-logged'),
-    ).toEqual([])
+    expect(messagesContaining("console.info({ token: '[redacted]' })", 'sensitive-data-logged')).toEqual([])
   })
 
   it('does not mistake a non-sensitive member for a credential', () => {
-    expect(messagesContaining('console.info(user.displayName)', 'sensitive-data-logged')).toEqual(
-      [],
-    )
+    expect(messagesContaining('console.info(user.displayName)', 'sensitive-data-logged')).toEqual([])
   })
 })
 
@@ -68,24 +62,15 @@ describe('leaks-error-message', () => {
   })
 
   it('accepts a generic public response message', () => {
-    expect(
-      messagesContaining(
-        "Response.json({ error: 'Internal server error' })",
-        'leaks-error-message',
-      ),
-    ).toEqual([])
+    expect(messagesContaining("Response.json({ error: 'Internal server error' })", 'leaks-error-message')).toEqual([])
   })
 
   it('accepts an explicit public-message boundary', () => {
-    expect(
-      messagesContaining('Response.json({ error: publicError(error) })', 'leaks-error-message'),
-    ).toEqual([])
+    expect(messagesContaining('Response.json({ error: publicError(error) })', 'leaks-error-message')).toEqual([])
   })
 
   it('does not mistake a domain message for an internal error object', () => {
-    expect(
-      messagesContaining('Response.json({ message: article.message })', 'leaks-error-message'),
-    ).toEqual([])
+    expect(messagesContaining('Response.json({ message: article.message })', 'leaks-error-message')).toEqual([])
   })
 })
 
@@ -94,10 +79,7 @@ const configPackage: string = path.join(path.dirname(fileURLToPath(import.meta.u
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null
 
-const selectorsFor = async (
-  config: readonly LinterTypes.Config[],
-  filePath: string,
-): Promise<readonly string[]> => {
+const selectorsFor = async (config: readonly LinterTypes.Config[], filePath: string): Promise<readonly string[]> => {
   const eslint: ESLint = new ESLint({
     overrideConfigFile: true,
     baseConfig: [...config],

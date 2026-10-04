@@ -1,10 +1,6 @@
 // Assign each update to the project or harness that owns its version, using the wiring policy as authority.
 
-import type {
-  DeclaredCoordinate,
-  FreshnessFinding,
-  ManifestSource,
-} from './dependency-freshness.js'
+import type { DeclaredCoordinate, FreshnessFinding, ManifestSource } from './dependency-freshness.js'
 import { HARNESS_PACKAGE, isHarnessPackage } from './harness-package.js'
 import { asRecord, asText } from './json-shapes.js'
 import { isPayloadFamilyPackage } from './version-policy.js'
@@ -70,12 +66,8 @@ export const isHarnessRepository = (manifests: readonly ManifestSource[]): boole
  * @param pinnedByHarness every name ploaness pins.
  * @returns true when the project may not change the version on its own.
  */
-export const isVersionDecidedByHarness = (
-  name: string,
-  pinnedByHarness: ReadonlySet<string>,
-): boolean =>
-  name !== HARNESS_PACKAGE &&
-  (pinnedByHarness.has(name) || isPayloadFamilyPackage(name) || isHarnessPackage(name))
+export const isVersionDecidedByHarness = (name: string, pinnedByHarness: ReadonlySet<string>): boolean =>
+  name !== HARNESS_PACKAGE && (pinnedByHarness.has(name) || isPayloadFamilyPackage(name) || isHarnessPackage(name))
 
 /**
  * Whose repair one coordinate is.
@@ -83,15 +75,11 @@ export const isVersionDecidedByHarness = (
  * @param ownership whose version each name is.
  * @returns the group the finding belongs in.
  */
-export const repairOf = (
-  coordinate: DeclaredCoordinate,
-  ownership: FreshnessOwnership,
-): FreshnessRepair => {
+export const repairOf = (coordinate: DeclaredCoordinate, ownership: FreshnessOwnership): FreshnessRepair => {
   if (coordinate.isInherited) {
     return 'inherited'
   }
-  return !ownership.isHarnessItself &&
-    isVersionDecidedByHarness(coordinate.name, ownership.pinnedByHarness)
+  return !ownership.isHarnessItself && isVersionDecidedByHarness(coordinate.name, ownership.pinnedByHarness)
     ? 'pin'
     : 'project'
 }
@@ -113,8 +101,7 @@ export const isHarnessRelease = (finding: DeclaredCoordinate): boolean =>
 const harnessRepair = (hasNewerHarness: boolean): string =>
   hasNewerHarness
     ? `upgrading ${HARNESS_PACKAGE} is the repair`
-    : `no newer ${HARNESS_PACKAGE} release is published yet, so the repair is to report a version ` +
-      'that matters'
+    : `no newer ${HARNESS_PACKAGE} release is published yet, so the repair is to report a version that matters`
 
 const headingOf = (repair: FreshnessRepair, hasNewerHarness: boolean): string => {
   const headings: Readonly<Record<FreshnessRepair, string>> = {
@@ -143,16 +130,12 @@ export const sectionFreshnessReport = (
   findings: readonly FreshnessFinding[],
   ownership: FreshnessOwnership,
 ): readonly FreshnessSection[] => {
-  const hasNewerHarness: boolean = findings.some((finding: FreshnessFinding): boolean =>
-    isHarnessRelease(finding),
-  )
+  const hasNewerHarness: boolean = findings.some((finding: FreshnessFinding): boolean => isHarnessRelease(finding))
   return REPAIR_ORDER.map(
     (repair: FreshnessRepair): FreshnessSection => ({
       repair,
       heading: headingOf(repair, hasNewerHarness),
-      findings: findings.filter(
-        (finding: FreshnessFinding): boolean => repairOf(finding, ownership) === repair,
-      ),
+      findings: findings.filter((finding: FreshnessFinding): boolean => repairOf(finding, ownership) === repair),
     }),
   )
 }

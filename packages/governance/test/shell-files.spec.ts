@@ -16,12 +16,9 @@ const firstLines =
     lines[file] ?? ''
 
 describe('isShellShebang', () => {
-  it.each(['#!/bin/sh', '#!/bin/bash', '#!/usr/bin/env bash', '#!/usr/bin/env sh'])(
-    'accepts %s',
-    (shebang: string) => {
-      expect(isShellShebang(shebang)).toBe(true)
-    },
-  )
+  it.each(['#!/bin/sh', '#!/bin/bash', '#!/usr/bin/env bash', '#!/usr/bin/env sh'])('accepts %s', (shebang: string) => {
+    expect(isShellShebang(shebang)).toBe(true)
+  })
 
   // ShellCheck refuses zsh with SC1071 and exits non-zero, so a zsh script must never be sent to it.
   it.each(['#!/usr/bin/env zsh', '#!/bin/zsh', '#!/usr/bin/env fish'])(
@@ -125,9 +122,7 @@ describe('findBlanketShellDirectives', () => {
   })
 
   it('reports a range wide enough to mean the same thing', () => {
-    const found: readonly ShellDirective[] = findBlanketShellDirectives(
-      '# shellcheck disable=SC1000-SC9999',
-    )
+    const found: readonly ShellDirective[] = findBlanketShellDirectives('# shellcheck disable=SC1000-SC9999')
     expect(found[0]?.directive).toBe('SC1000-SC9999')
   })
 
@@ -144,37 +139,25 @@ describe('findBlanketShellDirectives', () => {
   // own reports a repository for the contents of a file it generates, which is what this rule did to
   // the fixture suite that exercises it.
   it('ignores a directive inside a quoted heredoc, which is the written script own', () => {
-    const text: string = [
-      '#!/bin/sh',
-      "cat > fixture.sh <<'FIXTURE'",
-      '# shellcheck disable=all',
-      'FIXTURE',
-    ].join('\n')
+    const text: string = ['#!/bin/sh', "cat > fixture.sh <<'FIXTURE'", '# shellcheck disable=all', 'FIXTURE'].join('\n')
     expect(findBlanketShellDirectives(text)).toEqual([])
   })
 
   it('ignores a directive inside an unquoted heredoc', () => {
-    const text: string = ['cat > fixture.sh <<FIXTURE', '# shellcheck disable=all', 'FIXTURE'].join(
-      '\n',
-    )
+    const text: string = ['cat > fixture.sh <<FIXTURE', '# shellcheck disable=all', 'FIXTURE'].join('\n')
     expect(findBlanketShellDirectives(text)).toEqual([])
   })
 
   it('ignores a directive inside a tab-stripped heredoc', () => {
-    const text: string = ['cat > f.sh <<-FIXTURE', '# shellcheck disable=all', '\tFIXTURE'].join(
-      '\n',
-    )
+    const text: string = ['cat > f.sh <<-FIXTURE', '# shellcheck disable=all', '\tFIXTURE'].join('\n')
     expect(findBlanketShellDirectives(text)).toEqual([])
   })
 
   // The terminator closes the body, so the rule has to start reading again rather than give up.
   it('reports a directive the script applies to itself after a heredoc closes', () => {
-    const text: string = [
-      "cat > fixture.sh <<'FIXTURE'",
-      'echo written',
-      'FIXTURE',
-      '# shellcheck disable=all',
-    ].join('\n')
+    const text: string = ["cat > fixture.sh <<'FIXTURE'", 'echo written', 'FIXTURE', '# shellcheck disable=all'].join(
+      '\n',
+    )
     const found: readonly ShellDirective[] = findBlanketShellDirectives(text)
     expect(found).toHaveLength(1)
     expect(found[0]?.line).toBe(4)

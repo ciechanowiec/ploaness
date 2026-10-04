@@ -17,13 +17,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
-  asRecord,
-  findDenialViolations,
-  type PairedAsset,
-  pairedAssets,
-  parseManifest,
-} from '@ploaness/governance'
+import { asRecord, findDenialViolations, type PairedAsset, pairedAssets, parseManifest } from '@ploaness/governance'
 import { describe, expect, it } from 'vitest'
 
 const packageRoot: string = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -40,9 +34,7 @@ const inlinedConfigs = (): readonly string[] => {
     throw new TypeError('packages/ploaness/package.json declares no files list')
   }
   const configs: readonly string[] = shipped
-    .filter(
-      (entry: unknown): entry is string => typeof entry === 'string' && entry.endsWith('.json'),
-    )
+    .filter((entry: unknown): entry is string => typeof entry === 'string' && entry.endsWith('.json'))
     .map((entry: string): string => `packages/ploaness/${entry}`)
   if (configs.length === 0) {
     throw new TypeError('packages/ploaness/package.json ships no generated config')
@@ -56,10 +48,7 @@ const readJson = (relativePath: string): unknown =>
 const generatedArtefacts = (): readonly string[] => {
   const manifestText: string = readFileSync(path.join(packageRoot, 'manifest.tsv'), 'utf8')
   const pairs: readonly PairedAsset[] = pairedAssets(parseManifest(manifestText).assets)
-  return [
-    ...pairs.map((pair: PairedAsset): string => `packages/assets/${pair.assetPath}`),
-    ...inlinedConfigs(),
-  ]
+  return [...pairs.map((pair: PairedAsset): string => `packages/assets/${pair.assetPath}`), ...inlinedConfigs()]
 }
 
 describe('the write denial this repository carries', () => {

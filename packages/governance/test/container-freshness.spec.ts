@@ -115,13 +115,7 @@ describe('compareContainerTags', () => {
 
 describe('latestOfScheme', () => {
   it('ignores every tag outside the pinned tag scheme', () => {
-    const newest: ContainerTag = latestOfScheme(tagOf('v2.15.1'), [
-      'v2.15.1',
-      '2.99.0',
-      'v3.0',
-      'latest',
-      '2024.9.1',
-    ])
+    const newest: ContainerTag = latestOfScheme(tagOf('v2.15.1'), ['v2.15.1', '2.99.0', 'v3.0', 'latest', '2024.9.1'])
     expect(newest.raw).toBe('v2.15.1')
   })
 
@@ -182,21 +176,12 @@ describe('judgeContainer', () => {
 describe('the report lines', () => {
   it('names the declaring property and the whole replacement reference', () => {
     expect(
-      describeContainerUpdate(
-        referenceOf(`rhysd/actionlint:1.7.7@${DIGEST}`),
-        tagOf('1.7.12'),
-        OTHER_DIGEST,
-      ),
-    ).toBe(
-      `update actionlint rhysd/actionlint:1.7.7 -> 1.7.12; pin rhysd/actionlint:1.7.12@${OTHER_DIGEST}`,
-    )
+      describeContainerUpdate(referenceOf(`rhysd/actionlint:1.7.7@${DIGEST}`), tagOf('1.7.12'), OTHER_DIGEST),
+    ).toBe(`update actionlint rhysd/actionlint:1.7.7 -> 1.7.12; pin rhysd/actionlint:1.7.12@${OTHER_DIGEST}`)
   })
 
   it('names both digests, and says the pin still holds', () => {
-    const line: string = describeContainerDrift(
-      referenceOf(`rhysd/actionlint:1.7.12@${DIGEST}`),
-      OTHER_DIGEST,
-    )
+    const line: string = describeContainerDrift(referenceOf(`rhysd/actionlint:1.7.12@${DIGEST}`), OTHER_DIGEST)
     expect(line).toContain(DIGEST)
     expect(line).toContain(OTHER_DIGEST)
     expect(line).toContain('still names the bytes')

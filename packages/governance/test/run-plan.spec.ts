@@ -111,8 +111,7 @@ const EXTENDED_ADDITIONS: ReadonlySet<string> = new Set([
 
 const SOLE_PAYLOAD_MEMBER: readonly MemberDescriptor[] = [{ path: '.', isPayload: true }]
 
-const idsOf = (steps: readonly PlanStep[]): readonly string[] =>
-  steps.map((step: PlanStep): string => step.gateId)
+const idsOf = (steps: readonly PlanStep[]): readonly string[] => steps.map((step: PlanStep): string => step.gateId)
 
 describe('planSteps', () => {
   it('reproduces the single-package run order exactly', () => {
@@ -121,9 +120,7 @@ describe('planSteps', () => {
 
   it('adds the extended gates without reordering the default ones', () => {
     const extended: readonly string[] = idsOf(planSteps(GATES, SOLE_PAYLOAD_MEMBER, true))
-    expect(extended.filter((id: string): boolean => !EXTENDED_ADDITIONS.has(id))).toEqual(
-      DEFAULT_SEQUENCE,
-    )
+    expect(extended.filter((id: string): boolean => !EXTENDED_ADDITIONS.has(id))).toEqual(DEFAULT_SEQUENCE)
   })
 
   it('ends both modes with the working-tree fingerprint', () => {
@@ -134,10 +131,7 @@ describe('planSteps', () => {
 
   it('leads both modes with the two preconditions', () => {
     for (const isExtended of [false, true]) {
-      expect(idsOf(planSteps(GATES, SOLE_PAYLOAD_MEMBER, isExtended)).slice(0, 2)).toEqual([
-        'preflight',
-        'wiring',
-      ])
+      expect(idsOf(planSteps(GATES, SOLE_PAYLOAD_MEMBER, isExtended)).slice(0, 2)).toEqual(['preflight', 'wiring'])
     }
   })
 })

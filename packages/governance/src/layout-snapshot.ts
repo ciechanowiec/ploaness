@@ -101,8 +101,7 @@ const COMMA_ALPHA: RegExp = /^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/u
 const SLASH_ALPHA: RegExp = /\/\s*([\d.]+%?)\s*\)$/u
 const PERCENT: string = '%'
 
-const alphaText = (color: string): string | undefined =>
-  COMMA_ALPHA.exec(color)?.[1] ?? SLASH_ALPHA.exec(color)?.[1]
+const alphaText = (color: string): string | undefined => COMMA_ALPHA.exec(color)?.[1] ?? SLASH_ALPHA.exec(color)?.[1]
 
 /**
  * Whether a computed colour draws anything.
@@ -129,9 +128,7 @@ export const surroundingBackground = (snapshot: LayoutSnapshot, node: LayoutNode
   if (parent === undefined) {
     return isVisibleColor(snapshot.rootBackground) ? snapshot.rootBackground : CANVAS_BACKGROUND
   }
-  return isVisibleColor(parent.backgroundColor)
-    ? parent.backgroundColor
-    : surroundingBackground(snapshot, parent)
+  return isVisibleColor(parent.backgroundColor) ? parent.backgroundColor : surroundingBackground(snapshot, parent)
 }
 
 /**
@@ -142,8 +139,7 @@ export const surroundingBackground = (snapshot: LayoutSnapshot, node: LayoutNode
  */
 export const hasPaintedBackground = (snapshot: LayoutSnapshot, node: LayoutNode): boolean =>
   node.backgroundImage !== 'none' ||
-  (isVisibleColor(node.backgroundColor) &&
-    node.backgroundColor !== surroundingBackground(snapshot, node))
+  (isVisibleColor(node.backgroundColor) && node.backgroundColor !== surroundingBackground(snapshot, node))
 
 /**
  * Whether one side of an element draws a border.
@@ -198,11 +194,7 @@ export const isInClip = (snapshot: LayoutSnapshot, node: LayoutNode): boolean =>
  * @param node the possible descendant.
  * @returns true when `ancestor` is a strict ancestor of `node`.
  */
-export const isAncestorOf = (
-  snapshot: LayoutSnapshot,
-  ancestor: LayoutNode,
-  node: LayoutNode,
-): boolean => {
+export const isAncestorOf = (snapshot: LayoutSnapshot, ancestor: LayoutNode, node: LayoutNode): boolean => {
   const parent: LayoutNode | undefined = snapshot.nodes[node.parent]
   return parent !== undefined && (parent === ancestor || isAncestorOf(snapshot, ancestor, parent))
 }
@@ -212,8 +204,7 @@ export const isAncestorOf = (
  * @param rect the rect.
  * @returns false for a rect with no width or no height.
  */
-export const hasArea = (rect: LayoutRect): boolean =>
-  rect.right > rect.left && rect.bottom > rect.top
+export const hasArea = (rect: LayoutRect): boolean => rect.right > rect.left && rect.bottom > rect.top
 
 /**
  * Where an element sits in its document: each ancestor's tag and position among its siblings.

@@ -11,6 +11,8 @@ export interface EditorconfigRules {
   readonly insertFinalNewline: boolean
   readonly trimTrailingWhitespace: boolean
   readonly indentStyle: string | undefined
+  readonly indentSize: number | undefined
+  readonly maxLineLength: number
 }
 
 /** One place a file departs from the committed configuration. */
@@ -26,30 +28,48 @@ const FIRST_LINE: number = 1
 const BYTE_ORDER_MARK: number = 0xfe_ff
 const BOM: string = String.fromCodePoint(BYTE_ORDER_MARK)
 
-/**
- * Read the `[*]` section of an `.editorconfig`.
- * @param text the file's content.
- * @returns the properties the conformance rule binds.
- */
-// The `[*]` section is the span between that header and the next one, so it can be sliced out before
-// any property is read rather than tracked with a flag while reading.
-const wildcardSection = (text: string): readonly string[] => {
-  const lines: readonly string[] = text.split('\n').map((raw: string): string => raw.trim())
-  const start: number = lines.indexOf('[*]')
-  if (start === -1) {
-    return []
+const SECTION: RegExp = /^\[([^\r\n]+)\]\s*$/gm
+
+// EditorConfig's extension lists expand before the shared glob matcher reads individual patterns.
+const matchesSection = (pattern: string, file: string): boolean => {
+  const start: number = pattern.indexOf('{')
+  const end: number = pattern.indexOf('}', start)
+  if (start === -1 || end === -1) {
+    const target: string = pattern.includes('/') ? file : (file.split('/').at(-1) ?? file)
+    return matchesGlob(pattern, target)
   }
-  const rest: readonly string[] = lines.slice(start + 1)
-  const end: number = rest.findIndex((line: string): boolean => line.startsWith('['))
-  return end === -1 ? rest : rest.slice(0, end)
+  return pattern
+    .slice(start + 1, end)
+    .split(',')
+    .some((choice: string): boolean =>
+      matchesSection(`${pattern.slice(0, start)}${choice}${pattern.slice(end + 1)}`, file),
+    )
+}
+
+const matchingSections = (text: string, file: string | undefined): readonly string[] => {
+  const headers: readonly RegExpExecArray[] = [...text.matchAll(SECTION)]
+  return headers.flatMap((header: RegExpExecArray, index: number): readonly string[] => {
+    const pattern: string = header[1] ?? ''
+    const isMatches: boolean = file === undefined ? pattern === '*' : matchesSection(pattern, file)
+    return isMatches
+      ? text.slice(header.index + header[0].length, headers[index + 1]?.index ?? text.length).split('\n')
+      : []
+  })
 }
 
 const isProperty = (line: string): boolean =>
   line.length > 0 && !line.startsWith('#') && !line.startsWith(';') && line.includes('=')
 
-export const parseEditorconfig = (text: string): EditorconfigRules => {
+const positiveInteger = (value: string | undefined): number | undefined => {
+  const parsed: number = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
+/** Resolve matching sections in declaration order, inheriting properties not restated by a section. */
+export const parseEditorconfig = (text: string, file?: string): EditorconfigRules => {
   const properties: Record<string, string> = Object.fromEntries(
-    wildcardSection(text)
+    matchingSections(text, file)
+      .map((line: string): string => line.trim())
       .filter((line: string): boolean => isProperty(line))
       .map((line: string): readonly [string, string] => {
         const separator: number = line.indexOf('=')
@@ -67,6 +87,8 @@ export const parseEditorconfig = (text: string): EditorconfigRules => {
     insertFinalNewline: properties['insert_final_newline'] === 'true',
     trimTrailingWhitespace: properties['trim_trailing_whitespace'] === 'true',
     indentStyle: properties['indent_style'],
+    indentSize: positiveInteger(properties['indent_size']),
+    maxLineLength: Math.min(positiveInteger(properties['max_line_length']) ?? MAX_LINE_LENGTH, MAX_LINE_LENGTH),
   }
 }
 
@@ -74,23 +96,16 @@ export const parseEditorconfig = (text: string): EditorconfigRules => {
 // undefined, and the walk is then a filter rather than a chain of branches.
 type LineRule = (body: string, raw: string) => string | undefined
 
-const lineRules = (
-  rules: EditorconfigRules,
-  isLineLengthEnforced: boolean,
-): readonly LineRule[] => [
+const lineRules = (rules: EditorconfigRules, isLineLengthEnforced: boolean): readonly LineRule[] => [
   (_body: string, raw: string): string | undefined =>
-    rules.endOfLine === 'lf' && raw.endsWith('\r')
-      ? 'carriage return; end_of_line is lf'
-      : undefined,
+    rules.endOfLine === 'lf' && raw.endsWith('\r') ? 'carriage return; end_of_line is lf' : undefined,
   (body: string): string | undefined =>
     rules.trimTrailingWhitespace && /[ \t]$/.test(body) ? 'trailing whitespace' : undefined,
   (body: string): string | undefined =>
-    rules.indentStyle === 'space' && body.startsWith('\t')
-      ? 'tab indentation; indent_style is space'
-      : undefined,
+    rules.indentStyle === 'space' && body.startsWith('\t') ? 'tab indentation; indent_style is space' : undefined,
   (body: string): string | undefined =>
-    isLineLengthEnforced && body.length > MAX_LINE_LENGTH
-      ? `line is ${String(body.length)} characters; the cap is ${String(MAX_LINE_LENGTH)}`
+    isLineLengthEnforced && body.length > rules.maxLineLength
+      ? `line is ${String(body.length)} characters; the cap is ${String(rules.maxLineLength)}`
       : undefined,
 ]
 
@@ -100,15 +115,13 @@ const lineViolations = (
   isLineLengthEnforced: boolean,
 ): readonly EditorconfigViolation[] => {
   const checks: readonly LineRule[] = lineRules(rules, isLineLengthEnforced)
-  return content
-    .split('\n')
-    .flatMap((raw: string, index: number): readonly EditorconfigViolation[] => {
-      const body: string = raw.replace(/\r$/, '')
-      return checks.flatMap((check: LineRule): readonly EditorconfigViolation[] => {
-        const reason: string | undefined = check(body, raw)
-        return reason === undefined ? [] : [{ line: index + 1, reason }]
-      })
+  return content.split('\n').flatMap((raw: string, index: number): readonly EditorconfigViolation[] => {
+    const body: string = raw.replace(/\r$/, '')
+    return checks.flatMap((check: LineRule): readonly EditorconfigViolation[] => {
+      const reason: string | undefined = check(body, raw)
+      return reason === undefined ? [] : [{ line: index + 1, reason }]
     })
+  })
 }
 
 /**
@@ -126,10 +139,7 @@ const lineViolations = (
 // Matched as globs, not through `isGovernedCode`: `generatedArtefacts` is declared as globs and reaches
 // ESLint's ignore list as globs, and `src/migrations/**` is not merely a different pattern under regex
 // rules - `new RegExp` rejects it outright, so the gate would have thrown rather than reported.
-export const isLineCapEnforced = (
-  filePath: string,
-  generatedArtefacts: readonly string[],
-): boolean =>
+export const isLineCapEnforced = (filePath: string, generatedArtefacts: readonly string[]): boolean =>
   hasExtension(filePath, CODE_EXTENSIONS) &&
   !generatedArtefacts.some((pattern: string): boolean => matchesGlob(pattern, filePath))
 
@@ -155,9 +165,5 @@ export const findEditorconfigViolations = (
     rules.insertFinalNewline && !content.endsWith('\n')
       ? [{ line: content.split('\n').length, reason: 'no final newline' }]
       : []
-  return [
-    ...byteOrderMark,
-    ...lineViolations(content, rules, isLineLengthEnforced),
-    ...finalNewline,
-  ]
+  return [...byteOrderMark, ...lineViolations(content, rules, isLineLengthEnforced), ...finalNewline]
 }

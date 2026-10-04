@@ -109,9 +109,7 @@ describe('what the shipped configs make of a spec file', () => {
     expect(stated.length).toBeGreaterThan(0)
     for (const [name, config] of Object.entries(shippedConfigs)) {
       const rules: Readonly<Record<string, unknown>> = await resolveRules(config, SPEC_FILE)
-      expect(selectorsOf(rules), `the selectors reaching a spec in the ${name} config`).toEqual(
-        stated,
-      )
+      expect(selectorsOf(rules), `the selectors reaching a spec in the ${name} config`).toEqual(stated)
     }
   })
 
@@ -120,16 +118,11 @@ describe('what the shipped configs make of a spec file', () => {
   it('still holds the code that spec tests to the bans the spec is exempt from', async () => {
     // Named rather than derived from the exemption table: what is asserted is that these particular
     // relaxations are a spec's, and a rule added to the table later should have to say so here too.
-    const heldOnProduction: readonly string[] = [
-      '@typescript-eslint/no-magic-numbers',
-      'max-lines-per-function',
-    ]
+    const heldOnProduction: readonly string[] = ['@typescript-eslint/no-magic-numbers', 'max-lines-per-function']
     for (const [name, config] of Object.entries(shippedConfigs)) {
       const rules: Readonly<Record<string, unknown>> = await resolveRules(config, PRODUCTION_FILE)
       for (const rule of heldOnProduction) {
-        expect(severityOf(rules, rule), `${rule} on production code in the ${name} config`).toBe(
-          'error',
-        )
+        expect(severityOf(rules, rule), `${rule} on production code in the ${name} config`).toBe('error')
       }
     }
   })

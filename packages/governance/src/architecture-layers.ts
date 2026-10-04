@@ -19,8 +19,7 @@ const REGEX_METACHARACTERS: RegExp = /[$()*+.?[\\\]^{|}]/gu
 
 // A trailing slash is normalised where the setting is read, so what arrives here is already a bare
 // directory. This escapes it, and nothing else.
-const asRoot = (directory: string): string =>
-  directory.replaceAll(REGEX_METACHARACTERS, String.raw`\$&`)
+const asRoot = (directory: string): string => directory.replaceAll(REGEX_METACHARACTERS, String.raw`\$&`)
 
 const alternation = (directories: readonly string[]): string =>
   directories.map((directory: string): string => `${asRoot(directory)}/`).join('|')
@@ -34,9 +33,7 @@ const alternation = (directories: readonly string[]): string =>
  * @param pureLogicRoots the directories forming the floor, repo-relative and without a trailing slash.
  * @returns the dependency-cruiser rule, or undefined when the project declares no floor.
  */
-export const pureLogicRule = (
-  pureLogicRoots: readonly string[],
-): Record<string, unknown> | undefined => {
+export const pureLogicRule = (pureLogicRoots: readonly string[]): Record<string, unknown> | undefined => {
   if (pureLogicRoots.length === 0) {
     return undefined
   }

@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  BUNDLE_BUDGET_BYTES,
-  type BundleFile,
-  type BundleReport,
-  evaluateBundle,
-} from '../src/bundle-budget.js'
+import { BUNDLE_BUDGET_BYTES, type BundleFile, type BundleReport, evaluateBundle } from '../src/bundle-budget.js'
 
 const files = (...sizes: number[]): BundleFile[] =>
   sizes.map((gzipBytes: number): BundleFile => ({ path: 'chunk.js', gzipBytes }))

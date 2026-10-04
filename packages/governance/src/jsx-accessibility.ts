@@ -109,16 +109,7 @@ export const JSX_ACCESSIBILITY_RULES: readonly JsxAccessibilityRule[] = [
     oxlint: 'jsx-a11y/no-noninteractive-element-interactions',
     biome: 'noNoninteractiveElementInteractions',
     options: {
-      handlers: [
-        'onClick',
-        'onError',
-        'onLoad',
-        'onMouseDown',
-        'onMouseUp',
-        'onKeyPress',
-        'onKeyDown',
-        'onKeyUp',
-      ],
+      handlers: ['onClick', 'onError', 'onLoad', 'onMouseDown', 'onMouseUp', 'onKeyPress', 'onKeyDown', 'onKeyUp'],
       alert: ['onKeyUp', 'onKeyDown', 'onKeyPress'],
       body: ['onError', 'onLoad'],
       dialog: ['onKeyUp', 'onKeyDown', 'onKeyPress'],
@@ -195,8 +186,5 @@ export const oxlintAccessibilityConfig = (): Readonly<Record<string, unknown>> =
 /** The Biome checks whose application JSX responsibility belongs to Oxlint. */
 export const replacedBiomeAccessibilityRules = (): Readonly<Record<string, string>> =>
   Object.fromEntries(
-    JSX_ACCESSIBILITY_RULES.map((rule: JsxAccessibilityRule): readonly [string, string] => [
-      rule.biome,
-      'off',
-    ]),
+    JSX_ACCESSIBILITY_RULES.map((rule: JsxAccessibilityRule): readonly [string, string] => [rule.biome, 'off']),
   )

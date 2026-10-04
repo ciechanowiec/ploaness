@@ -52,8 +52,7 @@ const isTransparentWrapper = (snapshot: LayoutSnapshot, node: LayoutNode): boole
   (!(hasPaintedBox(snapshot, node) || hasOwnText(node)) && childrenOf(snapshot, node).length > 0)
 
 const isComparable = (node: LayoutNode): boolean =>
-  !HIDDEN_VISIBILITY.has(node.visibility) &&
-  node.rects.some((rect: LayoutRect): boolean => hasArea(rect))
+  !HIDDEN_VISIBILITY.has(node.visibility) && node.rects.some((rect: LayoutRect): boolean => hasArea(rect))
 
 /**
  * The elements laid out directly under a parent, after looking through wrappers that paint nothing.
@@ -61,10 +60,7 @@ const isComparable = (node: LayoutNode): boolean =>
  * @param parent the element whose children are compared.
  * @returns the siblings, in document order.
  */
-export const layoutChildren = (
-  snapshot: LayoutSnapshot,
-  parent: LayoutNode,
-): readonly LayoutNode[] =>
+export const layoutChildren = (snapshot: LayoutSnapshot, parent: LayoutNode): readonly LayoutNode[] =>
   childrenOf(snapshot, parent).flatMap((child: LayoutNode): readonly LayoutNode[] => {
     if (child.isAriaHidden || OUT_OF_FLOW.has(child.position) || isTablePart(child)) {
       return []
@@ -98,11 +94,9 @@ const separationOf = (first: LayoutRect, second: LayoutRect): Separation => ({
   vertical: Math.max(second.top - first.bottom, first.top - second.bottom),
 })
 
-const gapOf = (separation: Separation): number =>
-  Math.max(separation.horizontal, separation.vertical)
+const gapOf = (separation: Separation): number => Math.max(separation.horizontal, separation.vertical)
 
-const isOverlapping = (separation: Separation): boolean =>
-  separation.horizontal < 0 && separation.vertical < 0
+const isOverlapping = (separation: Separation): boolean => separation.horizontal < 0 && separation.vertical < 0
 
 const separationsOf = (first: LayoutNode, second: LayoutNode): readonly Separation[] =>
   first.rects
@@ -124,9 +118,7 @@ const facingSide = (node: LayoutRect, other: LayoutRect): LayoutSide => {
 }
 
 const outerBox = (node: LayoutNode): LayoutRect => {
-  const rects: readonly LayoutRect[] = node.rects.filter((rect: LayoutRect): boolean =>
-    hasArea(rect),
-  )
+  const rects: readonly LayoutRect[] = node.rects.filter((rect: LayoutRect): boolean => hasArea(rect))
   return {
     left: Math.min(...rects.map((rect: LayoutRect): number => rect.left)),
     top: Math.min(...rects.map((rect: LayoutRect): number => rect.top)),
@@ -137,12 +129,7 @@ const outerBox = (node: LayoutNode): LayoutRect => {
 
 // Boxed toward a neighbour: a background or a shadow is visible on every side, a border only on the
 // side it is drawn. Overlapping boxes have no facing side, so anything painted counts.
-const isBoxedToward = (
-  snapshot: LayoutSnapshot,
-  node: LayoutNode,
-  other: LayoutNode,
-  isOverlap: boolean,
-): boolean =>
+const isBoxedToward = (snapshot: LayoutSnapshot, node: LayoutNode, other: LayoutNode, isOverlap: boolean): boolean =>
   isOverlap
     ? hasPaintedBox(snapshot, node)
     : hasPaintedBackground(snapshot, node) ||
@@ -158,16 +145,11 @@ const judgePair = (
 ): readonly BoxFinding[] => {
   const [first, second] = pair
   const separations: readonly Separation[] = separationsOf(first, second)
-  const isOverlap: boolean = separations.some((separation: Separation): boolean =>
-    isOverlapping(separation),
-  )
-  const gap: number = Math.min(
-    ...separations.map((separation: Separation): number => gapOf(separation)),
-  )
+  const isOverlap: boolean = separations.some((separation: Separation): boolean => isOverlapping(separation))
+  const gap: number = Math.min(...separations.map((separation: Separation): number => gapOf(separation)))
   const isClose: boolean = separations.length > 0 && (isOverlap || gap < minimumGap)
   const isBoxed: boolean =
-    isBoxedToward(snapshot, first, second, isOverlap) ||
-    isBoxedToward(snapshot, second, first, isOverlap)
+    isBoxedToward(snapshot, first, second, isOverlap) || isBoxedToward(snapshot, second, first, isOverlap)
   return isClose && isBoxed
     ? [
         {
@@ -187,12 +169,11 @@ const isInlinePair = (first: LayoutNode, second: LayoutNode): boolean =>
   first.display === 'inline' && second.display === 'inline'
 
 const pairsOf = (siblings: readonly LayoutNode[]): readonly (readonly [LayoutNode, LayoutNode])[] =>
-  siblings.flatMap(
-    (first: LayoutNode, index: number): readonly (readonly [LayoutNode, LayoutNode])[] =>
-      siblings
-        .slice(index + 1)
-        .filter((second: LayoutNode): boolean => !isInlinePair(first, second))
-        .map((second: LayoutNode): readonly [LayoutNode, LayoutNode] => [first, second]),
+  siblings.flatMap((first: LayoutNode, index: number): readonly (readonly [LayoutNode, LayoutNode])[] =>
+    siblings
+      .slice(index + 1)
+      .filter((second: LayoutNode): boolean => !isInlinePair(first, second))
+      .map((second: LayoutNode): readonly [LayoutNode, LayoutNode] => [first, second]),
   )
 
 /**
@@ -201,17 +182,11 @@ const pairsOf = (siblings: readonly LayoutNode[]): readonly (readonly [LayoutNod
  * @param minimumGap the smallest gap, in CSS pixels, that keeps two boxes apart.
  * @returns one finding per pair, each saying whether an exemption excused it.
  */
-export const findTouchingBoxes = (
-  snapshot: LayoutSnapshot,
-  minimumGap: number,
-): readonly BoxFinding[] =>
+export const findTouchingBoxes = (snapshot: LayoutSnapshot, minimumGap: number): readonly BoxFinding[] =>
   snapshot.nodes
-    .filter(
-      (node: LayoutNode): boolean => isGroupRoot(snapshot, node) && !isInAriaHidden(snapshot, node),
-    )
+    .filter((node: LayoutNode): boolean => isGroupRoot(snapshot, node) && !isInAriaHidden(snapshot, node))
     .flatMap((parent: LayoutNode): readonly BoxFinding[] =>
       pairsOf(layoutChildren(snapshot, parent)).flatMap(
-        (pair: readonly [LayoutNode, LayoutNode]): readonly BoxFinding[] =>
-          judgePair(snapshot, pair, minimumGap),
+        (pair: readonly [LayoutNode, LayoutNode]): readonly BoxFinding[] => judgePair(snapshot, pair, minimumGap),
       ),
     )

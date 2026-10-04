@@ -17,9 +17,7 @@ import {
 describe('isDockerfile', (): void => {
   it('acceptsEveryConventionalSpelling', (): void => {
     expect(
-      ['Dockerfile', 'api.Dockerfile', 'Dockerfile.debug'].every((file: string): boolean =>
-        isDockerfile(file),
-      ),
+      ['Dockerfile', 'api.Dockerfile', 'Dockerfile.debug'].every((file: string): boolean => isDockerfile(file)),
     ).toBe(true)
   })
 
@@ -30,25 +28,25 @@ describe('isDockerfile', (): void => {
 
 describe('dockerfilesIn', (): void => {
   it('findsADockerfileOutsideTheRepositoryRoot', (): void => {
-    expect(dockerfilesIn(['cms/pgadmin/Dockerfile', 'README.md'])).toStrictEqual([
-      'cms/pgadmin/Dockerfile',
-    ])
+    expect(dockerfilesIn(['cms/pgadmin/Dockerfile', 'README.md'])).toStrictEqual(['cms/pgadmin/Dockerfile'])
   })
 
   // The order is the report's, not the tree's: `git ls-files` order is not a promise, and a findings
   // list that reorders between machines reads as a change nobody made.
   it('ordersTheReportIndependentlyOfTheTreeOrder', (): void => {
-    expect(
-      dockerfilesIn(['fe/Dockerfile', 'cms/pgadmin/Dockerfile', 'api.Dockerfile']),
-    ).toStrictEqual(['api.Dockerfile', 'cms/pgadmin/Dockerfile', 'fe/Dockerfile'])
+    expect(dockerfilesIn(['fe/Dockerfile', 'cms/pgadmin/Dockerfile', 'api.Dockerfile'])).toStrictEqual([
+      'api.Dockerfile',
+      'cms/pgadmin/Dockerfile',
+      'fe/Dockerfile',
+    ])
   })
 })
 
 describe('isComposeFile', (): void => {
   it('acceptsTheFourNamesComposeReadsOnItsOwn', (): void => {
     expect(
-      ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'].every(
-        (file: string): boolean => isComposeFile(file),
+      ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'].every((file: string): boolean =>
+        isComposeFile(file),
       ),
     ).toBe(true)
   })
@@ -70,9 +68,7 @@ describe('composeProjectsIn', (): void => {
   })
 
   it('namesTheRootProjectWithAnEmptyDirectory', (): void => {
-    expect(composeProjectsIn(['compose.yaml'])).toStrictEqual([
-      { directory: '', file: 'compose.yaml' },
-    ])
+    expect(composeProjectsIn(['compose.yaml'])).toStrictEqual([{ directory: '', file: 'compose.yaml' }])
   })
 
   // One directory is one project however many files compose merges there, because that is the unit
@@ -115,8 +111,9 @@ describe('isWorkflowFile', (): void => {
 
 describe('workflowsIn', (): void => {
   it('ordersTheReportIndependentlyOfTheTreeOrder', (): void => {
-    expect(
-      workflowsIn(['.github/workflows/verify.yml', 'README.md', '.github/workflows/release.yaml']),
-    ).toStrictEqual(['.github/workflows/release.yaml', '.github/workflows/verify.yml'])
+    expect(workflowsIn(['.github/workflows/verify.yml', 'README.md', '.github/workflows/release.yaml'])).toStrictEqual([
+      '.github/workflows/release.yaml',
+      '.github/workflows/verify.yml',
+    ])
   })
 })

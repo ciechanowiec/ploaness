@@ -17,8 +17,7 @@ export const NOT_FOUND: number = -1
  * @param index the offset.
  * @returns the line number, counting from one.
  */
-export const lineOf = (source: string, index: number): number =>
-  source.slice(0, index).split('\n').length
+export const lineOf = (source: string, index: number): number => source.slice(0, index).split('\n').length
 
 // A `/` begins a regular-expression literal only where a value may start. Tracking that lets the comment
 // scanner skip a literal such as /https:\/\// without mistaking its escaped slashes for a comment.
@@ -53,8 +52,7 @@ const lastMeaningful = (text: string): string => text.trimEnd().at(LAST_CHARACTE
 
 // A replacement FUNCTION rather than a replacement string: a string replacement reads `$&` and its
 // siblings as syntax, and the character to fill with is a parameter here rather than a literal.
-const fill = (text: string, character: string): string =>
-  text.replaceAll(/[^\n]/g, (): string => character)
+const fill = (text: string, character: string): string => text.replaceAll(/[^\n]/g, (): string => character)
 
 const blank = (text: string): string => fill(text, ' ')
 
@@ -145,8 +143,7 @@ const scanRegexLiteral = (source: string, start: number): number => {
   return cursor.end ?? cursor.index
 }
 
-const endOfRegexLiteral = (source: string, index: number): number =>
-  scanRegexLiteral(source, index + 1)
+const endOfRegexLiteral = (source: string, index: number): number => scanRegexLiteral(source, index + 1)
 
 /** What a fold step produced, and whether the walk should stop there. */
 export interface Folded<State> {
@@ -175,12 +172,7 @@ const commentAt = (source: string, index: number): Skipped | undefined => {
 
 // A string literal is kept because its contents are the only place a banned construct can legitimately
 // appear as data. Everything else here is erased, so prose naming a construct is never read as one.
-const constructAt = (
-  source: string,
-  index: number,
-  output: string,
-  shouldKeepRegex: boolean,
-): Skipped | undefined => {
+const constructAt = (source: string, index: number, output: string, shouldKeepRegex: boolean): Skipped | undefined => {
   const comment: Skipped | undefined = commentAt(source, index)
   if (comment !== undefined) {
     return comment
@@ -204,11 +196,7 @@ const replacementFor = (text: string, skipped: Skipped, isStringMasked: boolean)
   return isStringMasked ? fill(text, STRING_FILLER) : text
 }
 
-const strip = (
-  source: string,
-  isStringMasked: boolean,
-  shouldKeepRegex: boolean = false,
-): string => {
+const strip = (source: string, isStringMasked: boolean, shouldKeepRegex: boolean = false): string => {
   /* eslint-disable functional/no-let -- a whole source file is walked here, so recursion would risk
      the stack; the cursor and the output it builds are confined to this loop and escape as a value */
   let output: string = ''
@@ -347,8 +335,7 @@ export const topLevelSlice = (argumentText: string): string =>
         return { state: collected + (step.depth === 1 ? ' ' : ''), stop: false }
       }
       return {
-        state:
-          !CLOSERS.has(step.character) && step.depth === 1 ? collected + step.character : collected,
+        state: !CLOSERS.has(step.character) && step.depth === 1 ? collected + step.character : collected,
         stop: false,
       }
     },
@@ -362,9 +349,7 @@ export const topLevelSlice = (argumentText: string): string =>
  * @returns the offsets, in reading order.
  */
 export const occurrences = (source: string, needle: string): readonly number[] =>
-  [...source.matchAll(new RegExp(escapeForRegex(needle), 'g'))].map(
-    (match: RegExpExecArray): number => match.index,
-  )
+  [...source.matchAll(new RegExp(escapeForRegex(needle), 'g'))].map((match: RegExpExecArray): number => match.index)
 
 // A key opens the literal or follows a comma, which is what keeps a colon inside a value out of it.
 const TOP_LEVEL_KEY: RegExp = /(?:^|[{,])\s*([a-z_$][\w$]*)\s*:/gi
@@ -383,9 +368,7 @@ export const topLevelKeys = (source: string, index: number): readonly string[] =
   const body: string | undefined = balancedArguments(source, open)
   return body === undefined
     ? []
-    : [...topLevelSlice(`{${body}}`).matchAll(TOP_LEVEL_KEY)].map(
-        (match: RegExpExecArray): string => match[1] ?? '',
-      )
+    : [...topLevelSlice(`{${body}}`).matchAll(TOP_LEVEL_KEY)].map((match: RegExpExecArray): string => match[1] ?? '')
 }
 
 // The open braces still standing at a given point of the walk, and the innermost one at the offset
@@ -411,8 +394,7 @@ const enclose = (state: Enclosure, step: ScanStep, target: number): Folded<Enclo
     return { state: { ...state, opens: [...state.opens, step.index] }, stop: false }
   }
   return {
-    state:
-      step.character === '}' ? { ...state, opens: state.opens.slice(0, LAST_CHARACTER) } : state,
+    state: step.character === '}' ? { ...state, opens: state.opens.slice(0, LAST_CHARACTER) } : state,
     stop: false,
   }
 }

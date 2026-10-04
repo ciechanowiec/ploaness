@@ -46,25 +46,14 @@ export interface ParsedManifest {
   readonly problems: readonly string[]
 }
 
-const DISPOSITIONS: ReadonlySet<string> = new Set<string>([
-  'PINNED',
-  'SEED',
-  'FORBIDDEN',
-  'SECTION',
-  'REFERENCE',
-])
+const DISPOSITIONS: ReadonlySet<string> = new Set<string>(['PINNED', 'SEED', 'FORBIDDEN', 'SECTION', 'REFERENCE'])
 
 // A guard rather than a set membership test followed by an assertion. Both say the same thing; only
 // this one is a claim the compiler checks, so a disposition added to the union without being added to
 // the set above stops compiling instead of parsing into a value no rule handles.
 const isDisposition = (raw: string): raw is Disposition => DISPOSITIONS.has(raw)
 
-const SCOPES: ReadonlySet<string> = new Set<string>([
-  'REPOSITORY',
-  'APPLICATION',
-  'PAYLOAD',
-  'EVERYWHERE',
-])
+const SCOPES: ReadonlySet<string> = new Set<string>(['REPOSITORY', 'APPLICATION', 'PAYLOAD', 'EVERYWHERE'])
 
 const isScope = (raw: string): raw is AssetScope => SCOPES.has(raw)
 
@@ -199,12 +188,8 @@ export const parseManifest = (manifest: string): ParsedManifest => {
     .map(([index, line]: readonly [number, string]): ParsedRow => readManifestRow(index, line))
     .filter((row: ParsedRow): boolean => row.asset !== undefined || row.problem !== undefined)
   return {
-    assets: rows.flatMap((row: ParsedRow): readonly ManagedAsset[] =>
-      row.asset === undefined ? [] : [row.asset],
-    ),
-    problems: rows.flatMap((row: ParsedRow): readonly string[] =>
-      row.problem === undefined ? [] : [row.problem],
-    ),
+    assets: rows.flatMap((row: ParsedRow): readonly ManagedAsset[] => (row.asset === undefined ? [] : [row.asset])),
+    problems: rows.flatMap((row: ParsedRow): readonly string[] => (row.problem === undefined ? [] : [row.problem])),
   }
 }
 
@@ -248,8 +233,7 @@ const checkForbidden = (asset: ManagedAsset, state: AssetState): AssetViolation 
   state.isPresent
     ? {
         path: asset.path,
-        reason:
-          'ploaness supplies this configuration, so a working-tree copy shadows it; delete the file',
+        reason: 'ploaness supplies this configuration, so a working-tree copy shadows it; delete the file',
       }
     : undefined
 
@@ -381,9 +365,7 @@ export interface AssetHost {
  * @returns the repository-scope entries and the forbidden paths, which apply everywhere.
  */
 export const repositoryAssets = (assets: readonly ManagedAsset[]): readonly ManagedAsset[] =>
-  assets.filter(
-    (asset: ManagedAsset): boolean => asset.scope === 'REPOSITORY' || asset.scope === 'EVERYWHERE',
-  )
+  assets.filter((asset: ManagedAsset): boolean => asset.scope === 'REPOSITORY' || asset.scope === 'EVERYWHERE')
 
 /**
  * The catalogue entries that apply inside one member.
@@ -394,10 +376,7 @@ export const repositoryAssets = (assets: readonly ManagedAsset[]): readonly Mana
  * @param host what the member can hold, derived from its kind.
  * @returns the entries that apply to that member.
  */
-export const memberAssets = (
-  assets: readonly ManagedAsset[],
-  host: AssetHost,
-): readonly ManagedAsset[] =>
+export const memberAssets = (assets: readonly ManagedAsset[], host: AssetHost): readonly ManagedAsset[] =>
   assets.filter((asset: ManagedAsset): boolean => {
     return (
       asset.scope === 'EVERYWHERE' ||

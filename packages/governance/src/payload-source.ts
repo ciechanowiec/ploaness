@@ -77,9 +77,7 @@ interface LiteralSpan {
 
 const withClose = (spans: readonly LiteralSpan[], close: number): readonly LiteralSpan[] => {
   const last: LiteralSpan | undefined = spans.at(LAST_CHARACTER)
-  return last?.close === NOT_FOUND
-    ? [...spans.slice(0, LAST_CHARACTER), { open: last.open, close }]
-    : spans
+  return last?.close === NOT_FOUND ? [...spans.slice(0, LAST_CHARACTER), { open: last.open, close }] : spans
 }
 
 // Every module-level `{ ... }` in the file, collected in one pass. The `satisfies` form writes the type
@@ -109,11 +107,7 @@ const moduleLiterals = (source: string): readonly LiteralSpan[] =>
  * @param isTrailing true when the type follows the value, as `satisfies` does.
  * @returns the body wrapped in its own braces, or undefined when no literal belongs to the marker.
  */
-export const configBody = (
-  source: string,
-  marker: number,
-  isTrailing: boolean,
-): string | undefined => {
+export const configBody = (source: string, marker: number, isTrailing: boolean): string | undefined => {
   const open: number = isTrailing
     ? (moduleLiterals(source)
         .filter((span: LiteralSpan): boolean => span.close !== NOT_FOUND && span.close < marker)

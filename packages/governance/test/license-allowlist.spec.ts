@@ -1,10 +1,6 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import {
-  findLicenseViolations,
-  isLicenseAllowed,
-  type LicensedPackage,
-} from '../src/license-allowlist.js'
+import { findLicenseViolations, isLicenseAllowed, type LicensedPackage } from '../src/license-allowlist.js'
 
 describe('license allowlist', () => {
   it('permits permissive licenses', () => {
@@ -47,9 +43,7 @@ describe('license allowlist', () => {
   // The same defect in the direction that matters: read as a top-level OR, the expression below found
   // `MIT` among pieces that were never operands and passed a conjunct nothing permits.
   it('refuses a conjunct that is a group of disallowed licenses', () => {
-    expect(isLicenseAllowed('(MIT OR GPL-3.0-only) AND (GPL-3.0-only OR AGPL-3.0-only)')).toBe(
-      false,
-    )
+    expect(isLicenseAllowed('(MIT OR GPL-3.0-only) AND (GPL-3.0-only OR AGPL-3.0-only)')).toBe(false)
     expect(isLicenseAllowed('(GPL-3.0-only) AND (MIT)')).toBe(false)
   })
 
@@ -108,12 +102,10 @@ describe('license allowlist membership', () => {
 // them deterministic. (Each `it` also carries a concrete example assertion, since the unit scope's
 // assertions-in-tests rule - unlike the integration scope - does not recognise `fc.assert`.)
 describe('license allowlist properties (fast-check)', () => {
-  const allowedId: fc.Arbitrary<
-    'MIT' | 'Apache-2.0' | 'ISC' | 'MPL-2.0' | 'LGPL-3.0-only' | 'LGPL-3.0' | 'Zlib'
-  > = fc.constantFrom('MIT', 'Apache-2.0', 'ISC', 'MPL-2.0', 'LGPL-3.0-only', 'LGPL-3.0', 'Zlib')
-  const deniedId: fc.Arbitrary<
-    'GPL-3.0-only' | 'AGPL-3.0' | 'UNKNOWN' | 'BUSL-1.1' | 'Hippocratic-2.1' | 'BSD'
-  > = fc.constantFrom('GPL-3.0-only', 'AGPL-3.0', 'UNKNOWN', 'BUSL-1.1', 'Hippocratic-2.1', 'BSD')
+  const allowedId: fc.Arbitrary<'MIT' | 'Apache-2.0' | 'ISC' | 'MPL-2.0' | 'LGPL-3.0-only' | 'LGPL-3.0' | 'Zlib'> =
+    fc.constantFrom('MIT', 'Apache-2.0', 'ISC', 'MPL-2.0', 'LGPL-3.0-only', 'LGPL-3.0', 'Zlib')
+  const deniedId: fc.Arbitrary<'GPL-3.0-only' | 'AGPL-3.0' | 'UNKNOWN' | 'BUSL-1.1' | 'Hippocratic-2.1' | 'BSD'> =
+    fc.constantFrom('GPL-3.0-only', 'AGPL-3.0', 'UNKNOWN', 'BUSL-1.1', 'Hippocratic-2.1', 'BSD')
   const anyId: fc.Arbitrary<string> = fc.oneof(allowedId, deniedId)
   const Allowed: ReadonlySet<string> = new Set([
     'MIT',
@@ -147,11 +139,6 @@ describe('license allowlist properties (fast-check)', () => {
 
   it('is unaffected by surrounding parentheses', () => {
     expect(isLicenseAllowed('(MIT)')).toBe(isLicenseAllowed('MIT'))
-    fc.assert(
-      fc.property(
-        anyId,
-        (id: string): boolean => isLicenseAllowed(`(${id})`) === isLicenseAllowed(id),
-      ),
-    )
+    fc.assert(fc.property(anyId, (id: string): boolean => isLicenseAllowed(`(${id})`) === isLicenseAllowed(id)))
   })
 })

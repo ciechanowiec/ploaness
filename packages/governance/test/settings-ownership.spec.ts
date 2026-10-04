@@ -9,9 +9,7 @@ describe('workspace settings ownership', () => {
       { generatedArtefacts: [{ pattern: 'src/shared.ts', reason: 'generated schema' }] },
       { generatedArtefacts: [{ pattern: 'src/local.ts', reason: 'generated schema' }] },
     )
-    expect(settings.generatedArtefacts).toEqual(
-      expect.arrayContaining(['src/shared.ts', 'src/local.ts']),
-    )
+    expect(settings.generatedArtefacts).toEqual(expect.arrayContaining(['src/shared.ts', 'src/local.ts']))
     expect(settings.declaredExclusions.map((entry) => entry.pattern)).toEqual(['src/local.ts'])
   })
 
@@ -30,9 +28,7 @@ describe('workspace settings ownership', () => {
   it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 'none', null])(
     'preserves a zero suppression ceiling against %s',
     (value: unknown) => {
-      expect(
-        readMemberSettings({ maxSuppressions: 0 }, { maxSuppressions: value }).maxSuppressions,
-      ).toBe(0)
+      expect(readMemberSettings({ maxSuppressions: 0 }, { maxSuppressions: value }).maxSuppressions).toBe(0)
     },
   )
 
@@ -45,9 +41,7 @@ describe('workspace settings ownership', () => {
         reason: 'generated schema',
         kind: 'regex',
       })
-      const patterns: readonly RolePattern[] = [
-        { memberPath: entry.memberPath ?? '.', pattern: entry.pattern },
-      ]
+      const patterns: readonly RolePattern[] = [{ memberPath: entry.memberPath ?? '.', pattern: entry.pattern }]
       expect(matchesRole('apps/web/src/generated/schema.ts', patterns)).toBe(true)
       expect(matchesRole('apps/api/src/generated/schema.ts', patterns)).toBe(false)
       expect(matchesRole('src/generated/schema.ts', patterns)).toBe(false)

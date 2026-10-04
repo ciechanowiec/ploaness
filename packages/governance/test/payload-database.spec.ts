@@ -26,9 +26,7 @@ const evidence = (overrides: Partial<MigrationEvidence> = {}): MigrationEvidence
 
 describe('rootConfigsIn', () => {
   it('reads the body of a root configuration call', () => {
-    const found: readonly FoundRootConfig[] = rootConfigsIn(
-      configWith('postgresAdapter({ push: false })'),
-    )
+    const found: readonly FoundRootConfig[] = rootConfigsIn(configWith('postgresAdapter({ push: false })'))
     expect(found).toHaveLength(1)
     expect(found[0]?.body).toContain('collections')
   })
@@ -57,22 +55,16 @@ describe('findUnreviewedSchemaPush', () => {
   })
 
   it('reports an adapter that enables push', () => {
-    expect(rulesOf(configWith('postgresAdapter({ pool: { url }, push: true })'))).toEqual([
-      'no-unreviewed-schema-push',
-    ])
+    expect(rulesOf(configWith('postgresAdapter({ pool: { url }, push: true })'))).toEqual(['no-unreviewed-schema-push'])
   })
 
   // Undeclared is the dangerous spelling: Payload's own guard is `this.push !== false`.
   it('reports an adapter that declares no push at all', () => {
-    expect(rulesOf(configWith('postgresAdapter({ pool: { url } })'))).toEqual([
-      'no-unreviewed-schema-push',
-    ])
+    expect(rulesOf(configWith('postgresAdapter({ pool: { url } })'))).toEqual(['no-unreviewed-schema-push'])
   })
 
   it('does not read a push nested inside the pool as the adapter own setting', () => {
-    expect(rulesOf(configWith('postgresAdapter({ pool: { push: false } })'))).toEqual([
-      'no-unreviewed-schema-push',
-    ])
+    expect(rulesOf(configWith('postgresAdapter({ pool: { push: false } })'))).toEqual(['no-unreviewed-schema-push'])
   })
 
   it('says nothing about an adapter that carries no push to disable', () => {
@@ -111,22 +103,18 @@ describe('declaredMigrationDirectoryIn', () => {
   // so a quoted value never reaches the slice at all.
   it('reads a directory the adapter names', () => {
     expect(
-      declaredMigrationDirectoryIn(
-        configWith("postgresAdapter({ push: false, migrationDir: 'db/changes' })"),
-      ),
+      declaredMigrationDirectoryIn(configWith("postgresAdapter({ push: false, migrationDir: 'db/changes' })")),
     ).toBe('db/changes')
   })
 
   it('reads a directory declared as the only option', () => {
-    expect(
-      declaredMigrationDirectoryIn(configWith('postgresAdapter({ migrationDir: "db/changes" })')),
-    ).toBe('db/changes')
+    expect(declaredMigrationDirectoryIn(configWith('postgresAdapter({ migrationDir: "db/changes" })'))).toBe(
+      'db/changes',
+    )
   })
 
   it('is undefined when the adapter leaves the directory to Payload', () => {
-    expect(
-      declaredMigrationDirectoryIn(configWith('postgresAdapter({ push: false })')),
-    ).toBeUndefined()
+    expect(declaredMigrationDirectoryIn(configWith('postgresAdapter({ push: false })'))).toBeUndefined()
   })
 })
 
@@ -168,8 +156,6 @@ describe('findMissingMigrations', () => {
   })
 
   it('says nothing about a member that declares no pushing adapter', () => {
-    expect(
-      findMissingMigrations(evidence({ declaresPushingAdapter: false, directories: [] })),
-    ).toEqual([])
+    expect(findMissingMigrations(evidence({ declaresPushingAdapter: false, directories: [] }))).toEqual([])
   })
 })

@@ -359,13 +359,8 @@ const asLayoutViewports = (raw: unknown): readonly LayoutViewport[] =>
 
 // The gap is a floor rather than a ceiling, so the stricter direction is upward: a project may ask for
 // more room between boxes and never for less.
-const readLayoutSettings = (
-  raw: Record<string, unknown>,
-): Pick<Settings, 'layoutMinimumGap' | 'layoutViewports'> => ({
-  layoutMinimumGap: Math.max(
-    LAYOUT_MINIMUM_GAP,
-    asPositiveInteger(raw['layoutMinimumGap'], LAYOUT_MINIMUM_GAP),
-  ),
+const readLayoutSettings = (raw: Record<string, unknown>): Pick<Settings, 'layoutMinimumGap' | 'layoutViewports'> => ({
+  layoutMinimumGap: Math.max(LAYOUT_MINIMUM_GAP, asPositiveInteger(raw['layoutMinimumGap'], LAYOUT_MINIMUM_GAP)),
   layoutViewports: asLayoutViewports(raw['layoutViewports']),
 })
 
@@ -380,8 +375,7 @@ const asVulnerabilityAllowlist = (raw: unknown): readonly VulnerabilityException
         const advisory: string = asText(record['advisory']).trim()
         const reason: string = asText(record['reason']).trim()
         const addedOn: string = asText(record['addedOn'])
-        const isRecorded: boolean =
-          advisory.length > 0 && reason.length > 0 && ISO_DATE.test(addedOn)
+        const isRecorded: boolean = advisory.length > 0 && reason.length > 0 && ISO_DATE.test(addedOn)
         return isRecorded ? [{ advisory, reason, addedOn }] : []
       })
     : []
@@ -423,14 +417,8 @@ const asPublicAccess = (raw: unknown): readonly PublicAccess[] =>
 // may not do without the harness's leave. The leave it grants is an exclusion by file role - so an
 // entry states the role it is claiming, and an entry that states none is dropped rather than honoured.
 // A dropped entry makes the gate stricter, which is the safe direction to fail in.
-const asDeclaredExclusions = (
-  raw: unknown,
-  setting: string,
-  kind: ExclusionKind,
-): readonly DeclaredExclusion[] =>
-  isArray(raw)
-    ? raw.map((entry: unknown): DeclaredExclusion => readExclusion(entry, setting, kind))
-    : []
+const asDeclaredExclusions = (raw: unknown, setting: string, kind: ExclusionKind): readonly DeclaredExclusion[] =>
+  isArray(raw) ? raw.map((entry: unknown): DeclaredExclusion => readExclusion(entry, setting, kind)) : []
 
 // A bare string is kept with an empty reason rather than dropped silently, so the gate can name the
 // entry the project wrote instead of reporting that its exclusions simply stopped applying.
@@ -451,9 +439,7 @@ const readExclusion = (entry: unknown, setting: string, kind: ExclusionKind): De
 
 const honoured = (entries: readonly DeclaredExclusion[]): readonly string[] =>
   entries
-    .filter(
-      (entry: DeclaredExclusion): boolean => entry.pattern.length > 0 && entry.reason.length > 0,
-    )
+    .filter((entry: DeclaredExclusion): boolean => entry.pattern.length > 0 && entry.reason.length > 0)
     .map((entry: DeclaredExclusion): string => entry.pattern)
 
 /** The four exclusion lists a project may declare, each read under the matching kind its setting uses. */
@@ -485,8 +471,7 @@ const readDeclaredLists = (raw: Record<string, unknown>): DeclaredLists => ({
  * @param packageJson the parsed package.json of the consuming project.
  * @returns the effective settings, with every field populated.
  */
-export const readSettings = (packageJson: unknown): Settings =>
-  readRawSettings(ploanessBlock(packageJson))
+export const readSettings = (packageJson: unknown): Settings => readRawSettings(ploanessBlock(packageJson))
 
 /** The raw `ploaness` block of a manifest, before any default is applied. */
 export const ploanessBlock = (packageJson: unknown): Record<string, unknown> =>
@@ -518,9 +503,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     // Additive, like every other list field. Replacing the default let a project declare `["src"]` and
     // silently drop `tests` and `scripts` from the conventions, payload-rules, suppressions, css and
     // architecture gates - a scope narrowing the harness is supposed to refuse.
-    sourceRoots: [
-      ...new Set<string>([...DEFAULT_SOURCE_ROOTS, ...asStringArray(raw['sourceRoots'], [])]),
-    ],
+    sourceRoots: [...new Set<string>([...DEFAULT_SOURCE_ROOTS, ...asStringArray(raw['sourceRoots'], [])])],
     unmanagedAssets: asUnmanagedAssets(raw['unmanagedAssets']),
     typographyExclusions: [...DEFAULT_TYPOGRAPHY_EXCLUSIONS, ...honoured(declaredTypography)],
     frameworkGlue: [...DEFAULT_FRAMEWORK_GLUE, ...honoured(declaredGlue)],
@@ -539,8 +522,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     coverageExclude: [...DEFAULT_COVERAGE_EXCLUDE, ...honoured(declaredCoverage)],
     bundleBudgetBytes: clampedCeiling(raw['bundleBudgetBytes'], DEFAULT_BUNDLE_BUDGET_BYTES),
     maxSuppressions: asNonNegativeInteger(raw['maxSuppressions']),
-    vulnerabilitySeverity:
-      typeof raw['vulnerabilitySeverity'] === 'string' ? raw['vulnerabilitySeverity'] : undefined,
+    vulnerabilitySeverity: typeof raw['vulnerabilitySeverity'] === 'string' ? raw['vulnerabilitySeverity'] : undefined,
     vulnerabilityAllowlist: asVulnerabilityAllowlist(raw['vulnerabilityAllowlist']),
     secretAllowlist: asSecretAllowlist(raw['secretAllowlist']),
     publicAccess: asPublicAccess(raw['publicAccess']),
@@ -549,10 +531,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     serverUrl: typeof raw['serverUrl'] === 'string' ? raw['serverUrl'] : DEFAULT_SERVER_URL,
     auxiliaryServers: asAuxiliaryServers(raw['auxiliaryServers']),
     accessibilitySkipRoutes: [...DEFAULT_SKIPPED_ROUTES, ...honoured(declaredRoutes)],
-    accessibilityRouteBudget: clampedCeiling(
-      raw['accessibilityRouteBudget'],
-      DEFAULT_ACCESSIBILITY_ROUTE_BUDGET,
-    ),
+    accessibilityRouteBudget: clampedCeiling(raw['accessibilityRouteBudget'], DEFAULT_ACCESSIBILITY_ROUTE_BUDGET),
     ...readLayoutSettings(raw),
     analysisEnv: { ...DEFAULT_ANALYSIS_ENV, ...asStringRecord(raw['analysisEnv']) },
   }
@@ -568,9 +547,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
  * @param entries the exclusions the project declared.
  * @returns one message per entry that states no role.
  */
-export const findConvenienceExclusions = (
-  entries: readonly DeclaredExclusion[],
-): readonly string[] =>
+export const findConvenienceExclusions = (entries: readonly DeclaredExclusion[]): readonly string[] =>
   entries.flatMap((entry: DeclaredExclusion): readonly string[] =>
     entry.reason.length === 0
       ? [
@@ -609,9 +586,7 @@ export const findUnreachedExclusions = (
 
 const reachesAny = (entry: DeclaredExclusion, candidates: readonly string[]): boolean =>
   candidates.some((candidate: string): boolean =>
-    entry.kind === 'glob'
-      ? matchesGlob(entry.pattern, candidate)
-      : matchesRole(candidate, [entry.pattern]),
+    entry.kind === 'glob' ? matchesGlob(entry.pattern, candidate) : matchesRole(candidate, [entry.pattern]),
   )
 
 /**
@@ -658,9 +633,7 @@ export const trackedDirectories = (tracked: readonly string[]): readonly string[
   ...new Set<string>(
     tracked.flatMap((file: string): readonly string[] => {
       const segments: readonly string[] = file.split('/').slice(0, -1)
-      return segments.map((_: string, index: number): string =>
-        segments.slice(0, index + 1).join('/'),
-      )
+      return segments.map((_: string, index: number): string => segments.slice(0, index + 1).join('/'))
     }),
   ),
 ]
@@ -717,6 +690,4 @@ export const findUnreachedExclusionsBySetting = (
  * partition above exists to remove, one size smaller.
  */
 const normalised = (entry: DeclaredExclusion): DeclaredExclusion =>
-  DIRECTORY_SETTINGS.has(entry.setting)
-    ? { ...entry, pattern: withoutTrailingSlash(entry.pattern) }
-    : entry
+  DIRECTORY_SETTINGS.has(entry.setting) ? { ...entry, pattern: withoutTrailingSlash(entry.pattern) } : entry
