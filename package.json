@@ -54,6 +54,13 @@
         "pattern": "^eslint\\.config\\.mjs$",
         "reason": "ESLint's own flat config, which its loader reads as JavaScript unless jiti is added"
       }
+    ],
+    "vulnerabilityAllowlist": [
+      {
+        "advisory": "GHSA-vfj7-8cjw-p6xm",
+        "reason": "braces 3.0.3 is reached only through micromatch in fast-glob, under @next/eslint-plugin-next, stylelint's globby and type-coverage; the stack exhaustion needs a deeply nested brace pattern, and the only patterns braces expands there are the file globs of analyzer configurations the harness and the repository author. There is no upgrade: 3.0.3 is the latest release of braces",
+        "addedOn": "2026-10-04"
+      }
     ]
   }
 }
