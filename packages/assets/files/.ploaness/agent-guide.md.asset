@@ -150,7 +150,7 @@ Extended verification adds 8 gates before the final tree check.
 | `linear-history` | repository | No merge commit anywhere in the history. |
 | `build` | package | The production build. |
 | `bundle` | package | The gzipped client JavaScript stays under the bundle budget. |
-| `e2e` | package | The end-to-end suite, including the three sweeps ploaness ships into it. |
+| `e2e` | package | The end-to-end suite, including the three sweeps ploaness ships into it and the layout scan the accessibility sweep runs. |
 
 The `infra` gate reads the providers a tree declares from its `resource`, `data` and `provider`
 headers and judges only what it can see: resources inside external modules are not downloaded. A
@@ -171,7 +171,8 @@ pattern rules close what the analyzer leaves open on every cloud: an outright ad
 
 Settings live under `ploaness` in `package.json`. A member inherits the root settings. Source and role
 lists add entries; command arrays and origins describe one member and replace inherited values.
-Numeric ceilings honor the smallest valid value and cannot weaken an ancestor. Environment maps merge
+Numeric ceilings honor the smallest valid value and cannot weaken an ancestor; the layout gap is a
+floor and honors the largest. Environment maps merge
 by variable name. Malformed values use the strict default or contribute no exception; a malformed
 member ceiling cannot discard a valid root ceiling.
 
@@ -200,6 +201,8 @@ prefixes name URLs and are not checked against filesystem paths.
 | `publicAccess` | empty | Entries with `entity`, `operation`, `reason`, and optional `fields`, declaring intentional anonymous permissions. |
 | `accessibilitySkipRoutes` | `/admin`, `/api` | File-role-shaped entries whose patterns are additional URL prefixes; explain why each is outside the sweep. |
 | `accessibilityRouteBudget` | `250` | Positive integer; a smaller ceiling is honored. Reaching the ceiling fails rather than truncating coverage. |
+| `layoutMinimumGap` | `4` | Positive integer in CSS pixels; only a larger gap is honored. |
+| `layoutViewports` | empty | Entries with positive integer `width` and `height`, measured after the required 390x844 and 1280x800 viewports. |
 | `analysisEnv` | placeholders for `PAYLOAD_SECRET`, `DATABASE_URL` | String-valued map used by analysis gates that import the application. |
 | `pretest` | empty | Argument array for preparation before the test, build, and end-to-end gates. |
 | `testWrapper` | empty | Argument array wrapping those gate processes, for example to supply a disposable database. |
@@ -255,6 +258,8 @@ Ploaness pins three executable sweeps into applications where they apply:
 - Accessibility crawls public routes reachable from home, scans each default state with axe, and checks
   hover/focus contrast. The crawl excludes `/admin` and `/api`; project-owned custom admin views need
   their own authenticated scans, scoped to the authored view.
+- Layout measures every route the same crawl reaches, at 390x844 and at 1280x800, before the axe pass.
+  It reports every layout defect in the run rather than stopping at the first route.
 - Security headers checks the home response for content-type protection, referrer policy, a framing
   decision, and a script-constraining CSP. The seeded `src/proxy.ts` supplies a starting policy with a
   per-request nonce. Preserve Payload file handlers' own SVG policy on `/api/<collection>/file/*`.
@@ -262,14 +267,26 @@ Ploaness pins three executable sweeps into applications where they apply:
   with the project's `publicAccess` declarations, including field-level grants.
 
 The accessibility sweep compares discovered route files with visited URLs and project test evidence.
-Unlinked, authenticated, and dynamic routes need reachable links or explicit project scans. A dynamic
-family requires a concrete member URL; its parent route is not a substitute. Intentional exclusions
-require a reason. Do not narrow coverage merely to fit the route budget.
+Unlinked, authenticated, and dynamic routes need reachable links or explicit project scans of both
+kinds. A dynamic family requires a concrete member URL; its parent route is not a substitute.
+Intentional exclusions require a reason. Do not narrow coverage merely to fit the route budget.
+
+Cover such a page with `expectSweptPage(page)` from `ploaness/a11y`. It settles the page, runs the axe
+scan, and runs the layout scan at every viewport, so one call is evidence of both:
+
+```ts
+await page.goto(`/en/teams/${team.slug}`)
+await expectSweptPage(page)
+```
+
+`expectNoLayoutDefects(page)` runs the layout scan alone, beside a project's own axe scan. Both scans
+judge the page in the state the spec left it, so drive it into the state worth judging first.
 
 Static route/test matching recognizes route literals, regular expressions, dynamic URL templates, and
-axe evidence through one relative helper import. It does not prove the spec executes that scan. Keep
-navigation and scans clear, run the full browser suite, and account for URL changes introduced by
-`basePath`, redirects, rewrites, proxy logic, or custom page extensions.
+axe and layout evidence through one relative helper import. It does not prove the spec executes those
+scans. A route scanned with axe alone fails as `route-unmeasured`. Keep navigation and scans clear, run
+the full browser suite, and account for URL changes introduced by `basePath`, redirects, rewrites,
+proxy logic, or custom page extensions.
 
 The header sweep checks `/` and cannot establish every route's policy. Test project-specific file and
 API boundaries directly. Static Next.js Web Vitals rules and the bundle budget cover deterministic
@@ -278,3 +295,32 @@ causes of performance problems; the harness does not claim a measured Lighthouse
 Pass CMS-supplied link values through `safeHref` from `@ploaness/runtime` before assigning an `href`.
 Text escaping does not make an arbitrary URL scheme safe. Application code owns this call-site decision;
 tests may also import the re-export from `ploaness/runtime`.
+
+### Layout Scan
+
+The layout scan judges geometry from computed boxes and styles in the pinned browser. It does not
+compare screenshots and does not judge taste. It fails on:
+
+- touching or overlapping boxed siblings: a boxed element has a background unlike the one beneath it,
+  a shadow, or a border on the side facing its neighbor. Siblings closer than the minimum gap, 4 CSS
+  pixels by default, fail. Wrappers that paint nothing and hold no text of their own are looked
+  through, so `<p><a class="button">` beside a notice compares the button with the notice. Zero-size,
+  hidden, `aria-hidden`, absolutely or fixed positioned elements, and two inline elements in one run of
+  text are not compared;
+- overlapping text: two elements whose own text shares more than one pixel row, unless one contains the
+  other;
+- horizontal overflow: a document wider than the viewport, naming the outermost element past its edge;
+- clipped text: an element with `overflow: hidden` or `clip` whose content exceeds its box. Truncation
+  with `text-overflow: ellipsis` or a line clamp passes when `title` or `aria-label` holds the full
+  text.
+
+Repair a finding in the layout, usually with a gap on the parent. An edge shared on purpose, such as a
+tab joined to its panel, takes an exemption on the element whose edge is shared:
+
+```tsx
+<div role="tablist" data-ploaness-layout="attached" data-ploaness-layout-reason="tabs join their panel">
+```
+
+The exemption excuses only touching or overlapping boxes of that element. Each one counts toward the
+suppression ceiling. A missing reason, a value other than `attached`, and an exemption that excuses
+nothing at every measured viewport each fail the scan.

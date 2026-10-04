@@ -24,6 +24,11 @@ const routeOf = (route: string, isDynamic: boolean = false): DeclaredRoute => ({
 
 const SCANNING_SPEC: SpecSource = {
   path: 'tests/e2e/pages.e2e.spec.ts',
+  source: "await page.goto('/profile')\nawait expectSweptPage(page)",
+}
+
+const AXE_ONLY_SPEC: SpecSource = {
+  path: 'tests/e2e/pages.e2e.spec.ts',
   source: "await page.goto('/profile')\nconst scan = await new AxeBuilder({ page }).analyze()",
 }
 
@@ -98,13 +103,60 @@ describe('a page the crawl never reached', () => {
     ).toEqual(['route-unscanned'])
   })
 
+  // axe alone leaves the page's geometry unjudged: an accessible page can still render a notice flush
+  // against a button, which is exactly what the crawl would have measured had it reached the page.
+  it('is reported when a specification scans it with axe but never measures its layout', () => {
+    expect(
+      rulesOf({
+        declaredRoutes: [routeOf('/profile')],
+        visitedRoutes: ['/'],
+        specs: [AXE_ONLY_SPEC],
+        everyFile: [AXE_ONLY_SPEC],
+      }),
+    ).toEqual(['route-unmeasured'])
+  })
+
+  it('is covered by separate axe and layout scans in the same specification', () => {
+    const both: SpecSource = {
+      ...AXE_ONLY_SPEC,
+      source: `${AXE_ONLY_SPEC.source}\nawait expectNoLayoutDefects(page)`,
+    }
+    expect(
+      rulesOf({
+        declaredRoutes: [routeOf('/profile')],
+        visitedRoutes: ['/'],
+        specs: [both],
+        everyFile: [both],
+      }),
+    ).toEqual([])
+  })
+
+  it('accepts the layout scan through one imported helper', () => {
+    const helper: SpecSource = {
+      path: 'tests/e2e/scan.ts',
+      source: 'export const scan = async (page) => { await expectNoLayoutDefects(page) }',
+    }
+    const importing: SpecSource = {
+      ...AXE_ONLY_SPEC,
+      source: `import { scan } from './scan.js'\n${AXE_ONLY_SPEC.source}\nawait scan(page)`,
+    }
+    expect(
+      rulesOf({
+        declaredRoutes: [routeOf('/profile')],
+        visitedRoutes: ['/'],
+        specs: [importing],
+        everyFile: [importing, helper],
+      }),
+    ).toEqual([])
+  })
+
   it('names all three ways to answer, so the report is actionable', () => {
     const found: readonly UnsweptRoute[] = findUnsweptRoutes(
       sweepOf({ declaredRoutes: [routeOf('/welcome')], visitedRoutes: ['/'] }),
     )
     const reason: string = found[0]?.reason ?? ''
     expect(reason).toContain('link it')
-    expect(reason).toContain('axe')
+    expect(reason).toContain('expectSweptPage')
     expect(reason).toContain('accessibilitySkipRoutes')
   })
 })
@@ -174,7 +226,7 @@ describe('a dynamic page', () => {
   it('is covered by a specification that builds an address beneath it and scans', () => {
     const building: SpecSource = {
       path: 'tests/e2e/game.e2e.spec.ts',
-      source: `await page.goto(\`/play/${HOLE}String(gameId)}\`)\nnew AxeBuilder({ page })`,
+      source: `await page.goto(\`/play/${HOLE}String(gameId)}\`)\nawait expectSweptPage(page)`,
     }
     expect(
       rulesOf({
@@ -184,6 +236,21 @@ describe('a dynamic page', () => {
         everyFile: [building],
       }),
     ).toEqual([])
+  })
+
+  it('is reported when the specification building its address scans it with axe alone', () => {
+    const axeOnly: SpecSource = {
+      path: 'tests/e2e/game.e2e.spec.ts',
+      source: `await page.goto(\`/play/${HOLE}String(gameId)}\`)\nnew AxeBuilder({ page })`,
+    }
+    expect(
+      rulesOf({
+        declaredRoutes: [routeOf('/play/[id]', true)],
+        visitedRoutes: ['/', '/play'],
+        specs: [axeOnly],
+        everyFile: [axeOnly],
+      }),
+    ).toEqual(['route-unmeasured'])
   })
 
   // The false pass this rule cannot be allowed to have. Visiting the parent of a family scans none of

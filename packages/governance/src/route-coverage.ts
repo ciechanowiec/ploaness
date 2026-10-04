@@ -1,4 +1,10 @@
-import { containsBuiltRoute, containsRoute, reachesAxe, type SpecSource } from './axe-coverage.js'
+import {
+  containsBuiltRoute,
+  containsRoute,
+  reachesAxe,
+  reachesLayoutScan,
+  type SpecSource,
+} from './axe-coverage.js'
 import { type DeclaredRoute, matchesRoute, staticPrefixOf } from './route-map.js'
 
 // The pages the accessibility sweep never reached, and nobody was told about.
@@ -41,8 +47,9 @@ export interface UnsweptRoute {
 }
 
 const REMEDIES: string =
-  'link it from a page the crawl reaches, scan it in a specification of your own with axe, or ' +
-  'declare it in `ploaness.accessibilitySkipRoutes` with the reason it is out of scope'
+  'link it from a page the crawl reaches, scan it in a specification of your own with ' +
+  '`expectSweptPage(page)` from `ploaness/a11y`, or declare it in `ploaness.accessibilitySkipRoutes` ' +
+  'with the reason it is out of scope'
 
 // The same plain prefix test the crawl itself applies in `toRoute`, deliberately. A stricter one -
 // requiring the prefix to end on a segment boundary - would report a route the crawl was told to skip
@@ -84,16 +91,28 @@ const unsweptRoute = (sweep: RouteSweep, route: DeclaredRoute): UnsweptRoute[] =
       },
     ]
   }
-  return driving.some((spec: SpecSource): boolean => reachesAxe(spec, sweep.everyFile))
+  if (!driving.some((spec: SpecSource): boolean => reachesAxe(spec, sweep.everyFile))) {
+    return [
+      {
+        file: route.file,
+        route: route.route,
+        rule: 'route-unscanned',
+        reason:
+          `the accessibility sweep never reached "${route.route}". A specification drives it but ` +
+          `nothing scans it with axe, so this page has no accessibility coverage: ${REMEDIES}`,
+      },
+    ]
+  }
+  return driving.some((spec: SpecSource): boolean => reachesLayoutScan(spec, sweep.everyFile))
     ? []
     : [
         {
           file: route.file,
           route: route.route,
-          rule: 'route-unscanned',
+          rule: 'route-unmeasured',
           reason:
-            `the accessibility sweep never reached "${route.route}". A specification drives it but ` +
-            `nothing scans it with axe, so this page has no accessibility coverage: ${REMEDIES}`,
+            `the sweep never reached "${route.route}". A specification scans it with axe but ` +
+            `nothing measures its layout, so this page has no layout coverage: ${REMEDIES}`,
         },
       ]
 }

@@ -178,3 +178,28 @@ describe('the file-wide type-check suppression', () => {
     expect(findSuppressions('src/lib/reads.ts', NOCHECK)[0]?.token).toContain('check')
   })
 })
+
+// Assembled for the same reason as the comment tokens above.
+const layoutAttribute: string = ['data', 'ploaness', 'layout'].join('-')
+
+describe('findSuppressions over the layout exemption attribute', () => {
+  it('counts the attribute as JSX writes it', () => {
+    expect(
+      findSuppressions('src/Tabs.tsx', `<div ${layoutAttribute}="attached">`).map(
+        (site: SuppressionSite): string => site.token,
+      ),
+    ).toEqual([layoutAttribute])
+  })
+
+  it('counts the attribute as an object key a spread would carry', () => {
+    expect(
+      findSuppressions('src/tabs.ts', `const joined = { '${layoutAttribute}': 'attached' }`),
+    ).toHaveLength(1)
+  })
+
+  it('does not count the reason attribute beside it', () => {
+    expect(
+      findSuppressions('src/Tabs.tsx', `  ${layoutAttribute}-reason="the tab joins its panel"`),
+    ).toEqual([])
+  })
+})

@@ -267,10 +267,79 @@ only arrangement that resolves the way a published install does.'
 probe_part_one='dGhpcy1pc19hX3Zlcnlfc2VjcmV0'
 probe_part_two='X2tleV93aXRoX2VudHJvcHk'
 
+# Assert that the last command output of a case carries one line of the layout scan's report, or that
+# it carries none naming a page. Fixed-string matching, because a report line is full of brackets and
+# quotes; Playwright prints each line as a JSON string, so a quote in it arrives escaped.
+expect_layout_line() {
+    if ! grep -qF -- "$2" "$scratch/$1/command-output.log"; then
+        echo "FAILED $1: the layout scan did not report: $2" >&2
+        failures=$((failures + 1))
+        return
+    fi
+    echo "ok $1: reports $2"
+}
+
+expect_no_layout_line() {
+    if grep -qF -- "$2" "$scratch/$1/command-output.log"; then
+        echo "FAILED $1: the layout scan reported what it must accept: $2" >&2
+        grep -F -- "$2" "$scratch/$1/command-output.log" | sed 's/^/    /' >&2
+        failures=$((failures + 1))
+        return
+    fi
+    echo "ok $1: accepts $2"
+}
+
+# The layout scan in the pinned browser against a real Next server. One case renders a page per rule,
+# so a single run proves each rule reports its own defect and the clean and exempted pages beside them
+# stay silent; the overflow page is wide enough to fail at the phone width and narrow enough to pass at
+# the desktop one. The repaired case renders the same markup laid out correctly, including the email
+# confirmation page that first escaped every gate, and covers an unlinked dynamic route with the
+# combined helper. The last case scans that route with axe alone, which the coverage check refuses.
+layout_contracts() {
+    new_case fail-layout
+    node "$lib/create-a11y-page.ts" "$scratch/fail-layout" valid
+    node "$lib/create-layout-pages.ts" "$scratch/fail-layout" defects
+    commit_case fail-layout 'test(fixture): render one layout defect per page' "$CONFORMING_BODY"
+    expect_command fail-layout FAIL 'layout defects on the swept routes' \
+        pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+    expect_layout_line fail-layout \
+        '/verify @390px: touching boxes (gap 0px): div.notice.notice-success  <->  a.button \"Sign in\"'
+    expect_layout_line fail-layout \
+        '/text-overlap @390px: overlapping text: h2.overlap-title \"Results\"  <->  p.overlap-body'
+    expect_layout_line fail-layout '/overflow @390px: horizontal overflow (page '
+    expect_layout_line fail-layout 'px viewport): div.wide'
+    expect_no_layout_line fail-layout '/overflow @1280px'
+    expect_layout_line fail-layout '/clipped @390px: clipped text (content '
+    expect_layout_line fail-layout \
+        '/truncated @390px: truncated text without its full text in title or aria-label: span.truncated'
+    expect_layout_line fail-layout '/unexplained @390px: layout exemption without a reason on div.tablist'
+    expect_layout_line fail-layout '/stale: stale layout exemption on div.tablist'
+    expect_no_layout_line fail-layout '/attached @'
+    expect_no_layout_line fail-layout '/clean @'
+
+    new_case pass-layout
+    node "$lib/create-a11y-page.ts" "$scratch/pass-layout" valid
+    node "$lib/create-layout-pages.ts" "$scratch/pass-layout" repaired
+    commit_case pass-layout 'test(fixture): lay every page out with room between its boxes' "$CONFORMING_BODY"
+    expect_command pass-layout PASS '2 passed' \
+        pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts tests/e2e/items.e2e.spec.ts --reporter=line
+    # The exemption the repaired tab list carries is a suppression, and is counted as one.
+    edit_json "$scratch/pass-layout/package.json" ploaness.maxSuppressions 0
+    expect pass-layout suppressions FAIL 'data-ploaness-layout'
+
+    new_case fail-layout-coverage
+    node "$lib/create-a11y-page.ts" "$scratch/fail-layout-coverage" valid
+    node "$lib/create-layout-pages.ts" "$scratch/fail-layout-coverage" unmeasured
+    commit_case fail-layout-coverage 'test(fixture): scan an unlinked dynamic route with axe alone' \
+        "$CONFORMING_BODY"
+    expect_command fail-layout-coverage FAIL 'route-unmeasured' \
+        pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+}
+
 # A declared focused subset for iterating on the new analyzer; the default run remains complete.
 case "${1-}" in
-    ''|--jsx-only|--native-only) ;;
-    *) echo 'usage: verify.sh [--jsx-only|--native-only]' >&2; exit 1 ;;
+    ''|--jsx-only|--native-only|--layout-only) ;;
+    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only]' >&2; exit 1 ;;
 esac
 
 # The pass case: the untouched scaffold must satisfy every gate that judges a project's own shape.
@@ -286,6 +355,17 @@ commit_case native-contracts 'test(fixture): establish native core conformance c
 expect_command native-contracts PASS '30 native source and suppression contracts passed' \
     node "$lib/oxlint-conformance.ts" "$here/fixtures/oxlint-core.json" \
     "$scratch/native-contracts/node_modules/.bin/ploaness"
+
+if [ "${1-}" = --layout-only ]; then
+    (cd "$template" && pnpm exec playwright install chromium >/dev/null)
+    layout_contracts
+    if [ "$failures" -ne 0 ]; then
+        echo "$failures layout fixture assertion(s) failed" >&2
+        exit 1
+    fi
+    echo 'layout fixture contracts passed; run pnpm run verify for the complete verdict'
+    exit 0
+fi
 
 if [ "${1-}" = --native-only ]; then
     if [ "$failures" -ne 0 ]; then
@@ -451,6 +531,8 @@ if [ "${1-}" = --jsx-only ]; then
     echo 'JSX integration contracts passed; run pnpm run verify for the complete verdict'
     exit 0
 fi
+
+layout_contracts
 
 # `install-scripts` is here because its only other fixture is a failure case, and this file's own
 # reasoning applies symmetrically: a rule that only ever failed proves as little as one that only ever

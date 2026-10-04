@@ -213,3 +213,30 @@ describe('layerSettingBlocks, the accessibility ceiling', () => {
     ).toBe(40)
   })
 })
+
+describe('layering the layout sweep settings', () => {
+  it('keeps the larger minimum gap whichever side declares it', () => {
+    expect([
+      layered({ layoutMinimumGap: 8 }, { layoutMinimumGap: 6 })['layoutMinimumGap'],
+      layered({ layoutMinimumGap: 6 }, { layoutMinimumGap: 8 })['layoutMinimumGap'],
+    ]).toEqual([8, 8])
+  })
+
+  it('keeps a valid root gap when the member declares a malformed one', () => {
+    expect(layered({ layoutMinimumGap: 8 }, { layoutMinimumGap: 'wide' })['layoutMinimumGap']).toBe(
+      8,
+    )
+  })
+
+  it('adds a member viewport to the repository viewports', () => {
+    expect(
+      layered(
+        { layoutViewports: [{ width: 768, height: 1024 }] },
+        { layoutViewports: [{ width: 1440, height: 900 }] },
+      )['layoutViewports'],
+    ).toEqual([
+      { width: 768, height: 1024 },
+      { width: 1440, height: 900 },
+    ])
+  })
+})

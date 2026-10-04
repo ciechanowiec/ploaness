@@ -1,7 +1,8 @@
 // ploaness owns this file. Edit the harness, not this copy: `ploaness verify` compares it byte for byte
-// and `ploaness sync` restores it. The two things a project declares about it - route prefixes the crawl
-// must not follow, and a smaller route ceiling than the shipped one - go under the `ploaness` key of
-// package.json, as `accessibilitySkipRoutes` and `accessibilityRouteBudget`.
+// and `ploaness sync` restores it. What a project declares about it goes under the `ploaness` key of
+// package.json: route prefixes the crawl must not follow (`accessibilitySkipRoutes`), a smaller route
+// ceiling (`accessibilityRouteBudget`), a larger gap between boxes (`layoutMinimumGap`), and viewports
+// to measure beside the phone and desktop ones (`layoutViewports`).
 //
 // Accessibility has to stay default-safe as a site grows. Rather than a hand-maintained list of pages to
 // scan, which someone will eventually forget to extend, this sweep crawls every public route reachable
@@ -10,22 +11,26 @@
 // static rule, which is the half of accessibility a linter can never reach. A page linked anywhere on
 // the site is therefore checked the moment it exists, with no test to add. Per-page content and
 // behaviour assertions still belong in the project's own feature specs.
-import AxeBuilder from '@axe-core/playwright'
+//
+// The same crawl feeds the layout scan, which measures every route at a phone and a desktop width for
+// boxes that touch, text that collides, text its own box cuts off, and a page wider than its viewport.
+// A defect of that kind is accessible, so axe passes it, and a feature spec that reads the page's text
+// passes it too; only geometry measured in the browser can see it.
+import type AxeBuilder from '@axe-core/playwright'
 import { expect, type Locator, type Page, type Response, test } from '@playwright/test'
 import {
+  type AxeResults,
   classifyHitTarget,
-  findDefiniteIncomplete,
+  expectNoAxeDefects,
   type HitTargetClassification,
   type HitTargetProbe,
+  layoutDefectsOf,
   MAX_SWEEP_ROUTES,
   SKIPPED_ROUTE_PREFIXES,
+  scopedAxe,
   settleForScan,
   unsweptRoutes,
 } from 'ploaness/a11y'
-
-// Taken from the public surface of the builder this spec already imports, rather than from `axe-core`,
-// which is a transitive package no project declares.
-type AxeResults = Awaited<ReturnType<AxeBuilder['analyze']>>
 
 // The sweep scans every interactive control in three states on every route, so its cost grows with the
 // site. The budget is per discovered route, so it scales as pages are added instead of flaking against a
@@ -39,12 +44,6 @@ const MILLISECONDS_PER_ROUTE: number = 50_000
 // and at a route ceiling in the hundreds that reached several hours.
 const MAX_SWEEP_MILLISECONDS: number = 3_600_000
 
-// Scan the site's semantic regions - chrome and content alike - but not a framework's dev-only overlay,
-// which lives in a separate portal outside them and would otherwise raise findings about the framework.
-// Only regions actually present are included, so a page carrying just <main> scans cleanly rather than
-// erroring on a missing include target.
-const REGIONS: readonly string[] = ['header', 'main', 'footer']
-
 // The crawl is link-based, so it starts from the one route every site has. Whether this answers is
 // what separates a crawl that ran from one that could not start.
 const SEED_ROUTE: string = '/'
@@ -52,16 +51,6 @@ const SEED_ROUTE: string = '/'
 // A path ending in an extension is a static asset, not a page: axe has nothing to say about it and
 // `goto` would download it.
 const STATIC_ASSET: RegExp = /\.[a-z\d]+$/i
-
-const scopedAxe = async (page: Page): Promise<AxeBuilder> => {
-  const builder: AxeBuilder = new AxeBuilder({ page })
-  for (const region of REGIONS) {
-    if ((await page.locator(region).count()) > 0) {
-      builder.include(region)
-    }
-  }
-  return builder
-}
 
 const parseUrl = (href: string, origin: string): URL | null => {
   try {
@@ -174,19 +163,6 @@ const discoverRoutes = async (page: Page, origin: string): Promise<RouteDiscover
 }
 /* eslint-enable functional/immutable-data -- the crawl above is the only place this spec mutates */
 
-// axe answers in three buckets and this sweep used to read one. `incomplete` means "the check ran and
-// could not decide", and an EXACTLY equal foreground and background is filed there rather than as a
-// violation, because axe reads two identical colours as text hidden on purpose and defers to a human.
-// So the worst contrast defect that can exist passed the gate built to catch contrast defects, and a
-// mutation confirmed it: removing the colour fix from a page left this assertion green.
-//
-// `findDefiniteIncomplete` picks out only the entries that need no human - see its own module for why
-// the list is one key long and why a blanket "incomplete must be empty" would be wrong here.
-const expectNoContrastDefect = (scan: AxeResults, label: string): void => {
-  expect(scan.violations, label).toEqual([])
-  expect(findDefiniteIncomplete(scan.incomplete), `${label} (undecidable-but-definite)`).toEqual([])
-}
-
 const expectNoContrastViolation = async (page: Page, label: string): Promise<void> => {
   // Settled here rather than beside each `hover()` and `focus()`, so that one call covers both states
   // and covers a control whose colour arrives through a CSS transition: measured on the frame the
@@ -194,7 +170,7 @@ const expectNoContrastViolation = async (page: Page, label: string): Promise<voi
   await settleForScan(page)
   const builder: AxeBuilder = await scopedAxe(page)
   const scan: AxeResults = await builder.withRules(['color-contrast']).analyze()
-  expectNoContrastDefect(scan, label)
+  expectNoAxeDefects(scan, label)
 }
 
 // The site chrome renders from one global stylesheet identically on every page, so its hover and focus
@@ -283,12 +259,29 @@ const scanRoute = async (page: Page, origin: string, route: string): Promise<voi
   await settleForScan(page)
   const builder: AxeBuilder = await scopedAxe(page)
   const defaultScan: AxeResults = await builder.analyze()
-  expectNoContrastDefect(defaultScan, `default-state a11y on ${route}`)
+  expectNoAxeDefects(defaultScan, `default-state a11y on ${route}`)
   await scanInteractiveStates(page, route, MAIN_CONTROLS)
 }
 
-test.describe('Accessibility sweep', () => {
-  test('every reachable public page passes axe in default, hover, and focus states', async ({
+// Every route is measured before any is scanned with axe, and its findings are collected rather than
+// asserted one route at a time. An axe failure stops the sweep at its route; a layout defect does not
+// stop anything, so a run reports every layout defect on the site at once.
+const sweepLayout = async (
+  page: Page,
+  origin: string,
+  routes: readonly string[],
+): Promise<readonly string[]> =>
+  await routes.reduce(
+    async (found: Promise<readonly string[]>, route: string): Promise<readonly string[]> => {
+      const earlier: readonly string[] = await found
+      await page.goto(`${origin}${route}`)
+      return [...earlier, ...(await layoutDefectsOf(page))]
+    },
+    Promise.resolve<readonly string[]>([]),
+  )
+
+test.describe('Accessibility and layout sweep', () => {
+  test('every reachable public page passes axe in default, hover, and focus states, and its layout holds', async ({
     page,
     baseURL,
   }) => {
@@ -327,7 +320,7 @@ test.describe('Accessibility sweep', () => {
     // paid for three times over before anything was reported.
     expect(
       unsweptRoutes(routes, discovery.answered),
-      'pages this project declares that nothing scans for accessibility',
+      'pages this project declares that nothing scans for accessibility and layout',
     ).toEqual([])
     const [first] = routes
     if (first === undefined) {
@@ -338,6 +331,10 @@ test.describe('Accessibility sweep', () => {
     }
     // Narrowed from the ceiling armed above, now that the route count is known.
     test.setTimeout(Math.min(routes.length * MILLISECONDS_PER_ROUTE, MAX_SWEEP_MILLISECONDS))
+    // Soft, so the accessibility pass below still runs and reports when the layout pass has failed.
+    expect
+      .soft(await sweepLayout(page, origin, routes), 'layout defects on the swept routes')
+      .toEqual([])
     // The chrome is identical site-wide, so sweep its interactive states once, on the first route.
     await page.goto(`${origin}${first}`)
     await settleForScan(page)

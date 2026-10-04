@@ -7,8 +7,13 @@ export interface SpecSource {
   readonly source: string
 }
 
-// Recognize axe identifiers in code, excluding comments, strings, and regex literals.
-const AXE_MARKERS: readonly string[] = ['AxeBuilder', 'axe.run']
+// The helper that runs both of the sweep's scans on one page, so one call is evidence of each.
+const SWEPT_PAGE_HELPER: string = 'expectSweptPage'
+
+// Recognize scan identifiers in code, excluding comments, strings, and regex literals.
+const AXE_MARKERS: readonly string[] = ['AxeBuilder', 'axe.run', SWEPT_PAGE_HELPER]
+
+const LAYOUT_MARKERS: readonly string[] = ['expectNoLayoutDefects', SWEPT_PAGE_HELPER]
 
 const REGEX_METACHARACTERS: RegExp = /[$()*+.?[\\\]^{|}]/gu
 
@@ -53,8 +58,8 @@ export const containsRoute = (source: string, route: string): boolean =>
 export const containsBuiltRoute = (source: string, prefix: string): boolean =>
   routeText(source).includes(`${prefix === '/' ? '' : prefix}/\${`)
 
-const carriesAxe = (source: string): boolean =>
-  AXE_MARKERS.some((marker: string): boolean => maskLiterals(source).includes(marker))
+const carriesMarker = (source: string, markers: readonly string[]): boolean =>
+  markers.some((marker: string): boolean => maskLiterals(source).includes(marker))
 
 const RELATIVE_IMPORT: RegExp = /\bfrom\s*['"](\.[^'"]*)['"]/gu
 
@@ -93,7 +98,25 @@ const importedSources = (
  * @returns true when the source names axe directly or through an imported helper.
  */
 export const reachesAxe = (spec: SpecSource, everyFile: readonly SpecSource[]): boolean =>
-  carriesAxe(spec.source) ||
+  reachesMarker(spec, everyFile, AXE_MARKERS)
+
+/**
+ * Whether a specification runs the layout scan, directly or through a helper it imports.
+ *
+ * The same static evidence, with the same limit, as {@link reachesAxe}.
+ * @param spec the specification being judged.
+ * @param everyFile every file it may import a scan from, the specifications included.
+ * @returns true when the source calls the layout scan directly or through an imported helper.
+ */
+export const reachesLayoutScan = (spec: SpecSource, everyFile: readonly SpecSource[]): boolean =>
+  reachesMarker(spec, everyFile, LAYOUT_MARKERS)
+
+const reachesMarker = (
+  spec: SpecSource,
+  everyFile: readonly SpecSource[],
+  markers: readonly string[],
+): boolean =>
+  carriesMarker(spec.source, markers) ||
   importedSources(spec, everyFile).some((imported: SpecSource): boolean =>
-    carriesAxe(imported.source),
+    carriesMarker(imported.source, markers),
   )

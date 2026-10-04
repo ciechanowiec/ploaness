@@ -361,3 +361,28 @@ describe('the accessibility route budget clamps in one direction only', () => {
     ).toBe(shipped)
   })
 })
+
+describe('the layout sweep settings', () => {
+  const shipped: Settings = readSettings({})
+
+  it('honours a larger minimum gap, which judges more layouts as touching', () => {
+    expect(
+      readSettings({ ploaness: { layoutMinimumGap: shipped.layoutMinimumGap + 4 } })
+        .layoutMinimumGap,
+    ).toBe(shipped.layoutMinimumGap + 4)
+  })
+
+  it('ignores a smaller minimum gap, which would buy a pass', () => {
+    expect(readSettings({ ploaness: { layoutMinimumGap: 1 } }).layoutMinimumGap).toBe(
+      shipped.layoutMinimumGap,
+    )
+  })
+
+  it('keeps a declared viewport and drops one missing a dimension', () => {
+    expect(
+      readSettings({
+        ploaness: { layoutViewports: [{ width: 768, height: 1024 }, { width: 1440 }, 'tablet'] },
+      }).layoutViewports,
+    ).toEqual([{ width: 768, height: 1024 }])
+  })
+})

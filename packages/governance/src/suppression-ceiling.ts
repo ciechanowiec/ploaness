@@ -11,8 +11,14 @@
 // mechanism decorative, and zero must be expressible, since "no suppression is permitted" is a
 // position the standard names explicitly.
 //
+// The layout sweep's exemption attribute is counted here too. It is markup rather than a comment, but it
+// turns a rule off for one element exactly as a comment directive does for one line, so it spends the
+// same budget.
+//
 // The search tokens are assembled from fragments rather than written whole. This module would otherwise
 // report itself, which is the same self-reference the typography rule solves by naming code points.
+
+import { LAYOUT_EXEMPTION_ATTRIBUTE } from './layout-defects.js'
 
 const DISABLE: string = 'disable'
 const IGNORE: string = 'ignore'
@@ -88,11 +94,22 @@ const opensWith = (line: string, token: string): boolean =>
 // around that, and it costs a suppression like any other.
 const BARE_TOKENS: readonly string[] = [`gitleaks:${ALLOW}`]
 
+// The attribute as JSX or HTML writes it (`name=`), and as an object key a spread would carry
+// (`'name':`). Its reason attribute shares the prefix and is not matched: a hyphen follows the name.
+const LAYOUT_EXEMPTION: RegExp = new RegExp(
+  String.raw`${LAYOUT_EXEMPTION_ATTRIBUTE}(?:=|['"]\s*:)`,
+  'u',
+)
+
 const tokenOnLine = (line: string): string | undefined => {
-  return CLOSING_TOKENS.some((closing: string): boolean => opensWith(line, closing))
-    ? undefined
-    : (SUPPRESSION_TOKENS.find((token: string): boolean => opensWith(line, token)) ??
-        BARE_TOKENS.find((token: string): boolean => line.includes(token)))
+  if (CLOSING_TOKENS.some((closing: string): boolean => opensWith(line, closing))) {
+    return undefined
+  }
+  return (
+    SUPPRESSION_TOKENS.find((token: string): boolean => opensWith(line, token)) ??
+    BARE_TOKENS.find((token: string): boolean => line.includes(token)) ??
+    (LAYOUT_EXEMPTION.test(line) ? LAYOUT_EXEMPTION_ATTRIBUTE : undefined)
+  )
 }
 
 /**

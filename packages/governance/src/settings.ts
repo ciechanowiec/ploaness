@@ -13,6 +13,7 @@ import { GENERATED_ARTEFACTS } from './generated-denial.js'
 // Only string-valued entries survive `asStringRecord`: a non-string would reach `spawn` as a
 // malformed environment.
 import { asRecord, asStringRecord, asText, isArray, isRecord } from './json-shapes.js'
+import { LAYOUT_MINIMUM_GAP, type LayoutViewport } from './layout-defects.js'
 import type { SecretException } from './secret-policy.js'
 import type { VulnerabilityException } from './vulnerability-policy.js'
 
@@ -184,6 +185,16 @@ export interface Settings {
    */
   readonly accessibilityRouteBudget: number
   /**
+   * The smallest gap, in CSS pixels, the layout sweep accepts between a boxed element and its sibling.
+   * Honoured only upward: a project may ask for more room and never for less.
+   */
+  readonly layoutMinimumGap: number
+  /**
+   * Viewports the layout sweep measures beyond the phone and desktop widths the harness requires.
+   * Additive, so no declaration removes a required viewport.
+   */
+  readonly layoutViewports: readonly LayoutViewport[]
+  /**
    * Placeholder environment supplied to the gates that must IMPORT the project to analyse it. A Payload
    * config validates `process.env` at module scope, so a purely static analyser cannot load it in a bare
    * shell. These values are never connected to and never read as real configuration; they only let the
@@ -333,6 +344,30 @@ const asAuxiliaryServers = (raw: unknown): readonly AuxiliaryServer[] =>
         return [cwd.length > 0 ? { command, url, cwd } : { command, url }]
       })
     : []
+
+// Both dimensions must be positive whole pixels; an entry missing either is dropped, which leaves the
+// harness's own viewports in force rather than measuring at a size nobody declared.
+const asLayoutViewports = (raw: unknown): readonly LayoutViewport[] =>
+  isArray(raw)
+    ? raw.flatMap((entry: unknown): readonly LayoutViewport[] => {
+        const record: Record<string, unknown> = asRecord(entry)
+        const width: number = asPositiveInteger(record['width'], 0)
+        const height: number = asPositiveInteger(record['height'], 0)
+        return width > 0 && height > 0 ? [{ width, height }] : []
+      })
+    : []
+
+// The gap is a floor rather than a ceiling, so the stricter direction is upward: a project may ask for
+// more room between boxes and never for less.
+const readLayoutSettings = (
+  raw: Record<string, unknown>,
+): Pick<Settings, 'layoutMinimumGap' | 'layoutViewports'> => ({
+  layoutMinimumGap: Math.max(
+    LAYOUT_MINIMUM_GAP,
+    asPositiveInteger(raw['layoutMinimumGap'], LAYOUT_MINIMUM_GAP),
+  ),
+  layoutViewports: asLayoutViewports(raw['layoutViewports']),
+})
 
 // An advisory date must be recorded as a date. An entry whose reason or date is missing or malformed is
 // dropped rather than honoured, so a typo re-exposes the finding instead of quietly excusing it.
@@ -518,6 +553,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
       raw['accessibilityRouteBudget'],
       DEFAULT_ACCESSIBILITY_ROUTE_BUDGET,
     ),
+    ...readLayoutSettings(raw),
     analysisEnv: { ...DEFAULT_ANALYSIS_ENV, ...asStringRecord(raw['analysisEnv']) },
   }
 }

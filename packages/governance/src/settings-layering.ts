@@ -17,6 +17,7 @@ const ADDITIVE: ReadonlySet<string> = new Set<string>([
   'frameworkGlue',
   'generatedArtefacts',
   'pureLogicRoots',
+  'layoutViewports',
 ])
 
 // Keys where only a smaller number is honoured. A member may hold itself to more than the repository
@@ -27,6 +28,10 @@ const STRICTEST_NUMBER: ReadonlySet<string> = new Set<string>([
   'bundleBudgetBytes',
   'maxSuppressions',
 ])
+
+// Keys where only a larger number is honoured, because more is the stricter direction: a wider required
+// gap between boxes judges more layouts as touching.
+const STRICTEST_LARGER: ReadonlySet<string> = new Set<string>(['layoutMinimumGap'])
 
 /** Keys that are one value describing one package, where the member's answer replaces the repository's. */
 const REPLACED: ReadonlySet<string> = new Set<string>([
@@ -53,12 +58,23 @@ const smaller = (key: string, base: unknown, overlay: unknown): unknown => {
   return isValidCeiling(key, overlay) ? Math.min(base, overlay) : base
 }
 
+const isPositiveInteger = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+
+const larger = (base: unknown, overlay: unknown): number | undefined => {
+  const valid: readonly number[] = [base, overlay].filter(isPositiveInteger)
+  return valid.length === 0 ? undefined : Math.max(...valid)
+}
+
 const mergeValue = (key: string, base: unknown, overlay: unknown): unknown => {
   if (ADDITIVE.has(key)) {
     return mergeArrays(base, overlay)
   }
   if (STRICTEST_NUMBER.has(key)) {
     return smaller(key, base, overlay)
+  }
+  if (STRICTEST_LARGER.has(key)) {
+    return larger(base, overlay)
   }
   if (REPLACED.has(key)) {
     return overlay ?? base
