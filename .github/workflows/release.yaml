@@ -252,8 +252,12 @@ jobs:
       #
       # The install that follows is still the verdict. A per-package probe proves each exists; it
       # is the install that proves they resolve TOGETHER, which is the failure the publication
-      # order exists to prevent. It is retried a few times for the same reason the probe exists:
-      # the replica that answered the probe is not promised to be the one npm reads next.
+      # order exists to prevent. It is retried for the same reason the probe exists: the replica that
+      # answered the probe is not promised to be the one npm reads next. The 1.6.0 release met that
+      # replica: every probe passed, and npm was then told `@ploaness/runtime@1.6.0` did not exist.
+      # npm keeps the packument it was served for the registry's five-minute cache lifetime, so a
+      # retry that trusts its cache rereads the stale answer and cannot succeed; `--prefer-online`
+      # revalidates every packument, and the retries span longer than one cache lifetime.
       #
       # This runs on the recovery path too. A re-run after a failure of exactly this step used to
       # skip it - the publish had been skipped, so its outcome was not `success` - and recovered
@@ -290,9 +294,9 @@ jobs:
           mkdir -p "$smoke"
           cd "$smoke"
           npm init --yes > /dev/null
-          install_attempts=3
+          install_attempts=12
           attempt=1
-          until npm install --no-audit --no-fund "ploaness@$RELEASE_VERSION"; do
+          until npm install --prefer-online --no-audit --no-fund "ploaness@$RELEASE_VERSION"; do
             if [ "$attempt" -ge "$install_attempts" ]; then
               echo "ploaness@$RELEASE_VERSION did not install after $install_attempts attempts." >&2
               exit 1
