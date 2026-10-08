@@ -271,6 +271,8 @@ export const guidelineRules: RuleTable = {
   // declared type is written rather than left to inference. Arrow-function consts are exempt -
   // their signature is already covered by explicit-function-return-type.
   '@typescript-eslint/typedef': ['error', { variableDeclaration: true, variableDeclarationIgnoreFunction: true }],
+  // Generic construction must preserve the variable annotation required above, including after fixes.
+  '@typescript-eslint/consistent-generic-constructors': ['error', 'type-annotation'],
   // Conflicts with the explicit philosophy: typedef requires annotations, this rule would strip
   // the "trivially inferable" ones (e.g. `const x: string = '...'`). We want them written.
   '@typescript-eslint/no-inferrable-types': 'off',

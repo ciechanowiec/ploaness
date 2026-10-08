@@ -178,5 +178,77 @@
     "code": "export const value = new Promise(() => 1)",
     "expected": "eslint(no-promise-executor-return)",
     "file": "src/app/(payload)/layout.tsx"
+  },
+  {
+    "name": "logic-tsx",
+    "file": "src/logic.tsx",
+    "code": "export const increment = (value: number): number => value + 1",
+    "expected": "react(jsx-filename-extension)"
+  },
+  {
+    "name": "logic-ts",
+    "file": "src/logic.ts",
+    "code": "export const increment = (value: number): number => value + 1",
+    "expected": ""
+  },
+  {
+    "name": "self-closing-jsx",
+    "file": "src/Element.tsx",
+    "code": "export const element = <span />",
+    "expected": ""
+  },
+  {
+    "name": "fragment-jsx",
+    "file": "src/Fragment.tsx",
+    "code": "export const element = <>Ready</>",
+    "expected": ""
+  },
+  {
+    "name": "jsx-in-comment-and-string",
+    "file": "src/quoted.tsx",
+    "code": "// <span />\nexport const text = '<span />'",
+    "expected": "react(jsx-filename-extension)"
+  },
+  {
+    "name": "comment-only-tsx",
+    "file": "src/comment.tsx",
+    "code": "// There is no JSX in this file.",
+    "expected": "react(jsx-filename-extension)"
+  },
+  {
+    "name": "empty-tsx",
+    "file": "src/empty.tsx",
+    "code": " ",
+    "expected": "react(jsx-filename-extension)"
+  },
+  {
+    "name": "hidden-tsx-logic",
+    "file": ".storybook/config.tsx",
+    "code": "export const title = \"Preview\"",
+    "expected": "react(jsx-filename-extension)"
+  },
+  {
+    "name": "framework-tsx-without-jsx",
+    "file": "src/app/(payload)/page.tsx",
+    "code": "export default function Page() { return null }",
+    "expected": "react(jsx-filename-extension)"
+  },
+  {
+    "name": "framework-ts-without-jsx",
+    "file": "src/app/(payload)/page.ts",
+    "code": "export default function Page() { return null }",
+    "expected": ""
+  },
+  {
+    "name": "filename-suppression-does-not-hide-diagnostic",
+    "file": "src/exception.tsx",
+    "code": "export const value = 1 // oxlint-disable-line react/jsx-filename-extension -- exercise a named exception",
+    "expected": "react(jsx-filename-extension)"
+  },
+  {
+    "name": "filename-unused-suppression",
+    "file": "src/exception.tsx",
+    "code": "export const value = <span /> // oxlint-disable-line react/jsx-filename-extension -- exercise a stale exception",
+    "expected": "Unused oxlint-disable"
   }
 ]

@@ -13,6 +13,10 @@ export const OXLINT_CORE_RULES: readonly OxlintRule[] = [
     oxlint: 'import/no-absolute-path',
     options: { esmodule: true, commonjs: false, amd: false },
   },
+  {
+    oxlint: 'react/jsx-filename-extension',
+    options: { allow: 'as-needed', extensions: ['.tsx', '.jsx'], ignoreFilesWithoutCode: false },
+  },
 ]
 
 /** The rules applicable to one disjoint file group. */
@@ -27,7 +31,7 @@ export const oxlintRuleNames = (rules: readonly OxlintRule[]): readonly string[]
 
 /** Build a closed rule set; category defaults cannot add undeclared checks. */
 export const oxlintConfig = (rules: readonly OxlintRule[]): Readonly<Record<string, unknown>> => ({
-  plugins: ['import', 'jsx-a11y'],
+  plugins: ['import', 'jsx-a11y', 'react'],
   categories: { correctness: 'off' },
   rules: Object.fromEntries(
     rules.map((rule: OxlintRule): readonly [string, unknown] => [

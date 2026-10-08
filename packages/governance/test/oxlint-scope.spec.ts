@@ -40,11 +40,11 @@ describe('native source coverage', () => {
     ])
   })
 
-  it('partitions application source into disjoint two-rule and 33-rule groups', () => {
+  it('partitions application source into disjoint three-rule and 34-rule groups', () => {
     const files: readonly string[] = ['src/main.ts', 'src/Card.tsx', '.storybook/preview.tsx']
     const groups: readonly OxlintGroup[] = oxlintGroups(files, true)
     expect(groups.map((group) => group.files)).toEqual([['src/main.ts', '.storybook/preview.tsx'], ['src/Card.tsx']])
-    expect(groups.map((group) => group.rules.length)).toEqual([2, 33])
+    expect(groups.map((group) => group.rules.length)).toEqual([3, 34])
     expect(groups.flatMap((group) => group.files).toSorted((left, right) => left.localeCompare(right))).toEqual(
       files.toSorted((left, right) => left.localeCompare(right)),
     )
@@ -53,12 +53,12 @@ describe('native source coverage', () => {
   it('keeps library accessibility with Biome while adding core coverage', () => {
     const groups: readonly OxlintGroup[] = oxlintGroups(['src/Card.tsx'], false)
     expect(groups.map((group) => group.files)).toEqual([['src/Card.tsx']])
-    expect(groups.map((group) => group.rules.length)).toEqual([2])
+    expect(groups.map((group) => group.rules.length)).toEqual([3])
   })
 
   it('omits empty invocations', () => {
     expect(oxlintGroups([], true)).toEqual([])
-    expect(oxlintGroups(['src/Card.tsx'], true).map((group) => group.rules.length)).toEqual([33])
+    expect(oxlintGroups(['src/Card.tsx'], true).map((group) => group.rules.length)).toEqual([34])
   })
 })
 
@@ -67,13 +67,18 @@ describe('explicit native ownership', () => {
     expect(oxlintRuleNames(oxlintRules(false))).toEqual([
       'eslint/no-promise-executor-return',
       'import/no-absolute-path',
+      'react/jsx-filename-extension',
     ])
     expect(oxlintConfig(oxlintRules(false))).toEqual({
-      plugins: ['import', 'jsx-a11y'],
+      plugins: ['import', 'jsx-a11y', 'react'],
       categories: { correctness: 'off' },
       rules: {
         'eslint/no-promise-executor-return': ['error', { allowVoid: false }],
         'import/no-absolute-path': ['error', { esmodule: true, commonjs: false, amd: false }],
+        'react/jsx-filename-extension': [
+          'error',
+          { allow: 'as-needed', extensions: ['.tsx', '.jsx'], ignoreFilesWithoutCode: false },
+        ],
       },
     })
   })
@@ -81,6 +86,6 @@ describe('explicit native ownership', () => {
   it('preserves the existing JSX semantic options beside the core rules', () => {
     const config: Readonly<Record<string, unknown>> = oxlintConfig(oxlintRules(true))
     expect(config['rules']).toHaveProperty('jsx-a11y/no-redundant-roles', ['error', { td: ['gridcell'] }])
-    expect(Object.keys(config['rules'] as Record<string, unknown>)).toHaveLength(33)
+    expect(Object.keys(config['rules'] as Record<string, unknown>)).toHaveLength(34)
   })
 })

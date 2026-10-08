@@ -320,6 +320,13 @@ layout_contracts() {
     expect_layout_line fail-layout '/stale: stale layout exemption on div.tablist'
     expect_no_layout_line fail-layout '/attached @'
     expect_no_layout_line fail-layout '/clean @'
+    expect_no_layout_line fail-layout '/closed-disclosure @'
+    expect_no_layout_line fail-layout '/open-disclosure @'
+    for width in 390 1280; do
+        expect_layout_line fail-layout "/open-disclosure-overlap @${width}px: overlapping text:"
+        expect_layout_line fail-layout "/closed-summary-overlap @${width}px: overlapping text:"
+        expect_layout_line fail-layout "/closed-disclosure-box @${width}px: touching boxes"
+    done
 
     new_case pass-layout
     node "$lib/create-a11y-page.ts" "$scratch/pass-layout" valid
@@ -381,7 +388,7 @@ expect_command managed-defaults PASS 'managed defaults install, upgrade, remain 
 expect pass oxlint PASS
 new_case native-contracts
 commit_case native-contracts 'test(fixture): establish native core conformance cases' "$CONFORMING_BODY"
-expect_command native-contracts PASS '30 native source and suppression contracts passed' \
+expect_command native-contracts PASS '42 native source and suppression contracts passed' \
     node "$lib/oxlint-conformance.ts" "$here/fixtures/oxlint-core.json" \
     "$scratch/native-contracts/node_modules/.bin/ploaness"
 
@@ -455,13 +462,14 @@ expect fail-legacy-native-suppression oxlint FAIL 'use a named, explained Oxlint
 # The native unused-directive reporter also reads ESLint comments. Their real owner still runs.
 new_case pass-foreign-suppression
 printf '%s\n' '// eslint-disable-next-line @typescript-eslint/typedef -- infer this fixture literal to exercise ownership' \
-    'export const answer = 1' > "$scratch/pass-foreign-suppression/src/Typed.tsx"
+    'export const answer = 1' > "$scratch/pass-foreign-suppression/src/Typed.ts"
 commit_case pass-foreign-suppression 'test(fixture): retain a typed ESLint exception' "$CONFORMING_BODY"
 expect pass-foreign-suppression oxlint PASS
 expect pass-foreign-suppression eslint PASS
-replace_text "$scratch/pass-foreign-suppression/src/Typed.tsx" 'export const answer = 1' 'export const answer: number = 1'
+replace_text "$scratch/pass-foreign-suppression/src/Typed.ts" 'export const answer = 1' 'export const answer: number = 1'
 expect pass-foreign-suppression eslint FAIL 'Unused eslint-disable directive'
-replace_text "$scratch/pass-foreign-suppression/src/Typed.tsx" 'export const answer: number = 1' 'export const answer = 1'
+replace_text "$scratch/pass-foreign-suppression/src/Typed.ts" 'export const answer: number = 1' 'export const answer = 1'
+mv "$scratch/pass-foreign-suppression/src/Typed.ts" "$scratch/pass-foreign-suppression/src/Typed.tsx"
 printf '%s\n' '// oxlint-disable-next-line jsx-a11y/iframe-has-title -- deliberately leave an unused native exception' \
     'export const frame = <iframe title="External content" src="/frame" />' \
     >> "$scratch/pass-foreign-suppression/src/Typed.tsx"
@@ -512,14 +520,14 @@ expect nested-a11y-ownership suppressions PASS
 expect_in nested-a11y-ownership apps/web suppressions FAIL 'suppression ceiling is 0'
 
 # Core policy reaches libraries and hidden tooling while member budgets remain separate.
-expect_in nested-a11y-ownership packages/ui oxlint PASS '2 native rules'
+expect_in nested-a11y-ownership packages/ui oxlint PASS '3 native rules'
 mkdir -p "$scratch/nested-a11y-ownership/packages/ui/.storybook"
 printf '%s\n' '// oxlint-disable-next-line eslint/no-promise-executor-return -- deliberate library exception' \
     'export const value = new Promise(() => 1)' \
     > "$scratch/nested-a11y-ownership/packages/ui/.storybook/preview.ts"
 edit_json "$scratch/nested-a11y-ownership/packages/ui/package.json" ploaness.maxSuppressions 0
 expect nested-a11y-ownership suppressions PASS
-expect_in nested-a11y-ownership packages/ui oxlint PASS '2 native rules'
+expect_in nested-a11y-ownership packages/ui oxlint PASS '3 native rules'
 expect_in nested-a11y-ownership packages/ui suppressions FAIL 'suppression ceiling is 0'
 printf '%s\n' 'export const value = new Promise(() => 1)' \
     > "$scratch/nested-a11y-ownership/packages/ui/.storybook/preview.ts"
@@ -2185,6 +2193,29 @@ commit_case format-converges 'feat(fixture): add a value a fixer rewrites' "$CON
 expect format-converges biome PASS
 expect format-converges oxlint PASS
 
+# Generic constructors and mandatory variable annotations must agree after one formatting run.
+new_case format-generics
+cat > "$scratch/format-generics/src/lib/collections.ts" <<'FIXTURE'
+/** An explicitly typed lookup retains its annotation. */
+const values: Map<string, number> = new Map()
+/** Constructor type arguments move to the required annotation. */
+const labels = new Set<string>()
+/** Count the values in the two collections. */
+export const collectionSize = (): number => values.size + labels.size
+FIXTURE
+commit_case format-generics 'test(fixture): retain explicit generic annotations' "$CONFORMING_BODY"
+(cd "$scratch/format-generics" && ./node_modules/.bin/ploaness format >/dev/null 2>&1)
+expect format-generics biome PASS
+expect format-generics oxlint PASS
+expect format-generics eslint PASS
+expect format-generics types PASS
+cp "$scratch/format-generics/src/lib/collections.ts" "$scratch/formatted-collections.ts"
+(cd "$scratch/format-generics" && ./node_modules/.bin/ploaness format >/dev/null 2>&1)
+if ! cmp -s "$scratch/formatted-collections.ts" "$scratch/format-generics/src/lib/collections.ts"; then
+    echo 'FAILED format-generics: a second formatting run changed generic declarations' >&2
+    failures=$((failures + 1))
+fi
+
 # A range on a package a gate depends on lets an upstream release change a verdict while the project
 # stays unchanged, which is what pinning the toolchain exists to prevent.
 new_case fail-ranged-toolchain
@@ -2487,6 +2518,36 @@ it('increments its input', () => {
 COVERAGE
 commit_case pass-complete-coverage 'test(fixture): cover every authored source file' "$CONFORMING_BODY"
 expect pass-complete-coverage tests PASS
+
+# A helper keeps its testing obligation beside an App Router entry point.
+new_case fail-colocated-coverage
+rm -rf "$scratch/fail-colocated-coverage/src"
+cp -R "$scratch/fail-unimported-coverage/src" "$scratch/fail-colocated-coverage/src"
+mkdir -p "$scratch/fail-colocated-coverage/src/app/_lib" "$scratch/fail-colocated-coverage/tests/int"
+mv "$scratch/fail-colocated-coverage/src/lib/uncovered.ts" "$scratch/fail-colocated-coverage/src/app/_lib/uncovered.ts"
+cp "$scratch/fail-unimported-coverage/tests/int/coverage.int.spec.ts" \
+    "$scratch/fail-colocated-coverage/tests/int/coverage.int.spec.ts"
+commit_case fail-colocated-coverage 'test(fixture): retain colocated helpers in coverage' "$CONFORMING_BODY"
+expect fail-colocated-coverage tests FAIL 'Coverage for lines.*threshold.*src/app/_lib/uncovered.ts'
+
+new_case pass-colocated-coverage
+rm -rf "$scratch/pass-colocated-coverage/src"
+cp -R "$scratch/fail-colocated-coverage/src" "$scratch/pass-colocated-coverage/src"
+mkdir -p "$scratch/pass-colocated-coverage/tests/int"
+cp "$scratch/fail-colocated-coverage/tests/int/coverage.int.spec.ts" \
+    "$scratch/pass-colocated-coverage/tests/int/coverage.int.spec.ts"
+sed 's#src/lib/uncovered#src/app/_lib/uncovered#g' \
+    "$scratch/pass-complete-coverage/tests/int/increment.int.spec.ts" \
+    > "$scratch/pass-colocated-coverage/tests/int/increment.int.spec.ts"
+commit_case pass-colocated-coverage 'test(fixture): cover colocated application logic' "$CONFORMING_BODY"
+expect pass-colocated-coverage tests PASS
+
+new_case fail-renamed-logic
+mkdir -p "$scratch/fail-renamed-logic/src/app/_lib"
+cp "$scratch/fail-colocated-coverage/src/app/_lib/uncovered.ts" \
+    "$scratch/fail-renamed-logic/src/app/_lib/uncovered.tsx"
+commit_case fail-renamed-logic 'test(fixture): reject a JSX extension on ordinary logic' "$CONFORMING_BODY"
+expect fail-renamed-logic oxlint FAIL 'react(jsx-filename-extension)'
 
 new_case fail-unmatchable-css
 printf '%s\n' 'label:enabled { color: #000; }' > "$scratch/fail-unmatchable-css/src/selector.css"

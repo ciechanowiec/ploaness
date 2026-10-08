@@ -110,7 +110,7 @@ invocations of a package gate. `tree-verify` runs after all other gates in eithe
 | `types` | package | Strict TypeScript checking for the member. |
 | `biome` | package | Formatting and the fast lint pass. |
 | `biome-schema` | repository | The `$schema` in `biome.json` names the installed Biome version. |
-| `oxlint` | package | Two native rules across authored JS/TS plus 31 application JSX accessibility checks. Libraries retain Biome accessibility. |
+| `oxlint` | package | Three native rules across authored JS/TS plus 31 application JSX accessibility checks. Libraries retain Biome accessibility. |
 | `eslint` | package | The remaining type-aware and specialized lint checks. |
 | `conventions` | repository | The typography ban and the hand-written JavaScript ban, over tracked and non-ignored untracked text files, and documenting comments left above another comment rather than above what they document. |
 | `editorconfig` | repository | Every tracked and non-ignored untracked text file matches the pinned `.editorconfig`, and no code line passes 120 characters. |
@@ -263,7 +263,17 @@ a verification verdict.
 Playwright collects end-to-end specs under `tests/e2e`. Place tests in the collected paths. Test code
 receives strict typing and linting; type assertions are excluded from the production type-coverage
 measurement and expected numeric values need no named constants. Coverage floors still apply to each
-measured production file. The network guard confines runtime tests to the local machine; subprocesses,
+measured production file.
+
+Ordinary TypeScript helpers under `src/app/` are measured just like helpers under `src/lib/`.
+The App Router exclusion covers framework entry filenames, including pages, layouts, route handlers,
+and metadata routes; it does not cover their whole directories. Keep authored business decisions in
+measured modules and exercise framework entry points through the real request pipeline.
+Authored `.tsx` and `.jsx` files must contain JSX syntax. Rename a logic-only `.tsx` module to `.ts`
+so it retains its testing obligation. Generated-file roles remain excluded from the native filename rule.
+Oxlint reports a filename violation at file scope; a line suppression cannot hide it. Rename the file.
+
+The network guard confines runtime tests to the local machine; subprocesses,
 workers, and raw datagrams cannot bypass it through test code. Seed fast-check in the project's own
 Vitest setup so it configures the module instance the suite actually imports.
 
@@ -321,6 +331,9 @@ Text escaping does not make an arbitrary URL scheme safe. Application code owns 
 tests may also import the re-export from `ploaness/runtime`.
 
 ### Layout Scan
+
+Closed `<details>` bodies are excluded from measurement, including nested content and direct text.
+The disclosure box and its first summary remain measured; opening the disclosure measures its body.
 
 The layout scan judges geometry from computed boxes and styles in the pinned browser. It does not
 compare screenshots and does not judge taste. It fails on:

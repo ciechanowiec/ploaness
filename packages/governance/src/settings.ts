@@ -283,8 +283,31 @@ const DEFAULT_ACCESSIBILITY_ROUTE_BUDGET: number = 250
  */
 export const COVERAGE_INCLUDE: readonly string[] = ['src/**/*.ts', 'scripts/**/*.ts']
 
+// Only framework entry points receive the App Router exclusion. Colocated helpers remain measured.
+const APP_ENTRY_NAMES: readonly string[] = [
+  'page',
+  'layout',
+  'template',
+  'loading',
+  'error',
+  'global-error',
+  'not-found',
+  'global-not-found',
+  'default',
+  'forbidden',
+  'unauthorized',
+  'route',
+  'robots',
+  'sitemap',
+  'manifest',
+  'icon',
+  'apple-icon',
+  'opengraph-image',
+  'twitter-image',
+]
+
 const DEFAULT_COVERAGE_EXCLUDE: readonly string[] = [
-  'src/app/**',
+  ...APP_ENTRY_NAMES.map((name: string): string => `src/app/**/${name}.ts`),
   'src/payload.config.ts',
   'src/payload-types.ts',
   'src/seed/**',

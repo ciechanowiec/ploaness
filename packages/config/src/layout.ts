@@ -64,6 +64,7 @@ interface PageElement {
   readonly clientHeight: number
   readonly getAttribute: (name: string) => string | null
   readonly getClientRects: () => ArrayLike<PageRect>
+  readonly querySelector: (selectors: string) => PageElement | null
   readonly querySelectorAll: (selectors: string) => ArrayLike<PageElement>
 }
 
@@ -78,13 +79,29 @@ declare const scrollY: number
 
 /** The steps of the page code, each handed the others. */
 interface LayoutTools {
+  readonly isClosedDetails: (element: PageElement) => boolean
+  readonly isHiddenByDisclosure: (element: PageElement, tools: LayoutTools) => boolean
   readonly roundRects: (rects: ArrayLike<PageRect>) => readonly LayoutRect[]
-  readonly ownText: (element: PageElement) => readonly PageText[]
+  readonly ownText: (element: PageElement, tools: LayoutTools) => readonly PageText[]
   readonly ownTextRects: (element: PageElement, tools: LayoutTools) => readonly LayoutRect[]
   readonly bordersOf: (style: PageStyle) => LayoutBorders
   readonly lineHeightOf: (style: PageStyle) => number
   readonly labelOf: (element: PageElement, tools: LayoutTools) => string
   readonly describe: (element: PageElement, index: number, parent: number, tools: LayoutTools) => LayoutNode
+}
+
+const isClosedDetails = (element: PageElement): boolean =>
+  element.tagName.toLowerCase() === 'details' && element.getAttribute('open') === null
+
+// The first direct summary stays visible. Every other branch of a closed disclosure is unpainted,
+// even when an inner disclosure is open or a browser reports nonempty rectangles for its text.
+const isHiddenByDisclosure = (element: PageElement, tools: LayoutTools): boolean => {
+  const parent: PageElement | null = element.parentElement
+  if (parent === null) {
+    return false
+  }
+  const isClosedBody: boolean = tools.isClosedDetails(parent) && parent.querySelector(':scope > summary') !== element
+  return isClosedBody || tools.isHiddenByDisclosure(parent, tools)
 }
 
 const roundRects = (rects: ArrayLike<PageRect>): readonly LayoutRect[] =>
@@ -98,7 +115,10 @@ const roundRects = (rects: ArrayLike<PageRect>): readonly LayoutRect[] =>
     }),
   )
 
-const ownText = (element: PageElement): readonly PageText[] => {
+const ownText = (element: PageElement, tools: LayoutTools): readonly PageText[] => {
+  if (tools.isClosedDetails(element)) {
+    return []
+  }
   const textNodeType: number = 3
   return Array.from(element.childNodes).filter(
     (child: PageText): boolean => child.nodeType === textNodeType && (child.textContent ?? '').trim().length > 0,
@@ -106,7 +126,7 @@ const ownText = (element: PageElement): readonly PageText[] => {
 }
 
 const ownTextRects = (element: PageElement, tools: LayoutTools): readonly LayoutRect[] =>
-  tools.ownText(element).flatMap((text: PageText): readonly LayoutRect[] => {
+  tools.ownText(element, tools).flatMap((text: PageText): readonly LayoutRect[] => {
     const range: PageRange = document.createRange()
     range.selectNodeContents(text)
     return tools.roundRects(range.getClientRects())
@@ -141,7 +161,7 @@ const labelOf = (element: PageElement, tools: LayoutTools): string => {
           .map((className: string): string => `.${className}`)
           .join('')
   const text: string = tools
-    .ownText(element)
+    .ownText(element, tools)
     .map((node: PageText): string => node.textContent ?? '')
     .join(' ')
     .replaceAll(/\s+/gu, ' ')
@@ -197,7 +217,8 @@ const measureDocument = (tools: LayoutTools): MeasuredPage => {
   const svgNamespace: string = 'http://www.w3.org/2000/svg'
   const elements: readonly PageElement[] = [document.body, ...Array.from(document.body.querySelectorAll('*'))].filter(
     (element: PageElement): boolean =>
-      element.namespaceURI !== svgNamespace || element.parentElement?.namespaceURI !== svgNamespace,
+      (element.namespaceURI !== svgNamespace || element.parentElement?.namespaceURI !== svgNamespace) &&
+      !tools.isHiddenByDisclosure(element, tools),
   )
   const positions: ReadonlyMap<PageElement, number> = new Map(
     elements.map((element: PageElement, index: number): readonly [PageElement, number] => [element, index]),
@@ -217,6 +238,8 @@ const measureDocument = (tools: LayoutTools): MeasuredPage => {
 }
 
 const STEPS: Readonly<Record<keyof LayoutTools, (...parameters: never[]) => unknown>> = {
+  isClosedDetails,
+  isHiddenByDisclosure,
   roundRects,
   ownText,
   ownTextRects,
