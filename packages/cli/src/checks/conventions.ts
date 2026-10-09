@@ -17,11 +17,8 @@ import {
 import { type Context, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
-// The typography ban used to carry an allowlist of ten extensions here, which is the wrong shape for a
-// rule that reaches "every file the repository does not exclude by file role": `.css`, `.adoc`,
-// a shell script, and a Dockerfile all went unscanned, and every new text format arrived unscanned
-// until someone remembered this list. The role predicate is default-safe in the other direction - a
-// binary asset is recognised from its own bytes, and everything else is text that gets scanned.
+// Typography reaches text of every extension, including extensionless scripts and configuration.
+// Binary assets are identified from their complete contents through the shared file-role predicate.
 const JAVASCRIPT_EXTENSIONS: readonly string[] = ['.js', '.mjs', '.cjs']
 
 // Regions a tool rewrites byte for byte on every run, so a local edit is reverted rather than kept and

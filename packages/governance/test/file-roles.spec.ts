@@ -20,8 +20,45 @@ describe('isBinary', () => {
     expect(isBinary(new Uint8Array([]))).toBe(false)
   })
 
-  it('reports a NUL byte, which no text encoding produces', () => {
+  it('reports a NUL byte as binary content', () => {
     expect(isBinary(new Uint8Array([0x50, 0x4e, 0x47, 0x00, 0x1a]))).toBe(true)
+  })
+
+  it('recognises binary content after a long text prefix', () => {
+    expect(isBinary(bytesOf(`${'header\n'.repeat(6000)}\0payload`))).toBe(true)
+  })
+
+  it.each([
+    [0xff, 0xfe],
+    [0xc0, 0xaf],
+    [0xe2, 0x82],
+  ])('recognises non-UTF-8 bytes without requiring a NUL: %j', (...bytes: readonly number[]): void => {
+    expect(isBinary(new Uint8Array(bytes))).toBe(true)
+  })
+
+  it('checks UTF-8 validity beyond a long text prefix', () => {
+    const bytes: Uint8Array = new Uint8Array([...bytesOf('header\n'.repeat(6000)), 0xff])
+    expect(isBinary(bytes)).toBe(true)
+  })
+
+  it.each(['%PDF-1.7\n', '%PDF-2.0\r\n', '%PDF-1.4\r'])(
+    'recognises an entirely text-encoded PDF by its header: %j',
+    (header: string): void => {
+      expect(isBinary(bytesOf(`${header}1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF`))).toBe(true)
+    },
+  )
+
+  it.each([
+    '<svg xmlns="http://www.w3.org/2000/svg"><text>Zażółć İstanbul 東京</text></svg>\n',
+    '{"name":"Zażółć İstanbul 東京"}\n',
+    'The PDF header is %PDF-1.7\n',
+    '%PDF-example is ordinary text\n',
+  ])('keeps valid Unicode and text formats in scope: %j', (text: string): void => {
+    expect(isBinary(bytesOf(text))).toBe(false)
+  })
+
+  it('does not split a Unicode character at a probe boundary', () => {
+    expect(isBinary(bytesOf(`${'a'.repeat(8191)}東京\n`))).toBe(false)
   })
 
   it('decides from the content rather than from a name', () => {

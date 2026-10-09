@@ -1,7 +1,11 @@
 // Identify source, generated, binary, and prose roles so exclusions follow file meaning rather than tool defaults.
+import { isUtf8 } from 'node:buffer'
 
-/** How much of a file is inspected before deciding it is text. Enough to reach any real header. */
-const BINARY_PROBE_BYTES: number = 8192
+const NUL_BYTE: number = 0
+// A PDF can use ASCII for every object and stream and still carry byte offsets that formatting would break.
+const PDF_HEADER_BYTES: number = 9
+const PDF_HEADER: RegExp = /^%PDF-\d\.\d[\r\n]/
+const UTF8: TextDecoder = new TextDecoder()
 
 /** Extensions the Code Rules apply to, used where a rule is about code rather than about any text. */
 export const CODE_EXTENSIONS: readonly string[] = [
@@ -21,11 +25,12 @@ export const CODE_EXTENSIONS: readonly string[] = [
 export const PROSE_EXTENSIONS: readonly string[] = ['.md', '.adoc', '.txt']
 
 /**
- * Decide whether a file is binary, from the file itself rather than from its name.
- * @param bytes the file's leading content.
- * @returns true when a NUL byte appears in the probed span, which no text encoding produces.
+ * Identify binary assets before typography or whitespace checks decode their contents as UTF-8 text.
+ * @param bytes the complete file contents; binary payloads can follow arbitrarily long text headers.
+ * @returns true for NUL-containing or non-UTF-8 data, or a PDF identified by its format header.
  */
-export const isBinary = (bytes: Uint8Array): boolean => bytes.subarray(0, BINARY_PROBE_BYTES).includes(0)
+export const isBinary = (bytes: Uint8Array): boolean =>
+  bytes.includes(NUL_BYTE) || !isUtf8(bytes) || PDF_HEADER.test(UTF8.decode(bytes.subarray(0, PDF_HEADER_BYTES)))
 
 /**
  * Decide whether a path carries one of the given extensions.
