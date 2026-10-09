@@ -40,8 +40,12 @@ export interface OxlintGroup {
 
 // Payload generates these .tsx entry points as calls into its own renderer, without JSX syntax.
 // Only their filename requirement differs; native correctness and accessibility still apply.
+// An application may mount the same admin route without the optional route group.
 const PAYLOAD_ADMIN_SCAFFOLDS: ReadonlySet<string> = new Set(
-  ['page', 'not-found'].map((name: string): string => `${PAYLOAD_ADMIN_DIRECTORY}/[[...segments]]/${name}.tsx`),
+  [PAYLOAD_ADMIN_DIRECTORY, PAYLOAD_ADMIN_DIRECTORY.replaceAll(/\/\([^/]+\)/gu, '')].flatMap(
+    (directory: string): readonly string[] =>
+      ['page', 'not-found'].map((name: string): string => `${directory}/[[...segments]]/${name}.tsx`),
+  ),
 )
 
 /** Partition source by analyzer ownership and the filenames the Payload scaffold requires. */

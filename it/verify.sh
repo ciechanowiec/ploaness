@@ -432,6 +432,15 @@ expect_command native-contracts PASS '47 native source and suppression contracts
     node "$lib/oxlint-conformance.ts" "$here/fixtures/oxlint-core.json" \
     "$scratch/native-contracts/node_modules/.bin/ploaness"
 
+new_case pass-ungrouped-payload-admin
+mkdir -p "$scratch/pass-ungrouped-payload-admin/src/app/admin/[[...segments]]"
+for entry in page not-found; do
+    printf 'export default function Page(): string { return "admin" }\n' \
+        > "$scratch/pass-ungrouped-payload-admin/src/app/admin/[[...segments]]/$entry.tsx"
+done
+commit_case pass-ungrouped-payload-admin 'test(fixture): accept ungrouped payload admin scaffolds' "$CONFORMING_BODY"
+expect pass-ungrouped-payload-admin oxlint PASS
+
 new_case fail-non-payload-admin-scaffold
 mkdir -p "$scratch/fail-non-payload-admin-scaffold/src/app/(payload)/admin/[[...segments]]"
 printf 'export const value: number = 1\n' \

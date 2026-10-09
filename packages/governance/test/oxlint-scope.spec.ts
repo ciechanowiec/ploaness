@@ -61,24 +61,41 @@ describe('native source coverage', () => {
     expect(oxlintGroups(['src/Card.tsx'], true).map((group) => group.rules.length)).toEqual([34])
   })
 
-  it('keeps every native check on Payload admin scaffolds while accepting their upstream filenames', () => {
-    const scaffold: string = 'src/app/(payload)/admin/[[...segments]]/page.tsx'
-    const neighbor: string = 'src/app/(payload)/admin/[[...segments]]/helpers.tsx'
-    const groups: readonly OxlintGroup[] = oxlintGroups([scaffold, neighbor, 'src/main.ts'], true, true)
-    expect(groups.map((group) => group.files)).toEqual([['src/main.ts'], [neighbor], [scaffold]])
-    expect(groups.map((group) => group.rules.length)).toEqual([3, 34, 34])
-    expect(groups.map((group) => oxlintConfig(group.rules)['rules'])).toEqual([
-      expect.objectContaining({
-        'react/jsx-filename-extension': ['error', expect.objectContaining({ allow: 'as-needed' })],
-      }),
-      expect.objectContaining({
-        'react/jsx-filename-extension': ['error', expect.objectContaining({ allow: 'as-needed' })],
-      }),
-      expect.objectContaining({
-        'react/jsx-filename-extension': ['error', expect.objectContaining({ allow: 'always' })],
-        'eslint/no-promise-executor-return': ['error', { allowVoid: false }],
-        'jsx-a11y/alt-text': 'error',
-      }),
+  it.each(['src/app/(payload)/admin', 'src/app/admin'])(
+    'keeps every native check on the Payload scaffold under %s while accepting its upstream filename',
+    (directory: string) => {
+      const scaffold: string = `${directory}/[[...segments]]/page.tsx`
+      const neighbor: string = `${directory}/[[...segments]]/helpers.tsx`
+      const groups: readonly OxlintGroup[] = oxlintGroups([scaffold, neighbor, 'src/main.ts'], true, true)
+      expect(groups.map((group) => group.files)).toEqual([['src/main.ts'], [neighbor], [scaffold]])
+      expect(groups.map((group) => group.rules.length)).toEqual([3, 34, 34])
+      expect(groups.map((group) => oxlintConfig(group.rules)['rules'])).toEqual([
+        expect.objectContaining({
+          'react/jsx-filename-extension': ['error', expect.objectContaining({ allow: 'as-needed' })],
+        }),
+        expect.objectContaining({
+          'react/jsx-filename-extension': ['error', expect.objectContaining({ allow: 'as-needed' })],
+        }),
+        expect.objectContaining({
+          'react/jsx-filename-extension': ['error', expect.objectContaining({ allow: 'always' })],
+          'eslint/no-promise-executor-return': ['error', { allowVoid: false }],
+          'jsx-a11y/alt-text': 'error',
+        }),
+      ])
+    },
+  )
+
+  it('keeps an ungrouped not-found scaffold with Payload while retaining filename checks in another member', () => {
+    const scaffold: string = 'src/app/admin/[[...segments]]/not-found.tsx'
+    const payloadGroups: readonly OxlintGroup[] = oxlintGroups([scaffold], true, true)
+    const appGroups: readonly OxlintGroup[] = oxlintGroups([scaffold], true, false)
+    expect(oxlintConfig(payloadGroups[0]?.rules ?? [])['rules']).toHaveProperty('react/jsx-filename-extension', [
+      'error',
+      { allow: 'always', extensions: ['.tsx', '.jsx'], ignoreFilesWithoutCode: false },
+    ])
+    expect(oxlintConfig(appGroups[0]?.rules ?? [])['rules']).toHaveProperty('react/jsx-filename-extension', [
+      'error',
+      { allow: 'as-needed', extensions: ['.tsx', '.jsx'], ignoreFilesWithoutCode: false },
     ])
   })
 
