@@ -485,6 +485,8 @@ export const guidelineRules: RuleTable = {
   'unicorn/no-array-sort': 'off',
   'unicorn/prefer-set-methods': 'off',
   'unicorn/no-null': 'off', // React and Payload use `null` deliberately.
+  // Defaults handle undefined only; this syntax-only rule also proposes them for nullish fallbacks.
+  'unicorn/prefer-default-parameters': 'off',
   'unicorn/no-keyword-prefix': 'off',
   // A DIRECT contradiction rather than a preference. Biome's `useNumberNamespace` requires
   // `Number.NaN` and `Number.POSITIVE_INFINITY`; this rule requires the bare globals, so no source

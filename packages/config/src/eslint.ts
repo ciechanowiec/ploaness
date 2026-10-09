@@ -104,6 +104,12 @@ const config: ReturnType<typeof compose> = compose(
   typeAwareParsing({ projectService: true }),
   { rules: guidelineRules },
 
+  // Payload consumes an eagerly built configuration. Its boot-time write policy belongs to payload-rules.
+  {
+    files: ['src/payload.config.ts'],
+    rules: { 'unicorn/no-top-level-side-effects': 'off' },
+  },
+
   // Immutability: every hand-written TypeScript, with the framework's own scaffolding exempt by role.
   // The role is declarable rather than a fixed path, because a project that mounts its framework
   // elsewhere has the same generated files under a name ploaness cannot guess.
