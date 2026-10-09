@@ -20,7 +20,7 @@ describe('CONTAINER_IMAGES', () => {
   it('declares an image for every containerised analyzer', () => {
     expect(
       Object.keys(CONTAINER_IMAGES).toSorted((left: string, right: string): number => left.localeCompare(right)),
-    ).toEqual(['actionlint', 'checkov', 'gitleaks', 'hadolint', 'shellcheck'])
+    ).toEqual(['actionlint', 'cdxgen', 'checkov', 'gitleaks', 'hadolint', 'shellcheck'])
   })
 })
 

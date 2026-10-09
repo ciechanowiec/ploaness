@@ -60,6 +60,10 @@
     "./vitest-library": {
       "types": "./dist/vitest-library.d.ts",
       "default": "./dist/vitest-library.js"
+    },
+    "./security": {
+      "types": "./dist/security.d.ts",
+      "default": "./dist/security.js"
     }
   },
   "files": [

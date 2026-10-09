@@ -87,6 +87,18 @@ export const tests = (context: Member): GateResult =>
     )
   })
 
+/** Refuse occupied browser endpoints before building or starting a test wrapper. */
+export const browserReadiness = async (context: Context): Promise<GateResult | undefined> => {
+  if (!hasOwnRuntime(context)) {
+    return undefined
+  }
+  const problems: readonly string[] = await browserServerProblems([
+    context.settings.serverUrl,
+    ...context.settings.auxiliaryServers.map((server): string => server.url),
+  ])
+  return problems.length > 0 ? failed('the end-to-end suite requires fresh browser servers', problems) : undefined
+}
+
 /** Run the Playwright end-to-end suite. */
 export const endToEnd = async (context: Context): Promise<GateResult> => {
   // A library has no browser to drive, and `assets` already withholds the managed specs from one on the
@@ -104,12 +116,9 @@ export const endToEnd = async (context: Context): Promise<GateResult> => {
     ])
   }
   return await withPretest(context, async (): Promise<GateResult> => {
-    const problems: readonly string[] = await browserServerProblems([
-      context.settings.serverUrl,
-      ...context.settings.auxiliaryServers.map((server): string => server.url),
-    ])
-    if (problems.length > 0) {
-      return failed('the end-to-end suite requires fresh browser servers', problems)
+    const readiness: GateResult | undefined = await browserReadiness(context)
+    if (readiness !== undefined) {
+      return readiness
     }
     const playwright: string | undefined = resolveProjectToolOrUndefined(context, '@playwright/test', 'playwright')
     if (playwright === undefined) {
@@ -123,6 +132,7 @@ export const endToEnd = async (context: Context): Promise<GateResult> => {
         cwd: context.root,
         env: {
           NODE_OPTIONS: '--no-deprecation --import=tsx/esm',
+          NODE_ENV: 'production',
           [VERIFICATION_ENVIRONMENT_VARIABLE]: '1',
         },
       }),
@@ -149,6 +159,7 @@ export const build = (context: Context): GateResult => {
       cwd: context.root,
       env: {
         NEXT_TELEMETRY_DISABLED: '1',
+        NODE_ENV: 'production',
         NODE_OPTIONS: '--no-deprecation --max-old-space-size=8000',
       },
     })

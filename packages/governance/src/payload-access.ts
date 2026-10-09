@@ -83,8 +83,17 @@ const leadingNumber = (value: string = ''): number | undefined => {
   return match === null ? undefined : Number((match[1] ?? '').replaceAll('_', ''))
 }
 
-const unhardenedAuthIn = (found: FoundPayloadConfig): readonly PayloadViolation[] => {
+const localAuthValue = (found: FoundPayloadConfig): string | undefined => {
   const value: string | undefined = depthOneValue(found.body, 'auth')
+  if (value === undefined || /^\s*false\b/.test(value)) {
+    return undefined
+  }
+  const disabledLocal: string = depthOneValue(value, 'disableLocalStrategy') ?? ''
+  return /^\s*(?:true\b|\{)/.test(disabledLocal) ? undefined : value
+}
+
+const unhardenedAuthIn = (found: FoundPayloadConfig): readonly PayloadViolation[] => {
+  const value: string | undefined = localAuthValue(found)
   if (value === undefined) {
     return []
   }

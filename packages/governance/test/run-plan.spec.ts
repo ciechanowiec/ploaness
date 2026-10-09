@@ -1,11 +1,35 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canRunBuiltBrowser,
   type GateDescriptor,
   type GateScope,
   type MemberDescriptor,
   type PlanStep,
   planSteps,
+  recordBuildSuccess,
 } from '../src/run-plan.js'
+
+describe('production build evidence', () => {
+  const empty: ReadonlySet<string> = new Set()
+  const build: PlanStep = { gateId: 'build', member: 'apps/site' }
+  const browser: PlanStep = { gateId: 'e2e', member: 'apps/site' }
+
+  it('requires a successful build of the same member in this run', () => {
+    expect(canRunBuiltBrowser(browser, true, empty)).toBe(false)
+    expect(canRunBuiltBrowser(browser, true, recordBuildSuccess(empty, build, false))).toBe(false)
+    const built: ReadonlySet<string> = recordBuildSuccess(empty, build, true)
+    expect(canRunBuiltBrowser(browser, true, built)).toBe(true)
+    expect(canRunBuiltBrowser({ ...browser, member: 'apps/other' }, true, built)).toBe(false)
+    expect(canRunBuiltBrowser({ ...browser, member: undefined }, true, built)).toBe(false)
+  })
+
+  it('does not treat unrelated passes as builds or require a runtime for a library', () => {
+    expect(recordBuildSuccess(empty, browser, true)).toEqual(empty)
+    expect(recordBuildSuccess(empty, { gateId: 'build', member: undefined }, true)).toEqual(empty)
+    expect(canRunBuiltBrowser(browser, false, empty)).toBe(true)
+    expect(canRunBuiltBrowser(build, true, empty)).toBe(true)
+  })
+})
 
 // The registry as it stands, in run order, with the scope each gate is being given. Written out rather
 // than imported from the CLI because governance may not depend on it - and because a copy that has to

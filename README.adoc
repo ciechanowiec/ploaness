@@ -119,6 +119,9 @@ pnpm exec ploaness init && pnpm install
 | `ploaness gates`
 | Prints every xref:#gate[gate] in run order.
 
+| `ploaness sbom --artifact <file> [--artifact <file> ...] [--output <directory>]`
+| Exports a dependency inventory and release metadata to `dist/sbom/` by default.
+
 | `ploaness commit-message <file>`
 | Verifies one commit message. `ploaness commit-message` reads `--range <base>..<head>` or `--all` in place of a file.
 |===

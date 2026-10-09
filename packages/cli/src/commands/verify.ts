@@ -1,10 +1,11 @@
 // Verification: run the gates in order and report one verdict. A gate that throws is a failed gate, not
 // a crashed run, because a tool that cannot start is indistinguishable from a tool that found a defect:
 // either way the project is not verified.
-import { endsRun } from '@ploaness/governance'
-import type { Member, Repository } from '../context.js'
+import { canRunBuiltBrowser, endsRun, type PlanStep, recordBuildSuccess } from '@ploaness/governance'
+import { browserReadiness } from '../checks/tests.js'
+import { hasOwnRuntime, type Member, type Repository } from '../context.js'
 import { failed, type GateResult } from '../exec.js'
-import { type PlannedGate, planFor } from '../gates.js'
+import { type Gate, gateById, type PlannedGate, planFor } from '../gates.js'
 import {
   beginGate,
   type GateOutcome,
@@ -33,8 +34,19 @@ const invoke = async (planned: PlannedGate, repository: Repository): Promise<Gat
   return await planned.gate.run(member)
 }
 
-const runGate = async (planned: PlannedGate, repository: Repository): Promise<GateResult> => {
+const runGate = async (
+  planned: PlannedGate,
+  repository: Repository,
+  built?: ReadonlySet<string>,
+): Promise<GateResult> => {
   try {
+    const step: PlanStep = { gateId: planned.gate.id, member: planned.member?.path }
+    const isRuntime: boolean = planned.member !== undefined && hasOwnRuntime(planned.member)
+    if (built !== undefined && !canRunBuiltBrowser(step, isRuntime, built)) {
+      return failed('this run did not establish a production build for the browser suite', [
+        'repair the build failure and rerun full verification',
+      ])
+    }
     return await invoke(planned, repository)
   } catch (error: unknown) {
     return failed(`the ${planned.gate.id} gate could not run`, [asMessage(error)])
@@ -42,9 +54,13 @@ const runGate = async (planned: PlannedGate, repository: Repository): Promise<Ga
 }
 
 /** Time one gate and package it as the outcome the report layer prints. */
-const timeGate = async (planned: PlannedGate, repository: Repository): Promise<GateOutcome> => {
+const timeGate = async (
+  planned: PlannedGate,
+  repository: Repository,
+  built?: ReadonlySet<string>,
+): Promise<GateOutcome> => {
   const started: number = Date.now()
-  const result: GateResult = await runGate(planned, repository)
+  const result: GateResult = await runGate(planned, repository, built)
   return {
     gate: planned.gate,
     result,
@@ -64,13 +80,14 @@ const runPlan = async (
   planned: readonly PlannedGate[],
   repository: Repository,
   width: number,
+  built: ReadonlySet<string> = new Set(),
 ): Promise<readonly GateOutcome[]> => {
   const [step, ...rest] = planned
   if (step === undefined) {
     return []
   }
   beginGate(step.gate, width)
-  const outcome: GateOutcome = await timeGate(step, repository)
+  const outcome: GateOutcome = await timeGate(step, repository, built)
   reportGate(outcome, width)
   const isPrecondition: boolean = step.gate.isPrecondition === true
   if (
@@ -83,7 +100,12 @@ const runPlan = async (
     reportHalt(step.gate, rest.length, isPrecondition)
     return [outcome]
   }
-  return [outcome, ...(await runPlan(rest, repository, width))]
+  const nextBuilt: ReadonlySet<string> = recordBuildSuccess(
+    built,
+    { gateId: step.gate.id, member: step.member?.path },
+    outcome.result.ok,
+  )
+  return [outcome, ...(await runPlan(rest, repository, width, nextBuilt))]
 }
 
 /**
@@ -101,6 +123,26 @@ export const verify = async (repository: Repository, isExtended: boolean): Promi
   return reportVerdict(outcomes, isExtended, repository.isEnforced, Date.now() - started)
 }
 
+const hasBrowserBuild = async (repository: Repository, planned: PlannedGate): Promise<boolean> => {
+  const started: number = Date.now()
+  const readiness: GateResult | undefined =
+    planned.member === undefined ? undefined : await browserReadiness(planned.member)
+  if (readiness !== undefined) {
+    reportGate(
+      { gate: planned.gate, result: readiness, durationMs: Date.now() - started, member: planned.member?.path },
+      planned.gate.id.length,
+    )
+    return false
+  }
+  const buildGate: Gate | undefined = gateById('build')
+  if (buildGate === undefined) {
+    throw new Error('the e2e prerequisite build gate is missing')
+  }
+  const built: GateOutcome = await timeGate({ gate: buildGate, member: planned.member }, repository)
+  reportGate(built, buildGate.id.length)
+  return built.result.ok
+}
+
 /**
  * Run one gate by identifier. A single gate is a debugging aid, never a verdict.
  * @param repository the resolved repository environment.
@@ -113,6 +155,9 @@ export const verifyOne = async (
   planned: PlannedGate,
   isVerbose: boolean = false,
 ): Promise<number> => {
+  if (planned.gate.id === 'e2e' && !(await hasBrowserBuild(repository, planned))) {
+    return 1
+  }
   const outcome: GateOutcome = await timeGate(planned, repository)
   reportGate(outcome, planned.gate.id.length)
   if (isVerbose) {

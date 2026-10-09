@@ -39,6 +39,14 @@ const tagOf = (raw: string): ContainerTag => {
 }
 
 describe('parseContainerReference', () => {
+  it('retains GHCR ownership rather than querying Docker Hub for the same path', () => {
+    expect(referenceOf(`ghcr.io/cdxgen/cdxgen:13.3.0@${DIGEST}`)).toMatchObject({
+      registry: 'ghcr.io',
+      name: 'ghcr.io/cdxgen/cdxgen',
+      namespace: 'cdxgen',
+      repository: 'cdxgen',
+    })
+  })
   it('splits a pinned reference into the parts a registry addresses it by', () => {
     const parsed: ContainerReference = referenceOf(`rhysd/actionlint:1.7.12@${DIGEST}`)
     expect(parsed).toStrictEqual({

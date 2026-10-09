@@ -12,6 +12,7 @@ import {
   findGeneratedDrift,
   findInheritedAccess,
   findMissingMigrations,
+  findPayloadSecurityViolations,
   findPayloadViolations,
   findSourceViolations,
   findUnconstrainedDraftReads,
@@ -22,8 +23,10 @@ import {
   type MigrationDirectory,
   type MigrationEvidence,
   migrationDirectoriesFor,
+  type PayloadSecurityReport,
   type PayloadViolation,
   parseInheritedAccessReport,
+  parsePayloadSecurityReport,
   payloadConfigPathOf,
   type RegeneratedArtefact,
   type SpecSource,
@@ -155,17 +158,23 @@ const judgeProbe = (result: RunResult): GateResult => {
     return failed('the Payload configuration could not be built', asFindings(result.output))
   }
   const report: InheritedAccessReport | undefined = parseInheritedAccessReport(result.stdout)
-  if (report === undefined) {
-    return failed('the access probe printed no readable report', asFindings(result.output))
+  const security: PayloadSecurityReport | undefined = parsePayloadSecurityReport(result.stdout)
+  if (report === undefined || security === undefined) {
+    return failed('the configuration probe printed incomplete or malformed evidence', asFindings(result.output))
   }
   const inherited: readonly string[] = findInheritedAccess(report)
   const draftReads: readonly string[] = findUnconstrainedDraftReads(report)
-  const findings: readonly string[] = [...inherited, ...draftReads]
+  const securityFindings: readonly string[] = findPayloadSecurityViolations(security)
+  const findings: readonly string[] = [...inherited, ...draftReads, ...securityFindings]
+  const summary: string =
+    securityFindings.length > 0
+      ? 'the resolved Payload security configuration has defects'
+      : summariseAccessFindings(inherited.length, draftReads.length)
   return findings.length > 0
-    ? failed(summariseAccessFindings(inherited.length, draftReads.length), findings)
+    ? failed(summary, findings)
     : passed(
         'every collection and global decides its access, framework-built ones included, and no ' +
-          'drafts read serves an unapproved document to a stranger',
+          'drafts read serves an unapproved document to a stranger; production authentication settings are valid',
       )
 }
 
@@ -206,7 +215,7 @@ export const payloadDefaults = (context: Member): GateResult => {
     ['--tsconfig', tsconfig, path.join(cliDirectory(), ...PROBE_FILE), configFile, defaultAccessFile],
     {
       cwd: context.root,
-      env: analysisEnvironment(context),
+      env: { ...analysisEnvironment(context), NODE_ENV: 'production' },
       timeoutMs: PROBE_TIMEOUT_MS,
     },
   )

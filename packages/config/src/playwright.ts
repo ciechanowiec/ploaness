@@ -10,8 +10,16 @@
 // file. Neither reaches a rule: they say where the application answers and what else has to be running,
 // and every threshold, ban and pinned spec above is the same whatever they say.
 import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
-import { canReuseBrowserServer, portOf, runEnvironmentFiles } from '@ploaness/governance'
+import {
+  browserServerEndpoint,
+  canReuseBrowserServer,
+  portOf,
+  runEnvironmentFiles,
+  shellArgument,
+  VERIFICATION_ENVIRONMENT_VARIABLE,
+} from '@ploaness/governance'
 import { projectSettings } from './project-settings.js'
 
 // Read before anything else, because a spec module is what needs it. Playwright evaluates this config
@@ -27,6 +35,8 @@ for (const file of runEnvironmentFiles(existsSync)) {
 
 const isContinuousIntegration: boolean = Boolean(process.env['CI'])
 const isReuseExistingServer: boolean = canReuseBrowserServer(process.env)
+const isVerification: boolean = process.env[VERIFICATION_ENVIRONMENT_VARIABLE] !== undefined
+const productionLauncher: string = fileURLToPath(new URL('production-server.js', import.meta.url))
 
 // The web server is `next dev`, which compiles a route on its first request. The first hit to the heavy
 // Payload admin bundle can exceed the 30s Playwright default on a cold runner, so the budget gives
@@ -100,14 +110,24 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
       // spawned here inherits expectations from its parent that do not hold inside a test runner. The
       // name resolves out of the ambient PATH, which the package manager that started the run points at
       // this member's `node_modules/.bin` - which is the member under test, so it is the right one.
-      command: 'next dev',
+      command: isVerification ? `${shellArgument(process.execPath)} ${shellArgument(productionLauncher)}` : 'next dev',
       url: projectSettings.serverUrl,
       reuseExistingServer: isReuseExistingServer,
       timeout: SERVER_TIMEOUT_MS,
       // The port comes from the declared origin. Without it the server started on the framework's
       // default while the runner waited on the origin the project declared, so the one setting that
       // exists to describe a non-default port made the run hang instead of work.
-      env: withPort({ NEXT_TELEMETRY_DISABLED: '1', NODE_OPTIONS: '--no-deprecation' }, declaredPort),
+      env: withPort(
+        {
+          NEXT_TELEMETRY_DISABLED: '1',
+          NODE_OPTIONS: '--no-deprecation',
+          ...(isVerification && {
+            NODE_ENV: 'production',
+            HOSTNAME: browserServerEndpoint(projectSettings.serverUrl).host,
+          }),
+        },
+        declaredPort,
+      ),
     },
   ],
 })

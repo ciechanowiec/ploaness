@@ -113,6 +113,15 @@ describe('a key is a key, not a suffix of one', () => {
 })
 
 describe('positive authentication hardening values', () => {
+  it('leaves disabled and externally handled authentication to their applicable policies', () => {
+    for (const auth of [
+      'false',
+      '{ disableLocalStrategy: true }',
+      '{ disableLocalStrategy: { enableFields: true } }',
+    ]) {
+      expect(findUnhardenedAuth(`const Users: CollectionConfig = { slug: 'users', auth: ${auth} }`)).toEqual([])
+    }
+  })
   it.each([
     'auth: { maxLoginAttempts: 0, lockTime: 600 }',
     'auth: { maxLoginAttempts: -1, lockTime: 600 }',

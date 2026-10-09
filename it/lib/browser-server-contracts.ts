@@ -98,6 +98,15 @@ const configContracts = async (): Promise<void> => {
 const writeBrowserSpec = (helperUrls: readonly string[]): void => {
   rmSync('tests/e2e', { recursive: true, force: true })
   mkdirSync('tests/e2e', { recursive: true })
+  mkdirSync('src/app/api/verification-mode', { recursive: true })
+  writeFileSync(
+    'src/app/api/verification-mode/route.ts',
+    [
+      "export const dynamic = 'force-dynamic'",
+      'export function GET(): Response { return Response.json({ mode: process.env.NODE_ENV }) }',
+      '',
+    ].join('\n'),
+  )
   writeFileSync(
     'tests/e2e/server-ownership.e2e.spec.ts',
     [
@@ -106,11 +115,16 @@ const writeBrowserSpec = (helperUrls: readonly string[]): void => {
       "test('drives the application and both helper services', async ({ page, request }) => {",
       "  await page.goto('/')",
       "  await expect(page.getByRole('heading', { name: 'Accessibility contract' })).toBeVisible()",
+      "  const mode = await request.get('/api/verification-mode')",
+      '  const isVerification: boolean =',
+      `    process.env[${JSON.stringify(VERIFICATION_ENVIRONMENT_VARIABLE)}] !== undefined`,
+      "  const expected: string = isVerification ? 'production' : 'development'",
+      '  expect(await mode.json()).toEqual({ mode: expected })',
       `  const urls = ${JSON.stringify(helperUrls)}`,
-      "  for (const [index, identity] of ['alpha', 'beta'].entries()) {",
-      '    const response = await request.get(urls[index])',
+      '  for (const [index, url] of urls.entries()) {',
+      '    const response = await request.get(url)',
       '    expect(response.ok()).toBe(true)',
-      '    expect(await response.text()).toBe(identity)',
+      "    expect(await response.text()).toBe(['alpha', 'beta'][index])",
       '  }',
       "  writeFileSync('.browser-tests-ran', 'passed')",
       '})',
@@ -200,6 +214,9 @@ await occupied(createServer(), localhostUrl, '::1')
 writeSettings({ ...settings, serverUrl: 'file:///browser-server' })
 requireResult(await gate(), 1, 'browser server URLs must use http or https')
 writeSettings(settings)
+await freshStartup([appPort, ...helperPorts])
+const nextConfig: string = readFileSync('next.config.ts', 'utf8')
+writeFileSync('next.config.ts', nextConfig.replace('export default {', "export default { output: 'standalone',"))
 await freshStartup([appPort, ...helperPorts])
 await manualReuse(helperPorts)
 console.info('browser server ownership contracts passed')

@@ -21,6 +21,7 @@ import {
   parseContainerReference,
   REQUEST_TIMEOUT_MS,
 } from '@ploaness/governance'
+import { ociDigest, ociTags } from './oci-images.js'
 
 const DOCKER_HUB: string = 'https://hub.docker.com'
 const PAGE_SIZE: number = 100
@@ -74,6 +75,9 @@ const tagsFrom = async (
 }
 
 const digestOf = async (reference: ContainerReference, tag: string): Promise<string> => {
+  if (reference.registry === 'ghcr.io') {
+    return await ociDigest(reference, tag)
+  }
   const answered: unknown = await fetchJson(`${repositoryUrl(reference)}/tags/${tag}`)
   const digest: unknown = asRecord(answered)['digest']
   if (typeof digest !== 'string') {
@@ -84,7 +88,7 @@ const digestOf = async (reference: ContainerReference, tag: string): Promise<str
 
 const inspect = async (reference: ContainerReference): Promise<ContainerInspection> => ({
   reference,
-  available: await tagsFrom(reference, FIRST_PAGE, []),
+  available: reference.registry === 'ghcr.io' ? await ociTags(reference) : await tagsFrom(reference, FIRST_PAGE, []),
   currentDigest: await digestOf(reference, reference.tag),
 })
 

@@ -347,7 +347,7 @@ const parseJson = (text: string): unknown => {
  * @param text the probe's standard output.
  * @returns the report, or undefined when no well-formed report was printed.
  */
-export const parseInheritedAccessReport = (text: string): InheritedAccessReport | undefined => {
+export const parsePayloadReport = (text: string): unknown => {
   const line: string | undefined = text
     .split('\n')
     .map((candidate: string): string => candidate.trim())
@@ -355,7 +355,12 @@ export const parseInheritedAccessReport = (text: string): InheritedAccessReport 
   if (line === undefined) {
     return undefined
   }
-  const parsed: unknown = parseJson(line.slice(INHERITED_ACCESS_REPORT_MARKER.length))
+  return parseJson(line.slice(INHERITED_ACCESS_REPORT_MARKER.length))
+}
+
+/** Parse the access decisions in the shared resolved-configuration report. */
+export const parseInheritedAccessReport = (text: string): InheritedAccessReport | undefined => {
+  const parsed: unknown = parsePayloadReport(text)
   const collections: readonly InheritedAccessEntry[] | undefined = asEntries(readKey(parsed, 'collections'))
   const globals: readonly InheritedAccessEntry[] | undefined = asEntries(readKey(parsed, 'globals'))
   const draftReads: readonly DraftReadEntry[] | undefined = asDraftReads(readKey(parsed, 'draftReads'))

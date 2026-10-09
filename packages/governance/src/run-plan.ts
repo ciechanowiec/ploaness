@@ -23,6 +23,18 @@ export interface PlanStep {
   readonly member: string | undefined
 }
 
+/** Record only a successful build of the particular member in this invocation. */
+export const recordBuildSuccess = (
+  built: ReadonlySet<string>,
+  step: PlanStep,
+  isSuccess: boolean,
+): ReadonlySet<string> =>
+  isSuccess && step.gateId === 'build' && step.member !== undefined ? new Set([...built, step.member]) : built
+
+/** Report-only execution must not test an old artifact after the current build failed. */
+export const canRunBuiltBrowser = (step: PlanStep, isRuntime: boolean, built: ReadonlySet<string>): boolean =>
+  !isRuntime || step.gateId !== 'e2e' || (step.member !== undefined && built.has(step.member))
+
 // A package-scope gate asks about every member; a payload-scope gate asks only about the members that
 // are Payload applications. Derived from what the member declares rather than from anything it opts
 // into, so a project cannot silence the Payload rules by describing itself differently.

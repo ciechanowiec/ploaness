@@ -120,7 +120,7 @@ invocations of a package gate. `tree-verify` runs after all other gates in eithe
 | `arch` | package | dependency-cruiser: layering, cycles, and orphans. |
 | `type-coverage` | package | 100% type coverage of authored production TypeScript; test assertions are excluded from this measurement. |
 | `payload-generated` | payload | The generated Payload types and admin import map are current. |
-| `payload-defaults` | payload | Explicit access decisions in the built Payload configuration, including framework/plugin collections, and anonymous draft-read protection. |
+| `payload-defaults` | payload | Resolved production access decisions, draft protection, positive native authentication limits, and disabled admin auto-login. |
 | `generated-denial` | repository | The agent runtime is denied write access to every generated artefact. |
 | `payload-rules` | package | Source policy, including explicit Payload options, access control, request threading, drafts, upload restrictions, reviewable schema migrations, and boot-time writes. |
 | `admin-views` | payload | Static evidence that custom admin views have project-owned accessibility specs; the browser suite establishes execution. |
@@ -171,6 +171,31 @@ Every port from the world is still refused by the analyzer, and a standalone
 by a pattern rule, which reads that one resource because its type names its direction. Two more
 pattern rules close what the analyzer leaves open on every cloud: an outright administrative grant
 (`roles/owner`, `roles/editor`, `Owner`) and an explicit plaintext-transport setting.
+
+## Release Dependency Inventory
+
+Run `ploaness sbom --artifact <file> [--artifact <file> ...] [--output <directory>]` after building
+the release files. The command is repository-scoped and accepts local archive files, including an exported
+container-image archive. Artifact filenames must be distinct. It generates CycloneDX JSON 1.6 and a release
+metadata sidecar in the ignored dist/sbom directory by default. Paths supplied on the command line are relative
+to the current directory. A custom output directory must be ignored by Git or outside the repository.
+
+The workspace must already be installed with the pinned pnpm, and its manifests, lockfile, and installed lock
+snapshot must agree. The digest-pinned cdxgen image reads a bounded copy of workspace manifests and lockfiles.
+Generation runs without networking, dependency installation, lifecycle scripts, or source-usage filtering.
+Docker may need network access to acquire that image before generation. A failed generator or incomplete report
+fails the command. No advisory service or Snyk account is involved.
+
+Retain both output files with the release. Metadata records the source commit and dirty state, source fingerprint,
+lockfile hash, generator identity, SBOM hash, and SHA-256 hashes of the release files. A dirty checkout is identified
+as such; it is not represented as the committed source. Ploaness's own release workflow requires a clean source
+commit and retains the reports before publishing, then attaches them to the GitHub Release. Recovery requires the
+original reports and verifies them against the original commit and published archive bytes.
+
+This inventory covers resolved workspace dependencies, including development tools. Per-workspace direct dependency
+roles are recorded in its metadata; transitive runtime usage is not inferred from import syntax. Bundling may remove
+listed packages, and container OS packages are outside this inventory. SBOM generation neither replaces the
+vulnerability gate nor proves deployment provenance.
 
 ## Consumer Settings
 
@@ -229,6 +254,14 @@ the database and services that runtime verification starts. Keep environment rea
 
 ## Application Code and Tests
 
+The `payload-defaults` probe selects the production configuration with `NODE_ENV=production`, overriding
+any conflicting analysis setting. It checks resolved values after plugins and defaults. Native authentication
+requires a positive integer attempt limit, a finite positive lock time in milliseconds, and a finite positive
+token lifetime in seconds. Disabled local strategies are outside that native limit check. Production
+`admin.autoLogin` must be absent or false, including credential-prefill mode. The report never includes the
+contents of the auto-login object. These checks inspect the supplied analysis configuration, not live identity
+providers or deployed service settings.
+
 The architecture floor is `src/access` and `src/lib`, plus declared `pureLogicRoots`; these directories
 must not import higher application layers. `src/app` composes those layers. Collection, global, field,
 and block definitions are declarative: import access rules, hooks, and validators by reference.
@@ -259,10 +292,14 @@ Vitest collects:
 - `tests/int/**/*.int.spec.ts` and `tests/int/**/*.int.spec.tsx` for integration behavior.
 
 The `e2e` gate always starts fresh application and auxiliary servers, locally as well as in CI.
+Full verification tests the production build already produced in that run. Running `ploaness gate e2e`
+builds first. Ordinary Next output uses `next start`; standalone output uses its generated server with
+the public and static assets prepared under generated output. Static exports and custom server layouts
+are unsupported and fail explicitly. The normal pretest and test wrapper still supply isolated services.
 Before running `ploaness verify --extended` or `ploaness gate e2e`, stop servers already listening at
 the configured `serverUrl` and `auxiliaryServers` addresses. An occupied port fails the gate even when
 its health endpoint is failing. Ploaness reports the address to release and leaves the existing process
-running. Direct local `pnpm exec playwright test` runs may reuse existing servers; they do not establish
+running. Direct local `pnpm exec playwright test` runs use development mode and may reuse existing servers; they do not establish
 a verification verdict.
 
 Playwright collects end-to-end specs under `tests/e2e`. Place tests in the collected paths. Test code
@@ -299,7 +336,7 @@ Ploaness pins three executable sweeps into applications where they apply:
   their own authenticated scans, scoped to the authored view.
 - Layout measures every route the same crawl reaches, at 390x844 and at 1280x800, before the axe pass.
   It reports every layout defect in the run rather than stopping at the first route.
-- Security headers checks the home response for content-type protection, referrer policy, a framing
+- Security headers checks the home response and HTML pages reached by the public crawl for content-type protection, referrer policy, a framing
   decision, and a script-constraining CSP. The seeded `src/proxy.ts` supplies a starting policy with a
   per-request nonce. Preserve Payload file handlers' own SVG policy on `/api/<collection>/file/*`.
 - Access boundary asks Payload's `/api/access` what an anonymous caller may do and compares the result
@@ -330,8 +367,10 @@ scans. A route scanned with axe alone fails as `route-unmeasured`. Keep navigati
 the full browser suite, and account for URL changes introduced by `basePath`, redirects, rewrites,
 proxy logic, or custom page extensions.
 
-The header sweep checks `/` and cannot establish every route's policy. Test project-specific file and
-API boundaries directly. Static Next.js Web Vitals rules and the bundle budget cover deterministic
+Use `expectSecurityHeaders(response)` from `ploaness/security` on the actual navigation or request response
+in authenticated project tests. The assertions preserve the baseline decisions; they do not validate every
+CSP interaction. Unvisited routes are not covered. Test project-specific file and API boundaries directly.
+Static Next.js Web Vitals rules and the bundle budget cover deterministic
 causes of performance problems; the harness does not claim a measured Lighthouse or Web Vitals score.
 
 Pass CMS-supplied link values through `safeHref` from `@ploaness/runtime` before assigning an `href`.

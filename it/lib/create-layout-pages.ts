@@ -41,16 +41,16 @@ const CLEAN: string = '<p>Nothing on this page touches anything else.</p>'
 const CLOSED_DISCLOSURE: string = `
 <div><details><summary><span>Show details</span></summary>
 Hidden direct text before the nested content.
-<p class="overlap-body">Hidden body text</p>
-<details open><summary>Inner disclosure</summary><p class="overlap-body">Hidden inner text</p></details>
+<p className="overlap-body">Hidden body text</p>
+<details open><summary>Inner disclosure</summary><p className="overlap-body">Hidden inner text</p></details>
 <summary>Hidden second summary</summary>
-<div class="wide">Hidden wide content</div>
+<div className="wide">Hidden wide content</div>
 </details><p>Visible following text</p></div>`
 
 const OPEN_DISCLOSURE: string = `
 <details open><summary>Show details</summary><p>Visible body text</p>
 <details><summary>Inner disclosure</summary>Hidden direct inner text
-<p class="overlap-body">Hidden inner body</p></details></details>`
+<p className="overlap-body">Hidden inner body</p></details></details>`
 
 const DEFECT_PAGES: Readonly<Record<string, string>> = {
   verify: verifyPage('page page-narrow'),
@@ -66,13 +66,13 @@ const DEFECT_PAGES: Readonly<Record<string, string>> = {
   'closed-disclosure': CLOSED_DISCLOSURE,
   'open-disclosure': OPEN_DISCLOSURE,
   'open-disclosure-overlap':
-    '<details open><summary>Visible summary</summary><p class="overlap-body">Visible body overlap</p></details>',
+    '<details open><summary>Visible summary</summary><p className="overlap-body">Visible body overlap</p></details>',
   'closed-summary-overlap': `<div>
 <details><summary><span>Visible summary</span></summary>Hidden body</details>
-<p class="overlap-body">Visible neighbor</p></div>`,
+<p className="overlap-body">Visible neighbor</p></div>`,
   'closed-disclosure-box': `<div>
-<details class="notice"><summary>Visible summary</summary>Hidden body</details>
-<a class="button" href="/">Continue</a></div>`,
+<details className="notice"><summary>Visible summary</summary>Hidden body</details>
+<a className="button" href="/">Continue</a></div>`,
 }
 
 const REPAIRED_PAGES: Readonly<Record<string, string>> = {

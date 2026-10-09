@@ -29,6 +29,7 @@ import {
   isArray,
   isRecord,
   type PayloadSubjectKind,
+  payloadSecurityOf,
   QUERY_PRESETS_SLUG,
   readKey,
 } from '@ploaness/governance'
@@ -138,7 +139,9 @@ const report: InheritedAccessReport = {
   globals: globals.map((global: unknown): InheritedAccessEntry => entryOf(global, 'global')),
 }
 
-process.stdout.write(`${INHERITED_ACCESS_REPORT_MARKER}${JSON.stringify(report)}\n`)
+process.stdout.write(
+  `${INHERITED_ACCESS_REPORT_MARKER}${JSON.stringify({ ...report, ...payloadSecurityOf(config) })}\n`,
+)
 // The exit code rather than `process.exit()`, for the reason bin.ts states: the report is flushed
 // before the process ends. A plugin that keeps a handle open after import holds the process until the
 // gate's own timeout, which then reports it as a build that did not finish rather than as a pass.

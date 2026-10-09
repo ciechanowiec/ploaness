@@ -304,6 +304,7 @@ layout_contracts() {
     node "$lib/create-a11y-page.ts" "$scratch/fail-layout" valid
     node "$lib/create-layout-pages.ts" "$scratch/fail-layout" defects
     commit_case fail-layout 'test(fixture): render one layout defect per page' "$CONFORMING_BODY"
+    expect fail-layout build PASS
     expect_command fail-layout FAIL 'layout defects on the swept routes' \
         pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
     expect_layout_line fail-layout \
@@ -332,6 +333,7 @@ layout_contracts() {
     node "$lib/create-a11y-page.ts" "$scratch/pass-layout" valid
     node "$lib/create-layout-pages.ts" "$scratch/pass-layout" repaired
     commit_case pass-layout 'test(fixture): lay every page out with room between its boxes' "$CONFORMING_BODY"
+    expect pass-layout build PASS
     expect_command pass-layout PASS '2 passed' \
         pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts tests/e2e/items.e2e.spec.ts --reporter=line
     # The exemption the repaired tab list carries is a suppression, and is counted as one.
@@ -343,6 +345,7 @@ layout_contracts() {
     node "$lib/create-layout-pages.ts" "$scratch/fail-layout-coverage" unmeasured
     commit_case fail-layout-coverage 'test(fixture): scan an unlinked dynamic route with axe alone' \
         "$CONFORMING_BODY"
+    expect fail-layout-coverage build PASS
     expect_command fail-layout-coverage FAIL 'route-unmeasured' \
         pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 }
@@ -356,10 +359,34 @@ browser_server_contracts() {
         "$scratch/browser-servers/node_modules/.bin/ploaness"
 }
 
+security_contracts() {
+    new_case resolved-security
+    commit_case resolved-security 'test(fixture): inspect resolved authentication settings' "$CONFORMING_BODY"
+    expect_command resolved-security PASS 'resolved authentication and production auto-login contracts passed' \
+        node --import=tsx/esm "$lib/security-contracts.ts" "$scratch/resolved-security/node_modules/.bin/ploaness"
+    new_case sbom-workspace
+    node "$lib/create-sbom-workspace.ts" "$scratch/sbom-workspace"
+    rm "$scratch/sbom-workspace/node_modules"
+    install_case "$scratch/sbom-workspace"
+    commit_case sbom-workspace 'test(fixture): inventory a resolved pnpm workspace' "$CONFORMING_BODY"
+    mkdir -p "$scratch/sbom-workspace/dist"
+    printf 'release artifact bytes\n' > "$scratch/sbom-workspace/dist/release.tgz"
+    expect_command sbom-workspace PASS 'SBOM and release metadata written' \
+        ./node_modules/.bin/ploaness sbom --artifact dist/release.tgz
+    expect_command sbom-workspace PASS 'SBOM workspace identities, relationships, artifacts and failure contracts passed' \
+        node --import=tsx/esm "$lib/sbom-contracts.ts" "$scratch/sbom-workspace/node_modules/.bin/ploaness"
+    release_commit="$(git -C "$scratch/sbom-workspace" rev-parse HEAD)"
+    expect_command sbom-workspace PASS 'release inventory identifies the original commit' \
+        node "$root/scripts/lib/check-release-sbom.ts" "$release_commit" dist/sbom dist
+    printf 'changed archive bytes\n' >> "$scratch/sbom-workspace/dist/release.tgz"
+    expect_command sbom-workspace FAIL 'release inventory artifact hashes do not match' \
+        node "$root/scripts/lib/check-release-sbom.ts" "$release_commit" dist/sbom dist
+}
+
 # A declared focused subset for iterating on the new analyzer; the default run remains complete.
 case "${1-}" in
-    ''|--jsx-only|--native-only|--layout-only|--browser-servers-only) ;;
-    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--browser-servers-only]' >&2; exit 1 ;;
+    ''|--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only) ;;
+    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only]' >&2; exit 1 ;;
 esac
 
 if [ "${1-}" = --browser-servers-only ]; then
@@ -373,6 +400,15 @@ if [ "${1-}" = --browser-servers-only ]; then
     exit 0
 fi
 
+if [ "${1-}" = --security-only ]; then
+    security_contracts
+    if [ "$failures" -ne 0 ]; then
+        exit "$failures"
+    fi
+    echo "security contracts passed; run pnpm run verify for the complete verdict"
+    exit 0
+fi
+
 # The pass case: the untouched scaffold must satisfy every gate that judges a project's own shape.
 new_case pass
 commit_case pass 'feat(fixture): add the ploaness integration consumer' "$CONFORMING_BODY"
@@ -380,6 +416,9 @@ commit_case pass 'feat(fixture): add the ploaness integration consumer' "$CONFOR
 expect pass preflight PASS
 expect pass wiring PASS
 expect pass assets PASS
+if [ -z "${1-}" ]; then
+    security_contracts
+fi
 new_case managed-defaults
 commit_case managed-defaults 'test(fixture): enforce the upstream managed defaults' "$CONFORMING_BODY"
 expect_command managed-defaults PASS 'managed defaults install, upgrade, remain unchanged and reject drift' \
@@ -557,11 +596,20 @@ expect fail-retired-jsx-analyzer blocklist FAIL 'retired JSX accessibility analy
 new_case pass-browser-names
 node "$lib/create-a11y-page.ts" "$scratch/pass-browser-names" valid
 commit_case pass-browser-names 'test(fixture): render accessible controls in Next' "$CONFORMING_BODY"
+expect pass-browser-names build PASS
 expect_command pass-browser-names PASS '1 passed' \
+    pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+new_case fail-browser-headers
+node "$lib/create-a11y-page.ts" "$scratch/fail-browser-headers" valid
+node "$lib/create-header-page.ts" "$scratch/fail-browser-headers"
+commit_case fail-browser-headers 'test(fixture): reject missing headers beyond the home page' "$CONFORMING_BODY"
+expect fail-browser-headers build PASS
+expect_command fail-browser-headers FAIL 'security headers on .*unprotected' \
     pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 new_case fail-browser-names
 node "$lib/create-a11y-page.ts" "$scratch/fail-browser-names" invalid
 commit_case fail-browser-names 'test(fixture): render controls without accessible names' "$CONFORMING_BODY"
+expect fail-browser-names build PASS
 expect_command fail-browser-names FAIL 'button-name' \
     pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 if ! grep -q '"id": "label"' "$scratch/fail-browser-names/command-output.log"; then

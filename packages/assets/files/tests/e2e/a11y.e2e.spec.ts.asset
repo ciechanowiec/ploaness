@@ -31,6 +31,7 @@ import {
   settleForScan,
   unsweptRoutes,
 } from 'ploaness/a11y'
+import { expectSecurityHeaders } from 'ploaness/security'
 
 // The sweep scans every interactive control in three states on every route, so its cost grows with the
 // site. The budget is per discovered route, so it scales as pages are added instead of flaking against a
@@ -116,6 +117,13 @@ interface RouteDiscovery {
   readonly hasSeedAnswered: boolean
 }
 
+/** Check the existing baseline on HTML navigation responses, leaving API and file policies to their tests. */
+const expectHtmlSecurityHeaders = (response: Response): void => {
+  if (response.headers()['content-type']?.includes('text/html') === true) {
+    expectSecurityHeaders(response)
+  }
+}
+
 const discoverRoutes = async (page: Page, origin: string): Promise<RouteDiscovery> => {
   const state: CrawlState = {
     seen: new Set<string>([SEED_ROUTE]),
@@ -144,6 +152,7 @@ const discoverRoutes = async (page: Page, origin: string): Promise<RouteDiscover
     if (toRoute(page.url(), origin) === null) {
       continue
     }
+    expectHtmlSecurityHeaders(response)
     reachable.push(routePath)
     const hrefs: readonly string[] = await page
       .locator('a[href]')

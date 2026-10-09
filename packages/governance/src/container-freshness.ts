@@ -11,6 +11,8 @@
 // without one.
 /** A digest-pinned image reference, split into the parts a registry API addresses it by. */
 export interface ContainerReference {
+  /** Omitted for Docker Hub; explicitly recorded for the supported OCI registry. */
+  readonly registry?: 'ghcr.io'
   /** The analyzer the image runs, which is the property that declares it. */
   readonly tool: string
   /** The repository as written, such as `zricethezav/gitleaks`. */
@@ -44,8 +46,13 @@ export interface ContainerTag {
 // prerelease, neither of which a pin should move to on its own.
 const STABLE_TAG: RegExp = /^(?<prefix>v?)(?<version>\d+(?:\.\d+)+)$/
 
-const PINNED_REFERENCE: RegExp =
-  /^(?<name>[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*):(?<tag>[A-Za-z0-9][\w.-]*)@(?<digest>sha256:[0-9a-f]{64})$/
+const PINNED_REFERENCE: RegExp = new RegExp(
+  [
+    String.raw`^(?:(?<registry>ghcr\.io)/)?`,
+    '(?<name>[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*):',
+    String.raw`(?<tag>[A-Za-z0-9][\w.-]*)@(?<digest>sha256:[0-9a-f]{64})$`,
+  ].join(''),
+)
 
 // Ordered by component rather than by the semver rule `dependency-freshness.ts` implements. A tag has
 // no prerelease - the pattern above refuses any suffix - and its component COUNT is meaningful here,
@@ -67,6 +74,9 @@ const YEAR_LENGTH: number = 4
 const FIRST_CALENDAR_YEAR: number = 2000
 const LAST_CALENDAR_YEAR: number = 2099
 
+const imageAddress = (name: string, registry: string | undefined): Pick<ContainerReference, 'name' | 'registry'> =>
+  registry === 'ghcr.io' ? { name: `ghcr.io/${name}`, registry } : { name }
+
 /**
  * Read a digest-pinned reference into its addressable parts.
  * @param tool the analyzer that runs the image, used to name the declaring property in a report.
@@ -84,7 +94,7 @@ export const parseContainerReference = (tool: string, reference: string): Contai
     ? undefined
     : {
         tool,
-        name,
+        ...imageAddress(name, found.groups['registry']),
         namespace,
         repository: repository,
         tag: found.groups['tag'] ?? '',

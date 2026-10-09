@@ -90,7 +90,21 @@ writeFileSync(
 )
 
 // Fixture cases share their installed packages with a sibling template. Turbopack must see both.
+const SECURITY_POLICY: string = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "frame-ancestors 'none'",
+].join('; ')
 writeFileSync(
   path.join(directory, 'next.config.ts'),
-  `export default { turbopack: { root: ${JSON.stringify(path.dirname(directory))} } }\n`,
+  [
+    `export default { turbopack: { root: ${JSON.stringify(path.dirname(directory))} },`,
+    '  async headers() { return [{ source: "/:path*", headers: [',
+    '    { key: "X-Content-Type-Options", value: "nosniff" },',
+    '    { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },',
+    `    { key: "Content-Security-Policy", value: ${JSON.stringify(SECURITY_POLICY)} },`,
+    '  ] }] } }',
+    '',
+  ].join('\n'),
 )
