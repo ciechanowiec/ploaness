@@ -123,14 +123,11 @@ describe('rebaseExclusion', () => {
   })
 })
 
-// A member INHERITS the repository's values and OWNS its declarations. Layering the declarations too
-// made every member answer for the repository's: a workspace root correctly excusing its Vale detector
-// definitions - whose content IS the character the ban detects - had each member report that exclusion
-// as reaching nothing, because no member holds the file. One correct declaration failed two gates, and
-// no edit a member could make would have fixed it.
+// A member inherits the repository's effective values and owns only its own declarations. A repository
+// fixture exclusion must not become a member-owned declaration that matches no files in that member.
 describe('readMemberSettings', () => {
   const Repository: Record<string, unknown> = {
-    typographyExclusions: [{ pattern: String.raw`^\.vale/styles/`, reason: 'detector definitions' }],
+    typographyExclusions: [{ pattern: String.raw`^\.fixtures/typography/`, reason: 'typography fixtures' }],
     sourceRoots: ['src'],
   }
   const Own: Record<string, unknown> = {
@@ -139,7 +136,7 @@ describe('readMemberSettings', () => {
 
   it('inherits the repository effective values', () => {
     const settings: Settings = readMemberSettings(Repository, Own)
-    expect(settings.typographyExclusions).toContain(String.raw`^\.vale/styles/`)
+    expect(settings.typographyExclusions).toContain(String.raw`^\.fixtures/typography/`)
     expect(settings.pureLogicRoots).toContain('src/config')
   })
 

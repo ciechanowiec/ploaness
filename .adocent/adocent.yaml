@@ -1,0 +1,70 @@
+version: 0.0.1-SNAPSHOT
+
+document:
+  header: |-
+    :reproducible:
+    :doctype: article
+    :author: Herman Ciechanowiec
+    :email: herman@ciechanowiec.eu
+    :chapter-signifier:
+    :sectnums:
+    :sectnumlevels: 5
+    :sectanchors:
+    :toc: left
+    :toclevels: 5
+    :icons: font
+    :linkcss:
+    :sourcedir: {docdir}
+    :stylesdir: https://www.ciechanowiec.eu/linux_mantra/
+    :stylesheet: adoc-css-style.css
+    :!table-caption:
+    :!figure-caption:
+    :!example-caption:
+  htmlPreamble: |-
+    ifdef::backend-html5[]
+    ifndef::env-github[]
+    ++++
+    <link href="https://www.ciechanowiec.eu/linux_mantra/adoc-docinfo.css" rel="stylesheet">
+    <style>
+        table.tableblock {
+            table-layout: fixed;
+        }
+
+        table.tableblock td,
+        table.tableblock th {
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+    </style>
+    ++++
+    endif::[]
+    endif::[]
+  about: |-
+    == About the Document
+
+    . The source text of this document is written in the https://asciidoc.org[AsciiDoc^] markup language.
+    . The source text of this document must follow the link:README-guideline-writing.adoc[Writing Guideline for Utilitarian Non-Fiction^]. The guideline is stored beside the source text in the same Git repository.
+    . The https://github.com/ciechanowiec/adocent[`adocent`^] application lints and converts the source text of this document.
+    . To lint the source text of this document, run this command from the directory containing the source text:
+    +
+    [source,bash,subs="attributes+"]
+    ----
+    adocent lint "{docname}{docfilesuffix}"
+    ----
+    . To export this document to HTML, PDF, and DOCX, run this command from the directory containing the source text:
+    +
+    [source,bash,subs="attributes+"]
+    ----
+    adocent convert "{docname}{docfilesuffix}" --to html --to pdf --to docx
+    ----
+  htmlFooter: |-
+    ifdef::backend-html5[]
+    ifndef::env-github[]
+    ++++
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tocbot/4.32.2/tocbot.min.js"></script>
+    <script src="https://www.ciechanowiec.eu/linux_mantra/adoc-docinfo-footer.js"></script>
+    ++++
+    endif::[]
+    endif::[]
+
+rules: {}

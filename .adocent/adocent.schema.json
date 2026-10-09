@@ -1,0 +1,497 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/ciechanowiec/adocent/main/.adocent/adocent.schema.json",
+  "title": "adocent Configuration File",
+  "description": "The adocent configuration schema defines the valid structure of `.adocent/adocent.yaml`. At run time, adocent resolves each rule identifier against the effective registry. adocent checks whether each language-specific rule applies to that language. Each resolved path must remain inside the Git repository and contain no symbolic link. adocent reads the configuration file as YAML 1.2 under the Core Schema. Under that schema, each unquoted value `on` or `off` is a string rather than `true` or `false`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version"
+  ],
+  "properties": {
+    "version": {
+      "description": "The `version` value declares the adocent version the project is configured for. adocent refuses a run whose configuration file declares a version other than the version of the running adocent. `adocent version` reports the version of the running adocent, and `adocent init` writes that version into a configuration file it creates.",
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-((0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)(\\.(0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*))*))?(\\+([0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*))?$"
+    },
+    "defaultLanguage": {
+      "description": "The `defaultLanguage` value selects the language of a document whose filename doesn't end in `.pl.adoc`. A filename ending in `.pl.adoc` always selects Polish. The selected language determines the applicable rules and language-specific configuration.",
+      "enum": [
+        "en",
+        "pl"
+      ]
+    },
+    "document": {
+      "$ref": "#/$defs/documentFragments",
+      "description": "The `document` mapping defines the exact AsciiDoc source fragments that adocent requires at fixed positions in a document."
+    },
+    "languages": {
+      "description": "The `languages` mapping defines configuration specific to English and Polish documents. Its only permitted keys are `en` and `pl`. Each language may set only `document` and `rules`. A language-specific value takes precedence over the corresponding top-level value. Each omitted key inherits its own top-level or built-in value.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "en": {
+          "$ref": "#/$defs/languageConfiguration",
+          "description": "The `en` mapping sets `document` and `rules` for English documents."
+        },
+        "pl": {
+          "$ref": "#/$defs/languageConfiguration",
+          "description": "The `pl` mapping sets `document` and `rules` for Polish documents."
+        }
+      }
+    },
+    "rules": {
+      "$ref": "#/$defs/ruleMapping",
+      "description": "The top-level `rules` mapping defines rule states and settings shared by English and Polish documents."
+    },
+    "convert": {
+      "description": "The `convert` mapping optionally configures HTML, PDF, and DOCX conversion. Each omitted key retains the built-in behavior.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "footnotes": {
+          "type": "string",
+          "enum": ["floating", "end"],
+          "default": "floating",
+          "description": "Place PDF and DOCX notes at the bottom of their markers' pages (floating) or at the end of the whole document (end). DOCX end placement uses Word endnotes. HTML always uses document-end notes. Both article and book use continuous numbering without chapter-end collections."
+        },
+        "includeAbout": {
+          "type": "boolean",
+          "default": false,
+          "description": "Set `includeAbout` to true to retain the section identified by the effective `document.about` heading in HTML, PDF, and DOCX exports. By default, conversion omits that section and its table-of-contents entry while retaining the bibliography and HTML footer. Source files and lint requirements are unchanged."
+        },
+        "pdf": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "theme": {
+              "$ref": "#/$defs/repositoryPath",
+              "pattern": "\\.yml$",
+              "description": "The `theme` path selects a PDF theme in place of the default `embedded/conversion/basic.yml`. The filename must end in `.yml` because Asciidoctor PDF rejects `.yaml`. adocent applies its own styling after the selected PDF theme."
+            },
+            "fontsDirectory": {
+              "$ref": "#/$defs/repositoryPath",
+              "description": "The `fontsDirectory` path identifies the directory that adocent searches before the embedded font directory for fonts named by the PDF theme."
+            }
+          }
+        },
+        "docx": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "referenceDocument": {
+              "$ref": "#/$defs/repositoryPath",
+              "description": "The `referenceDocument` path selects a DOCX reference document in place of the default `embedded/conversion/reference.docx`. adocent then applies its DOCX transformations. These transformations address Word styles by name."
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "repositoryPath": {
+      "description": "A repository path is a nonempty string interpreted relative to the repository root. adocent checks that the resolved path remains inside the Git repository. The schema only rejects a string that begins with `/`.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/]"
+    },
+    "languageConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/documentFragments"
+        },
+        "rules": {
+          "$ref": "#/$defs/ruleMapping"
+        }
+      }
+    },
+    "documentFragments": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "header": {
+          "$ref": "#/$defs/documentFragment",
+          "description": "The `header` fragment contains the attribute declarations that `Structure.DocumentHeader` requires at the top of the attribute list, directly after the document title."
+        },
+        "htmlPreamble": {
+          "$ref": "#/$defs/documentFragment",
+          "description": "`Structure.HTMLPreamble` requires the `htmlPreamble` fragment once as the first block of the document body after the attributes. The fragment contains exactly one `ifdef::backend-html5[]` conditional around exactly one `passthrough` block."
+        },
+        "about": {
+          "$ref": "#/$defs/documentFragment",
+          "description": "`Structure.AboutSection` requires the `about` fragment once as the last level-one section before the HTML footer block. The fragment begins with one level-one heading and contains no other heading of that level."
+        },
+        "htmlFooter": {
+          "$ref": "#/$defs/documentFragment",
+          "description": "`Structure.HTMLFooter` requires the `htmlFooter` fragment once as the last block in the document. The fragment contains exactly one `ifdef::backend-html5[]` conditional around exactly one `passthrough` block."
+        }
+      }
+    },
+    "documentFragment": {
+      "description": "A required document fragment is a nonempty string of exact AsciiDoc source text. Write its YAML value as a literal block scalar with `|-`. adocent performs no substitution and compares every character that remains after line-ending normalization.",
+      "type": "string",
+      "minLength": 1
+    },
+    "toggle": {
+      "description": "The string value `on` enables a rule. The string value `off` disables a rule. The YAML 1.2 Core Schema treats both unquoted values as strings. Boolean `true` and `false` values are invalid.",
+      "enum": [
+        "on",
+        "off"
+      ]
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "entryMax": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/toggle"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "max": {
+              "$ref": "#/$defs/positiveInteger"
+            }
+          }
+        }
+      ]
+    },
+    "entryMaxWords": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/toggle"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "maxWords": {
+              "$ref": "#/$defs/positiveInteger"
+            }
+          }
+        }
+      ]
+    },
+    "entryMaxMeanWords": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/toggle"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "maxMeanWords": {
+              "$ref": "#/$defs/positiveInteger"
+            }
+          }
+        }
+      ]
+    },
+    "entryMaxMeanAbstractness": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/toggle"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "maxMeanAbstractness": {
+              "$ref": "#/$defs/positiveInteger"
+            }
+          }
+        }
+      ]
+    },
+    "ruleMapping": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/ruleKey"
+      },
+      "properties": {
+        "Structure.SectionNesting": {
+          "$ref": "#/$defs/entryMax",
+          "description": "`Structure.SectionNesting` reports a heading nested beyond `max` levels. `max` defaults to `5`."
+        },
+        "Structure.SectionBodyLength": {
+          "$ref": "#/$defs/entryMaxWords",
+          "description": "`Structure.SectionBodyLength` reports a section body whose word count exceeds `maxWords`. `maxWords` defaults to `600`."
+        },
+        "Structure.HeadingLength": {
+          "$ref": "#/$defs/entryMaxWords",
+          "description": "`Structure.HeadingLength` reports a heading whose word count exceeds `maxWords`. `maxWords` defaults to `8`."
+        },
+        "Readability.SentenceLength": {
+          "$ref": "#/$defs/entryMaxWords",
+          "description": "`Readability.SentenceLength` reports a sentence whose word count exceeds `maxWords`. `maxWords` defaults to `45`."
+        },
+        "Readability.ParagraphSentences": {
+          "$ref": "#/$defs/entryMax",
+          "description": "`Readability.ParagraphSentences` reports a paragraph containing more than `max` sentences. `max` defaults to `8`."
+        },
+        "Readability.ParagraphLength": {
+          "$ref": "#/$defs/entryMaxMeanWords",
+          "description": "`Readability.ParagraphLength` reports a document whose mean paragraph length exceeds `maxMeanWords`. `maxMeanWords` defaults to `40`."
+        },
+        "Readability.OpenerRuns": {
+          "$ref": "#/$defs/entryMax",
+          "description": "`Readability.OpenerRuns` reports more than `max` consecutive sentences that begin with the same word. `max` defaults to `4`."
+        },
+        "Readability.NominalizationDensity": {
+          "$ref": "#/$defs/entryMax",
+          "description": "`Readability.NominalizationDensity` reports a sentence containing more than `max` abstract nouns built from verbs. `max` defaults to `7`."
+        },
+        "Readability.ConcreteVocabulary": {
+          "$ref": "#/$defs/entryMaxMeanAbstractness",
+          "description": "`Readability.ConcreteVocabulary` reports a sentence whose mean word abstractness exceeds `maxMeanAbstractness`. `maxMeanAbstractness` defaults to `70`."
+        },
+        "Readability.Index": {
+          "$ref": "#/$defs/entryMax",
+          "description": "`Readability.Index` reports a document whose readability index exceeds `max`. `max` defaults to `45` for English and `65` for Polish."
+        }
+      },
+      "patternProperties": {
+        "^LanguageTool\\.category\\.": {
+          "$ref": "#/$defs/toggle",
+          "description": "A LanguageTool category accepts only `on` or `off`. An entry for a specific rule takes precedence over a category entry that covers the rule."
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/toggle",
+        "description": "A rule that declares no setting accepts only `on` or `off`."
+      }
+    },
+    "ruleKey": {
+      "description": "A rule key is a rule identifier or a LanguageTool category switch. The eleven built-in groups are closed, so the schema enumerates their rule identifiers. The `LanguageTool` group is open, so the schema checks only the form of its rule identifiers. At run time, adocent resolves those identifiers against the pinned LanguageTool version.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/builtInRuleId"
+        },
+        {
+          "$ref": "#/$defs/languageToolCategoryId"
+        },
+        {
+          "title": "LanguageTool rule identifier",
+          "description": "LanguageTool names its own rules, and the names it uses carry underscores, hyphens, and Latin letters outside ASCII. The pattern is therefore the upstream form rather than the PascalCase form the built-in groups use.",
+          "pattern": "^LanguageTool\\.[A-Za-z0-9_\\u00C0-\\u024F][A-Za-z0-9_\\-\\u00C0-\\u024F]*$"
+        }
+      ]
+    },
+    "languageToolCategoryId": {
+      "title": "LanguageTool category switch",
+      "enum": [
+        "LanguageTool.category.AMERICAN_ENGLISH_STYLE",
+        "LanguageTool.category.BRITISH_ENGLISH",
+        "LanguageTool.category.CASING",
+        "LanguageTool.category.COLLOCATIONS",
+        "LanguageTool.category.COMPOUNDING",
+        "LanguageTool.category.CONFUSED_WORDS",
+        "LanguageTool.category.CREATIVE_WRITING",
+        "LanguageTool.category.GENDER",
+        "LanguageTool.category.GRAMMAR",
+        "LanguageTool.category.MISC",
+        "LanguageTool.category.MULTITOKEN_SPELLING",
+        "LanguageTool.category.NONSTANDARD_PHRASES",
+        "LanguageTool.category.NUMBERS",
+        "LanguageTool.category.PHONETICS",
+        "LanguageTool.category.PLAIN_ENGLISH",
+        "LanguageTool.category.PRAWDOPODOBNE_LITEROWKI",
+        "LanguageTool.category.PROPER_NOUNS",
+        "LanguageTool.category.PUNCTUATION",
+        "LanguageTool.category.REDUNDANCY",
+        "LanguageTool.category.REPETITIONS_STYLE",
+        "LanguageTool.category.SEMANTICS",
+        "LanguageTool.category.SPELLING",
+        "LanguageTool.category.STYLE",
+        "LanguageTool.category.SYNTAX",
+        "LanguageTool.category.TEXT_ANALYSIS",
+        "LanguageTool.category.TON_ACADEMIC",
+        "LanguageTool.category.TYPOGRAPHY",
+        "LanguageTool.category.TYPOS",
+        "LanguageTool.category.WIKIPEDIA",
+        "LanguageTool.category.WORD_ORDER"
+      ]
+    },
+    "builtInRuleId": {
+      "title": "Built-in rule identifier",
+      "enum": [
+        "Structure.SectionNesting",
+        "Structure.LoneSubsection",
+        "Structure.NumberedParagraphs",
+        "Structure.NumberedProseIntroduction",
+        "Structure.NumberingDepth",
+        "Structure.GenuineList",
+        "Structure.LoneListItem",
+        "Structure.TableHeaders",
+        "Structure.OrphanContinuation",
+        "Structure.GluedListItem",
+        "Structure.ContinuationContent",
+        "Structure.SectionBodyLength",
+        "Structure.HeadingLength",
+        "Structure.HeadingPunctuation",
+        "Structure.DeclarativeHeading",
+        "Structure.DuplicateHeading",
+        "Structure.AbstractPosition",
+        "Structure.DocumentHeader",
+        "Structure.HTMLPreamble",
+        "Structure.AboutSection",
+        "Structure.HTMLFooter",
+        "Structure.ConfiguredAttribute",
+
+        "Markup.ExplicitAnchors",
+        "Markup.AnchorFormat",
+        "Markup.AnchorInCodeSpan",
+        "Markup.XrefTargets",
+        "Markup.InternalReferences",
+        "Markup.SelfReference",
+        "Markup.AnchorReferenceText",
+        "Markup.SectionReferenceQualifier",
+        "Markup.ReferenceLocality",
+        "Markup.DefinitionUse",
+        "Markup.FootnotePunctuation",
+        "Markup.FootnoteBoundary",
+        "Markup.FootnoteBareBracket",
+        "Markup.AutolinkBoundary",
+        "Markup.InlineFormatting",
+        "Markup.CodeInItalics",
+        "Markup.AsteriskInCode",
+        "Markup.HashInCode",
+        "Markup.PlusDelimiterInCode",
+        "Markup.ParagraphHeaderCase",
+        "Markup.SplitCodeDlist",
+        "Markup.LanguageSpanSpelling",
+        "Markup.LinkText",
+        "Markup.ExternalLinkTarget",
+        "Markup.AltText",
+        "Markup.FigureCaption",
+        "Markup.VerbatimFlushLeft",
+        "Markup.LanguageTaggedListing",
+        "Markup.SourceSyntax",
+        "Markup.OneSentencePerLine",
+        "Markup.NoDashes",
+        "Markup.NoCurlyQuotes",
+        "Markup.NoUnicodeEllipsis",
+        "Markup.RenderDiagnostics",
+        "Markup.UnrenderedFootnote",
+
+        "Prose.Patronizing",
+        "Prose.EditingCommentary",
+        "Prose.TooWordy",
+        "Prose.Cliches",
+        "Prose.Jargon",
+        "Prose.Apologizing",
+        "Prose.BuriedVerb",
+        "Prose.Uncomparables",
+        "Prose.Hyperbole",
+        "Prose.Malapropisms",
+        "Prose.Oxymorons",
+        "Prose.Nonwords",
+        "Prose.Needless",
+        "Prose.Archaisms",
+        "Prose.Formal",
+        "Prose.Slang",
+        "Prose.GenderedPronoun",
+        "Prose.GenderedTerms",
+        "Prose.OffensiveTerms",
+        "Prose.Cursing",
+        "Prose.Exclamation",
+        "Prose.ParentheticalInformation",
+        "Prose.Semicolons",
+        "Prose.ColonCase",
+        "Prose.OxfordComma",
+        "Prose.Repetition",
+        "Prose.Annotations",
+        "Prose.LyHyphens",
+
+        "Terminology.Abbreviations",
+        "Terminology.Acronyms",
+        "Terminology.WordList",
+        "Terminology.Diacritical",
+        "Terminology.DenizenLabels",
+        "Terminology.AnimalLabels",
+        "Terminology.GroupTerms",
+        "Terminology.RASSyndrome",
+        "Terminology.TermForm",
+
+        "Convention.DateFormat",
+        "Convention.Duration",
+        "Convention.Clock",
+        "Convention.DateCase",
+        "Convention.DateSpacing",
+        "Convention.DateRedundancy",
+        "Convention.DateMidnight",
+        "Convention.Units",
+        "Convention.Currency",
+        "Convention.Ranges",
+        "Convention.OptionalPlurals",
+        "Convention.AcronymPeriods",
+        "Convention.QuotePunctuation",
+        "Convention.SentenceSpacing",
+        "Convention.DecimalPlaces",
+        "Convention.Arithmetic",
+
+        "Readability.SentenceLength",
+        "Readability.ParagraphSentences",
+        "Readability.ParagraphLength",
+        "Readability.OpenerRuns",
+        "Readability.NominalizationDensity",
+        "Readability.ConcreteVocabulary",
+        "Readability.Index",
+
+        "Diagram.Tabs",
+        "Diagram.TrailingSpace",
+        "Diagram.Charset",
+        "Diagram.ElementLabels",
+        "Diagram.ArrowDirection",
+        "Diagram.ArrowEndpoints",
+        "Diagram.BoxAlignment",
+        "Diagram.CornerSupport",
+        "Diagram.JunctionSupport",
+        "Diagram.LifelineAlignment",
+
+        "Citation.FootnoteFormat",
+        "Citation.QuoteDelimiters",
+        "Citation.InferencePrefix",
+        "Citation.BibliographyFormat",
+        "Citation.ClosedSourceList",
+        "Citation.Overreach",
+        "Citation.UnrenderedQuote",
+
+        "Source.FieldSchema",
+        "Source.TypeSchema",
+        "Source.ClassSchema",
+        "Source.StatusRequired",
+        "Source.FileExists",
+        "Source.DigestMatches",
+        "Source.EmailFields",
+        "Source.QuoteFound",
+        "Source.QuoteLocated",
+        "Source.QuoteUnverifiable",
+        "Source.QuoteOcr",
+        "Source.GitPinned",
+        "Source.GitPinnedDraft",
+
+        "English.AmericanSpelling",
+        "English.ConsistentSpelling",
+        "English.Contractions",
+        "English.HeadingTitleCase",
+        "English.InterrogativeHeadings",
+
+        "Polish.HeadingSentenceCase",
+        "Polish.InterrogativeHeadings",
+        "Polish.BadWords",
+        "Polish.Substitutions"
+      ]
+    }
+  }
+}

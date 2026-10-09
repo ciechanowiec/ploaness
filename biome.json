@@ -9,5 +9,13 @@
   "files": {
     "ignoreUnknown": false,
     "includes": ["**", "!**/node_modules", "!packages/assets/files"]
-  }
+  },
+  "overrides": [
+    {
+      "includes": [".adocent/adocent.schema.json"],
+      "formatter": {
+        "enabled": false
+      }
+    }
+  ]
 }

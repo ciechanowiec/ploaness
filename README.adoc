@@ -13,22 +13,16 @@
 :icons: font
 :linkcss:
 :sourcedir: {docdir}
-:ploaness-version: 1.7.0
-:pdf-theme: {sourcedir}/.docs/themes/basic.yml
-:pdf-fontsdir: {sourcedir}/.docs/themes/fonts,GEM_FONTS_DIR
 :stylesdir: https://www.ciechanowiec.eu/linux_mantra/
 :stylesheet: adoc-css-style.css
 :!table-caption:
 :!figure-caption:
 :!example-caption:
-ifndef::env-github[:not-env-github:]
 
-ifdef::backend-html5+not-env-github[]
+ifdef::backend-html5[]
+ifndef::env-github[]
 ++++
 <link href="https://www.ciechanowiec.eu/linux_mantra/adoc-docinfo.css" rel="stylesheet">
-<!-- Inlined so the IntelliJ AsciiDoc preview honors these rules: its webview blocks external CSS even in
-     UNSAFE mode, so the remote stylesheet above is dropped in the IDE preview. Mirrors rules already in
-     adoc-css-style.css for the published HTML - enforces [cols="..."] column widths and wraps long content. -->
 <style>
     table.tableblock {
         table-layout: fixed;
@@ -42,6 +36,9 @@ ifdef::backend-html5+not-env-github[]
 </style>
 ++++
 endif::[]
+endif::[]
+
+:ploaness-version: 1.7.0
 
 [[overview]]
 == Overview
@@ -56,13 +53,13 @@ endif::[]
 [[gates]]
 === Gates
 
-. A [[gate,gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding,finding]]_finding_ is one problem a gate reports. Default verification runs 38 gates. Extended verification adds eight more, covering the shell scripts, the infrastructure definitions, the history, the production build, the client bundle, and the browser suite.
+. A [[gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding]]_finding_ is one problem a gate reports. Default verification runs 38 gates. Extended verification adds eight more, covering the shell scripts, the infrastructure definitions, the history, the production build, the client bundle, and the browser suite.
 . A run stops at the first failing gate and names how many gates the run didn't reach. Stopping there is deliberate: a gate is free to leave the tree in a shape the next gate misreads, and a column of passes beneath a failure would describe a state nobody established.
 
 [[managed-files]]
 === Managed Files
 
-_ploaness_ owns the text of certain files in the project, among them the editor settings, the ignore files, and the agent instructions. `ploaness sync` writes those files, and a gate reports any that were edited afterwards. A managed file is owned rather than suggested for the reason a rule is: a check a project can rewrite isn't a check.
+_ploaness_ owns the text of certain files in the project, among them the editor settings, the ignore files, and the agent instructions. `ploaness sync` writes those files, and a gate reports any that were edited afterward. A managed file is owned rather than suggested for the reason a rule is: a check a project can rewrite isn't a check.
 
 [[requirements]]
 == Requirements
@@ -95,8 +92,8 @@ pnpm exec ploaness init && pnpm install
 [[commands]]
 == Commands
 
-Every command runs through the `ploaness` executable:
-
+. Every command runs through the `ploaness` executable:
++
 [cols="3,5"]
 |===
 | Command | Behavior
@@ -126,13 +123,12 @@ Every command runs through the `ploaness` executable:
 | Verifies one commit message. `ploaness commit-message` reads `--range <base>..<head>` or `--all` in place of a file.
 |===
 
-Both verification commands read one flag, `--enforce=false`, which carries the run past a failing xref:#gate[gate] instead of stopping there, so a single run lists xref:#finding[findings] across gates. Failed preconditions still stop the run. The run then exits with status `0`, and that status isn't a pass. Reach for the flag to measure the size of the job, not to declare the job done.
+. Both verification commands read one flag, `--enforce=false`, which carries the run past a failing xref:#gate[gate] instead of stopping there, so a single run lists xref:#finding[findings] across gates. Failed preconditions still stop the run. The run then exits with status `0`, and that status isn't a pass. Reach for the flag to measure the size of the job, not to declare the job done.
 
 [[installed-documentation]]
 == Installed Documentation
 
-`ploaness init` installs the full contract into the project, where the agent working on that project reads the contract:
-
+.Contract files installed by `ploaness init` for the project's coding agent
 [cols="2,5"]
 |===
 | Path | Content
@@ -147,63 +143,29 @@ Both verification commands read one flag, `--enforce=false`, which carries the r
 | A managed block naming `.ploaness/agent-guide.md` and `README-guideline-software-project.adoc`, in the order an agent reads those two documents, followed by whatever the project wants to add.
 |===
 
-== About the Guide
+== About the Document
 
-The source text of this guide is written in the https://asciidoc.org[AsciiDoc^] markup language. The writing guideline, export, and linting setup described below live in the repository that holds the source text, and an exported copy of the guide carries none of them.
-
-=== Writing Guideline
-
-The source text of this guide should follow the link:README-guideline-writing.adoc[Writing Guideline], stored beside the source text in the repository.
-
-[#prerequisites]
-=== Prerequisites
-
-To export and lint the source text of this guide, install the following tools:
-
-. https://asciidoctor.org/#installation[Asciidoctor^],
-. https://docs.asciidoctor.org/pdf-converter/latest/install/[Asciidoctor PDF^],
-. https://pandoc.org/installing.html[Pandoc^],
-. https://www.python.org/downloads/[Python 3^],
-. https://vale.sh/docs/install/[Vale^],
-. https://poppler.freedesktop.org[`pdftotext`^],
-. https://github.com/tesseract-ocr/tesseract[`tesseract`^].
-
-[#export]
-=== Export
-
-. To export the source text of this guide to HTML:
+. The source text of this document is written in the https://asciidoc.org[AsciiDoc^] markup language.
+. The source text of this document must follow the link:README-guideline-writing.adoc[Writing Guideline for Utilitarian Non-Fiction^]. The guideline is stored beside the source text in the same Git repository.
+. The https://github.com/ciechanowiec/adocent[`adocent`^] application lints and converts the source text of this document.
+. To lint the source text of this document, run this command from the directory containing the source text:
 +
 [source,bash,subs="attributes+"]
 ----
-asciidoctor --attribute allow-uri-read {docname}{docfilesuffix}
+adocent lint "{docname}{docfilesuffix}"
 ----
-
-. Export the source text of this guide to PDF with this command:
+. To export this document to HTML, PDF, and DOCX, run this command from the directory containing the source text:
 +
 [source,bash,subs="attributes+"]
 ----
-asciidoctor-pdf --attribute allow-uri-read --require ./.docs/lib/common-style.rb {docname}{docfilesuffix}
+adocent convert "{docname}{docfilesuffix}" --to html --to pdf --to docx
 ----
 
-. Export the source text of this guide to DOCX with this command:
-+
-[source,bash,subs="attributes+"]
-----
-prepared="$(python3 {sourcedir}/.docs/lib/export_prepare.py --docx-compat {docname}{docfilesuffix})" && asciidoctor --backend docbook --attribute allow-uri-read --out-file - "$prepared" | pandoc --from docbook --to docx --reference-doc={sourcedir}/.docs/themes/reference.docx --output {docname}.docx && python3 {sourcedir}/.docs/lib/apply_docx_formatting.py {docname}.docx && rm "$prepared"
-----
-
-=== Linting
-
-Lint the source text of this guide:
-
-[source,bash,subs="attributes+"]
-----
-python3 .docs/lib/adoc_lint.py {docname}{docfilesuffix}
-----
-
-ifdef::backend-html5+not-env-github[]
+ifdef::backend-html5[]
+ifndef::env-github[]
 ++++
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tocbot/4.32.2/tocbot.min.js"></script>
 <script src="https://www.ciechanowiec.eu/linux_mantra/adoc-docinfo-footer.js"></script>
 ++++
+endif::[]
 endif::[]

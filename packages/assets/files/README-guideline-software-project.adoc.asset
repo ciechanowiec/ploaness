@@ -13,21 +13,16 @@
 :icons: font
 :linkcss:
 :sourcedir: {docdir}
-:pdf-theme: {sourcedir}/.docs/themes/basic.yml
-:pdf-fontsdir: {sourcedir}/.docs/themes/fonts,GEM_FONTS_DIR
 :stylesdir: https://www.ciechanowiec.eu/linux_mantra/
 :stylesheet: adoc-css-style.css
 :!table-caption:
 :!figure-caption:
 :!example-caption:
-ifndef::env-github[:not-env-github:]
 
-ifdef::backend-html5+not-env-github[]
+ifdef::backend-html5[]
+ifndef::env-github[]
 ++++
 <link href="https://www.ciechanowiec.eu/linux_mantra/adoc-docinfo.css" rel="stylesheet">
-<!-- Inlined so the IntelliJ AsciiDoc preview honors these rules: its webview blocks external CSS even in
-     UNSAFE mode, so the remote stylesheet above is dropped in the IDE preview. Mirrors rules already in
-     adoc-css-style.css for the published HTML - enforces [cols="..."] column widths and wraps long content. -->
 <style>
     table.tableblock {
         table-layout: fixed;
@@ -41,11 +36,13 @@ ifdef::backend-html5+not-env-github[]
 </style>
 ++++
 endif::[]
+endif::[]
 
-[cols=">.^1h,<.^1"]
+// This metadata table pairs each event with its timestamp and needs no column headers.
+[cols=">.^1,<.^1",adocent-disable-next-line="Structure.TableHeaders"]
 |===
-| Document last modified: | {docdatetime}
-| Document generated: | {localdatetime}
+| Document last modified | {docdatetime}
+| Document generated | {localdatetime}
 |===
 
 This guideline is written primarily for AI agents that work in software project repositories. It applies from the creation of a repository through everyday coding and the remake of an existing repository.
@@ -53,7 +50,7 @@ This guideline is written primarily for AI agents that work in software project 
 [[goal]]
 == Goal
 
-. [[governed-repository,a governed repository]]A _governed repository_ is a software project repository in which AI agents write all code without manual programming and changes merge without human review. Human review therefore catches none of its defects.
+. [[governed-repository]]A _governed repository_ is a software project repository in which AI agents write all code without manual programming and changes merge without human review. Human review therefore catches none of its defects.
 . The xref:#governed-repository[governed repository] aims to create confidence without human code review. It automatically rejects every change that violates a rule.
 . Hard, explicit rules describe the exact state that a xref:#governed-repository[governed repository] must preserve. The governed repository enforces that state automatically.
 . Every rule of this guideline serves the goal. A stronger rule replaces a weaker rule. A missing rule that would serve the goal is a gap. A rule that doesn't serve the goal doesn't belong. An improvement to this guideline is judged against the same goal.
@@ -86,8 +83,8 @@ This section defines the terms the guideline uses and states the qualities requi
 
 . [[check]]A _check_ is an automated verification with exactly two verdicts: pass and fail. Any outcome other than a pass, including the failure of the check itself to run, is a fail. A warning severity doesn't exist in a xref:#governed-repository[governed repository].
 . [[harness]]A _harness_ is the complete set of xref:#check[checks] of a xref:#governed-repository[governed repository].
-. [[verification-command,the verification command]]A _verification command_ is a command of the xref:#governed-repository[governed repository] that covers every xref:#check[check] and runs the checks in a fixed order. It stops at the first check that fails and fails with it, so one run reports one failing check. The verdict of the verification command is the verdict of the whole xref:#harness[harness].
-. [[file-role,a file role]]A _file role_ is a category that a xref:#governed-repository[governed repository] can determine from a file itself and uses to include or exclude the file from xref:#check[checks].
+. [[verification-command]]A _verification command_ is a command of the xref:#governed-repository[governed repository] that covers every xref:#check[check] and runs the checks in a fixed order. It stops at the first check that fails and fails with it, so one run reports one failing check. The verdict of the verification command is the verdict of the whole xref:#harness[harness].
+. [[file-role]]A _file role_ is a category that a xref:#governed-repository[governed repository] can determine from a file itself and uses to include or exclude the file from xref:#check[checks].
 
 [[check-qualities]]
 === Check Qualities
@@ -123,14 +120,16 @@ This section describes the layout of a xref:#governed-repository[governed reposi
 [[instruction-files]]
 === Instruction Files
 
-. [[instruction-file,an instruction file]]An _instruction file_ is a committed file that holds rules of the xref:#governed-repository[governed repository] for AI agents. [[root-instruction-file,the root instruction file]]The root instruction file is `AGENTS.md` at the top of the governed repository and is neutral to the tools used by AI agents.
+. [[instruction-file]]An _instruction file_ is a committed file that holds rules of the xref:#governed-repository[governed repository] for AI agents. [[root-instruction-file]]The root instruction file is `AGENTS.md` at the top of the governed repository and is neutral to the tools used by AI agents.
 . If this guideline and an xref:#instruction-file[instruction file] conflict, this guideline applies. An instruction file adds only details specific to the xref:#governed-repository[governed repository] or one of its directories and doesn't restate this guideline.
 . A tool-specific xref:#instruction-file[instruction file] contains only a reference to `AGENTS.md`. A xref:#check[check] rejects any other content and any instruction reference, command, or path that doesn't resolve.
 
 [[production-imports]]
-=== Production Imports
+=== Production Boundaries
 
-Production code imports neither test code nor development-only dependencies. A xref:#check[check] walks every import of production code and fails on either kind.
+. Production code imports neither test code nor development-only dependencies. A xref:#check[check] walks every import of production code and fails on either kind.
+. Non-production identities have no production permissions. Tests use isolated data and credentials, so a test account can't access production data.
+. Production accepts neither development credentials nor default privileged credentials.
 
 [[generated-files]]
 === Generated Files
@@ -155,7 +154,7 @@ This section describes the state of the source code: its size, its types, its na
 [[size-and-complexity-caps]]
 === Size and Complexity Caps
 
-. Code respects the caps listed below, and each cap binds as an error in a static analyzer. A [[callable,a callable]]_callable_ is a source-code construct that can be invoked, such as a function, method, constructor, or a template fragment invoked by name.
+. Code respects the caps listed below, and each cap binds as an error in a static analyzer. A [[callable]]_callable_ is a source-code construct that can be invoked, such as a function, method, constructor, or a template fragment invoked by name.
 +
 [cols="<3,>1",options="header"]
 |===
@@ -176,7 +175,12 @@ This section describes the state of the source code: its size, its types, its na
 
 . Where the programming language or platform provides a static type checker, the type checker is one of the xref:#check[checks].
 . A xref:#callable[callable] doesn't return null and doesn't accept null where the programming language offers an optional or result type instead. A missing value is expressed as a typed value, such as an empty optional.
+
+[[error-handling]]
+=== Error Handling
+
 . A xref:#callable[callable] that can't do its job fails immediately with an error that says what went wrong. The callable doesn't fall back silently to a default.
+. An error response to an untrusted caller omits internal diagnostics, such as stack traces and private paths. Internal diagnostics retain the cause and a reference that connects the failure to the reported error.
 
 [[explicitness]]
 === Explicitness
@@ -194,7 +198,7 @@ This section describes the state of the source code: its size, its types, its na
 [[dependency-structure]]
 === Dependency Structure
 
-. A [[dependency-unit,a dependency unit]]_dependency unit_ is a named source-code division that can depend on another dependency unit, such as a module or package. The dependencies among the xref:#governed-repository[governed repository's] dependency units form a directed acyclic graph. A xref:#check[check] builds the graph from the code and fails on a cycle, naming the dependency units that lie on the cycle.
+. A [[dependency-unit]]_dependency unit_ is a named source-code division that can depend on another dependency unit, such as a module or package. The dependencies among the xref:#governed-repository[governed repository's] dependency units form a directed acyclic graph. A xref:#check[check] builds the graph from the code and fails on a cycle, naming the dependency units that lie on the cycle.
 . A cycle is broken by moving the shared concept into a xref:#dependency-unit[dependency unit] that both sides depend on, or by inverting one direction behind an abstraction that the depended-on dependency unit declares. A cycle is never declared acceptable.
 
 [[naming]]
@@ -220,7 +224,7 @@ This section describes the state of the source code: its size, its types, its na
 . A _suppression_ is a machine-readable exception that turns one named rule off at the narrowest scope its tool supports. The suppression is a source annotation where the tool supports one. A tool that has no stable source-annotation form may use a declared configuration entry or baseline record instead.
 . Every suppression carries a concise justification in the source annotation, configuration, or baseline record that declares it.
 . A xref:#check[check] fails on a suppression without a justification, on one broader than its tool requires, and on one that no longer suppresses anything.
-. A [[suppression-ceiling,a suppression ceiling]]_suppression ceiling_ is a declared limit on the suppression count of a xref:#governed-repository[governed repository]. A xref:#check[check] fails when the count passes the suppression ceiling. Whoever adds a suppression writes its justification, so the justification never stops one from being added. The suppression ceiling stops one, because it makes the next suppression cost the removal of an existing one.
+. A [[suppression-ceiling]]_suppression ceiling_ is a declared limit on the suppression count of a xref:#governed-repository[governed repository]. A xref:#check[check] fails when the count passes the suppression ceiling. Whoever adds a suppression writes its justification, so the justification never stops one from being added. The suppression ceiling stops one, because it makes the next suppression cost the removal of an existing one.
 . The xref:#suppression-ceiling[suppression ceiling] is expressed against the size of the code rather than as a bare count, so it neither strangles a small xref:#governed-repository[governed repository] nor loosens as a large governed repository grows. A suppression ceiling of zero states that no suppression is permitted.
 . Every run of the xref:#verification-command[verification command] reports the suppression count and the distance left to the xref:#suppression-ceiling[suppression ceiling], so the trend is readable before the suppression ceiling is reached.
 
@@ -230,13 +234,45 @@ This section describes the state of the source code: its size, its types, its na
 . The following characters are banned: the em dash, the en dash, typographic quotation marks, and the single-character ellipsis. The plain equivalents - the hyphen, the straight quotation mark, and three periods - stand in their place.
 . The banned characters are absent from every commit message and from every tracked file the xref:#governed-repository[governed repository] doesn't exclude by xref:#file-role[file role]. A xref:#check[check] scans those files by code point and fails on the first finding.
 
+[[security]]
+== Security
+
+These rules govern access, authentication, audit events, and data handling wherever the software implements those capabilities.
+
+[[authorization]]
+=== Authorization
+
+. Each protected operation verifies the caller's permission for the target resource at a boundary the caller can't bypass.
+. A protected operation runs only when access is explicitly permitted. If permission can't be established, the operation is denied. Operations available without authentication are declared explicitly.
+
+[[authentication]]
+=== Authentication
+
+. Interactive authenticated sessions have a declared lifetime. The component that validates access enforces expiry and logout, so a saved session credential can't restore a terminated session.
+. Account disablement, permission removal, and credential revocation take effect within declared time limits. Existing sessions and credentials obey those limits.
+. A declared policy limits repeated authentication failures and specifies recovery conditions. The software enforces that policy.
+. Login and account-recovery failures reveal neither the existence of a private account nor which credential component was correct.
+
+[[audit-events]]
+=== Audit Events
+
+. Software records authentication outcomes, account and permission changes, and privileged operations that it performs. Each event identifies the actor where known, action, target, outcome, and an unambiguous timestamp.
+. Access controls protect audit records against unauthorized reading, alteration, and deletion.
+
+[[input-and-stored-data]]
+=== Input and Stored Data
+
+. Software validates untrusted input against the types, sizes, ranges, and domain constraints required by the operation. For example, an order quantity that must be positive rejects zero and negative values.
+. Every supported write path preserves the domain's rules for identity, uniqueness, relationships, and required values. Storage constraints enforce those rules where the storage system supports them.
+. Commands and expressions receive untrusted values as data rather than executable text.
+
 [[dependencies]]
 == Dependencies
 
 . This section governs the licenses and vulnerabilities of third-party packages used by the xref:#governed-repository[governed repository] and the freshness of dependency, plugin, and parent versions.
-. [[declared-coordinate,a declared coordinate]]A _declared coordinate_ is the identity and version of a dependency, plugin, or parent declared in a manifest of the xref:#governed-repository[governed repository] or an inherited manifest.
-. [[versioned-input,a versioned input]]A _versioned input_ is a xref:#declared-coordinate[declared coordinate] or a container image the xref:#harness[harness] owns and declares with a version tag and immutable digest.
-. [[resolved-set,the resolved set]]The _resolved set_ contains the packages identified by xref:#declared-coordinate[declared coordinates] and all packages they pull in.
+. [[declared-coordinate]]A _declared coordinate_ is the identity and version of a dependency, plugin, or parent declared in a manifest of the xref:#governed-repository[governed repository] or an inherited manifest.
+. [[versioned-input]]A _versioned input_ is a xref:#declared-coordinate[declared coordinate] or a container image the xref:#harness[harness] owns and declares with a version tag and immutable digest.
+. [[resolved-set]]The _resolved set_ contains the packages identified by xref:#declared-coordinate[declared coordinates] and all packages they pull in.
 
 [[dependency-licenses]]
 === Licenses
@@ -250,14 +286,14 @@ This section describes the state of the source code: its size, its types, its na
 . A xref:#check[check] reads every package in the xref:#resolved-set[resolved set] against a public vulnerability database. It fails on any known vulnerability at or above the severity the xref:#governed-repository[governed repository] declares.
 . The xref:#check[check] covers packages used by the product, tests, and build. Build tools run with build privileges, so their vulnerabilities are reachable by anyone who can change the xref:#governed-repository[governed repository].
 . A finding is resolved by upgrading the package. If no upgrade exists, a declared vulnerability allowlist records the advisory. Each entry explains why the xref:#governed-repository[governed repository] can't reach the vulnerability and records its addition date.
-. Every vulnerability-allowlist entry suppresses a finding. An entry that suppresses none fails the xref:#check[check].
+. Every entry in the vulnerability allowlist suppresses a finding. An entry that suppresses none fails the xref:#check[check].
 . The vulnerability xref:#check[check] reads a public database, so its verdict can change while the xref:#governed-repository[governed repository] stays unchanged. The section xref:#check-qualities[] excludes the vulnerability check from determinism. An unreachable database fails the vulnerability check.
 
 [[dependency-freshness]]
 === Freshness
 
-. The freshness xref:#check[check] compares every xref:#versioned-input[versioned input] with its latest stable version. Its [[update-report,an update report]]_update report_ lists every newer stable version and names the declaring manifest for a xref:#declared-coordinate[declared coordinate] or the declaring property and replacement digest for a container image. Every build produces the report. A newer stable version doesn't fail the build on its own.
-. The [[freshness-bound,the freshness bound]]_freshness bound_ applies only to xref:#declared-coordinate[declared coordinates] and is fixed at a gap of two major versions. A xref:#governed-repository[governed repository] doesn't configure it. A declared coordinate becomes noncompliant when its latest stable version is at least two major versions ahead. For example, version 71 fails when version 73 is available.
+. The freshness xref:#check[check] compares every xref:#versioned-input[versioned input] with its latest stable version. Its [[update-report]]_update report_ lists every newer stable version and names the declaring manifest for a xref:#declared-coordinate[declared coordinate] or the declaring property and replacement digest for a container image. Every build produces the report. A newer stable version doesn't fail the build on its own.
+. The [[freshness-bound]]_freshness bound_ applies only to xref:#declared-coordinate[declared coordinates] and is fixed at a gap of two major versions. A xref:#governed-repository[governed repository] doesn't configure it. A declared coordinate becomes noncompliant when its latest stable version is at least two major versions ahead. For example, version 71 fails when version 73 is available.
 . For a xref:#declared-coordinate[declared coordinate], the freshness xref:#check[check] uses the numeric major version. For a version beginning with a four-digit year from 2000 through 2099, it treats the year as the major version. The check excludes version schemes with neither a numeric major nor a leading year and doesn't inspect transitive packages in the xref:#resolved-set[resolved set].
 . Because the freshness xref:#check[check] reads public package and image registries, the section xref:#check-qualities[] excludes it from determinism. A gap below the xref:#freshness-bound[freshness bound] passes, and a gap that reaches it fails. An unreachable registry also fails the check.
 
@@ -269,12 +305,18 @@ This section describes the state of the test suite and what it proves.
 [[real-components-only]]
 === Real Components Only
 
-. [[substitute-criterion,the substitute criterion]]A [[real-component,a real component]]_real component_ is a component that implements the behavior of the protocol it stands for. A [[substitute,a substitute]]_substitute_ is a component whose answers the test declares. The component's name decides nothing: an in-memory library component that implements a protocol is real, and a class inside the test tree whose answers a test sets is a substitute.
+. [[substitute-criterion]]A [[real-component]]_real component_ is a component that implements the behavior of the protocol it stands for. A [[substitute]]_substitute_ is a component whose answers the test declares. The component's name decides nothing: an in-memory library component that implements a protocol is real, and a class inside the test tree whose answers a test sets is a substitute.
 . A test uses no xref:#substitute[substitutes]. It runs against xref:#real-component[real components]: a real database, a real server on a local port, or a real temporary file.
 . A service that exists only outside the machine is exercised through a local component that implements its protocol. The local component supplies the protocol's behavior on the machine that runs the test.
-. A xref:#check[check] fails on the construction of a xref:#substitute[substitute] in test code. The check names the libraries and framework declarations of the programming language or platform that install a substitute in place of a xref:#real-component[real component]. The check binds xref:#substitute-criterion[] and not a name, so a local component stays available however its library is named.
-. A test-only imitation of a framework's web layer is a xref:#substitute[substitute] under xref:#substitute-criterion[]. It skips the server, the serialization, the filter ordering, and the error handling a real request passes through, so a test written against it proves the handler ran rather than that the endpoint works. The framework's own request pipeline isn't an imitation. It's the code a live request runs, so an endpoint driven through it in the process under test is driven against a xref:#real-component[real component]. Driving that pipeline in process reaches neither the socket nor whatever the server wraps around it. At least one test therefore starts the real application on a local port, because a suite that never starts it can pass an application that doesn't start.
+. A xref:#check[check] fails on the construction of a xref:#substitute[substitute] in test code. The check names the libraries and framework declarations of the programming language or platform that install a substitute in place of a xref:#real-component[real component]. The check binds xref:#substitute-criterion[the substitute criterion] and not a name, so a local component stays available however its library is named.
+. A test-only imitation of a framework's web layer is a xref:#substitute[substitute] under xref:#substitute-criterion[the substitute criterion]. It skips the server, the serialization, the filter ordering, and the error handling a real request passes through, so a test written against it proves the handler ran rather than that the endpoint works. The framework's own request pipeline isn't an imitation. It's the code a live request runs, so an endpoint driven through it in the process under test is driven against a xref:#real-component[real component]. Driving that pipeline in process reaches neither the socket nor whatever the server wraps around it. At least one test therefore starts the real application on a local port, because a suite that never starts it can pass an application that doesn't start.
 . Test code passes the same xref:#check[static-analysis checks] as production code.
+
+[[security-tests]]
+=== Security Tests
+
+. Tests exercise permitted and denied access to protected operations. They assert that denied operations disclose no protected data and make no unauthorized state changes. For example, the owner can read a private document, while a caller without permission can't read or change it.
+. Tests cover the applicable rules of the section xref:#security[] through xref:#real-component[real components]. They exercise security failures, session termination, credential expiry, revoked access, rejected input, and recorded audit events for the features the software implements.
 
 [[coverage]]
 === Coverage
@@ -286,7 +328,7 @@ This section describes the state of the test suite and what it proves.
 === Determinism
 
 . A test produces the same verdict on every run.
-. A test reaches no network beyond the machine it runs on. Every wait a test performs is bounded by a timeout sized so that its expiry signals a defect of the code, not the speed of the machine.
+. A test reaches no network beyond the machine it runs on. Every wait in a test is bounded by a timeout sized so that its expiry signals a defect of the code, not the speed of the machine.
 . A test reaches its verdict whatever order the test suite runs in.
 
 [[test-integrity]]
@@ -329,60 +371,27 @@ Masking them in the header parser closes the leak for every consumer.
 
 == About the Document
 
-The source text of this document is written in the https://asciidoc.org[AsciiDoc^] markup language. The [[source-repository,the source repository]]_source repository_ is the repository that holds the source text, this guideline, and the export and linting support files described below. An exported copy of the document carries none of them.
-
-=== Guideline
-
-The source text should follow the link:README-guideline-writing.adoc[Writing Guideline], stored beside it in xref:#source-repository[].
-
-[#export]
-=== Prerequisites
-
-To export and lint the source text, install the following tools:
-
-. https://asciidoctor.org/#installation[Asciidoctor^],
-. https://docs.asciidoctor.org/pdf-converter/latest/install/[Asciidoctor PDF^],
-. https://pandoc.org/installing.html[Pandoc^],
-. https://www.python.org/downloads/[Python 3^],
-. https://vale.sh/docs/install/[Vale^],
-. https://poppler.freedesktop.org[`pdftotext`^],
-. https://github.com/tesseract-ocr/tesseract[`tesseract`^].
-
-=== Export
-
-. To export the source text to HTML:
+. The source text of this document is written in the https://asciidoc.org[AsciiDoc^] markup language.
+. The source text of this document must follow the link:README-guideline-writing.adoc[Writing Guideline for Utilitarian Non-Fiction^]. The guideline is stored beside the source text in the same Git repository.
+. The https://github.com/ciechanowiec/adocent[`adocent`^] application lints and converts the source text of this document.
+. To lint the source text of this document, run this command from the directory containing the source text:
 +
 [source,bash,subs="attributes+"]
 ----
-asciidoctor --attribute allow-uri-read {docname}{docfilesuffix}
+adocent lint "{docname}{docfilesuffix}"
 ----
-
-. Export the source text to PDF with this command:
+. To export this document to HTML, PDF, and DOCX, run this command from the directory containing the source text:
 +
 [source,bash,subs="attributes+"]
 ----
-asciidoctor-pdf --attribute allow-uri-read --require ./.docs/lib/common-style.rb {docname}{docfilesuffix}
+adocent convert "{docname}{docfilesuffix}" --to html --to pdf --to docx
 ----
 
-. Export the source text to DOCX with this command:
-+
-[source,bash,subs="attributes+"]
-----
-prepared="$(python3 {sourcedir}/.docs/lib/export_prepare.py --docx-compat {docname}{docfilesuffix})" && asciidoctor --backend docbook --attribute allow-uri-read --out-file - "$prepared" | pandoc --from docbook --to docx --reference-doc={sourcedir}/.docs/themes/reference.docx --output {docname}.docx && python3 {sourcedir}/.docs/lib/apply_docx_formatting.py {docname}.docx && rm "$prepared"
-----
-
-=== Linting
-
-Lint the source text:
-
-[source,bash,subs="attributes+"]
-----
-python3 .docs/lib/adoc_lint.py {docname}{docfilesuffix}
-----
-
-ifdef::backend-html5+not-env-github[]
+ifdef::backend-html5[]
+ifndef::env-github[]
 ++++
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tocbot/4.32.2/tocbot.min.js"></script>
 <script src="https://www.ciechanowiec.eu/linux_mantra/adoc-docinfo-footer.js"></script>
 ++++
+endif::[]
 endif::[]

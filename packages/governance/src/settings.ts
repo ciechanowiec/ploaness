@@ -19,7 +19,7 @@ import type { VulnerabilityException } from './vulnerability-policy.js'
 
 /**
  * How a declared exclusion's pattern is matched against a path. The settings that carry each kind know
- * it at the point they are read, which is the only place the answer is not a guess: `^\.vale/styles/`
+ * it at the point they are read, which is the only place the answer is not a guess: `^\.fixtures/typography/`
  * and `src/app/**` are both plausible-looking strings and neither matches under the other's rules.
  */
 export type ExclusionKind = 'regex' | 'glob' | 'route'
@@ -477,7 +477,7 @@ interface DeclaredLists {
 }
 
 // The kind travels with the setting because this is the only place the answer is not a guess: by the
-// time a rule holds the entry, `^\.vale/styles/` and `src/app/**` are two strings that look alike.
+// time a rule holds the entry, `^\.fixtures/typography/` and `src/app/**` are two strings that look alike.
 const readDeclaredLists = (raw: Record<string, unknown>): DeclaredLists => ({
   typography: asDeclaredExclusions(raw['typographyExclusions'], 'typographyExclusions', 'regex'),
   javascript: asDeclaredExclusions(raw['javascriptAllowlist'], 'javascriptAllowlist', 'regex'),

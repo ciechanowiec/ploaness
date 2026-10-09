@@ -43,12 +43,6 @@
       "scripts",
       "it"
     ],
-    "typographyExclusions": [
-      {
-        "pattern": "^\\.vale/styles/",
-        "reason": "Vale detector definitions, whose content is the character they detect"
-      }
-    ],
     "javascriptAllowlist": [
       {
         "pattern": "^eslint\\.config\\.mjs$",
