@@ -71,7 +71,7 @@ const reexportConfigBlock: FlatConfigBlock = {
   rules: { 'unicorn/prefer-export-from': 'off' },
 }
 
-export default compose(
+const config: ReturnType<typeof compose> = compose(
   // ── What is never linted ────────────────────────────────────────────────────────────────────
   {
     ignores: [
@@ -393,3 +393,5 @@ export default compose(
   reexportConfigBlock,
   prettierLast,
 )
+
+export default config

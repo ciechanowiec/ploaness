@@ -276,6 +276,9 @@ and metadata routes; it does not cover their whole directories. Keep authored bu
 measured modules and exercise framework entry points through the real request pipeline.
 Authored `.tsx` and `.jsx` files must contain JSX syntax. Rename a logic-only `.tsx` module to `.ts`
 so it retains its testing obligation. Generated-file roles remain excluded from the native filename rule.
+Payload's default admin `page.tsx` and `not-found.tsx` scaffolds may retain their upstream filenames
+when they delegate rendering without JSX. Their other native checks still apply; neighboring modules
+and members without Payload retain the ordinary filename rule.
 Oxlint reports a filename violation at file scope; a line suppression cannot hide it. Rename the file.
 
 The network guard confines runtime tests to the local machine; subprocesses,

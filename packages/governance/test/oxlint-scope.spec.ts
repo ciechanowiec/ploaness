@@ -60,6 +60,37 @@ describe('native source coverage', () => {
     expect(oxlintGroups([], true)).toEqual([])
     expect(oxlintGroups(['src/Card.tsx'], true).map((group) => group.rules.length)).toEqual([34])
   })
+
+  it('keeps every native check on Payload admin scaffolds while accepting their upstream filenames', () => {
+    const scaffold: string = 'src/app/(payload)/admin/[[...segments]]/page.tsx'
+    const neighbor: string = 'src/app/(payload)/admin/[[...segments]]/helpers.tsx'
+    const groups: readonly OxlintGroup[] = oxlintGroups([scaffold, neighbor, 'src/main.ts'], true, true)
+    expect(groups.map((group) => group.files)).toEqual([['src/main.ts'], [neighbor], [scaffold]])
+    expect(groups.map((group) => group.rules.length)).toEqual([3, 34, 34])
+    expect(groups.map((group) => oxlintConfig(group.rules)['rules'])).toEqual([
+      expect.objectContaining({
+        'react/jsx-filename-extension': ['error', expect.objectContaining({ allow: 'as-needed' })],
+      }),
+      expect.objectContaining({
+        'react/jsx-filename-extension': ['error', expect.objectContaining({ allow: 'as-needed' })],
+      }),
+      expect.objectContaining({
+        'react/jsx-filename-extension': ['error', expect.objectContaining({ allow: 'always' })],
+        'eslint/no-promise-executor-return': ['error', { allowVoid: false }],
+        'jsx-a11y/alt-text': 'error',
+      }),
+    ])
+  })
+
+  it.each([true, false])('does not grant the scaffold exception to a non-Payload member with runtime %s', (runtime) => {
+    const scaffold: string = 'src/app/(payload)/admin/[[...segments]]/not-found.tsx'
+    const groups: readonly OxlintGroup[] = oxlintGroups([scaffold], runtime)
+    expect(groups).toHaveLength(1)
+    expect(oxlintConfig(groups[0]?.rules ?? [])['rules']).toHaveProperty('react/jsx-filename-extension', [
+      'error',
+      { allow: 'as-needed', extensions: ['.tsx', '.jsx'], ignoreFilesWithoutCode: false },
+    ])
+  })
 })
 
 describe('explicit native ownership', () => {

@@ -193,7 +193,16 @@ const NO_LITERAL_ASSERTIONS: readonly RestrictedSyntax[] = [
 export const compose: typeof defineConfig = defineConfig
 
 /** Formatting is Biome's job; this disables every conflicting stylistic rule and must stay last. */
-export const prettierLast: FlatConfigBlock = prettier
+export const prettierLast: FlatConfigBlock = {
+  ...prettier,
+  rules: {
+    ...prettier.rules,
+    // Biome owns layout, including JSDoc indentation and leading blank lines. These Unicorn rules
+    // are newer than the formatter compatibility preset and must not impose a second format.
+    'unicorn/no-asterisk-prefix-in-documentation-comments': 'off',
+    'unicorn/no-leading-empty-lines': 'off',
+  },
+}
 
 // A warning severity does not exist in a governed repository: a check has two verdicts, and a finding
 // that prints and exits 0 is neither. Several presets ship rules at `warn` anyway - 31 of jsdoc's, 6

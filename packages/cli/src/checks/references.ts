@@ -18,7 +18,7 @@ import {
   requiredBiomeFiles,
   type SkillViolation,
 } from '@ploaness/governance'
-import { type Context, type Member, type Repository as Repo, shippedDirectory, workingTreeFiles } from '../context.js'
+import { type Context, type Member, type Repository, shippedDirectory, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 const declaredScripts = (context: Context): Record<string, unknown> =>
@@ -31,11 +31,11 @@ const biomeFilesJson = (context: Context): string => JSON.stringify(requiredBiom
 // root doc names files that live inside a member, so resolving either against a single package.json
 // reports rot where there is none. What the union still catches is the only thing this gate is for: a
 // name that resolves NOWHERE.
-const ownerOf = (repository: Repo, directory: string): Member | undefined =>
+const ownerOf = (repository: Repository, directory: string): Member | undefined =>
   repository.members.find((candidate: Member): boolean => candidate.path === directory)
 
 const namesFrom = (
-  repository: Repo,
+  repository: Repository,
   owner: Member | undefined,
   read: (context: Context) => readonly string[],
 ): ReadonlySet<string> => new Set([...read(repository), ...(owner === undefined ? [] : read(owner))])
@@ -50,7 +50,10 @@ const dependencyNames = (context: Context): readonly string[] => Object.keys(dec
  * @param reservedWords words that look like a script but name something else, such as a gate. The
  *   registry supplies them, so this module does not have to import it back and create a cycle.
  */
-export const documentation = (repository: Repo, reservedWords: ReadonlySet<string> = new Set<string>()): GateResult => {
+export const documentation = (
+  repository: Repository,
+  reservedWords: ReadonlySet<string> = new Set<string>(),
+): GateResult => {
   const existsAt = (relativePath: string): boolean => existsSync(path.join(repository.root, relativePath))
   const documents: readonly DocumentLocation[] = findAgentDocuments(
     repository.members.map((member: Member): string => member.path),

@@ -158,10 +158,10 @@ const checkVersionEscapes = (
   expected: Readonly<Record<string, string>>,
 ): readonly WiringViolation[] =>
   escapeEntries(packageJson)
-    .filter(([, entry]: readonly string[]): boolean => Object.hasOwn(expected, packageNameOf(entry ?? '')))
+    .filter(([, entry = '']: readonly string[]): boolean => Object.hasOwn(expected, packageNameOf(entry)))
     .map(
-      ([key, entry]: readonly string[]): WiringViolation => ({
-        location: `package.json ${key ?? ''}.${entry ?? ''}`,
+      ([key = '', entry = '']: readonly string[]): WiringViolation => ({
+        location: `package.json ${key}.${entry}`,
         reason:
           'changes what a version ploaness pins installs; the pin decides what the gates run ' +
           'against, and a project cannot answer for a version it did not choose',

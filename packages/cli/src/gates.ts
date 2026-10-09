@@ -24,7 +24,7 @@ import { build, endToEnd, tests } from './checks/tests.js'
 import { architecture, biome, biomeSchema, css, eslint, knip, typeCoverage, types } from './checks/toolchain.js'
 import { treeSnapshot, treeVerify } from './checks/tree.js'
 import { wiring } from './checks/wiring.js'
-import type { Member, Repository as Repo } from './context.js'
+import type { Member, Repository } from './context.js'
 import type { GateResult } from './exec.js'
 
 /** What every gate declares, whatever it judges. */
@@ -56,7 +56,7 @@ interface GateMeta {
 export type Gate =
   | (GateMeta & {
       readonly scope: 'repository'
-      readonly run: (repo: Repo) => GateResult | Promise<GateResult>
+      readonly run: (repository: Repository) => GateResult | Promise<GateResult>
     })
   | (GateMeta & {
       readonly scope: 'package' | 'payload'
@@ -272,7 +272,7 @@ const DEFAULT_GATES: readonly Gate[] = [
     // The gate identifiers are supplied as reserved words: documenting a gate must not be read as a
     // reference to a script that no longer exists, since the two share a vocabulary. ALL_GATES is read
     // when the gate runs, by which point this module has finished initialising.
-    run: (repository: Repo): GateResult =>
+    run: (repository: Repository): GateResult =>
       documentation(repository, new Set(ALL_GATES.map((gate: Gate): string => gate.id))),
   },
   {
@@ -395,7 +395,7 @@ const describe = (gate: Gate): GateDescriptor => ({
  * @param isExtended whether extended verification's gates are included.
  * @returns one planned invocation per step, in run order.
  */
-export const planFor = (repository: Repo, isExtended: boolean): readonly PlannedGate[] => {
+export const planFor = (repository: Repository, isExtended: boolean): readonly PlannedGate[] => {
   const members: readonly MemberDescriptor[] = repository.members.map(
     (member: Member): MemberDescriptor => ({ path: member.path, isPayload: member.isPayload }),
   )

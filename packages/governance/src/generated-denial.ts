@@ -1,10 +1,13 @@
 // Derive agent-runtime write denials from the generated-file roles the harness already governs.
 import { asRecord, isArray, readKey } from './json-shapes.js'
 
+/** The default admin mount whose import map and page scaffolds Payload names. */
+export const PAYLOAD_ADMIN_DIRECTORY: string = 'src/app/(payload)/admin'
+
 /** The artefacts Payload derives from the configuration. Declared once and consumed by every rule. */
 export const GENERATED_ARTEFACTS: readonly string[] = [
   'src/payload-types.ts',
-  'src/app/(payload)/admin/importMap.js',
+  `${PAYLOAD_ADMIN_DIRECTORY}/importMap.js`,
   'src/payload-generated-schema.ts',
 ]
 
@@ -22,8 +25,8 @@ export const GENERATED_ARTEFACTS: readonly string[] = [
 export const requiredDenyRules = (artefacts: readonly string[]): readonly string[] =>
   artefacts.flatMap((artefact: string): readonly string[] => [`Edit(${artefact})`, `Write(${artefact})`])
 
-const stringsAt = (settings: unknown, section: string, key: string): readonly string[] => {
-  const inner: unknown = readKey(readKey(settings, section), key)
+const permissionStrings = (settings: unknown, key: string): readonly string[] => {
+  const inner: unknown = readKey(readKey(settings, 'permissions'), key)
   return isArray(inner) ? inner.filter((entry: unknown): entry is string => typeof entry === 'string') : []
 }
 
@@ -36,7 +39,7 @@ const stringsAt = (settings: unknown, section: string, key: string): readonly st
 export const applyDenyRules = (existing: unknown, artefacts: readonly string[]): Record<string, unknown> => {
   const base: Record<string, unknown> = { ...asRecord(existing) }
   const permissions: Record<string, unknown> = { ...asRecord(base['permissions']) }
-  const deny: readonly string[] = stringsAt(base, 'permissions', 'deny')
+  const deny: readonly string[] = permissionStrings(base, 'deny')
   const merged: readonly string[] = [
     ...deny,
     ...requiredDenyRules(artefacts).filter((rule: string): boolean => !deny.includes(rule)),
@@ -57,13 +60,13 @@ export const findDenialViolations = (
   artefacts: readonly string[],
 ): readonly string[] => {
   const required: readonly string[] = requiredDenyRules(artefacts)
-  const deny: readonly string[] = stringsAt(settings, 'permissions', 'deny')
+  const deny: readonly string[] = permissionStrings(settings, 'deny')
   const missing: readonly string[] = required
     .filter((rule: string): boolean => !deny.includes(rule))
     .map((rule: string): string => `no write denial for ${rule}; run \`ploaness sync\` to add it`)
   // A local override that re-permits a denied artefact undoes the denial on the one machine where it
   // matters most, and it is untracked, so nothing else would ever report it.
-  const allowed: readonly string[] = stringsAt(localSettings, 'permissions', 'allow')
+  const allowed: readonly string[] = permissionStrings(localSettings, 'allow')
   const rePermitted: readonly string[] = allowed
     .filter((rule: string): boolean => required.includes(rule))
     .map(

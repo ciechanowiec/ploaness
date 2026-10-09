@@ -32,7 +32,11 @@ export const invoke = async (
   const completion: Promise<number> = new Promise<number>((resolve, reject): void => {
     child.once('error', reject)
     child.once('close', (code: number | null): void => {
-      resolve(code ?? 1)
+      if (code === null) {
+        reject(new Error('The fixture command terminated without an exit code'))
+      } else {
+        resolve(code)
+      }
     })
   })
   const [code, stdout, stderr]: readonly [number, string, string] = await Promise.all([

@@ -5,7 +5,7 @@
 // requires the allowlist to exist and says nothing about what is on it: which packages a project trusts
 // with an install script is a decision for the project to record, not one the harness can make for it.
 import { declaresInstallScriptAllowlist, findReleaseAgeViolations } from '@ploaness/governance'
-import type { Repository as Repo } from '../context.js'
+import type { Repository } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 const WORKSPACE_FILE: string = 'pnpm-workspace.yaml'
@@ -15,8 +15,8 @@ const WORKSPACE_FILE: string = 'pnpm-workspace.yaml'
 // in - and pnpm honours `pnpm.onlyBuiltDependencies` only at the root too, so the finding advised
 // declaring the key somewhere it would have no effect.
 /** The repository must name the dependencies permitted to run an install script. */
-export const installScripts = (repo: Repo): GateResult =>
-  declaresInstallScriptAllowlist(repo.workspaceFile, repo.packageJson)
+export const installScripts = (repository: Repository): GateResult =>
+  declaresInstallScriptAllowlist(repository.workspaceFile, repository.packageJson)
     ? passed('the dependencies permitted to run an install script are declared')
     : failed('no install-script allowlist is declared', [
         `declare onlyBuiltDependencies in ${WORKSPACE_FILE}, or under the "pnpm" key of package.json`,
@@ -26,8 +26,8 @@ export const installScripts = (repo: Repo): GateResult =>
 // The same file, read the same way, for the other half of install policy: what pnpm may install at all.
 // The decisions are in `install-policy.ts`; this hands over the file and names the gate.
 /** The repository must keep pnpm's release-age floor strict, and may exempt only the harness from it. */
-export const releaseAge = (repo: Repo): GateResult => {
-  const findings: readonly string[] = findReleaseAgeViolations(repo.workspaceFile)
+export const releaseAge = (repository: Repository): GateResult => {
+  const findings: readonly string[] = findReleaseAgeViolations(repository.workspaceFile)
   return findings.length > 0
     ? failed(`${String(findings.length)} release-age setting(s) weaken the floor pnpm enforces`, findings)
     : passed('the release-age floor is strict, and only the harness is excluded from it')

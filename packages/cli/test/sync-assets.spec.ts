@@ -27,15 +27,15 @@ const withWorkspace = (use: (workspace: Workspace) => void): void => {
   }
 }
 
-const write = (file: string, content: string): void => {
+const writeManaged = (file: string): void => {
   mkdirSync(path.dirname(file), { recursive: true })
-  writeFileSync(file, content)
+  writeFileSync(file, 'managed\n')
 }
 
 describe('hasCopiedChange', () => {
   it('writes an absent target, creating its directories', () => {
     withWorkspace(({ source, target }: Workspace): void => {
-      write(source, 'managed\n')
+      writeManaged(source)
       expect(hasCopiedChange(source, target)).toBe(true)
       expect(readFileSync(target, 'utf8')).toBe('managed\n')
     })
@@ -43,7 +43,7 @@ describe('hasCopiedChange', () => {
 
   it('rewrites a target whose bytes differ', () => {
     withWorkspace(({ source, target }: Workspace): void => {
-      write(source, 'managed\n')
+      writeManaged(source)
       hasCopiedChange(source, target)
       writeFileSync(target, 'drifted\n')
       expect(hasCopiedChange(source, target)).toBe(true)
@@ -53,7 +53,7 @@ describe('hasCopiedChange', () => {
 
   it('reports no change and leaves the file untouched when the bytes already match', () => {
     withWorkspace(({ source, target }: Workspace): void => {
-      write(source, 'managed\n')
+      writeManaged(source)
       hasCopiedChange(source, target)
       const before: number = statSync(target).mtimeMs
       expect(hasCopiedChange(source, target)).toBe(false)

@@ -53,10 +53,10 @@ const settingAt = async (filePath: string): Promise<unknown> => {
   return isRecord(settings) ? settings[CUSTOM_QUERIES] : undefined
 }
 
-const isRuleOnAt = async (filePath: string, rule: string): Promise<boolean> => {
+const isAsyncQueryRuleOnAt = async (filePath: string): Promise<boolean> => {
   const resolved: Readonly<Record<string, unknown>> = await configAt(filePath)
   const rules: unknown = resolved['rules']
-  return isRecord(rules) && ENABLED.has(severityOf(rules[rule]))
+  return isRecord(rules) && ENABLED.has(severityOf(rules[ASYNC_QUERIES]))
 }
 
 describe('what counts as a Testing Library query', () => {
@@ -68,13 +68,13 @@ describe('what counts as a Testing Library query', () => {
   // The repair had to keep the rules where they were. Scoping them to `.tsx` would have fixed the same
   // false positive by leaving every `.ts` spec unlinted, which is the trade this assertion refuses.
   it('keeps the rules on a plain .ts integration spec, not only on a .tsx component spec', async () => {
-    expect(await isRuleOnAt(INTEGRATION_SPEC, ASYNC_QUERIES)).toBe(true)
-    expect(await isRuleOnAt(COMPONENT_SPEC, ASYNC_QUERIES)).toBe(true)
+    expect(await isAsyncQueryRuleOnAt(INTEGRATION_SPEC)).toBe(true)
+    expect(await isAsyncQueryRuleOnAt(COMPONENT_SPEC)).toBe(true)
   })
 
   // The block is still scoped to the suite: production source carries neither the rules nor the setting.
   it('reaches no production source', async () => {
-    expect(await isRuleOnAt(SOURCE_FILE, ASYNC_QUERIES)).toBe(false)
+    expect(await isAsyncQueryRuleOnAt(SOURCE_FILE)).toBe(false)
     expect(await settingAt(SOURCE_FILE)).toBeUndefined()
   })
 })

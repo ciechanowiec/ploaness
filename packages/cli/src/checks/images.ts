@@ -45,7 +45,7 @@ const fetchJson = async (url: string): Promise<unknown> => {
   return await response.json()
 }
 
-const repoUrl = (reference: ContainerReference): string =>
+const repositoryUrl = (reference: ContainerReference): string =>
   `${DOCKER_HUB}/v2/namespaces/${reference.namespace}/repositories/${reference.repository}`
 
 const tagNames = (body: unknown): readonly string[] => {
@@ -67,14 +67,14 @@ const tagsFrom = async (
   soFar: readonly string[],
 ): Promise<readonly string[]> => {
   const names: readonly string[] = tagNames(
-    await fetchJson(`${repoUrl(reference)}/tags?page_size=${String(PAGE_SIZE)}&page=${String(page)}`),
+    await fetchJson(`${repositoryUrl(reference)}/tags?page_size=${String(PAGE_SIZE)}&page=${String(page)}`),
   )
   const collected: readonly string[] = [...soFar, ...names]
   return names.length < PAGE_SIZE || page >= MAX_PAGES ? collected : await tagsFrom(reference, page + 1, collected)
 }
 
 const digestOf = async (reference: ContainerReference, tag: string): Promise<string> => {
-  const answered: unknown = await fetchJson(`${repoUrl(reference)}/tags/${tag}`)
+  const answered: unknown = await fetchJson(`${repositoryUrl(reference)}/tags/${tag}`)
   const digest: unknown = asRecord(answered)['digest']
   if (typeof digest !== 'string') {
     throw new TypeError(`Docker Hub returned no digest for ${reference.name}:${tag}`)

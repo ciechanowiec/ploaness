@@ -22,7 +22,7 @@ const PRIVILEGED_FIELD_NAMES: ReadonlySet<string> = new Set([
 
 const REQUIRED_OPERATIONS: readonly string[] = ['create', 'update']
 
-const quotedValue = (value: string | undefined): string | undefined => /^\s*['"`]([^'"`]+)['"`]/.exec(value ?? '')?.[1]
+const quotedValue = (value: string = ''): string | undefined => /^\s*['"`]([^'"`]+)['"`]/.exec(value)?.[1]
 
 const isAuthCollection = (config: FoundPayloadConfig): boolean => {
   if (config.kind.kind !== 'collection') {

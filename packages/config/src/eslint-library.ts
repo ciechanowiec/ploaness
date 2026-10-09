@@ -40,7 +40,7 @@ const reexportConfigBlock: FlatConfigBlock = {
   rules: { 'unicorn/prefer-export-from': 'off' },
 }
 
-export default compose(
+const config: ReturnType<typeof compose> = compose(
   { ignores: [...IGNORED] },
   ...baseLayers,
   typeAwareParsing({ projectService: true }),
@@ -78,3 +78,5 @@ export default compose(
   reexportConfigBlock,
   prettierLast,
 )
+
+export default config

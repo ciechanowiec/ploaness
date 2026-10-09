@@ -121,7 +121,11 @@ const analyzeGroups = (member: Member, groups: readonly OxlintGroup[]): GateResu
 /** Native core checks for every member, with accessibility only in the existing application scope. */
 export const oxlint = (member: Member): GateResult => {
   const inventory: readonly string[] = workingTreeFiles(member.root)
-  const groups: readonly OxlintGroup[] = oxlintGroups(eligibleFiles(member, inventory), hasOwnRuntime(member))
+  const groups: readonly OxlintGroup[] = oxlintGroups(
+    eligibleFiles(member, inventory),
+    hasOwnRuntime(member),
+    member.isPayload,
+  )
   const problems: readonly string[] = [
     ...versionProblems(),
     ...inventory

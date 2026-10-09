@@ -140,31 +140,30 @@ const severityOf = (setting: unknown): unknown => (Array.isArray(setting) ? sett
 const severitiesAt = async (
   config: readonly Linter.Config[],
   paths: readonly string[],
-  rule: string,
 ): Promise<Readonly<Record<string, unknown>>> =>
   Object.fromEntries(
     await Promise.all(
       paths.map(async (filePath: string): Promise<readonly [string, unknown]> => {
         const rules: Readonly<Record<string, unknown>> = await resolveRules(config, filePath)
-        return [filePath, severityOf(rules[rule])]
+        return [filePath, severityOf(rules[INTEGRITY_RULE])]
       }),
     ),
   )
 
-const atEveryPath = (paths: readonly string[], value: unknown): Readonly<Record<string, unknown>> =>
-  Object.fromEntries(paths.map((filePath: string): readonly [string, unknown] => [filePath, value]))
+const errorsAtEveryPath = (paths: readonly string[]): Readonly<Record<string, unknown>> =>
+  Object.fromEntries(paths.map((filePath: string): readonly [string, unknown] => [filePath, ERROR]))
 
 describe('every suite the runner collects', () => {
   it('is held to the test-integrity rules by the application configuration', async () => {
     const paths: readonly string[] = collectedPaths(SHIPPED_SUITES)
 
-    expect(await severitiesAt(payloadConfig, paths, INTEGRITY_RULE)).toStrictEqual(atEveryPath(paths, ERROR))
+    expect(await severitiesAt(payloadConfig, paths)).toStrictEqual(errorsAtEveryPath(paths))
   })
 
   it('is held to the test-integrity rules by the library configuration', async () => {
     const paths: readonly string[] = collectedPaths(LIBRARY_SUITES)
 
-    expect(await severitiesAt(libraryConfig, paths, INTEGRITY_RULE)).toStrictEqual(atEveryPath(paths, ERROR))
+    expect(await severitiesAt(libraryConfig, paths)).toStrictEqual(errorsAtEveryPath(paths))
   })
 
   // The load-bearing half. Both properties above would hold for a configuration that turned the rule on

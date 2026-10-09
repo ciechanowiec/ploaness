@@ -10,8 +10,7 @@ const collectionWith = (field: string, auth: string = 'auth: { maxLoginAttempts:
 const rulesOf = (source: string): readonly string[] =>
   findUnprotectedPrivilegedFields(source).map((violation: PayloadViolation): string => violation.rule)
 
-const protectedField = (name: string): string =>
-  `{ name: '${name}', type: 'text', access: { create: admins, update: admins } }`
+const PROTECTED_ROLES: string = "{ name: 'roles', type: 'text', access: { create: admins, update: admins } }"
 
 describe('require-privileged-field-access', () => {
   it.each(['role', 'roles', 'isAdmin', 'isStaff', 'permission', 'permissions', 'capability', 'capabilities'])(
@@ -22,7 +21,7 @@ describe('require-privileged-field-access', () => {
   )
 
   it('accepts a privileged field that declares both operations', () => {
-    expect(rulesOf(collectionWith(protectedField('roles')))).toEqual([])
+    expect(rulesOf(collectionWith(PROTECTED_ROLES))).toEqual([])
   })
 
   it('reports create when only update is protected', () => {
@@ -102,7 +101,7 @@ describe('the shared config reader used by the field rule', () => {
 
   it('judges every config in a file and reports the field own line', () => {
     const source: string = [
-      collectionWith(protectedField('roles')),
+      collectionWith(PROTECTED_ROLES),
       collectionWith("{ name: 'isAdmin', type: 'checkbox' }").replace('Users', 'Editors'),
     ].join('\n')
     const findings: readonly PayloadViolation[] = findUnprotectedPrivilegedFields(source)

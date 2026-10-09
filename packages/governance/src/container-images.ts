@@ -52,13 +52,12 @@ interface FromClause {
   readonly stage: string | undefined
 }
 
-const readFrom = (rest: string | undefined): FromClause | undefined => {
-  const tokens: readonly string[] = (rest ?? '')
+const readFrom = (rest: string = ''): FromClause | undefined => {
+  const tokens: readonly string[] = rest
     .trim()
     .split(/[ \t]+/)
     .filter((token: string): boolean => !token.startsWith(PLATFORM_OPTION))
-  const [first, keyword, stage]: readonly (string | undefined)[] = tokens
-  const reference: string = first ?? ''
+  const [reference = '', keyword, stage]: readonly (string | undefined)[] = tokens
   if (reference.length === 0) {
     return undefined
   }

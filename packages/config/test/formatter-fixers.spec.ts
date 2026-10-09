@@ -1,18 +1,11 @@
-// Two unicorn fixers whose output another gate rejects, held off in every shipped config.
-//
-// `ploaness format` runs Biome, then every ESLint fixer, then Biome again, and promises a tree the gates
-// accept. `prefer-ternary` rewrote a guard clause into the `x ? true : y` form that
-// `prefer-logical-operator-over-ternary` reports and cannot fix, and `no-useless-concat` joined a string
-// split across two lines into one the line cap rejects. Both were the harness walking a project into a
-// failure it had just written, which is the shape `dom-fixers.spec.ts` records for the DOM fixers.
-//
-// The contradiction itself is shown here with the plugin's own rules rather than taken on trust, so a
-// unicorn release that resolves it fails this spec and says the rule may come back.
+// Keep fixers disabled while their output fails a later gate. TypeScript boolean ternaries still
+// receive a non-fixable logical-operator finding; joined string literals can exceed the line cap.
 
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ESLint, Linter } from 'eslint'
 import unicorn from 'eslint-plugin-unicorn'
+import tseslint from 'typescript-eslint'
 import { describe, expect, it } from 'vitest'
 import payloadConfig from '../dist/eslint.js'
 import libraryConfig from '../dist/eslint-library.js'
@@ -68,14 +61,14 @@ const onInEveryConfig = async (rule: string): Promise<Readonly<Record<string, bo
 const everyConfig = <Value>(value: Value): Readonly<Record<string, Value>> =>
   Object.fromEntries(Object.keys(shippedConfigs).map((name: string): readonly [string, Value] => [name, value]))
 
-// The condition is a comparison so that it is boolean without type information: the logical-operator
-// rule only rewrites a ternary whose test is known to be boolean, which a consumer's typed lint supplies.
+// Both branches are visibly boolean. The TypeScript parser matters: Unicorn can repair the JavaScript
+// ternary, but deliberately leaves its TypeScript counterpart without an automatic fix.
 const GUARD_CLAUSE: string = [
   'export const decide = (user) => {',
   '  if (user.level > 2) {',
   '    return true',
   '  }',
-  '  return user.isEditor || user.ownsDraft',
+  '  return user.isEditor === true || user.ownsDraft === true',
   '}',
   '',
 ].join('\n')
@@ -83,13 +76,13 @@ const GUARD_CLAUSE: string = [
 /** The guard clause after one fixing pass of the ternary rule, and what the logical rule then reports. */
 const fixThenReport = (): { readonly fixed: string; readonly reported: readonly string[] } => {
   const linter: Linter = new Linter({ configType: 'flat' })
-  const plugins: Linter.Config['plugins'] = { unicorn }
+  const config: Linter.Config = { plugins: { unicorn }, languageOptions: { parser: tseslint.parser } }
   const fixed: string = linter.verifyAndFix(GUARD_CLAUSE, [
-    { plugins, rules: { [PREFER_TERNARY]: ['error', 'always'] } },
+    { ...config, rules: { [PREFER_TERNARY]: ['error', 'always'] } },
   ]).output
   const reported: readonly string[] = linter
-    .verify(fixed, [{ plugins, rules: { [LOGICAL_OVER_TERNARY]: 'error' } }])
-    .map((message: Linter.LintMessage): string => message.ruleId ?? '')
+    .verifyAndFix(fixed, [{ ...config, rules: { [LOGICAL_OVER_TERNARY]: 'error' } }])
+    .messages.map((message: Linter.LintMessage): string => message.ruleId ?? '')
   return { fixed, reported }
 }
 

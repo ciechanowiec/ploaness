@@ -19,7 +19,7 @@ import {
   workflowsIn,
 } from '@ploaness/governance'
 
-import { type Member, type Repository as Repo, workingTreeFiles } from '../context.js'
+import { type Member, type Repository, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 const readIfPresent = (root: string, relativePath: string): string | undefined => {
@@ -32,28 +32,28 @@ const isPresent = (value: string | undefined): value is string => value !== unde
 // One example file per repository, taken in the declared order. A project that ships two has documented
 // its environment twice and the first is the one a reader is pointed at, so reading both would let the
 // weaker copy vouch for the stronger.
-const exampleFile = (repository: Repo): string | undefined =>
+const exampleFile = (repository: Repository): string | undefined =>
   ENVIRONMENT_EXAMPLE_FILES.map((candidate: string): string | undefined =>
     readIfPresent(repository.root, candidate),
   ).find(isPresent)
 
 // Per member, because a workspace holds one validated module per application, and a member that is a
 // library has none.
-const appSources = (repository: Repo): readonly string[] =>
+const appSources = (repository: Repository): readonly string[] =>
   repository.members
     .map((member: Member): string | undefined =>
       readIfPresent(repository.root, path.join(member.path, VALIDATED_ENVIRONMENT_MODULE)),
     )
     .filter(isPresent)
 
-const composeSources = (repository: Repo): readonly string[] =>
+const composeSources = (repository: Repository): readonly string[] =>
   composeProjectsIn(workingTreeFiles(repository.root)).map((project: ComposeProject): string =>
     readFileSync(path.join(repository.root, project.file), 'utf8'),
   )
 
 // Discovered by the same rule the blocklist gate reads workflows by, so the two never disagree about
 // what a workflow is.
-const workflows = (repository: Repo): readonly WorkflowFile[] =>
+const workflows = (repository: Repository): readonly WorkflowFile[] =>
   workflowsIn(workingTreeFiles(repository.root)).map(
     (file: string): WorkflowFile => ({
       file,
@@ -62,7 +62,7 @@ const workflows = (repository: Repo): readonly WorkflowFile[] =>
   )
 
 // Discovered by the same rule the container gate reads Dockerfiles by, for the same reason.
-const dockerfileSources = (repository: Repo): readonly DockerfileSource[] =>
+const dockerfileSources = (repository: Repository): readonly DockerfileSource[] =>
   dockerfilesIn(workingTreeFiles(repository.root)).map(
     (file: string): DockerfileSource => ({
       file,
@@ -75,7 +75,7 @@ const dockerfileSources = (repository: Repo): readonly DockerfileSource[] =>
 // says nothing about the arguments a sibling's image declares.
 const BUILD_SOURCE_FILES: readonly string[] = [VALIDATED_ENVIRONMENT_MODULE, ...BUILD_CONFIGURATION_FILES]
 
-const builds = (repository: Repo): readonly ImageBuild[] => {
+const builds = (repository: Repository): readonly ImageBuild[] => {
   const dockerfiles: readonly DockerfileSource[] = dockerfileSources(repository)
   const memberPaths: readonly string[] = repository.members.map((member: Member): string => member.path)
   return repository.members.map(
@@ -99,7 +99,7 @@ const describe = (violation: EnvironmentViolation): string => `${violation.name}
  * @param repository the repository being judged, and the members whose modules it holds.
  * @returns the gate result.
  */
-export const environment = (repository: Repo): GateResult => {
+export const environment = (repository: Repository): GateResult => {
   const violations: readonly EnvironmentViolation[] = findEnvironmentViolations({
     applicationSources: appSources(repository),
     example: exampleFile(repository),

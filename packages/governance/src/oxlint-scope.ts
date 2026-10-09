@@ -1,5 +1,5 @@
 import { hasExtension, matchesGlob } from './file-roles.js'
-import { GENERATED_ARTEFACTS } from './generated-denial.js'
+import { GENERATED_ARTEFACTS, PAYLOAD_ADMIN_DIRECTORY } from './generated-denial.js'
 import { jsxAccessibilityFiles } from './jsx-accessibility-scope.js'
 import { type OxlintRule, oxlintRules } from './oxlint-policy.js'
 import { analysisBoundaries } from './workspace-policy.js'
@@ -38,11 +38,28 @@ export interface OxlintGroup {
   readonly rules: readonly OxlintRule[]
 }
 
-/** Partition already-selected source; libraries retain Biome ownership of accessibility. */
-export const oxlintGroups = (files: readonly string[], hasAppRuntime: boolean): readonly OxlintGroup[] => {
+// Payload generates these .tsx entry points as calls into its own renderer, without JSX syntax.
+// Only their filename requirement differs; native correctness and accessibility still apply.
+const PAYLOAD_ADMIN_SCAFFOLDS: ReadonlySet<string> = new Set(
+  ['page', 'not-found'].map((name: string): string => `${PAYLOAD_ADMIN_DIRECTORY}/[[...segments]]/${name}.tsx`),
+)
+
+/** Partition source by analyzer ownership and the filenames the Payload scaffold requires. */
+export const oxlintGroups = (
+  files: readonly string[],
+  hasAppRuntime: boolean,
+  isPayload: boolean = false,
+): readonly OxlintGroup[] => {
   const jsx: ReadonlySet<string> = new Set(hasAppRuntime ? jsxAccessibilityFiles(files, [], []) : [])
+  const scaffolds: ReadonlySet<string> = new Set(
+    files.filter((file: string): boolean => isPayload && jsx.has(file) && PAYLOAD_ADMIN_SCAFFOLDS.has(file)),
+  )
   return [
     { files: files.filter((file: string): boolean => !jsx.has(file)), rules: oxlintRules(false) },
-    { files: files.filter((file: string): boolean => jsx.has(file)), rules: oxlintRules(true) },
+    {
+      files: files.filter((file: string): boolean => jsx.has(file) && !scaffolds.has(file)),
+      rules: oxlintRules(true),
+    },
+    { files: files.filter((file: string): boolean => scaffolds.has(file)), rules: oxlintRules(true, true) },
   ].filter((group: OxlintGroup): boolean => group.files.length > 0)
 }

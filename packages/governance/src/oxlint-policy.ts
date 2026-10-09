@@ -6,6 +6,8 @@ export interface OxlintRule {
   readonly options?: Readonly<Record<string, unknown>>
 }
 
+const JSX_FILENAME_RULE: string = 'react/jsx-filename-extension'
+
 /** Validated gaps in the existing analyzer coverage; equivalent rules retain their current owner. */
 export const OXLINT_CORE_RULES: readonly OxlintRule[] = [
   { oxlint: 'eslint/no-promise-executor-return', options: { allowVoid: false } },
@@ -14,14 +16,19 @@ export const OXLINT_CORE_RULES: readonly OxlintRule[] = [
     options: { esmodule: true, commonjs: false, amd: false },
   },
   {
-    oxlint: 'react/jsx-filename-extension',
+    oxlint: JSX_FILENAME_RULE,
     options: { allow: 'as-needed', extensions: ['.tsx', '.jsx'], ignoreFilesWithoutCode: false },
   },
 ]
 
 /** The rules applicable to one disjoint file group. */
-export const oxlintRules = (hasAccessibility: boolean): readonly OxlintRule[] => [
-  ...OXLINT_CORE_RULES,
+export const oxlintRules = (hasAccessibility: boolean, isPayloadScaffold: boolean = false): readonly OxlintRule[] => [
+  ...OXLINT_CORE_RULES.map(
+    (rule: OxlintRule): OxlintRule =>
+      isPayloadScaffold && rule.oxlint === JSX_FILENAME_RULE
+        ? { ...rule, options: { ...rule.options, allow: 'always' } }
+        : rule,
+  ),
   ...(hasAccessibility ? JSX_ACCESSIBILITY_RULES : []),
 ]
 

@@ -74,7 +74,7 @@ describe('minimumNodeMajor', () => {
   })
 
   it('reads an absent range as naming none, rather than as zero', () => {
-    expect(minimumNodeMajor(undefined)).toBeUndefined()
+    expect(minimumNodeMajor()).toBeUndefined()
   })
 })
 
@@ -94,7 +94,7 @@ describe('pinnedPnpmVersion', () => {
   })
 
   it('names no version when the field is absent, rather than an empty one', () => {
-    expect(pinnedPnpmVersion(undefined)).toBeUndefined()
+    expect(pinnedPnpmVersion()).toBeUndefined()
   })
 })
 

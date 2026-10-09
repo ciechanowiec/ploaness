@@ -58,7 +58,7 @@ const executable: string | undefined = process.argv[EXECUTABLE_ARGUMENT]
 if (source === undefined || executable === undefined) {
   throw new Error('Expected the native fixture file and the packed ploaness executable')
 }
-const CASE_COUNT: number = 42
+const CASE_COUNT: number = 47
 const parsed: unknown = JSON.parse(readFileSync(source, 'utf8'))
 if (!isArray(parsed) || parsed.length !== CASE_COUNT) {
   throw new Error(`Expected ${String(CASE_COUNT)} native conformance cases`)

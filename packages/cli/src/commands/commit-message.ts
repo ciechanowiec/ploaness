@@ -45,7 +45,7 @@ const checkPending = (context: Context, file: string): number => {
  * @param value the revision range, when mode is `--range`.
  * @returns the process exit code.
  */
-export const commitMessage = (context: Context, mode: string | undefined, value: string | undefined): number => {
+export const commitMessage = (context: Context, mode: string | undefined, value: string = 'HEAD'): number => {
   if (mode === undefined) {
     console.error('usage: ploaness commit-message <message-file> | --range <base>..<head> | --all')
     return 1
@@ -53,5 +53,5 @@ export const commitMessage = (context: Context, mode: string | undefined, value:
   if (mode === '--all') {
     return checkHistory(context, OWNED_HISTORY_REVISIONS)
   }
-  return mode === '--range' ? checkHistory(context, [value ?? 'HEAD']) : checkPending(context, mode)
+  return mode === '--range' ? checkHistory(context, [value]) : checkPending(context, mode)
 }

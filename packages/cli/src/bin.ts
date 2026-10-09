@@ -8,7 +8,7 @@ import { verify, verifyOne } from './commands/verify.js'
 // options that change what is checked. Two flags exist and neither reaches a rule: --enforce=false
 // changes whether findings are fatal, and --verbose changes what is shown. There is no flag that skips
 // a gate.
-import { createRepository as createRepo, type Member, memberAt, type Repository as Repo } from './context.js'
+import { createRepository, type Member, memberAt, type Repository } from './context.js'
 import { ALL_GATES, type Gate, gateById } from './gates.js'
 
 // argv begins with the node binary and the script path; the command follows them.
@@ -64,30 +64,31 @@ const listGates = (rest: readonly string[]): number => {
 // A single gate names no member, so a member-scope gate is asked about the package the engineer is
 // standing in. That is the only reading that stays useful in a workspace and is exactly today's
 // behaviour in a single-package repository, where there is one member and it is the root.
-const runOneGate = async (repo: Repo, id: string | undefined, isVerbose: boolean): Promise<number> => {
+const runOneGate = async (repository: Repository, id: string | undefined, isVerbose: boolean): Promise<number> => {
   const gate: Gate | undefined = id === undefined ? undefined : gateById(id)
   if (gate === undefined) {
     console.error(`unknown gate "${id ?? ''}". Run \`ploaness gates\` to list them.`)
     return 1
   }
-  const member: Member | undefined = gate.scope === 'repository' ? undefined : memberAt(repo, process.cwd())
-  return await verifyOne(repo, { gate, member }, isVerbose)
+  const member: Member | undefined = gate.scope === 'repository' ? undefined : memberAt(repository, process.cwd())
+  return await verifyOne(repository, { gate, member }, isVerbose)
 }
 
 // One entry per command. The table is the list of commands the binary accepts, and each handler is
 // small enough to read on its own - which the switch it replaced no longer was.
-type CommandRunner = (repo: Repo, rest: readonly string[]) => number | Promise<number>
+type CommandRunner = (repository: Repository, rest: readonly string[]) => number | Promise<number>
 
 const COMMANDS: Readonly<Record<string, CommandRunner>> = {
-  verify: async (repo: Repo, rest: readonly string[]): Promise<number> =>
-    await verify(repo, rest.includes('--extended')),
-  format: (repo: Repo): number => format(repo),
-  sync: (repo: Repo): number => sync(repo),
-  init: (repo: Repo): number => init(repo),
-  gates: (_repository: Repo, rest: readonly string[]): number => listGates(rest),
-  gate: async (repo: Repo, rest: readonly string[]): Promise<number> =>
-    await runOneGate(repo, rest[0], rest.includes(VERBOSE_OPTION)),
-  'commit-message': (repo: Repo, rest: readonly string[]): number => commitMessage(repo, rest[0], rest[1]),
+  verify: async (repository: Repository, rest: readonly string[]): Promise<number> =>
+    await verify(repository, rest.includes('--extended')),
+  format: (repository: Repository): number => format(repository),
+  sync: (repository: Repository): number => sync(repository),
+  init: (repository: Repository): number => init(repository),
+  gates: (_repository: Repository, rest: readonly string[]): number => listGates(rest),
+  gate: async (repository: Repository, rest: readonly string[]): Promise<number> =>
+    await runOneGate(repository, rest[0], rest.includes(VERBOSE_OPTION)),
+  'commit-message': (repository: Repository, rest: readonly string[]): number =>
+    commitMessage(repository, rest[0], rest[1]),
 }
 
 // Each command owns its grammar. A global allowlist rejected the documented `commit-message --all` and
@@ -156,7 +157,7 @@ const main = async (): Promise<number> => {
     return 1
   }
   const isEnforce: boolean = !rest.includes('--enforce=false')
-  return await runCommand(createRepo(process.cwd(), isEnforce), rest)
+  return await runCommand(createRepository(process.cwd(), isEnforce), rest)
 }
 
 // A command outside a gate has nothing above it to catch a throw, so an unreadable package.json used to

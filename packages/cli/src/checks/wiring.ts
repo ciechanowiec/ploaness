@@ -61,8 +61,7 @@ interface PinGroup {
   readonly versions: Readonly<Record<string, string>>
 }
 
-const shippedFile = (packageName: string, fileName: string): string =>
-  path.join(shippedDirectory(packageName), fileName)
+const shippedManifest = (packageName: string): string => path.join(shippedDirectory(packageName), 'package.json')
 
 const pinGroups = (): readonly PinGroup[] => {
   const groups: unknown = readPins()['groups']
@@ -102,13 +101,13 @@ const VERSION_SOURCES: readonly string[] = ['@ploaness/config', '@ploaness/cli']
 // read from the meta package's dependencies, the way a pinned analyzer is: `ploaness` depends on this
 // package rather than the reverse, so under pnpm's strict layout the CLI cannot resolve it.
 const harnessRuntimeVersion = (): Readonly<Record<string, string>> => {
-  const manifest: unknown = readJson(shippedFile('@ploaness/cli', 'package.json'))
+  const manifest: unknown = readJson(shippedManifest('@ploaness/cli'))
   const version: string | undefined = asOptionalText(readKey(manifest, 'version'))
   return version === undefined ? {} : { [HARNESS_RUNTIME]: version }
 }
 
 const declaredBy = (packageName: string): Record<string, unknown> => {
-  const manifest: unknown = readJson(shippedFile(packageName, 'package.json'))
+  const manifest: unknown = readJson(shippedManifest(packageName))
   return asRecord(readKey(manifest, 'dependencies'))
 }
 

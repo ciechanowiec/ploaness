@@ -126,7 +126,7 @@ describe('findEditorconfigViolations', () => {
   })
 
   it('reports a byte order mark', () => {
-    expect(reasons('﻿const value = 1\n')[0]).toContain('byte order mark')
+    expect(reasons('\u{FEFF}const value = 1\n')[0]).toContain('byte order mark')
   })
 
   it('reports the line, so the finding points at a real position', () => {

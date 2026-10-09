@@ -39,8 +39,7 @@ const scriptSources = (policy: string): string | undefined =>
   directive(policy, 'script-src') ?? directive(policy, 'default-src')
 
 test.describe('Security headers', () => {
-  test('the application answers with a baseline of security headers', async ({ request, baseURL }) => {
-    const origin: string = baseURL ?? ''
+  test('the application answers with a baseline of security headers', async ({ request, baseURL: origin = '' }) => {
     expect(origin, 'the ploaness Playwright config must declare a server URL').not.toEqual('')
     const response: APIResponse = await request.get(origin)
     expect(response.ok(), `${origin} did not answer`).toBe(true)

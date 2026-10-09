@@ -22,7 +22,7 @@ import {
 // A compose interpolation, ASSEMBLED rather than written out. Biome reads `${NAME}` inside a plain
 // string as a template literal somebody forgot to write - which is exactly the shape a compose
 // interpolation has - so writing one literally here would cost a suppression per fixture.
-const interpolation = (body: string): string => `$\u{7B}${body}}`
+const interpolation = (body: string): string => `\${${body}}`
 
 const namesOf = (violations: readonly EnvironmentViolation[]): readonly string[] =>
   violations.map((violation: EnvironmentViolation): string => violation.name)

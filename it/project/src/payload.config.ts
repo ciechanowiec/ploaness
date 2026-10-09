@@ -13,7 +13,7 @@ import { foldersAccess } from '@/lib/folders'
 // Framework collection access is exercised with both safe defaults and incomplete overrides.
 const { payloadSecret, databaseUrl }: Environment = loadEnvironment()
 
-export default buildConfig({
+const config: ReturnType<typeof buildConfig> = buildConfig({
   admin: { user: Users.slug },
   collections: [Users, Media, Posts, Articles],
   globals: [Header],
@@ -21,3 +21,5 @@ export default buildConfig({
   db: postgresAdapter({ pool: { connectionString: databaseUrl }, push: false }),
   secret: payloadSecret,
 })
+
+export default config

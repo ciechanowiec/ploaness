@@ -7,7 +7,7 @@ import { defineConfig } from 'vitest/config'
 // `packages/runtime` is measured on the same terms and for the same reason: it is pure. It is a
 // separate package because a consumer's `src/**` must be able to import it (see its own header), not
 // because it is a different KIND of code, so moving a module there must not move it out of the floor.
-export default defineConfig({
+const config: ReturnType<typeof defineConfig> = defineConfig({
   test: {
     include: ['packages/*/test/**/*.spec.ts'],
     // The harness file first, which installs the network guard; then this repository's own, which
@@ -25,3 +25,5 @@ export default defineConfig({
     },
   },
 })
+
+export default config

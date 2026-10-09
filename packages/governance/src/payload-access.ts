@@ -78,8 +78,8 @@ const AUTH_HARDENING_KEYS: readonly string[] = ['maxLoginAttempts', 'lockTime']
 
 const COLLECTION: string = 'CollectionConfig'
 
-const leadingNumber = (value: string | undefined): number | undefined => {
-  const match: RegExpExecArray | null = /^\s*(-?\d[\d_]*(?:\.\d[\d_]*)?)\s*(?=[,}])/.exec(value ?? '')
+const leadingNumber = (value: string = ''): number | undefined => {
+  const match: RegExpExecArray | null = /^\s*(-?\d[\d_]*(?:\.\d[\d_]*)?)\s*(?=[,}])/.exec(value)
   return match === null ? undefined : Number((match[1] ?? '').replaceAll('_', ''))
 }
 

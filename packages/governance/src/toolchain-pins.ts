@@ -18,7 +18,7 @@ export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
   // catalogue cannot change underneath it, so the enabled ids stay the ones somebody confirmed with
   // `--list`. The provider standings beside the catalogue rest on the same listing: which providers
   // the image has no check for at all. Re-confirm both whenever this pin moves.
-  checkov: 'bridgecrew/checkov:3.3.22@sha256:617c76e3f9b1f7907ebca9abb6b9d746844edcb48e9bd775e4692c69c1c6ac47',
+  checkov: 'bridgecrew/checkov:3.3.26@sha256:8e63f217cb084f1c1a067326a9cf6e37d54bdc82e5822210d50ca4e2f647dd93',
 }
 
 /** Matches a reference that names image bytes AND the release they are, and only such a reference. */
@@ -48,8 +48,8 @@ const LEADING_MAJOR: RegExp = /(\d+)/
  * @param enginesNode the declared range, such as `>=26`.
  * @returns the major version, or undefined when the range names none.
  */
-export const minimumNodeMajor = (enginesNode: string | undefined): number | undefined => {
-  const found: RegExpExecArray | null = LEADING_MAJOR.exec(enginesNode ?? '')
+export const minimumNodeMajor = (enginesNode: string = ''): number | undefined => {
+  const found: RegExpExecArray | null = LEADING_MAJOR.exec(enginesNode)
   return found === null ? undefined : Number(found[1])
 }
 
@@ -68,8 +68,8 @@ const PNPM_SPECIFIER: RegExp = /^pnpm@([^+\s]+)(?:\+\S+)?$/
  * @param packageManager the declared specifier, such as `pnpm@11.9.0`.
  * @returns the version, or undefined when the specifier names another manager or no version.
  */
-export const pinnedPnpmVersion = (packageManager: string | undefined): string | undefined => {
-  const found: RegExpExecArray | null = PNPM_SPECIFIER.exec(packageManager ?? '')
+export const pinnedPnpmVersion = (packageManager: string = ''): string | undefined => {
+  const found: RegExpExecArray | null = PNPM_SPECIFIER.exec(packageManager)
   return found?.[1]
 }
 

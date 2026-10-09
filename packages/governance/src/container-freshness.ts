@@ -79,14 +79,14 @@ export const parseContainerReference = (tool: string, reference: string): Contai
     return undefined
   }
   const name: string = found.groups['name'] ?? ''
-  const [namespace, repo]: readonly string[] = name.split('/', NAME_PARTS)
-  return namespace === undefined || repo === undefined
+  const [namespace, repository]: readonly string[] = name.split('/', NAME_PARTS)
+  return namespace === undefined || repository === undefined
     ? undefined
     : {
         tool,
         name,
         namespace,
-        repository: repo,
+        repository: repository,
         tag: found.groups['tag'] ?? '',
         digest: found.groups['digest'] ?? '',
       }

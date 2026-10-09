@@ -250,5 +250,35 @@
     "file": "src/exception.tsx",
     "code": "export const value = <span /> // oxlint-disable-line react/jsx-filename-extension -- exercise a stale exception",
     "expected": "Unused oxlint-disable"
+  },
+  {
+    "name": "Payload admin renderer delegation",
+    "file": "src/app/(payload)/admin/[[...segments]]/page.tsx",
+    "code": "import { RootPage } from '@payloadcms/next/views'; export default RootPage;",
+    "expected": ""
+  },
+  {
+    "name": "Payload not-found renderer delegation",
+    "file": "src/app/(payload)/admin/[[...segments]]/not-found.tsx",
+    "code": "import { NotFoundPage } from '@payloadcms/next/views'; export default NotFoundPage;",
+    "expected": ""
+  },
+  {
+    "name": "Payload scaffold retains core checks",
+    "file": "src/app/(payload)/admin/[[...segments]]/page.tsx",
+    "code": "export const result = new Promise(resolve => resolve(1));",
+    "expected": "eslint(no-promise-executor-return)"
+  },
+  {
+    "name": "Payload scaffold retains accessibility checks",
+    "file": "src/app/(payload)/admin/[[...segments]]/not-found.tsx",
+    "code": "export const Page = () => <img src=\"/image.png\" />;",
+    "expected": "jsx-a11y(alt-text)"
+  },
+  {
+    "name": "Payload scaffold neighbor requires JSX",
+    "file": "src/app/(payload)/admin/[[...segments]]/helpers.tsx",
+    "code": "export const value: number = 1;",
+    "expected": "react(jsx-filename-extension)"
   }
 ]

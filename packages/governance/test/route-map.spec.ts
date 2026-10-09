@@ -18,8 +18,8 @@ import {
 
 const routeOf = (file: string): string | undefined => declaredRouteOf(file)?.route
 
-const routesIn = (paths: readonly string[], appRoot: string): readonly string[] =>
-  declaredRoutesOf(paths, appRoot).map((route: DeclaredRoute): string => route.route)
+const routesIn = (paths: readonly string[]): readonly string[] =>
+  declaredRoutesOf(paths, 'src/app').map((route: DeclaredRoute): string => route.route)
 
 describe('which directory holds the routes', () => {
   it('prefers src/app, where a Payload application puts it', () => {
@@ -123,14 +123,14 @@ describe('every address a file tree declares', () => {
       'src/lib/page.tsx',
       'tests/e2e/page.tsx',
     ]
-    expect(routesIn(paths, 'src/app')).toEqual(['/', '/leaderboard'])
+    expect(routesIn(paths)).toEqual(['/', '/leaderboard'])
   })
 
   // A slot and the page beside it reduce to the same address, and reporting it twice would ask a
   // project to answer for one page under two file names.
   it('reports one address once, however many files reduce to it', () => {
     const paths: readonly string[] = ['src/app/page.tsx', 'src/app/@modal/page.tsx']
-    expect(routesIn(paths, 'src/app')).toEqual(['/'])
+    expect(routesIn(paths)).toEqual(['/'])
   })
 
   it('carries the whole path of the file that declared it', () => {
@@ -139,7 +139,7 @@ describe('every address a file tree declares', () => {
   })
 
   it('says nothing about a tree with no pages in it', () => {
-    expect(routesIn(['src/app/layout.tsx'], 'src/app')).toEqual([])
+    expect(routesIn(['src/app/layout.tsx'])).toEqual([])
   })
 })
 

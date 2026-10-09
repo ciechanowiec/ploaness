@@ -267,9 +267,8 @@ const sweepLayout = async (page: Page, origin: string, routes: readonly string[]
 test.describe('Accessibility and layout sweep', () => {
   test('every reachable public page passes axe in default, hover, and focus states, and its layout holds', async ({
     page,
-    baseURL,
+    baseURL: origin = '',
   }) => {
-    const origin: string = baseURL ?? ''
     expect(origin, 'the ploaness Playwright config must declare a server URL').not.toEqual('')
     // Armed before the crawl rather than after it. Until the budget below is set this test runs under
     // the shipped default, and a site approaching the route cap cannot be crawled inside it - which

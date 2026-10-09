@@ -388,9 +388,18 @@ expect_command managed-defaults PASS 'managed defaults install, upgrade, remain 
 expect pass oxlint PASS
 new_case native-contracts
 commit_case native-contracts 'test(fixture): establish native core conformance cases' "$CONFORMING_BODY"
-expect_command native-contracts PASS '42 native source and suppression contracts passed' \
+expect_command native-contracts PASS '47 native source and suppression contracts passed' \
     node "$lib/oxlint-conformance.ts" "$here/fixtures/oxlint-core.json" \
     "$scratch/native-contracts/node_modules/.bin/ploaness"
+
+new_case fail-non-payload-admin-scaffold
+mkdir -p "$scratch/fail-non-payload-admin-scaffold/src/app/(payload)/admin/[[...segments]]"
+printf 'export const value: number = 1\n' \
+    > "$scratch/fail-non-payload-admin-scaffold/src/app/(payload)/admin/[[...segments]]/page.tsx"
+node "$lib/delete-dependency.ts" "$scratch/fail-non-payload-admin-scaffold/package.json" payload
+commit_case fail-non-payload-admin-scaffold 'test(fixture): keep scaffold ownership with payload members' \
+    "$CONFORMING_BODY"
+expect fail-non-payload-admin-scaffold oxlint FAIL 'react(jsx-filename-extension)'
 
 if [ "${1-}" = --layout-only ]; then
     (cd "$template" && pnpm exec playwright install chromium >/dev/null)

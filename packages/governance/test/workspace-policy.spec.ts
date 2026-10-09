@@ -5,7 +5,7 @@ import {
   eslintArguments,
   findGovernedMembers,
   findPayloadMemberViolations,
-  findRepositoryRoot as findRepoRoot,
+  findRepositoryRoot,
   findServerUrlCollisions,
   findUngovernedProjects,
   hasRuntime,
@@ -44,7 +44,7 @@ describe('findRepositoryRoot', () => {
       '/a': ['pnpm-workspace.yaml'],
       '/': ['.git', 'package.json'],
     })
-    expect(findRepoRoot(['/a/b', '/a', '/'], hasEntry)).toBe('/a')
+    expect(findRepositoryRoot(['/a/b', '/a', '/'], hasEntry)).toBe('/a')
   })
 
   it('does not escape a workspace file to reach an enclosing checkout', () => {
@@ -52,21 +52,21 @@ describe('findRepositoryRoot', () => {
       '/work/case': ['pnpm-workspace.yaml'],
       '/work': ['.git', 'package.json'],
     })
-    expect(findRepoRoot(['/work/case', '/work', '/'], hasEntry)).toBe('/work/case')
+    expect(findRepositoryRoot(['/work/case', '/work', '/'], hasEntry)).toBe('/work/case')
   })
 
   it('falls back to a checkout carrying both a git directory and a manifest', () => {
     const hasEntry: EntryLookup = lookupIn({ '/repo': ['.git', 'package.json'] })
-    expect(findRepoRoot(['/repo/src', '/repo', '/'], hasEntry)).toBe('/repo')
+    expect(findRepositoryRoot(['/repo/src', '/repo', '/'], hasEntry)).toBe('/repo')
   })
 
   it('ignores a git directory with no manifest beside it', () => {
     const hasEntry: EntryLookup = lookupIn({ '/repo': ['.git'] })
-    expect(findRepoRoot(['/repo/src', '/repo'], hasEntry)).toBe('/repo/src')
+    expect(findRepositoryRoot(['/repo/src', '/repo'], hasEntry)).toBe('/repo/src')
   })
 
   it('returns the working directory when nothing above it qualifies', () => {
-    expect(findRepoRoot(['/scratch', '/'], lookupIn({}))).toBe('/scratch')
+    expect(findRepositoryRoot(['/scratch', '/'], lookupIn({}))).toBe('/scratch')
   })
 })
 

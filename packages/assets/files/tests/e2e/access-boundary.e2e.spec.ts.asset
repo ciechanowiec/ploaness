@@ -37,8 +37,10 @@ import {
 const ACCESS_ENDPOINT: string = '/api/access'
 
 test.describe('Access boundary', () => {
-  test('an unauthenticated caller receives only the access the project declared', async ({ request, baseURL }) => {
-    const origin: string = baseURL ?? ''
+  test('an unauthenticated caller receives only the access the project declared', async ({
+    request,
+    baseURL: origin = '',
+  }) => {
     expect(origin, 'the ploaness Playwright config must declare a server URL').not.toEqual('')
     // Anonymous by construction rather than by arrangement: the request fixture carries no credential
     // unless the Playwright config sets a storageState, and that config is a bare re-export of the

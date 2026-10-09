@@ -18,9 +18,9 @@ const NOCHECK: string = `// @ts-${nocheck()}\n`
 // Assembled rather than written whole, for the same reason the module assembles its own tokens: a spec
 // containing a literal suppression would be counted by the rule it is testing.
 const disable = (tool: string): string => `${tool}-disable`
-const ignore = (tool: string): string => `${tool}-ignore`
+const ignore = (): string => ['biome', 'ignore'].join('-')
 const coverage = (tool: string): string => `${tool} ignore`
-const allow = (tool: string): string => `${tool}:allow`
+const allow = (): string => ['gitleaks', 'allow'].join(':')
 
 const sites = (count: number): readonly SuppressionSite[] =>
   Array.from({ length: count }, (_: unknown, index: number) => ({
@@ -32,7 +32,7 @@ const sites = (count: number): readonly SuppressionSite[] =>
 describe('findSuppressions', () => {
   it.each([
     ['ESLint', `// ${disable('eslint')}-next-line no-console -- reason`],
-    ['Biome', `// ${ignore('biome')} lint/style/useConst: reason`],
+    ['Biome', `// ${ignore()} lint/style/useConst: reason`],
     ['Stylelint', `/* ${disable('stylelint')} color-named -- reason */`],
     ['TypeScript expect-error', `// @ts-expect-error reason`],
   ])('counts a %s suppression', (_tool, line) => {
@@ -44,11 +44,11 @@ describe('findSuppressions', () => {
   })
 
   it('does not count a biome block terminator, which its opener already counted', () => {
-    expect(findSuppressions('src/a.ts', `// ${ignore('biome')}-end lint/style/useConst`)).toEqual([])
+    expect(findSuppressions('src/a.ts', `// ${ignore()}-end lint/style/useConst`)).toEqual([])
   })
 
   it('reports the line, so an over-budget project is told which suppression to reconsider', () => {
-    const text: string = `const first = 1\n// ${ignore('biome')} lint/style/useConst: reason\nconst second = 2`
+    const text: string = `const first = 1\n// ${ignore()} lint/style/useConst: reason\nconst second = 2`
     expect(findSuppressions('src/a.ts', text)[0]?.line).toBe(2)
   })
 
@@ -81,7 +81,7 @@ describe('findSuppressions over the directives that are not lint comments', () =
     ['v8 coverage', `/* ${coverage('v8')} next */`],
     ['c8 coverage', `/* ${coverage('c8')} next */`],
     ['istanbul coverage', `/* ${coverage('istanbul')} next */`],
-    ['gitleaks inline', `const token = 'aaaa' // ${allow('gitleaks')}`],
+    ['gitleaks inline', `const token = 'aaaa' // ${allow()}`],
   ])('counts a %s suppression', (_tool, line) => {
     expect(findSuppressions('src/a.ts', line)).toHaveLength(1)
   })
@@ -99,7 +99,7 @@ describe('findSuppressions over the directives that are not lint comments', () =
   // suppression are the same act - which is why this differs from the prose case above rather than
   // contradicting it.
   it('counts a gitleaks allowance whatever syntax the file comments in', () => {
-    expect(findSuppressions('src/a.ts', `const key = 'aaaa' # ${allow('gitleaks')}`)).toHaveLength(1)
+    expect(findSuppressions('src/a.ts', `const key = 'aaaa' # ${allow()}`)).toHaveLength(1)
   })
 })
 

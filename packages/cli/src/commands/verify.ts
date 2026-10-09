@@ -2,7 +2,7 @@
 // a crashed run, because a tool that cannot start is indistinguishable from a tool that found a defect:
 // either way the project is not verified.
 import { endsRun } from '@ploaness/governance'
-import type { Member, Repository as Repo } from '../context.js'
+import type { Member, Repository } from '../context.js'
 import { failed, type GateResult } from '../exec.js'
 import { type PlannedGate, planFor } from '../gates.js'
 import {
@@ -20,9 +20,9 @@ const asMessage = (error: unknown): string => (error instanceof Error ? error.me
 
 // The union is narrowed exactly here, once. Everywhere else a gate is a gate; this is the one place
 // that has to know a repository-scope gate is handed the repository and a member-scope gate its member.
-const invoke = async (planned: PlannedGate, repo: Repo): Promise<GateResult> => {
+const invoke = async (planned: PlannedGate, repository: Repository): Promise<GateResult> => {
   if (planned.gate.scope === 'repository') {
-    return await planned.gate.run(repo)
+    return await planned.gate.run(repository)
   }
   const member: Member | undefined = planned.member
   if (member === undefined) {
@@ -33,18 +33,18 @@ const invoke = async (planned: PlannedGate, repo: Repo): Promise<GateResult> => 
   return await planned.gate.run(member)
 }
 
-const runGate = async (planned: PlannedGate, repo: Repo): Promise<GateResult> => {
+const runGate = async (planned: PlannedGate, repository: Repository): Promise<GateResult> => {
   try {
-    return await invoke(planned, repo)
+    return await invoke(planned, repository)
   } catch (error: unknown) {
     return failed(`the ${planned.gate.id} gate could not run`, [asMessage(error)])
   }
 }
 
 /** Time one gate and package it as the outcome the report layer prints. */
-const timeGate = async (planned: PlannedGate, repo: Repo): Promise<GateOutcome> => {
+const timeGate = async (planned: PlannedGate, repository: Repository): Promise<GateOutcome> => {
   const started: number = Date.now()
-  const result: GateResult = await runGate(planned, repo)
+  const result: GateResult = await runGate(planned, repository)
   return {
     gate: planned.gate,
     result,
@@ -60,26 +60,30 @@ const identifierWidth = (planned: readonly PlannedGate[]): number =>
 
 // A sequence with an exit rather than a plain map, because a run does not always reach the end. The
 // rule that decides is `endsRun`, in governance; this supplies the outcome and the mode.
-const runPlan = async (planned: readonly PlannedGate[], repo: Repo, width: number): Promise<readonly GateOutcome[]> => {
+const runPlan = async (
+  planned: readonly PlannedGate[],
+  repository: Repository,
+  width: number,
+): Promise<readonly GateOutcome[]> => {
   const [step, ...rest] = planned
   if (step === undefined) {
     return []
   }
   beginGate(step.gate, width)
-  const outcome: GateOutcome = await timeGate(step, repo)
+  const outcome: GateOutcome = await timeGate(step, repository)
   reportGate(outcome, width)
   const isPrecondition: boolean = step.gate.isPrecondition === true
   if (
     endsRun({
       isFailure: !outcome.result.ok,
       isPrecondition,
-      isEnforced: repo.isEnforced,
+      isEnforced: repository.isEnforced,
     })
   ) {
     reportHalt(step.gate, rest.length, isPrecondition)
     return [outcome]
   }
-  return [outcome, ...(await runPlan(rest, repo, width))]
+  return [outcome, ...(await runPlan(rest, repository, width))]
 }
 
 /**
@@ -88,7 +92,7 @@ const runPlan = async (planned: readonly PlannedGate[], repo: Repo, width: numbe
  * @param isExtended whether to include the history, build, bundle, and end-to-end gates.
  * @returns the process exit code.
  */
-export const verify = async (repository: Repo, isExtended: boolean): Promise<number> => {
+export const verify = async (repository: Repository, isExtended: boolean): Promise<number> => {
   const started: number = Date.now()
   const planned: readonly PlannedGate[] = planFor(repository, isExtended)
   const width: number = identifierWidth(planned)
@@ -105,7 +109,7 @@ export const verify = async (repository: Repo, isExtended: boolean): Promise<num
  * @returns the process exit code.
  */
 export const verifyOne = async (
-  repository: Repo,
+  repository: Repository,
   planned: PlannedGate,
   isVerbose: boolean = false,
 ): Promise<number> => {
