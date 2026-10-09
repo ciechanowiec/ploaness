@@ -144,7 +144,7 @@ invocations of a package gate. `tree-verify` runs after all other gates in eithe
 
 ### Extended Verification Gates
 
-Extended verification adds 8 gates before the final tree check.
+Extended verification adds 9 gates before the final tree check.
 
 | Gate | Scope | What it verifies |
 | --- | --- | --- |
@@ -156,6 +156,7 @@ Extended verification adds 8 gates before the final tree check.
 | `build` | package | The production build. |
 | `bundle` | package | The gzipped client JavaScript stays under the bundle budget. |
 | `e2e` | package | The end-to-end suite, including the three sweeps ploaness ships into it and the layout scan the accessibility sweep runs. |
+| `sbom` | repository | Generates and validates the resolved workspace dependency inventory and its source metadata. |
 
 The `infra` gate reads the providers a tree declares from its `resource`, `data` and `provider`
 headers and judges only what it can see: resources inside external modules are not downloaded. A
@@ -174,6 +175,11 @@ pattern rules close what the analyzer leaves open on every cloud: an outright ad
 
 ## Release Dependency Inventory
 
+Full verification runs the required `sbom` gate once for the repository, after the browser suite and before
+the final tree check. It writes bom.cdx.json and source metadata in release.json under the repository's ignored
+dist/sbom directory. The metadata contains no release artifact associations at this stage; full verification does
+not assume a container or archive format. A generation failure fails verification, even if an older inventory exists.
+
 Run `ploaness sbom --artifact <file> [--artifact <file> ...] [--output <directory>]` after building
 the release files. The command is repository-scoped and accepts local archive files, including an exported
 container-image archive. Artifact filenames must be distinct. It generates CycloneDX JSON 1.6 and a release
@@ -184,7 +190,7 @@ The workspace must already be installed with the pinned pnpm, and its manifests,
 snapshot must agree. The digest-pinned cdxgen image reads a bounded copy of workspace manifests and lockfiles.
 Generation runs without networking, dependency installation, lifecycle scripts, or source-usage filtering.
 Docker may need network access to acquire that image before generation. A failed generator or incomplete report
-fails the command. No advisory service or Snyk account is involved.
+fails the command. No advisory service is involved.
 
 Retain both output files with the release. Metadata records the source commit and dirty state, source fingerprint,
 lockfile hash, generator identity, SBOM hash, and SHA-256 hashes of the release files. A dirty checkout is identified

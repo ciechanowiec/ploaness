@@ -369,6 +369,7 @@ security_contracts() {
     rm "$scratch/sbom-workspace/node_modules"
     install_case "$scratch/sbom-workspace"
     commit_case sbom-workspace 'test(fixture): inventory a resolved pnpm workspace' "$CONFORMING_BODY"
+    expect sbom-workspace sbom PASS 'SBOM inventory and source metadata written'
     mkdir -p "$scratch/sbom-workspace/dist"
     printf 'release artifact bytes\n' > "$scratch/sbom-workspace/dist/release.tgz"
     expect_command sbom-workspace PASS 'SBOM and release metadata written' \

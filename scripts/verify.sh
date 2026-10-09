@@ -184,6 +184,7 @@ step integration pnpm run it
 gate require-full-history
 gate commit-history
 gate linear-history
+gate sbom
 
 if ! report_tree; then
     exit 1

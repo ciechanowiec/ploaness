@@ -17,6 +17,7 @@ import { oxlint } from './checks/oxlint.js'
 import { adminViews, payloadDefaults, payloadGenerated, payloadRules } from './checks/payload.js'
 import { preflight } from './checks/preflight.js'
 import { configReferences, documentation, skills } from './checks/references.js'
+import { sbomInventory } from './checks/sbom.js'
 import { shell } from './checks/shell.js'
 import { suppressions } from './checks/suppressions.js'
 import { tailwindTokens } from './checks/tailwind.js'
@@ -308,7 +309,7 @@ const DEFAULT_GATES: readonly Gate[] = [
 
 /**
  * Extended verification adds the shell scripts, the infrastructure definitions, history, build, bundle,
- * and end-to-end checks.
+ * end-to-end checks, and a workspace dependency inventory.
  */
 const EXTENDED_GATES: readonly Gate[] = [
   // First in the tier because it is the cheapest thing in it: a static read of the tracked scripts,
@@ -346,6 +347,7 @@ const EXTENDED_GATES: readonly Gate[] = [
   { id: 'build', scope: 'package', title: 'production build', isExtended: true, run: build },
   { id: 'bundle', scope: 'package', title: 'client bundle budget', isExtended: true, run: bundle },
   { id: 'e2e', scope: 'package', title: 'end-to-end suite', isExtended: true, run: endToEnd },
+  { id: 'sbom', scope: 'repository', title: 'dependency inventory', isExtended: true, run: sbomInventory },
 ]
 
 // Last in BOTH modes, which it was not. It closed `DEFAULT_GATES`, and the extended gates were appended

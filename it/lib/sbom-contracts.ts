@@ -1,7 +1,7 @@
 // Judge a real generated inventory against independently chosen fixture package coordinates and bytes.
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { asRecord, isArray, readKey } from '@ploaness/governance'
+import { asRecord, isArray, readKey, sbomProblems } from '@ploaness/governance'
 import { invoke, requireResult } from './browser-server-support.js'
 
 const EXECUTABLE_ARGUMENT: number = 2
@@ -50,11 +50,32 @@ const artifacts: unknown = metadata['artifacts']
 if (!isArray(artifacts) || readKey(artifacts[0], 'sha256') !== hashFile('dist/release.tgz')) {
   throw new Error('The release archive was not measured')
 }
+requireResult(await invoke(executable, ['gate', 'sbom']), 0, '[PASS] sbom')
+const inventory: unknown = JSON.parse(readFileSync('dist/sbom/bom.cdx.json', 'utf8'))
+const inventoryMetadata: unknown = JSON.parse(readFileSync('dist/sbom/release.json', 'utf8'))
+const associations: unknown = readKey(inventoryMetadata, 'artifacts')
+if (
+  sbomProblems(inventory).length > 0 ||
+  !isArray(associations) ||
+  associations.length > 0 ||
+  readKey(inventoryMetadata, 'sbomSha256') !== hashFile('dist/sbom/bom.cdx.json')
+) {
+  throw new Error('The inventory gate must generate valid reports without retaining old release associations')
+}
+requireResult(
+  await invoke(executable, ['gate', 'sbom'], {
+    DOCKER_CONTEXT: undefined,
+    DOCKER_HOST: 'unix:///tmp/ploaness-sbom-no-daemon.sock',
+  }),
+  1,
+  '[FAIL] sbom',
+)
 const manifestFile: string = 'packages/one/package.json'
 const original: string = readFileSync(manifestFile, 'utf8')
 try {
   writeFileSync(manifestFile, original.replace('"3.0.1"', '"3.0.0"'))
   requireResult(await invoke(executable, ['sbom', '--artifact', 'dist/release.tgz']), 1, 'frozen lockfile specifier')
+  requireResult(await invoke(executable, ['gate', 'sbom']), 1, 'frozen lockfile specifier')
 } finally {
   writeFileSync(manifestFile, original)
 }
@@ -62,5 +83,10 @@ requireResult(
   await invoke(executable, ['sbom', '--artifact', 'dist/release.tgz', '--output', 'authored-inventory']),
   1,
   'ignored artifact directory',
+)
+requireResult(
+  await invoke(executable, ['sbom', '--artifact', 'dist/release.tgz']),
+  0,
+  'SBOM and release metadata written',
 )
 console.info('SBOM workspace identities, relationships, artifacts and failure contracts passed')
