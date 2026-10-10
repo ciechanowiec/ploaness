@@ -114,6 +114,37 @@ describe('frozen SBOM inputs', () => {
     const scoped: Readonly<Record<string, unknown>> = { ...overridden, overrides: { 'direct@1.0.0': archive } }
     expect(sbomInputProblems([manifest], scoped, scoped, { overrides: scoped['overrides'] })).toEqual([])
   })
+
+  it.each([
+    ['.', 'file:archives/direct.tgz', 'file:archives/direct.tgz', true],
+    ['cms', 'file:../archives/direct.tgz', 'file:../../archives/direct.tgz', true],
+    ['packages/site', 'file:archives/direct.tgz', 'file:../../archives/direct.tgz', true],
+    ['packages/site', 'file:./archives/direct.tgz', 'file:../../archives/direct.tgz', true],
+    ['cms', 'file:../archives/direct.tgz', 'file:../archives/direct.tgz', false],
+    ['cms', 'file:../archives/direct.tgz', 'file:../../archives/other.tgz', false],
+    ['cms', 'file:../archives/direct.tgz', '1.0.0', false],
+    ['cms', 'file:../archives/direct.tgz', undefined, false],
+    ['cms', 'file:archives/direct.tgz', 'file:/archives/direct.tgz', false],
+    ['cms', 'file:/archives/direct.tgz', 'file:/archives/direct.tgz', true],
+    ['cms', 'file:/archives/direct.tgz', 'file:/archives/other.tgz', false],
+    ['cms', 'file:C:/archives/direct.tgz', 'file:C:/archives/direct.tgz', true],
+    ['cms', '2.0.0', '2.0.0', true],
+  ] as const)(
+    'checks importer %s against archive override %s and locked specifier %s',
+    (member, override, specifier, isValid) => {
+      const overridden: Readonly<Record<string, unknown>> = {
+        ...lock,
+        overrides: { direct: override },
+        importers: { [member]: { dependencies: { direct: { specifier, version: '1.0.0' } } } },
+      }
+      const problems: readonly string[] = sbomInputProblems([{ ...manifest, path: member }], overridden, overridden, {
+        overrides: { direct: override },
+      })
+      expect(problems).toEqual(
+        isValid ? [] : [`${member}: direct does not match its frozen lockfile specifier; install with the pinned pnpm`],
+      )
+    },
+  )
 })
 
 describe('SBOM identities and relationships', () => {

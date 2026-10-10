@@ -1,4 +1,5 @@
 // A release inventory is evidence only when its inputs, components and graph are accounted for.
+import path from 'node:path'
 import { asRecord, isArray, isRecord, readKey } from './json-shapes.js'
 
 /** Files whose bytes a release inventory accompanies, and where its two reports are written. */
@@ -55,6 +56,29 @@ export interface SbomManifest {
 
 const DEPENDENCY_GROUPS: readonly string[] = ['dependencies', 'devDependencies', 'optionalDependencies']
 
+const FILE_PROTOCOL: string = 'file:'
+const isAbsolutePath = (value: string): boolean => path.posix.isAbsolute(value) || path.win32.isAbsolute(value)
+
+// pnpm addresses a relative archive override from the workspace root, but writes each importer's
+// specifier relative to that member. Compare their lexical targets without reading the filesystem.
+const matchesOverride = (override: unknown, locked: unknown, importer: string): boolean => {
+  if (typeof override !== 'string' || !override.startsWith(FILE_PROTOCOL)) {
+    return locked === override
+  }
+  const target: string = override.slice(FILE_PROTOCOL.length)
+  if (isAbsolutePath(target)) {
+    return locked === override
+  }
+  if (typeof locked !== 'string' || !locked.startsWith(FILE_PROTOCOL)) {
+    return false
+  }
+  const memberTarget: string = locked.slice(FILE_PROTOCOL.length)
+  return (
+    !isAbsolutePath(memberTarget) &&
+    path.posix.normalize(path.posix.join(importer, memberTarget)) === path.posix.normalize(target)
+  )
+}
+
 const manifestProblems = (manifest: SbomManifest, lock: unknown): readonly string[] => {
   const importers: unknown = readKey(lock, 'importers')
   const overrides: Record<string, unknown> = asRecord(readKey(lock, 'overrides'))
@@ -69,8 +93,13 @@ const manifestProblems = (manifest: SbomManifest, lock: unknown): readonly strin
     return names.flatMap((name: string): readonly string[] => {
       const specifier: unknown = declared[name]
       const locked: unknown = lockedGroup[name]
-      const effective: unknown = overrides[name] ?? overrides[`${name}@${String(specifier)}`] ?? specifier
-      return Object.hasOwn(declared, name) && readKey(locked, 'specifier') === effective
+      const override: unknown = overrides[name] ?? overrides[`${name}@${String(specifier)}`]
+      const lockedSpecifier: unknown = readKey(locked, 'specifier')
+      const isMatched: boolean =
+        override === undefined
+          ? lockedSpecifier === specifier
+          : matchesOverride(override, lockedSpecifier, manifest.path)
+      return isMatched && Object.hasOwn(declared, name)
         ? []
         : [`${manifest.path}: ${name} does not match its frozen lockfile specifier; install with the pinned pnpm`]
     })

@@ -31,4 +31,9 @@ for (const name of ['one', 'two']) {
   )
 }
 const workspace: string = path.join(directory, 'pnpm-workspace.yaml')
-writeFileSync(workspace, `packages:\n  - 'packages/*'\n${readFileSync(workspace, 'utf8')}`)
+// Exercise pnpm's importer-relative rewrite of root-relative overrides with the real packed archives.
+const relativeArchives: string = readFileSync(workspace, 'utf8').replaceAll(
+  /file:([^"\n]+\.tgz)/gu,
+  (_match: string, archive: string): string => `file:${path.relative(directory, archive).split(path.sep).join('/')}`,
+)
+writeFileSync(workspace, `packages:\n  - 'packages/*'\n${relativeArchives}`)
