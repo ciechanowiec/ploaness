@@ -376,6 +376,8 @@ security_contracts() {
         ./node_modules/.bin/ploaness sbom --artifact dist/release.tgz
     expect_command sbom-workspace PASS 'SBOM workspace identities, relationships, artifacts and failure contracts passed' \
         node --import=tsx/esm "$lib/sbom-contracts.ts" "$scratch/sbom-workspace/node_modules/.bin/ploaness"
+    expect_command sbom-workspace PASS 'SBOM private inputs and caller-owned outputs passed' \
+        node --import=tsx/esm "$lib/sbom-permissions.ts" "$scratch/sbom-workspace/node_modules/.bin/ploaness"
     release_commit="$(git -C "$scratch/sbom-workspace" rev-parse HEAD)"
     expect_command sbom-workspace PASS 'release inventory identifies the original commit' \
         node "$root/scripts/lib/check-release-sbom.ts" "$release_commit" dist/sbom dist

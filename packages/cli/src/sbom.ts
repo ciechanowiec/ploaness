@@ -13,6 +13,7 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import {
   CONTAINER_IMAGES,
   canonicalInventory,
@@ -101,6 +102,14 @@ const mirrorInputs = (repository: Repository, directory: string): void => {
   }
 }
 
+// Linux bind mounts retain host ownership, including private lockfiles and output directories.
+// Docker Desktop handles the ownership mapping on hosts without POSIX user identities.
+const containerUserArguments = (): readonly string[] => {
+  const uid: number | undefined = process.geteuid?.()
+  const gid: number | undefined = process.getegid?.()
+  return uid === undefined || gid === undefined ? [] : ['--user', `${String(uid)}:${String(gid)}`]
+}
+
 const generate = (repository: Repository, directory: string): unknown => {
   const input: string = path.join(directory, 'input')
   const output: string = path.join(directory, 'output')
@@ -113,6 +122,7 @@ const generate = (repository: Repository, directory: string): unknown => {
       'run',
       '--rm',
       '--network=none',
+      ...containerUserArguments(),
       '-v',
       `${input}:/workspace:ro`,
       '-v',
