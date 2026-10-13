@@ -190,7 +190,9 @@ The workspace must already be installed with the pinned pnpm, and its manifests,
 snapshot must agree. The digest-pinned cdxgen image reads a bounded copy of workspace manifests and lockfiles.
 Generation runs without networking, dependency installation, lifecycle scripts, or source-usage filtering.
 Docker may need network access to acquire that image before generation. A failed generator or incomplete report
-fails the command. No advisory service is involved.
+fails the command. No advisory service is involved. Each component then records the license its installed manifest
+declares, read from the same workspace-wide pnpm inventory the `licenses` gate judges: an SPDX expression where the
+declared text is one, otherwise a named license. The component scope is the generator's own.
 
 Retain both output files with the release. Metadata records the source commit and dirty state, source fingerprint,
 lockfile hash, generator identity, SBOM hash, and SHA-256 hashes of the release files. A dirty checkout is identified

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   canonicalInventory,
+  cycloneLicenseOf,
   parseSbomArguments,
   type SbomManifest,
   sbomInputProblems,
   sbomProblems,
+  sbomWithDeclaredLicenses,
   sbomWithWorkspaceRoles,
 } from '../src/sbom-policy.js'
 import { type ReleaseEvidence, releaseInventoryProblems, SBOM_SCOPE } from '../src/sbom-release.js'
@@ -251,5 +253,47 @@ describe('release inventory recovery', () => {
     { artifacts: [{ path: 'one.tgz', sha256: 'wrong' }] },
   ])('rejects mismatched original release evidence %j', (change) => {
     expect(releaseInventoryProblems({ ...metadata, ...change }, evidence).length).toBeGreaterThan(0)
+  })
+})
+
+describe('SBOM declared licences', () => {
+  it('records an SPDX expression, including compound and grouped ones', () => {
+    expect(cycloneLicenseOf('MIT')).toEqual([{ expression: 'MIT' }])
+    expect(cycloneLicenseOf(' (MIT OR Apache-2.0) AND ISC ')).toEqual([{ expression: '(MIT OR Apache-2.0) AND ISC' }])
+    expect(cycloneLicenseOf('GPL-2.0-only WITH Classpath-exception-2.0')).toEqual([
+      { expression: 'GPL-2.0-only WITH Classpath-exception-2.0' },
+    ])
+    expect(cycloneLicenseOf('GPL-3.0+')).toEqual([{ expression: 'GPL-3.0+' }])
+  })
+  it('records anything that is not an expression as a named licence', () => {
+    expect(cycloneLicenseOf('SEE LICENSE IN LICENSE.md')).toEqual([{ license: { name: 'SEE LICENSE IN LICENSE.md' } }])
+    expect(cycloneLicenseOf('UNLICENSED')).toEqual([{ license: { name: 'UNLICENSED' } }])
+    expect(cycloneLicenseOf('Unknown')).toEqual([{ license: { name: 'Unknown' } }])
+    expect(cycloneLicenseOf('()')).toEqual([{ license: { name: '()' } }])
+    expect(cycloneLicenseOf('(MIT')).toEqual([{ license: { name: '(MIT' } }])
+    expect(cycloneLicenseOf('MIT) OR (ISC')).toEqual([{ license: { name: 'MIT) OR (ISC' } }])
+    expect(cycloneLicenseOf('MIT OR')).toEqual([{ license: { name: 'MIT OR' } }])
+  })
+  it('adds the declared licence to matching components at every depth and leaves the rest untouched', () => {
+    const scoped: Record<string, unknown> = { ...component('kit'), group: '@scope' }
+    const enriched: unknown = sbomWithDeclaredLicenses(
+      { ...bom, components: [...(bom['components'] as readonly unknown[]), scoped] },
+      new Map([
+        ['nested@1.0.0', 'ISC'],
+        ['@scope/kit@1.0.0', 'MIT OR Apache-2.0'],
+        ['direct@1.0.0', ' '],
+      ]),
+    )
+    expect(enriched).toMatchObject({
+      components: [
+        { name: 'direct' },
+        { name: 'shared', components: [{ name: 'nested', licenses: [{ expression: 'ISC' }] }] },
+        { name: 'kit', licenses: [{ expression: 'MIT OR Apache-2.0' }] },
+      ],
+    })
+    expect(enriched).not.toHaveProperty(['components', 0, 'licenses'])
+    expect(enriched).not.toHaveProperty(['components', 1, 'licenses'])
+    expect(sbomProblems(sbomWithDeclaredLicenses(bom, new Map([['direct@1.0.0', 'MIT']])))).toEqual([])
+    expect(sbomWithDeclaredLicenses({ bomFormat: 'CycloneDX' }, new Map())).toEqual({ bomFormat: 'CycloneDX' })
   })
 })

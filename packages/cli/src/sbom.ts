@@ -17,16 +17,21 @@ import process from 'node:process'
 import {
   CONTAINER_IMAGES,
   canonicalInventory,
+  type InventoryPackage,
+  licensesByCoordinate,
+  parseLicenseInventory,
   type ReleaseArtifact,
   readKey,
   SBOM_SCOPE,
   type SbomArguments,
   sbomInputProblems,
   sbomProblems,
+  sbomWithDeclaredLicenses,
   sbomWithWorkspaceRoles,
 } from '@ploaness/governance'
 import { parseAllDocuments } from 'yaml'
 import { acquireImage } from './checks/container-run.js'
+import { runLicenseInventory } from './checks/license-inventory.js'
 import { git, type Repository } from './context.js'
 import { type GateResult, type RunResult, run } from './exec.js'
 import { workingTreeFingerprint } from './working-tree.js'
@@ -110,6 +115,18 @@ const containerUserArguments = (): readonly string[] => {
   return uid === undefined || gid === undefined ? [] : ['--user', `${String(uid)}:${String(gid)}`]
 }
 
+// Read from the installation `assertInputs` has already proven to match the lockfile, so the licences
+// belong to exactly the versions the generator inventories.
+const declaredLicenses = (repository: Repository): ReadonlyMap<string, string> => {
+  const result: RunResult = runLicenseInventory(repository)
+  const packages: readonly InventoryPackage[] | undefined =
+    result.code === 0 ? parseLicenseInventory(result.stdout) : undefined
+  if (packages === undefined) {
+    throw new Error(`the license inventory could not be read for the SBOM: ${result.output}`)
+  }
+  return licensesByCoordinate(packages)
+}
+
 const generate = (repository: Repository, directory: string): unknown => {
   const input: string = path.join(directory, 'input')
   const output: string = path.join(directory, 'output')
@@ -157,7 +174,7 @@ const generate = (repository: Repository, directory: string): unknown => {
   if (problems.length > 0) {
     throw new Error(problems.join('\n'))
   }
-  return sbomWithWorkspaceRoles(bom, repository.projects)
+  return sbomWithDeclaredLicenses(sbomWithWorkspaceRoles(bom, repository.projects), declaredLicenses(repository))
 }
 
 const artifactsOf = (arguments_: SbomArguments): readonly ReleaseArtifact[] =>

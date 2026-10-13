@@ -1,6 +1,7 @@
 // A release inventory is evidence only when its inputs, components and graph are accounted for.
 import path from 'node:path'
-import { asRecord, isArray, isRecord, readKey } from './json-shapes.js'
+import { asRecord, asText, isArray, isRecord, readKey } from './json-shapes.js'
+import { coordinateOf } from './license-inventory.js'
 
 /** Files whose bytes a release inventory accompanies, and where its two reports are written. */
 export interface SbomArguments {
@@ -180,6 +181,98 @@ export const sbomWithWorkspaceRoles = (bom: unknown, manifests: readonly SbomMan
         { name: 'ploaness:direct-workspace-dependency-roles', value: JSON.stringify(roles) },
       ],
     },
+  }
+}
+
+// An SPDX expression is ids joined by AND, OR and WITH, optionally grouped. Anything else - `UNLICENSED`,
+// `SEE LICENSE IN LICENSE.md`, a free-text name - is recorded as a named licence, so the CycloneDX
+// document never claims an expression the declared text is not.
+const SPDX_ID: RegExp = /^[A-Za-z0-9][A-Za-z0-9.-]*\+?$/u
+const SPDX_SEPARATORS: RegExp = /([()])|\s+/u
+const SPDX_OPERATORS: ReadonlySet<string> = new Set(['AND', 'OR', 'WITH'])
+const NOT_AN_EXPRESSION: ReadonlySet<string> = new Set(['UNLICENSED', 'UNKNOWN', 'NONE', 'NOASSERTION'])
+
+const isOperand = (part: string): boolean =>
+  SPDX_ID.test(part) && !SPDX_OPERATORS.has(part) && !NOT_AN_EXPRESSION.has(part.toUpperCase())
+
+const PAIR: number = 2
+
+const depthChange = (part: string): number => {
+  if (part === '(') {
+    return 1
+  }
+  return part === ')' ? -1 : 0
+}
+
+// Parentheses must balance, and between them the parts must alternate operand, operator, operand: four
+// words in a row are a sentence, not an expression.
+const isBalanced = (parts: readonly string[]): boolean => {
+  const depths: readonly number[] = parts.reduce(
+    (seen: readonly number[], part: string): readonly number[] => [...seen, (seen.at(-1) ?? 0) + depthChange(part)],
+    [0],
+  )
+  return depths.every((depth: number): boolean => depth >= 0) && depths.at(-1) === 0
+}
+
+const isSpdxExpression = (license: string): boolean => {
+  const parts: readonly string[] = license
+    .split(SPDX_SEPARATORS)
+    .filter((part?: string): part is string => part !== undefined && part.length > 0)
+  const terms: readonly string[] = parts.filter((part: string): boolean => part !== '(' && part !== ')')
+  return (
+    terms.length % PAIR === 1 &&
+    isBalanced(parts) &&
+    terms.every((part: string, index: number): boolean =>
+      index % PAIR === 0 ? isOperand(part) : SPDX_OPERATORS.has(part),
+    )
+  )
+}
+
+/**
+ * The CycloneDX licence choice for one declared licence.
+ * @param license the licence the installed package declares.
+ * @returns an SPDX expression when the text is one, otherwise a named licence.
+ */
+export const cycloneLicenseOf = (license: string): readonly unknown[] => {
+  const declared: string = license.trim()
+  return [isSpdxExpression(declared) ? { expression: declared } : { license: { name: declared } }]
+}
+
+const componentCoordinate = (component: unknown): string => {
+  const group: string = asText(readKey(component, 'group'))
+  const name: string = asText(readKey(component, 'name'))
+  return coordinateOf(group.length > 0 ? `${group}/${name}` : name, asText(readKey(component, 'version')))
+}
+
+const withDeclaredLicense = (component: unknown, licenses: ReadonlyMap<string, string>): unknown => {
+  const nested: unknown = readKey(component, 'components')
+  const license: string | undefined = licenses.get(componentCoordinate(component))
+  return {
+    ...asRecord(component),
+    ...(license !== undefined && license.trim().length > 0 && { licenses: cycloneLicenseOf(license) }),
+    ...(isArray(nested) && {
+      components: nested.map((child: unknown): unknown => withDeclaredLicense(child, licenses)),
+    }),
+  }
+}
+
+/**
+ * Record the licence each installed package declares on its SBOM component.
+ *
+ * The generator runs offline and without the installation, so it cannot read a licence itself. The
+ * values come from the same installed manifests the licence gate judges, which keeps the inventory and
+ * the verdict on one source; a component the installation does not report keeps whatever it carried.
+ * @param bom the generated CycloneDX document.
+ * @param licenses the declared licence by `name@version`.
+ * @returns the document with the licences recorded.
+ */
+export const sbomWithDeclaredLicenses = (bom: unknown, licenses: ReadonlyMap<string, string>): unknown => {
+  const components: unknown = readKey(bom, 'components')
+  return {
+    ...asRecord(bom),
+    ...(isArray(components) && {
+      components: components.map((component: unknown): unknown => withDeclaredLicense(component, licenses)),
+    }),
   }
 }
 

@@ -29,6 +29,16 @@ for (const [name, version] of [
     throw new Error(`The SBOM omitted ${name}@${version}`)
   }
 }
+// Both fixture packages declare MIT in their installed manifests; the generator alone cannot read it.
+if (
+  !components.every(
+    (entry: unknown): boolean =>
+      readKey(entry, 'name') !== 'is-number' ||
+      JSON.stringify(readKey(entry, 'licenses')) === JSON.stringify([{ expression: 'MIT' }]),
+  )
+) {
+  throw new Error('The SBOM did not record the licence each installed package declares')
+}
 const hasEdge = (parent: string, child: string): boolean =>
   graph.some((edge: unknown): boolean => {
     const children: unknown = readKey(edge, 'dependsOn')
