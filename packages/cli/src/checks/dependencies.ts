@@ -46,6 +46,7 @@ import {
 import { type Context, manifestPathFrom, readJson, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed, type RunResult, run, TIMED_OUT_CODE, withOutput } from '../exec.js'
 import { type ImageReport, imageFreshness } from './images.js'
+import { runLicenseInventory } from './license-inventory.js'
 import { harnessDecidedVersions } from './wiring.js'
 
 interface PnpmLicenseEntry {
@@ -62,7 +63,7 @@ const MAX_LISTED_NAMES: number = 10
 const NOT_FOUND: number = 404
 
 export const licenses = (context: Context): GateResult => {
-  const result: RunResult = run('pnpm', ['licenses', 'list', '--json'], { cwd: context.root })
+  const result: RunResult = runLicenseInventory(context)
   if (result.code !== 0) {
     return failed('the license inventory could not be produced', [result.output])
   }

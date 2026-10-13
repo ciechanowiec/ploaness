@@ -24,6 +24,7 @@ import {
 } from '@ploaness/governance'
 import { type Context, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed, type RunResult, run } from '../exec.js'
+import { runLicenseInventory } from './license-inventory.js'
 
 const INVENTORY_LOCATION: string = 'the resolved dependency set'
 
@@ -99,7 +100,7 @@ interface InventoryJudgement {
 }
 
 const judgeInventory = (context: Context): InventoryJudgement => {
-  const result: RunResult = run('pnpm', ['licenses', 'list', '--json'], { cwd: context.root })
+  const result: RunResult = runLicenseInventory(context)
   // Parsed from stdout alone, for the reason `dependencies.ts` records: pnpm writes its warnings to
   // stderr, and the joined output is not JSON.
   const packages: readonly InstalledPackage[] | undefined =

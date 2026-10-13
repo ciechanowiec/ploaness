@@ -384,6 +384,12 @@ security_contracts() {
     printf 'changed archive bytes\n' >> "$scratch/sbom-workspace/dist/release.tgz"
     expect_command sbom-workspace FAIL 'release inventory artifact hashes do not match' \
         node "$root/scripts/lib/check-release-sbom.ts" "$release_commit" dist/sbom dist
+    new_case license-workspace
+    node "$lib/create-sbom-workspace.ts" "$scratch/license-workspace" copyleft-member
+    rm "$scratch/license-workspace/node_modules"
+    install_case "$scratch/license-workspace"
+    commit_case license-workspace 'test(fixture): declare a copyleft dependency in a member' "$CONFORMING_BODY"
+    expect license-workspace licenses FAIL 'copyleft-fixture: GPL-3.0-only'
 }
 
 # A declared focused subset for iterating on the new analyzer; the default run remains complete.
