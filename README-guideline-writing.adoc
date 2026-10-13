@@ -393,7 +393,7 @@ The footnote points to an entry in the source list that identifies the vendor's 
 +-----------+ +-----------+ +-----------+ +-----------+
 ....
 
-. An entry states its xref:#source-title[`Title`], every required field of its class and type, and the optional fields that apply, in the catalog order. The field names are exact. A required field whose value the author can't establish states the literal value `unknown`, so the reader sees a gap that was checked rather than skipped. An optional field whose value is unknown is omitted. A class field is never unknown, because it records the author's own acts, such as archiving, accessing sources, and receiving the xref:#request-source[writing request].
+. An entry states its xref:#source-title[`Title`], every required field of its class and type, and the optional fields that apply, in the catalog order. The field names and controlled values are exact for the document's language. A required field whose value the author can't establish states the literal value `unknown`, so the reader sees a gap that was checked rather than skipped. An optional field whose value is unknown is omitted. A class field is never unknown, because it records the author's own acts, such as archiving, accessing sources, and receiving the xref:#request-source[writing request].
 
 [.bad-example]
 .{bad-icon} Bad example
@@ -1079,6 +1079,25 @@ The charity compares its income with GNI and reports its work with local CSOs.
 .{good-icon} Good example
 ====
 The charity compares its income with gross national income (GNI), the total income earned by a country's residents. It also reports its work with civil society organizations (CSOs), such as neighborhood associations.
+====
+
+[[consistent-spelling]]
+==== Consistent Spelling Variants
+
+When a word has two accepted spellings, choose one for the document. Keep that spelling when adding an ending, such as a plural ending. Preserve the spelling of quoted words, code identifiers, and proper names.
+
+[.bad-example]
+.{bad-icon} Bad example
+====
+// Mixing the accepted variants is the deliberate defect.
+// adocent-disable-next-line English.ConsistentSpelling
+The adviser sent the report. A second advisor approved it.
+====
+
+[.good-example]
+.{good-icon} Good example
+====
+The adviser sent the report. A second adviser approved it.
 ====
 
 [[american-spelling]]
@@ -1793,7 +1812,7 @@ The museum director supervises the head of collections, the education manager, a
 Each arrow points from a supervisor to the role they supervise.
 ====
 
-. Every diagram uses ASCII.
+. English diagram text uses only ASCII. Polish diagram text may also use Polish letters. Drawing strokes always use ASCII.
 . [[ascii-diagrams]]Every diagram labels its elements and uses consistent connectors. Each arrow has one direction and connects two named elements. ASCII diagrams align boxes, labels, and connectors and use one consistent set of box characters.
 
 [[alt-text-and-captions]]
@@ -2745,18 +2764,30 @@ The library is open six days a week. It lends books, provides study desks, and h
 
 . The source text of this document is written in the https://asciidoc.org[AsciiDoc^] markup language.
 . The source text of this document must follow the link:README-guideline-writing.adoc[Writing Guideline for Utilitarian Non-Fiction^]. The guideline is stored beside the source text in the same Git repository.
-. The https://github.com/ciechanowiec/adocent[`adocent`^] application lints and converts the source text of this document.
-. To lint the source text of this document, run this command from the directory containing the source text:
+. The https://github.com/ciechanowiec/adocent[`adocent`^] application lints, converts, and watches the source text of this document.
+. *Linting*
++
+To lint the source text of this document, run this command from the directory containing the source text:
 +
 [source,bash,subs="attributes+"]
 ----
 adocent lint "{docname}{docfilesuffix}"
 ----
-. To export this document to HTML, PDF, and DOCX, run this command from the directory containing the source text:
+. *Converting*
++
+To convert this document to HTML, PDF, and DOCX, run this command from the directory containing the source text:
 +
 [source,bash,subs="attributes+"]
 ----
 adocent convert "{docname}{docfilesuffix}" --to html --to pdf --to docx
+----
+. *Watching*
++
+To open a live HTML preview of this document, run this command from the directory containing the source text:
++
+[source,bash,subs="attributes+"]
+----
+adocent watch "{docname}{docfilesuffix}"
 ----
 
 ifdef::backend-html5[]
