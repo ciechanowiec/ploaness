@@ -123,7 +123,7 @@ pnpm exec ploaness init && pnpm install
 | Exports a dependency inventory and release metadata to `dist/sbom/` by default.
 
 | `ploaness compliance-report [--output <directory>]`
-| Regenerates the dependency inventory, then writes the compliance report on open source dependencies to `dist/compliance/` by default. The report is one self-contained HTML file with the license policy and review, known vulnerabilities, package inventory, third-party notices, and the embedded software bill of materials. A PDF rendering comes with it when a workspace package declares `@playwright/test`. Full verification writes the same report.
+| Writes the open source compliance report to `dist/compliance/` by default, as HTML and, when the project uses Playwright, PDF.
 
 | `ploaness commit-message <file>`
 | Verifies one commit message. `ploaness commit-message` reads `--range <base>..<head>` or `--all` in place of a file.
