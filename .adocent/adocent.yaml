@@ -44,18 +44,30 @@ document:
 
     . The source text of this document is written in the https://asciidoc.org[AsciiDoc^] markup language.
     . The source text of this document must follow the link:README-guideline-writing.adoc[Writing Guideline for Utilitarian Non-Fiction^]. The guideline is stored beside the source text in the same Git repository.
-    . The https://github.com/ciechanowiec/adocent[`adocent`^] application lints and converts the source text of this document.
-    . To lint the source text of this document, run this command from the directory containing the source text:
+    . The https://github.com/ciechanowiec/adocent[`adocent`^] application lints, converts, and watches the source text of this document.
+    . *Linting*
+    +
+    To lint the source text of this document, run this command from the directory containing the source text:
     +
     [source,bash,subs="attributes+"]
     ----
     adocent lint "{docname}{docfilesuffix}"
     ----
-    . To export this document to HTML, PDF, and DOCX, run this command from the directory containing the source text:
+    . *Converting*
+    +
+    To convert this document to HTML, PDF, and DOCX, run this command from the directory containing the source text:
     +
     [source,bash,subs="attributes+"]
     ----
     adocent convert "{docname}{docfilesuffix}" --to html --to pdf --to docx
+    ----
+    . *Watching*
+    +
+    To open a live HTML preview of this document, run this command from the directory containing the source text:
+    +
+    [source,bash,subs="attributes+"]
+    ----
+    adocent watch "{docname}{docfilesuffix}"
     ----
   htmlFooter: |-
     ifdef::backend-html5[]
