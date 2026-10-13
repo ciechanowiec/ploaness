@@ -53,7 +53,7 @@ endif::[]
 [[gates]]
 === Gates
 
-. A [[gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding]]_finding_ is one problem a gate reports. Default verification runs 38 gates. Extended verification adds nine more, covering the shell scripts, the infrastructure definitions, the history, the production build, the client bundle, the browser suite, and the dependency inventory.
+. A [[gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding]]_finding_ is one problem a gate reports. Default verification runs 38 gates. Extended verification adds ten more, covering the shell scripts, the infrastructure definitions, the history, the production build, the client bundle, the browser suite, the dependency inventory, and the compliance report on open source dependencies.
 . A run stops at the first failing gate and names how many gates the run didn't reach. Stopping there is deliberate: a gate is free to leave the tree in a shape the next gate misreads, and a column of passes beneath a failure would describe a state nobody established.
 
 [[managed-files]]
@@ -102,7 +102,7 @@ pnpm exec ploaness init && pnpm install
 | Runs the default verification gates. Written as `pnpm run verify`.
 
 | `ploaness verify --extended`
-| Runs the default verification gates and the eight extended gates as well. Written as `pnpm run verify:full`.
+| Runs the default verification gates and the ten extended gates as well. Written as `pnpm run verify:full`.
 
 | `ploaness format`
 | Rewrites the files Biome selects and applies the fixes ESLint can make unaided. Written as `pnpm run format`.
@@ -121,6 +121,9 @@ pnpm exec ploaness init && pnpm install
 
 | `ploaness sbom --artifact <file> [--artifact <file> ...] [--output <directory>]`
 | Exports a dependency inventory and release metadata to `dist/sbom/` by default.
+
+| `ploaness compliance-report [--output <directory>]`
+| Regenerates the dependency inventory, then writes the compliance report on open source dependencies to `dist/compliance/` by default. The report is one self-contained HTML file with the license policy and review, known vulnerabilities, package inventory, third-party notices, and the embedded software bill of materials. A PDF rendering comes with it when a workspace package declares `@playwright/test`. Full verification writes the same report.
 
 | `ploaness commit-message <file>`
 | Verifies one commit message. `ploaness commit-message` reads `--range <base>..<head>` or `--all` in place of a file.

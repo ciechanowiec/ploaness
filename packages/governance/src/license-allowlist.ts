@@ -79,14 +79,19 @@ const ALLOWED: ReadonlySet<string> = new Set<string>([...PERMISSIVE, ...WEAK_COP
 // least three ways. The allowlist is matched on a folded id so a casing difference is not a licence
 // decision. A `WITH` exception (`GPL-2.0 WITH Classpath-exception-2.0`) names the same licence plus a
 // grant, so the licence half decides; a `+` suffix means "or later", which is the same licence too.
-const ALLOWED_FOLDED: ReadonlySet<string> = new Set([...ALLOWED].map((id: string): string => id.toLowerCase()))
+const folded = (ids: readonly string[]): ReadonlySet<string> =>
+  new Set(ids.map((id: string): string => id.toLowerCase()))
+const ALLOWED_FOLDED: ReadonlySet<string> = folded([...ALLOWED])
+const PERMISSIVE_FOLDED: ReadonlySet<string> = folded(PERMISSIVE)
 // Anchored on a single space run rather than a nested quantifier: `\s+WITH\s+(?:\S.*)?$` backtracks
 // super-linearly on a long id, and an expression comes from a registry rather than from this repository.
 const WITH_EXCEPTION: RegExp = /\sWITH\s[\s\S]*$/i
 const OR_LATER: RegExp = /\+$/
 
-const isAllowedId = (id: string): boolean =>
-  ALLOWED_FOLDED.has(id.trim().replace(WITH_EXCEPTION, '').replace(OR_LATER, '').toLowerCase())
+const acceptsIdIn =
+  (accepted: ReadonlySet<string>) =>
+  (id: string): boolean =>
+    accepted.has(id.trim().replace(WITH_EXCEPTION, '').replace(OR_LATER, '').toLowerCase())
 
 // The operators, lowest precedence first. SPDX binds AND more tightly than OR, so a correct evaluator
 // splits on OR before AND - and the ONLY correct order is that one. Splitting on AND first, after
@@ -161,6 +166,18 @@ const unwrap = (expression: string): string => {
     : trimmed
 }
 
+const matchesPolicy = (expression: string, isAccepted: (id: string) => boolean): boolean => {
+  const clean: string = unwrap(expression)
+  const alternatives: readonly string[] = splitOutside(clean, OR)
+  if (alternatives.length > 1) {
+    return alternatives.some((part: string): boolean => matchesPolicy(part, isAccepted))
+  }
+  const conjuncts: readonly string[] = splitOutside(clean, AND)
+  return conjuncts.length > 1
+    ? conjuncts.every((part: string): boolean => matchesPolicy(part, isAccepted))
+    : isAccepted(clean)
+}
+
 /**
  * Evaluate an SPDX licence expression against the policy.
  *
@@ -169,15 +186,29 @@ const unwrap = (expression: string): string => {
  * @param expression the declared licence, which may be a compound SPDX expression.
  * @returns whether the policy permits it.
  */
-export const isLicenseAllowed = (expression: string): boolean => {
-  const clean: string = unwrap(expression)
-  const alternatives: readonly string[] = splitOutside(clean, OR)
-  if (alternatives.length > 1) {
-    return alternatives.some((part: string): boolean => isLicenseAllowed(part))
+export const isLicenseAllowed = (expression: string): boolean => matchesPolicy(expression, acceptsIdIn(ALLOWED_FOLDED))
+
+/** How the policy admits a declared licence. */
+export type LicenseClass = 'permissive' | 'weak-copyleft' | 'refused'
+
+/**
+ * Classify a declared licence by the least restrictive way the policy admits it. An expression that a
+ * permissive choice satisfies is permissive, even when a copyleft alternative is also offered.
+ * @param expression the declared licence.
+ * @returns the class the policy places it in.
+ */
+export const licenseClassOf = (expression: string): LicenseClass => {
+  if (matchesPolicy(expression, acceptsIdIn(PERMISSIVE_FOLDED))) {
+    return 'permissive'
   }
-  const conjuncts: readonly string[] = splitOutside(clean, AND)
-  return conjuncts.length > 1 ? conjuncts.every((part: string): boolean => isLicenseAllowed(part)) : isAllowedId(clean)
+  return isLicenseAllowed(expression) ? 'weak-copyleft' : 'refused'
 }
+
+/** The license identifiers the policy admits, by group, for a reader of the policy. */
+export const LICENSE_POLICY: {
+  readonly permissive: readonly string[]
+  readonly weakCopyleft: readonly string[]
+} = { permissive: PERMISSIVE, weakCopyleft: WEAK_COPYLEFT }
 
 export interface LicensedPackage {
   readonly name: string

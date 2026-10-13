@@ -28,7 +28,19 @@ const gateRows = (heading: string): readonly (readonly string[])[] =>
 const expectedRows = (gates: readonly Gate[]): readonly (readonly string[])[] =>
   gates.map((gate: Gate): readonly string[] => [gate.id, gate.scope])
 
-const COUNT_WORDS: readonly string[] = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+const COUNT_WORDS: readonly string[] = [
+  'zero',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+  'ten',
+]
 
 const statedCount = (source: string, pattern: RegExp): number => {
   const value: string = pattern.exec(source)?.[1] ?? ''

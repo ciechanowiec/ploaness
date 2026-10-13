@@ -381,6 +381,11 @@ security_contracts() {
     release_commit="$(git -C "$scratch/sbom-workspace" rev-parse HEAD)"
     expect_command sbom-workspace PASS 'release inventory identifies the original commit' \
         node "$root/scripts/lib/check-release-sbom.ts" "$release_commit" dist/sbom dist
+    (cd "$template" && pnpm exec playwright install chromium >/dev/null)
+    expect sbom-workspace compliance-report PASS 'Compliance report written'
+    expect_command sbom-workspace PASS 'compliance report contents, provenance and refusal contracts passed' \
+        node --import=tsx/esm "$lib/compliance-report-contracts.ts" \
+        "$scratch/sbom-workspace/node_modules/.bin/ploaness" "$release_commit"
     printf 'changed archive bytes\n' >> "$scratch/sbom-workspace/dist/release.tgz"
     expect_command sbom-workspace FAIL 'release inventory artifact hashes do not match' \
         node "$root/scripts/lib/check-release-sbom.ts" "$release_commit" dist/sbom dist

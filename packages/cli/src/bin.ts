@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import { parseSbomArguments } from '@ploaness/governance'
+import { parseComplianceReportArguments, parseSbomArguments } from '@ploaness/governance'
 import { commitMessage } from './commands/commit-message.js'
+import { complianceReport } from './commands/compliance-report.js'
 import { format } from './commands/format.js'
 import { init } from './commands/init.js'
 import { sbom } from './commands/sbom.js'
@@ -25,6 +26,7 @@ const USAGE: string = `ploaness, the quality harness for Payload CMS projects
   ploaness sync                                    materialise the managed files
   ploaness init                                    scaffold the consumer wiring
   ploaness sbom --artifact <file> [--output <dir>] export a release dependency inventory
+  ploaness compliance-report [--output <dir>]      write the shareable compliance report
   ploaness gate <id> [--verbose]                   run one gate, for debugging
   ploaness gates                                   list the gates in run order
   ploaness commit-message <file|--range R|--all>   check one message, a range, or the history
@@ -88,6 +90,7 @@ const COMMANDS: Readonly<Record<string, CommandRunner>> = {
   sync: (repository: Repository): number => sync(repository),
   init: (repository: Repository): number => init(repository),
   sbom,
+  'compliance-report': complianceReport,
   gates: (_repository: Repository, rest: readonly string[]): number => listGates(rest),
   gate: async (repository: Repository, rest: readonly string[]): Promise<number> =>
     await runOneGate(repository, rest[0], rest.includes(VERBOSE_OPTION)),
@@ -122,6 +125,7 @@ const acceptsArguments: Readonly<Record<string, (rest: readonly string[]) => boo
   sync: (rest: readonly string[]): boolean => rest.length === 0,
   init: (rest: readonly string[]): boolean => rest.length === 0,
   sbom: (rest: readonly string[]): boolean => parseSbomArguments(rest) !== undefined,
+  'compliance-report': (rest: readonly string[]): boolean => parseComplianceReportArguments(rest) !== undefined,
   // A scope must name one ploaness knows, so a typo lists nothing rather than silently listing
   // everything - which for a script asking "have I missed a gate" would answer yes when it should not.
   gates: (rest: readonly string[]): boolean =>

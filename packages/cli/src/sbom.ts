@@ -1,16 +1,5 @@
 import { createHash } from 'node:crypto'
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -34,6 +23,7 @@ import { acquireImage } from './checks/container-run.js'
 import { runLicenseInventory } from './checks/license-inventory.js'
 import { git, type Repository } from './context.js'
 import { type GateResult, type RunResult, run } from './exec.js'
+import { type GeneratedOutput, ignoredOutputDirectory, publishFiles } from './output-directory.js'
 import { workingTreeFingerprint } from './working-tree.js'
 
 const JSON_INDENT: number = 2
@@ -65,30 +55,9 @@ const assertInputs = (repository: Repository): void => {
   }
 }
 
-// Resolve existing ancestors so an ignored symlink cannot direct output into authored content.
-const resolvedDestination = (directory: string): string =>
-  existsSync(directory)
-    ? realpathSync(directory)
-    : path.join(resolvedDestination(path.dirname(directory)), path.basename(directory))
-
-const outputDirectory = (repository: Repository, requested: string): string => {
-  const directory: string = resolvedDestination(path.resolve(requested))
-  const relative: string = path.relative(realpathSync(repository.root), directory)
-  const isInside: boolean =
-    relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative))
-  if (isInside) {
-    const ignored: readonly RunResult[] = ['bom.cdx.json', 'release.json', 'bom.cdx.json.tmp', 'release.json.tmp'].map(
-      (file: string): RunResult =>
-        run('git', ['check-ignore', '--quiet', '--', path.join(directory, file)], {
-          cwd: repository.root,
-        }),
-    )
-    const tracked: string = git(repository, ['ls-files', '--', relative])
-    if (ignored.some((result: RunResult): boolean => result.code !== 0) || tracked.length > 0) {
-      throw new Error('SBOM output must be in an ignored artifact directory or outside the repository')
-    }
-  }
-  return directory
+const SBOM_OUTPUT: GeneratedOutput = {
+  files: ['bom.cdx.json', 'release.json', 'bom.cdx.json.tmp', 'release.json.tmp'],
+  label: 'SBOM',
 }
 
 const mirrorInputs = (repository: Repository, directory: string): void => {
@@ -197,19 +166,12 @@ const rejectArtifactOutputs = (arguments_: SbomArguments, directory: string): vo
   }
 }
 
-const publishReports = (directory: string, reports: Readonly<Record<string, unknown>>): void => {
-  mkdirSync(directory, { recursive: true })
-  for (const [name, report] of Object.entries(reports)) {
-    const temporary: string = path.join(directory, `${name}.tmp`)
-    writeFileSync(temporary, `${JSON.stringify(report, null, JSON_INDENT)}\n`, { flag: 'wx' })
-    renameSync(temporary, path.join(directory, name))
-  }
-}
+const asJsonText = (report: unknown): string => `${JSON.stringify(report, null, JSON_INDENT)}\n`
 
 /** Generate inventory and source metadata; supplied artifacts add release associations. */
 export const writeSbom = (repository: Repository, arguments_: SbomArguments): string => {
   const before: string = workingTreeFingerprint(repository.root)
-  const destination: string = outputDirectory(repository, arguments_.output)
+  const destination: string = ignoredOutputDirectory(repository, arguments_.output, SBOM_OUTPUT)
   rejectArtifactOutputs(arguments_, destination)
   const artifacts: readonly ReleaseArtifact[] = artifactsOf(arguments_)
   if (new Set(artifacts.map((artifact: ReleaseArtifact): string => artifact.path)).size !== artifacts.length) {
@@ -229,21 +191,19 @@ export const writeSbom = (repository: Repository, arguments_: SbomArguments): st
     if (canonicalInventory(artifacts) !== canonicalInventory(artifactsOf(arguments_))) {
       throw new Error('release artifact bytes changed during SBOM generation')
     }
-    const text: string = `${JSON.stringify(bom, null, JSON_INDENT)}\n`
-    publishReports(destination, {
-      'bom.cdx.json': bom,
-      'release.json': {
-        schemaVersion: 1,
-        sourceCommit: git(repository, ['rev-parse', 'HEAD']).trim(),
-        sourceDirty: git(repository, ['status', '--porcelain']).length > 0,
-        sourceFingerprint: before,
-        lockfileSha256: hashFile(path.join(repository.root, 'pnpm-lock.yaml')),
-        generator: { image: IMAGE, tool: readKey(readKey(bom, 'metadata'), 'tools') },
-        scope: SBOM_SCOPE,
-        sbomSha256: createHash('sha256').update(text).digest('hex'),
-        artifacts,
-      },
-    })
+    const text: string = asJsonText(bom)
+    const release: Record<string, unknown> = {
+      schemaVersion: 1,
+      sourceCommit: git(repository, ['rev-parse', 'HEAD']).trim(),
+      sourceDirty: git(repository, ['status', '--porcelain']).length > 0,
+      sourceFingerprint: before,
+      lockfileSha256: hashFile(path.join(repository.root, 'pnpm-lock.yaml')),
+      generator: { image: IMAGE, tool: readKey(readKey(bom, 'metadata'), 'tools') },
+      scope: SBOM_SCOPE,
+      sbomSha256: createHash('sha256').update(text).digest('hex'),
+      artifacts,
+    }
+    publishFiles(destination, { 'bom.cdx.json': text, 'release.json': asJsonText(release) })
     return destination
   } finally {
     rmSync(temporary, { recursive: true, force: true })

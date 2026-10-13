@@ -185,6 +185,7 @@ gate require-full-history
 gate commit-history
 gate linear-history
 gate sbom
+gate compliance-report
 
 if ! report_tree; then
     exit 1

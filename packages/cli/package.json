@@ -35,6 +35,9 @@
   },
   "dependencies": {
     "@biomejs/biome": "2.5.15",
+    "@fontsource-variable/playfair-display": "5.3.0",
+    "@fontsource-variable/source-code-pro": "5.3.0",
+    "@fontsource-variable/source-serif-4": "5.3.0",
     "@ploaness/assets": "1.8.0",
     "@ploaness/config": "1.8.0",
     "@ploaness/governance": "1.8.0",

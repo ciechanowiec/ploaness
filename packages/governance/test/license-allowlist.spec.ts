@@ -1,6 +1,12 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import { findLicenseViolations, isLicenseAllowed, type LicensedPackage } from '../src/license-allowlist.js'
+import {
+  findLicenseViolations,
+  isLicenseAllowed,
+  LICENSE_POLICY,
+  type LicensedPackage,
+  licenseClassOf,
+} from '../src/license-allowlist.js'
 
 describe('license allowlist', () => {
   it('permits permissive licenses', () => {
@@ -140,5 +146,24 @@ describe('license allowlist properties (fast-check)', () => {
   it('is unaffected by surrounding parentheses', () => {
     expect(isLicenseAllowed('(MIT)')).toBe(isLicenseAllowed('MIT'))
     fc.assert(fc.property(anyId, (id: string): boolean => isLicenseAllowed(`(${id})`) === isLicenseAllowed(id)))
+  })
+})
+
+describe('license classes', () => {
+  it('places a licence in the least restrictive class the policy admits it through', () => {
+    expect(licenseClassOf('MIT')).toBe('permissive')
+    expect(licenseClassOf('(MPL-2.0 OR Apache-2.0)')).toBe('permissive')
+    expect(licenseClassOf('lgpl-3.0-only')).toBe('weak-copyleft')
+    expect(licenseClassOf('MIT AND MPL-2.0')).toBe('weak-copyleft')
+    expect(licenseClassOf('GPL-3.0-only OR AGPL-3.0-only')).toBe('refused')
+    expect(licenseClassOf('Unknown')).toBe('refused')
+  })
+  it('publishes the groups the allowlist is built from', () => {
+    expect(LICENSE_POLICY.permissive).toContain('MIT')
+    expect(LICENSE_POLICY.weakCopyleft).toContain('MPL-2.0')
+    expect(LICENSE_POLICY.permissive.every((id: string): boolean => isLicenseAllowed(id))).toBe(true)
+    expect(LICENSE_POLICY.weakCopyleft.every((id: string): boolean => licenseClassOf(id) === 'weak-copyleft')).toBe(
+      true,
+    )
   })
 })

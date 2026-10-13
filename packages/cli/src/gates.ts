@@ -3,6 +3,7 @@
 import { type GateDescriptor, type MemberDescriptor, type PlanStep, planSteps } from '@ploaness/governance'
 import { assets } from './checks/assets.js'
 import { blocklist } from './checks/blocklist.js'
+import { complianceReport } from './checks/compliance-report.js'
 import { actions, containers, secrets } from './checks/containers.js'
 import { conventions } from './checks/conventions.js'
 import { dependencyFreshness, licenses, vulnerabilities } from './checks/dependencies.js'
@@ -348,6 +349,13 @@ const EXTENDED_GATES: readonly Gate[] = [
   { id: 'bundle', scope: 'package', title: 'client bundle budget', isExtended: true, run: bundle },
   { id: 'e2e', scope: 'package', title: 'end-to-end suite', isExtended: true, run: endToEnd },
   { id: 'sbom', scope: 'repository', title: 'dependency inventory', isExtended: true, run: sbomInventory },
+  {
+    id: 'compliance-report',
+    scope: 'repository',
+    title: 'compliance report',
+    isExtended: true,
+    run: complianceReport,
+  },
 ]
 
 // Last in BOTH modes, which it was not. It closed `DEFAULT_GATES`, and the extended gates were appended

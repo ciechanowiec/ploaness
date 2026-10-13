@@ -13,11 +13,17 @@ describe('mandatory full-run inventory', () => {
     expect(plan.filter((step: PlanStep): boolean => step.gateId === 'sbom')).toEqual([
       { gateId: 'sbom', member: undefined },
     ])
-    expect(plan.slice(-2).map((step: PlanStep): string => step.gateId)).toEqual(['sbom', 'tree-verify'])
+    expect(plan.slice(-3).map((step: PlanStep): string => step.gateId)).toEqual([
+      'sbom',
+      'compliance-report',
+      'tree-verify',
+    ])
   })
 
   it('keeps inventory generation outside the declared development subset', () => {
     const plan: readonly PlanStep[] = planSteps(ALL_GATES, MEMBERS, false)
-    expect(plan.some((step: PlanStep): boolean => step.gateId === 'sbom')).toBe(false)
+    expect(plan.some((step: PlanStep): boolean => step.gateId === 'sbom' || step.gateId === 'compliance-report')).toBe(
+      false,
+    )
   })
 })

@@ -76,7 +76,8 @@ manual repair before synchronization. Generated application files change through
 4. Use `pnpm run verify` during development. Use `pnpm exec ploaness gate <id> --verbose` to diagnose
    an individual gate; its analyzer output is evidence for that gate alone.
 5. Run `pnpm run verify:full` before finishing. It includes history, production build, bundle, and
-   browser checks, and must reach the final tree check without a failure.
+   browser checks, writes the dependency inventory and the compliance report, and must reach the
+   final tree check without a failure.
 6. Review the diff, commit, and verify the resulting commit. A commit changing more than two files or
    more than 50 added/deleted lines needs a body explaining why. Check a new message with
    `pnpm exec ploaness commit-message --range HEAD~1..HEAD`; the complete policy is in the guideline.
@@ -144,7 +145,7 @@ invocations of a package gate. `tree-verify` runs after all other gates in eithe
 
 ### Extended Verification Gates
 
-Extended verification adds 9 gates before the final tree check.
+Extended verification adds 10 gates before the final tree check.
 
 | Gate | Scope | What it verifies |
 | --- | --- | --- |
@@ -157,6 +158,7 @@ Extended verification adds 9 gates before the final tree check.
 | `bundle` | package | The gzipped client JavaScript stays under the bundle budget. |
 | `e2e` | package | The end-to-end suite, including the three sweeps ploaness ships into it and the layout scan the accessibility sweep runs. |
 | `sbom` | repository | Generates and validates the resolved workspace dependency inventory and its source metadata. |
+| `compliance-report` | repository | Writes the shareable compliance report from the inventory `sbom` wrote for the current tree. |
 
 The `infra` gate reads the providers a tree declares from its `resource`, `data` and `provider`
 headers and judges only what it can see: resources inside external modules are not downloaded. A
@@ -204,6 +206,29 @@ This inventory covers resolved workspace dependencies, including development too
 roles are recorded in its metadata; transitive runtime usage is not inferred from import syntax. Bundling may remove
 listed packages, and container OS packages are outside this inventory. SBOM generation neither replaces the
 vulnerability gate nor proves deployment provenance.
+
+## Compliance Report
+
+Full verification runs the `compliance-report` gate after `sbom`. It writes one self-contained HTML document
+under the repository's ignored dist/compliance directory, named after the project and the source commit, and a
+PDF rendering of the same document beside it. That pair is what a project sends when a reviewer asks for a
+license and vulnerability report on its open source dependencies. Earlier reports in the directory are removed,
+so it always holds the report for the current tree.
+
+The report states the verdict, a summary, the license policy the `licenses` gate enforces, and every weak
+copyleft or refused package with its scope. It lists every advisory the `vulnerabilities` gate read with each
+recorded exception and its reason, the full package inventory, and the license and notice files the production
+dependencies ship. It embeds the software bill of materials the `sbom` gate wrote, byte for byte, with its hash.
+The gate fails when that inventory doesn't describe the current tree, when the license inventory or the advisory
+database can't be read, or when the tree changes while the report is written. A dirty tree or a dependency
+outside policy marks the report as a draft.
+
+Scope is production when a version is reachable from a production dependency of any workspace package, and
+development otherwise. The vulnerability section reflects the advisory database at the time of the query, so it
+can change for the same source. The PDF is printed by the Chromium of the project's own `@playwright/test`,
+which the `e2e` gate already requires. A repository where no workspace package declares it gets the HTML alone.
+Run `ploaness compliance-report [--output <directory>]` to regenerate the inventory and the report outside full
+verification. A custom output directory must be ignored by Git or outside the repository.
 
 ## Consumer Settings
 

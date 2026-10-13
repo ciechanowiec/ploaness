@@ -532,6 +532,7 @@ const asAdvisory = (key: string, raw: AuditAdvisory): Advisory => ({
   severity: textAt(raw, 'severity', 'unknown'),
   title: textAt(raw, 'title', 'no title reported'),
   aliases: asStrings(raw['cves']),
+  ...(asText(raw['url']).length > 0 && { url: asText(raw['url']) }),
 })
 
 // `pnpm audit` exits non-zero whenever it finds anything, so the exit code carries no information the
@@ -550,12 +551,17 @@ const parseAudit = (output: string): readonly Advisory[] | undefined => {
   }
 }
 
+/** What the advisory database answered, or why it could not be read. */
+export type AuditReading =
+  | { readonly kind: 'read'; readonly advisories: readonly Advisory[]; readonly transcript: string }
+  | { readonly kind: 'unreachable'; readonly findings: readonly string[] }
+
 /**
- * Read every package in the resolved set against the public advisory database.
+ * Ask the public advisory database about every package in the resolved set.
  * @param context the resolved project environment.
- * @returns a failure for any finding at or above the declared severity, or for a stale exception.
+ * @returns the reported advisories with the audit transcript, or why the database could not be read.
  */
-export const vulnerabilities = (context: Context): GateResult => {
+export const readAdvisories = (context: Context): AuditReading => {
   // No `--prod` filter: the standard is explicit that build and test packages count, because a build
   // tool runs with build privileges and its vulnerability is reachable by anyone who can change the repo.
   // Deadlined because it asks the advisory database over the network. Without one, a registry that
@@ -567,15 +573,31 @@ export const vulnerabilities = (context: Context): GateResult => {
   // `stdout` for the reason the licence gate reads it: a pnpm warning on stderr used to be concatenated
   // into the payload and reported as the advisory database being unreachable.
   const advisories: readonly Advisory[] | undefined = parseAudit(result.stdout)
-  if (advisories === undefined) {
-    return failed('the advisory database was unreachable, so vulnerabilities cannot be proven', [
-      ...(result.code === TIMED_OUT_CODE
-        ? [`the audit did not answer within ${String(NETWORKED_TOOL_TIMEOUT_MS)}ms and was stopped`]
-        : []),
-      result.output.split('\n').slice(0, MAX_REPORTED_LINES).join('\n'),
-      'this gate is fail-closed by design; retry with network access',
-    ])
+  return advisories === undefined
+    ? {
+        kind: 'unreachable',
+        findings: [
+          ...(result.code === TIMED_OUT_CODE
+            ? [`the audit did not answer within ${String(NETWORKED_TOOL_TIMEOUT_MS)}ms and was stopped`]
+            : []),
+          result.output.split('\n').slice(0, MAX_REPORTED_LINES).join('\n'),
+          'this gate is fail-closed by design; retry with network access',
+        ],
+      }
+    : { kind: 'read', advisories, transcript: result.stdout }
+}
+
+/**
+ * Read every package in the resolved set against the public advisory database.
+ * @param context the resolved project environment.
+ * @returns a failure for any finding at or above the declared severity, or for a stale exception.
+ */
+export const vulnerabilities = (context: Context): GateResult => {
+  const reading: AuditReading = readAdvisories(context)
+  if (reading.kind === 'unreachable') {
+    return failed('the advisory database was unreachable, so vulnerabilities cannot be proven', reading.findings)
   }
+  const { advisories } = reading
   const report: VulnerabilityReport = judgeVulnerabilities(
     advisories,
     context.settings.vulnerabilityAllowlist,
@@ -599,6 +621,6 @@ export const vulnerabilities = (context: Context): GateResult => {
       : passed(
           `no vulnerability at or above ${report.threshold} across ${String(advisories.length)} advisory record(s)`,
         ),
-    result.stdout,
+    reading.transcript,
   )
 }

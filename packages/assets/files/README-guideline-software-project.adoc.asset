@@ -90,7 +90,7 @@ This section defines the terms the guideline uses and states the qualities requi
 === Check Qualities
 
 . The xref:#check[checks] run at the strictest settings their tools offer, relaxed only where a rule of this guideline declares a cap, a floor, an allowlist, or a xref:#suppressions[machine-readable suppression].
-. A xref:#check[check] is deterministic: on the same state of the xref:#governed-repository[governed repository] it reaches the same verdict on every run and on every machine. The exceptions are the two checks of the section xref:#dependencies[] that read a public package registry by design: the xref:#dependency-freshness[freshness check] and the xref:#dependency-vulnerabilities[vulnerability check].
+. A xref:#check[check] is deterministic: on the same state of the xref:#governed-repository[governed repository] it reaches the same verdict on every run and on every machine. The exceptions are the three checks of the section xref:#dependencies[] that read a public package registry by design: the xref:#dependency-freshness[freshness check], the xref:#dependency-vulnerabilities[vulnerability check], and the xref:#compliance-report[compliance report check].
 . The toolchain that the xref:#check[checks] run - every analyzer, every build plugin, and every container image - is pinned to an exact version. An upstream release therefore can't change a verdict while the xref:#governed-repository[governed repository] doesn't change.
 
 [[the-verification-command]]
@@ -288,6 +288,13 @@ These rules govern access, authentication, audit events, and data handling where
 . A finding is resolved by upgrading the package. If no upgrade exists, a declared vulnerability allowlist records the advisory. Each entry explains why the xref:#governed-repository[governed repository] can't reach the vulnerability and records its addition date.
 . Every entry in the vulnerability allowlist suppresses a finding. An entry that suppresses none fails the xref:#check[check].
 . The vulnerability xref:#check[check] reads a public database, so its verdict can change while the xref:#governed-repository[governed repository] stays unchanged. The section xref:#check-qualities[] excludes the vulnerability check from determinism. An unreachable database fails the vulnerability check.
+
+[[compliance-report]]
+=== Compliance Report
+
+. Full verification writes a self-contained compliance report on the open source dependencies for a reviewer outside the project. A xref:#check[check] fails when the report can't be written.
+. The report names its source commit and is built from the data the license and vulnerability checks judge.
+. The report lists every package of the xref:#resolved-set[resolved set] with its license and use, every copyleft package, every known vulnerability with its allowlist entry, and the license files the product ships.
 
 [[dependency-freshness]]
 === Freshness
