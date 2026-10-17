@@ -122,27 +122,35 @@ describe('vulnerability settings', () => {
   const entry: Record<string, unknown> = {
     advisory: 'GHSA-93q8-gq69-wqmw',
     reason: 'reachable only through the dev server',
+    mitigation: 'the dev server binds to localhost, and the next release lifts the pin',
     addedOn: '2026-08-23',
   }
 
-  it('reads a fully recorded exception', () => {
+  it('reads a fully recorded mitigation', () => {
     const settings: Settings = readSettings({ ploaness: { vulnerabilityAllowlist: [entry] } })
     expect(settings.vulnerabilityAllowlist).toEqual([entry])
   })
 
-  // An unexplained or undated exception is one nobody can review, so it is dropped and the finding
-  // returns rather than being quietly excused.
-  it('drops an exception with no reason', () => {
+  // An unexplained, unplanned or undated entry is one nobody can review, so it is dropped and the
+  // advisory stays open rather than being quietly accepted.
+  it('drops an entry with no reason', () => {
     const { reason: _reason, ...rest } = entry
     expect(readSettings({ ploaness: { vulnerabilityAllowlist: [rest] } }).vulnerabilityAllowlist).toEqual([])
   })
 
-  it('drops an exception with no addition date', () => {
+  it('drops an entry with no mitigation plan, or a blank one', () => {
+    const { mitigation: _mitigation, ...rest } = entry
+    expect(readSettings({ ploaness: { vulnerabilityAllowlist: [rest] } }).vulnerabilityAllowlist).toEqual([])
+    const blank: Record<string, unknown> = { ...entry, mitigation: '  ' }
+    expect(readSettings({ ploaness: { vulnerabilityAllowlist: [blank] } }).vulnerabilityAllowlist).toEqual([])
+  })
+
+  it('drops an entry with no addition date', () => {
     const { addedOn: _addedOn, ...rest } = entry
     expect(readSettings({ ploaness: { vulnerabilityAllowlist: [rest] } }).vulnerabilityAllowlist).toEqual([])
   })
 
-  it('drops an exception whose date is not a date', () => {
+  it('drops an entry whose date is not a date', () => {
     const malformed: Record<string, unknown> = { ...entry, addedOn: 'last tuesday' }
     expect(readSettings({ ploaness: { vulnerabilityAllowlist: [malformed] } }).vulnerabilityAllowlist).toEqual([])
   })
@@ -153,14 +161,6 @@ describe('vulnerability settings', () => {
 
   it('drops a whole allowlist that is not a list', () => {
     expect(readSettings({ ploaness: { vulnerabilityAllowlist: 'GHSA-1' } }).vulnerabilityAllowlist).toEqual([])
-  })
-
-  it('reads a declared severity', () => {
-    expect(readSettings({ ploaness: { vulnerabilitySeverity: 'low' } }).vulnerabilitySeverity).toBe('low')
-  })
-
-  it('leaves the severity undeclared when it is not a string', () => {
-    expect(readSettings({ ploaness: { vulnerabilitySeverity: 3 } }).vulnerabilitySeverity).toBeUndefined()
   })
 })
 

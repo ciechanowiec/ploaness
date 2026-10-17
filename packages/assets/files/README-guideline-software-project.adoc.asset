@@ -283,10 +283,10 @@ These rules govern access, authentication, audit events, and data handling where
 [[dependency-vulnerabilities]]
 === Known Vulnerabilities
 
-. A xref:#check[check] reads every package in the xref:#resolved-set[resolved set] against a public vulnerability database. It fails on any known vulnerability at or above the severity the xref:#governed-repository[governed repository] declares.
+. A xref:#check[check] reads every package in the xref:#resolved-set[resolved set] against a public vulnerability database. It fails on any known vulnerability that isn't repaired or mitigated, whatever its severity.
 . The xref:#check[check] covers packages used by the product, tests, and build. Build tools run with build privileges, so their vulnerabilities are reachable by anyone who can change the xref:#governed-repository[governed repository].
-. A finding is resolved by upgrading the package. If no upgrade exists, a declared vulnerability allowlist records the advisory. Each entry explains why the xref:#governed-repository[governed repository] can't reach the vulnerability and records its addition date.
-. Every entry in the vulnerability allowlist suppresses a finding. An entry that suppresses none fails the xref:#check[check].
+. A finding is repaired by upgrading the package. If no upgrade exists, an entry in a declared vulnerability allowlist mitigates it. Each entry explains why the vulnerability can't be exploited, states a mitigation plan, and records its addition date.
+. Every entry in the vulnerability allowlist matches a finding. An entry that matches none fails the xref:#check[check].
 . The vulnerability xref:#check[check] reads a public database, so its verdict can change while the xref:#governed-repository[governed repository] stays unchanged. The section xref:#check-qualities[] excludes the vulnerability check from determinism. An unreachable database fails the vulnerability check.
 
 [[compliance-report]]
@@ -294,7 +294,8 @@ These rules govern access, authentication, audit events, and data handling where
 
 . Full verification writes a self-contained compliance report on the open source dependencies for a reviewer outside the project. A xref:#check[check] fails when the report can't be written.
 . The report names its source commit and is built from the data the license and vulnerability checks judge.
-. The report lists every package of the xref:#resolved-set[resolved set] with its license and use, every copyleft package, every known vulnerability with its allowlist entry, and the license files the product ships.
+. The report opens with its verdict.
+. The report lists every known vulnerability with its status and mitigation plan, every package of the xref:#resolved-set[resolved set] with its license and use, every copyleft package, and the license files the product ships.
 
 [[dependency-freshness]]
 === Freshness

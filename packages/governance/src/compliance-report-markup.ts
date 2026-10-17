@@ -76,14 +76,13 @@ export const table = (headings: readonly string[], rows: readonly string[], empt
 
 /**
  * A two-column table of labelled facts.
- * @param rows each label with its already rendered value.
+ * @param rows each already rendered label with its already rendered value.
+ * @param variant an extra class for the table, such as `plan`.
  * @returns the table markup.
  */
-export const facts = (rows: readonly (readonly [string, string])[]): string =>
-  `<div class="table-wrap"><table class="tableblock facts"><tbody>${rows
-    .map(
-      ([label, value]: readonly [string, string]): string => `<tr><td>${escapeHtml(label)}</td><td>${value}</td></tr>`,
-    )
+export const facts = (rows: readonly (readonly [string, string])[], variant: string = ''): string =>
+  `<div class="table-wrap"><table class="${['tableblock', 'facts', variant].join(' ').trim()}"><tbody>${rows
+    .map(([label, value]: readonly [string, string]): string => `<tr><td>${label}</td><td>${value}</td></tr>`)
     .join('')}</tbody></table></div>`
 
 const WEB_LINK: RegExp = /^https?:\/\//u
@@ -98,17 +97,13 @@ const idItem = (id: string): string => `<li>${code(id)}</li>`
 export const idList = (ids: readonly string[]): string =>
   `<ul class="ids">${ids.map((id: string): string => idItem(id)).join('')}</ul>`
 
-const letteredItem = (html: string): string => `<li><p>${html}</p></li>`
-
 /**
- * Statements set as a lettered list, the way every statement of the report is addressed.
- * @param items each statement, already rendered.
- * @returns the list markup.
+ * Plain paragraphs of the report's own prose.
+ * @param items each paragraph, already rendered.
+ * @returns the paragraph markup.
  */
-export const lettered = (items: readonly string[]): string =>
-  `<div class="olist upperalpha"><ol class="upperalpha" type="A">${items
-    .map((item: string): string => letteredItem(item))
-    .join('')}</ol></div>`
+export const paragraphs = (items: readonly string[]): string =>
+  items.map((item: string): string => `<p>${item}</p>`).join('')
 
 /** The icon an admonition carries. */
 export type AdmonitionKind = 'warning' | 'ok' | 'fail'

@@ -500,14 +500,14 @@ const checkTsconfig = (
 // pinned this way, so a pre-publication consumer may still point them at a local tarball.
 
 // The sanctioned route for an advisory a project cannot reach is `ploaness.vulnerabilityAllowlist`,
-// which records a reason and a date and fails once the entry stops suppressing anything.
+// which records a reason, a mitigation plan and a date and fails once the entry matches no advisory.
 const checkSilencedAdvisories = (packageJson: unknown): readonly WiringViolation[] =>
   findSilencedAdvisories(packageJson).map(
     (key: string): WiringViolation => ({
       location: `package.json pnpm.auditConfig.${key}`,
       reason:
         'silences the vulnerability gate; record the advisory in ' +
-        'ploaness.vulnerabilityAllowlist instead, with a reason and a date',
+        'ploaness.vulnerabilityAllowlist instead, with a reason, a mitigation plan and a date',
     }),
   )
 

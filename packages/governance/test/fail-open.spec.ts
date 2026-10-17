@@ -49,30 +49,17 @@ const advisory = (severity: string): Advisory => ({
   aliases: [],
 })
 
-const reported = (severity: string): number =>
-  judgeVulnerabilities([advisory(severity)], [], 'moderate').unsuppressed.length
+const reported = (severity: string): number => judgeVulnerabilities([advisory(severity)], []).open.length
 
-// The advisory gate is fail-closed by design; the severity read was not. An advisory whose severity was
-// absent, misspelled, or newly introduced upstream ranked at -1 and was dropped from the report.
-describe('an advisory whose severity this scale does not know', () => {
-  it.each(['', 'unknown', 'SEVERE', 'hgih'])(
+// The advisory gate is fail-closed by design, and so is the severity read. An advisory whose severity is
+// absent, misspelled, newly introduced upstream, or merely low is reported like any other.
+describe('an advisory whatever its severity', () => {
+  it.each(['', 'unknown', 'SEVERE', 'hgih', 'critical', 'low', 'info'])(
     'reports the advisory rather than dropping it (%j)',
     (severity: string) => {
       expect(reported(severity)).toBe(1)
     },
   )
-
-  it('still reports a known severity at the threshold', () => {
-    expect(reported('critical')).toBe(1)
-  })
-
-  it('still says nothing about a known severity below the threshold', () => {
-    expect(reported('low')).toBe(0)
-  })
-
-  it('reads a known severity whatever its casing', () => {
-    expect(reported('CRITICAL')).toBe(1)
-  })
 })
 
 // A tsconfig legally carries comments, and `create-payload-app` writes one that does. The rule parsed

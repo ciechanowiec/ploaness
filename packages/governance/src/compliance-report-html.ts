@@ -1,7 +1,7 @@
-// Render the compliance report as one self-contained HTML document: no external asset, so the file is
+// Render the open source software report as one self-contained HTML document: no external asset, so the file is
 // the whole deliverable whether it is opened offline, attached to a message, or printed to PDF.
 
-import type { ComplianceReport, LicenseCount, NoticeGroup, ReportPackage, SeverityCount } from './compliance-report.js'
+import type { ComplianceReport, LicenseCount, NoticeGroup, ReportAdvisory, ReportPackage } from './compliance-report.js'
 import { type EmbeddedFont, fontFaces, REPORT_SCRIPT, REPORT_STYLE } from './compliance-report-assets.js'
 import {
   admonition,
@@ -16,9 +16,9 @@ import {
   formatCount,
   idList,
   inventoryCsv,
-  lettered,
   nowrap,
   packageLink,
+  paragraphs,
   percentOf,
   plural,
   relationLabel,
@@ -29,7 +29,7 @@ import {
 } from './compliance-report-markup.js'
 import { section, sectionReference, subheading, tableOfContents } from './compliance-report-outline.js'
 import type { LicenseClass } from './license-allowlist.js'
-import type { Advisory, SuppressedAdvisory } from './vulnerability-policy.js'
+import type { Advisory } from './vulnerability-policy.js'
 
 /** What the report carries besides its own markup. */
 export interface ReportAttachments {
@@ -54,55 +54,179 @@ const draftNotice = (report: ComplianceReport): string =>
           .join(' ')}</p>`,
       )
 
-const verdictNotice = (report: ComplianceReport): string => {
-  const threshold: string = escapeHtml(report.vulnerabilities.threshold)
-  return report.isCompliant
-    ? admonition(
-        'ok',
-        '<p><strong>Compliant.</strong> Every dependency is licensed within the stated policy, and no known ' +
-          `vulnerability at or above ${threshold} severity stands unresolved.</p>`,
-      )
-    : admonition(
-        'fail',
-        '<p><strong>Not compliant</strong>. At least one dependency is outside the license policy, or a known ' +
-          `vulnerability at or above ${threshold} severity stands unresolved. The sections below name each one.</p>`,
-      )
+type Outcome = 'pass' | 'fail'
+
+const statement = (outcome: Outcome, text: string): string => `<li class="${outcome}">${text}</li>`
+
+const verdictOf = (isPassing: boolean): Outcome => (isPassing ? 'pass' : 'fail')
+
+// The verb that agrees with a counted subject: "1 package version has", "2 package versions have".
+const agreeing = (count: number, one: string, several: string): string => (count === 1 ? one : several)
+
+const severityOf = (entry: ReportAdvisory): string => entry.advisory.severity.toLowerCase()
+
+const countAt = (entries: readonly ReportAdvisory[], severity: string): number =>
+  entries.filter((entry: ReportAdvisory): boolean => severityOf(entry) === severity).length
+
+// "1 high, 2 low", most severe first, which is the order the advisories are already listed in.
+const severityBreakdown = (entries: readonly ReportAdvisory[]): string =>
+  [...new Set(entries.map((entry: ReportAdvisory): string => severityOf(entry)))]
+    .map((severity: string): string => `${formatCount(countAt(entries, severity))} ${escapeHtml(severity)}`)
+    .join(', ')
+
+const licenseStatement = (report: ComplianceReport): string => {
+  const outside: number = report.classCounts.refused
+  return statement(
+    verdictOf(outside === 0),
+    outside === 0
+      ? `All ${plural(report.packages.length, 'package version')} have a license within the policy.`
+      : `${plural(outside, 'package version')} ${agreeing(outside, 'has', 'have')} a license outside the policy. ` +
+          `Each is listed in ${sectionReference('review-outside')}.`,
+  )
 }
 
-const header = (): string =>
-  `<div id="header"><h1>Open Source Software Compliance Report</h1>${tableOfContents()}</div>`
+const openStatement = (report: ComplianceReport, mitigatedCount: number): string => {
+  const open: readonly ReportAdvisory[] = report.advisories.filter(
+    (entry: ReportAdvisory): boolean => entry.mitigation === undefined,
+  )
+  if (open.length > 0) {
+    return statement(
+      'fail',
+      `${plural(open.length, 'vulnerability', 'vulnerabilities')} (${severityBreakdown(open)}) ` +
+        `${agreeing(open.length, 'is', 'are')} open, with no mitigation plan. ` +
+        `Each is listed in ${sectionReference('advisories-all')}.`,
+    )
+  }
+  return statement('pass', mitigatedCount === 0 ? 'No known vulnerabilities.' : 'No open vulnerabilities.')
+}
 
-const opening = (report: ComplianceReport): string =>
-  `<div id="preamble">${draftNotice(report)}${verdictNotice(report)}${facts([
+const vulnerabilityStatements = (report: ComplianceReport): readonly string[] => {
+  const mitigated: readonly ReportAdvisory[] = report.advisories.filter(
+    (entry: ReportAdvisory): boolean => entry.mitigation !== undefined,
+  )
+  const stale: number = report.vulnerabilities.deadEntries.length
+  return [
+    openStatement(report, mitigated.length),
+    ...(mitigated.length > 0
+      ? [
+          statement(
+            'pass',
+            `${plural(mitigated.length, 'vulnerability', 'vulnerabilities')} (${severityBreakdown(mitigated)}) ` +
+              `${agreeing(mitigated.length, 'is mitigated, with a', 'are mitigated, each with a')} ` +
+              `mitigation plan in ${sectionReference('advisories-plans')}.`,
+          ),
+        ]
+      : []),
+    ...(stale > 0
+      ? [
+          statement(
+            'fail',
+            `${plural(stale, 'recorded mitigation')} ${agreeing(stale, 'matches', 'match')} no current ` +
+              `vulnerability. Each is listed in ${sectionReference('advisories-stale')}.`,
+          ),
+        ]
+      : []),
+  ]
+}
+
+const verdict = (report: ComplianceReport): string =>
+  `<ul class="statements verdict">${[licenseStatement(report), ...vulnerabilityStatements(report)].join('')}</ul>`
+
+const preamble = (report: ComplianceReport): string =>
+  `<div id="preamble">${draftNotice(report)}${verdict(report)}${facts([
     ['Project', escapeHtml(report.projectName)],
     ...(report.projectDescription === undefined
       ? []
       : [['Description', escapeHtml(report.projectDescription)] as const]),
     ['Source commit', code(report.source.commit)],
     ['Report generated', escapeHtml(report.generatedAt)],
-    ['Advisory data as of', escapeHtml(report.auditedAt)],
-    ['Package versions', formatCount(report.packages.length)],
-    ['Software bill of materials', `CycloneDX 1.6, ${plural(report.sbom.components, 'component')}`],
+    ['Vulnerability data as of', escapeHtml(report.auditedAt)],
   ])}</div>`
 
-const figure = (value: number, label: string, tone: string): string =>
-  `<div class="figure ${tone}"><b>${formatCount(value)}</b><span>${escapeHtml(label)}</span></div>`
+// The verdict precedes the contents, so a reader who opens only the first page reads it.
+const header = (report: ComplianceReport): string =>
+  `<div id="header"><h1>Open Source Software Report</h1>${preamble(report)}${tableOfContents()}</div>`
 
-const toneOf = (count: number, whenPresent: string): string => (count > 0 ? whenPresent : 'good')
+const advisoryLink = (advisory: Advisory): string =>
+  advisory.url?.startsWith('https://') === true
+    ? `<a href="${escapeHtml(advisory.url)}" rel="noreferrer noopener">${nowrap(code(advisory.id))}</a>`
+    : nowrap(code(advisory.id))
 
-const keyFigures = (report: ComplianceReport): string => {
-  const total: number = report.packages.length
-  const open: number = report.vulnerabilities.unsuppressed.length
-  const weak: number = report.classCounts['weak-copyleft']
-  const refused: number = report.classCounts.refused
-  return `<div class="figures">${[
-    figure(total, 'package versions in the resolved set', 'plain'),
-    figure(report.productionCount, 'in the production dependency graph', 'plain'),
-    figure(total - report.productionCount, 'used only for development and build', 'plain'),
-    figure(weak, 'under a weak copyleft license', toneOf(weak, 'warn')),
-    figure(refused, 'licenses outside the policy', toneOf(refused, 'bad')),
-    figure(open, `open vulnerabilities at or above ${report.vulnerabilities.threshold}`, toneOf(open, 'bad')),
-  ].join('')}</div>`
+const aliasLine = (advisory: Advisory): string =>
+  advisory.aliases.length > 0 ? `<br><span class="mono">${escapeHtml(advisory.aliases.join(', '))}</span>` : ''
+
+const planId = (index: number): string => `plan-${String(index + 1)}`
+
+const statusOf = (entry: ReportAdvisory, planIndex: number): string =>
+  entry.mitigation === undefined
+    ? '<span class="chip status-open">Open</span>'
+    : `<a class="plain" href="#${planId(planIndex)}"><span class="chip status-mitigated">Mitigated</span></a>`
+
+const ADVISORY_HEADINGS: readonly string[] = ['Severity', 'Advisory', 'Package', 'Scope', 'Status']
+
+const advisoryRow = (entry: ReportAdvisory, mitigated: readonly ReportAdvisory[]): string => {
+  const status: string = statusOf(entry, mitigated.indexOf(entry))
+  return cells([
+    severityChip(entry.advisory.severity),
+    `${advisoryLink(entry.advisory)}${aliasLine(entry.advisory)}<br>${escapeHtml(entry.advisory.title)}`,
+    escapeHtml(entry.advisory.packageName),
+    nowrap(entry.isProduction ? 'Production' : 'Development'),
+    nowrap(status),
+  ])
+}
+
+const plan = (entry: ReportAdvisory, index: number): string => {
+  const addedOn: string = escapeHtml(entry.mitigation?.addedOn ?? '')
+  const recorded: string =
+    `<span class="mono">${nowrap(addedOn)}</span>` + (entry.isHarnessMitigation ? ' by the build harness' : '')
+  return (
+    `<div class="plan" id="${planId(index)}"><p class="title">${severityChip(entry.advisory.severity)} ` +
+    `${nowrap(code(entry.advisory.id))} in ${escapeHtml(entry.advisory.packageName)}</p>` +
+    `<p class="plan-subject">${escapeHtml(entry.advisory.title)}</p>` +
+    facts(
+      [
+        ['Why it can&#39;t be exploited here', escapeHtml(entry.mitigation?.reason ?? '')],
+        ['Mitigation plan', escapeHtml(entry.mitigation?.mitigation ?? '')],
+        ['Recorded', recorded],
+      ],
+      'plan',
+    ) +
+    '</div>'
+  )
+}
+
+const listItem = (text: string): string => `<li>${escapeHtml(text)}</li>`
+
+const staleMitigations = (entries: readonly string[]): string =>
+  entries.length > 0
+    ? `<ul>${entries.map((entry: string): string => listItem(entry)).join('')}</ul>`
+    : '<p class="empty">Every recorded mitigation matches a current vulnerability.</p>'
+
+const vulnerabilities = (report: ComplianceReport): string => {
+  const mitigated: readonly ReportAdvisory[] = report.advisories.filter(
+    (entry: ReportAdvisory): boolean => entry.mitigation !== undefined,
+  )
+  return section(
+    'vulnerabilities',
+    paragraphs([
+      'Every installed package, development tools included, was checked against the GitHub Advisory Database ' +
+        `at ${escapeHtml(report.auditedAt)}.`,
+      'Each vulnerability is either open, which fails the build, or mitigated, which means the project recorded ' +
+        'why it can&#39;t be exploited here and a mitigation plan.',
+    ]) +
+      subheading('advisories-all') +
+      table(
+        ADVISORY_HEADINGS,
+        report.advisories.map((entry: ReportAdvisory): string => advisoryRow(entry, mitigated)),
+        'No known vulnerability was reported.',
+      ) +
+      subheading('advisories-plans') +
+      (mitigated.length > 0
+        ? mitigated.map((entry: ReportAdvisory, index: number): string => plan(entry, index)).join('')
+        : '<p class="empty">No vulnerability needs a mitigation plan.</p>') +
+      subheading('advisories-stale') +
+      staleMitigations(report.vulnerabilities.deadEntries),
+  )
 }
 
 const classStack = (report: ComplianceReport): string => {
@@ -139,125 +263,6 @@ const licenseBars = (report: ComplianceReport): string => {
   ].join('')}</div>`
 }
 
-const severityRow = (counts: readonly SeverityCount[]): string =>
-  `<ul class="severities">${counts
-    .map((entry: SeverityCount): string => `<li>${severityChip(entry.severity)} ${formatCount(entry.count)}</li>`)
-    .join('')}</ul>`
-
-type Outcome = 'pass' | 'fail' | 'info'
-
-const statement = (outcome: Outcome, text: string): string => `<li class="${outcome}">${text}</li>`
-
-const verdictOf = (isPassing: boolean): Outcome => (isPassing ? 'pass' : 'fail')
-
-const licenseFinding = (report: ComplianceReport): string =>
-  statement(
-    verdictOf(report.classCounts.refused === 0),
-    report.classCounts.refused === 0
-      ? `All ${plural(report.packages.length, 'package version')} declare a license the policy admits.`
-      : `${plural(report.classCounts.refused, 'package version')} declare a license outside the policy.`,
-  )
-
-const vulnerabilityFindings = (report: ComplianceReport): readonly string[] => {
-  const open: number = report.vulnerabilities.unsuppressed.length
-  const threshold: string = escapeHtml(report.vulnerabilities.threshold)
-  const excused: number = report.vulnerabilities.suppressed.length
-  const stale: number = report.vulnerabilities.deadEntries.length
-  const excusedVerb: string = excused === 1 ? 'is' : 'are'
-  return [
-    statement(
-      verdictOf(open === 0),
-      open === 0
-        ? `No known vulnerability at or above ${threshold} severity stands unresolved across ` +
-            `${plural(report.advisoryRecords, 'advisory record')}.`
-        : `${plural(open, 'known vulnerability', 'known vulnerabilities')} at or above ${threshold} severity ` +
-            'stand unresolved.',
-    ),
-    statement(
-      verdictOf(stale === 0),
-      stale === 0
-        ? `${plural(excused, 'advisory', 'advisories')} at or above the threshold ${excusedVerb} excused by a ` +
-            'recorded, justified and dated exception.'
-        : `${plural(stale, 'recorded exception')} no longer match any finding.`,
-    ),
-  ]
-}
-
-const noticeFinding = (report: ComplianceReport): string =>
-  statement(
-    'info',
-    `${plural(report.notices.length, 'distinct license text')} reproduced for the production dependencies.` +
-      (report.withoutNotice.length === 0
-        ? ''
-        : ` ${plural(report.withoutNotice.length, 'production package version')} ship no license file and are ` +
-          `attributed by their declared license in ${sectionReference('inventory')}.`),
-  )
-
-const findings = (report: ComplianceReport): string =>
-  `<ul class="statements">${[
-    licenseFinding(report),
-    statement(
-      'info',
-      `${plural(report.classCounts['weak-copyleft'], 'package version')} carry a weak copyleft license. Each is ` +
-        `listed with its scope in ${sectionReference('copyleft')}.`,
-    ),
-    ...vulnerabilityFindings(report),
-    noticeFinding(report),
-  ].join('')}</ul>`
-
-const summary = (report: ComplianceReport): string =>
-  section(
-    'summary',
-    lettered([
-      'This section states what the report establishes, in one view.',
-      'Every figure is computed from the installed dependency tree of the source commit named above, with the ' +
-        'same data the project build uses to pass or fail.',
-    ]) +
-      subheading('key-figures') +
-      keyFigures(report) +
-      subheading('license-classes') +
-      classStack(report) +
-      subheading('common-licenses') +
-      licenseBars(report) +
-      subheading('severities') +
-      severityRow(report.severityCounts) +
-      subheading('findings') +
-      findings(report),
-  )
-
-const policy = (report: ComplianceReport): string =>
-  section(
-    'policy',
-    lettered([
-      'This section states the policy the build enforces, rendered from the same definition the license check reads.',
-      'A license is identified by its Software Package Data Exchange (SPDX) identifier.',
-      'In a compound expression, an OR is satisfied by any admitted alternative, because the recipient may choose ' +
-        'it, and an AND requires every part.',
-    ]) +
-      subheading('policy-permissive') +
-      lettered([
-        `The policy admits ${plural(report.policy.permissive.length, 'license')} with no copyleft obligation.`,
-        `Attribution, where the license requires it, is satisfied by ${sectionReference('notices')}.`,
-      ]) +
-      idList(report.policy.permissive) +
-      subheading('policy-weak-copyleft') +
-      lettered([
-        `The policy admits ${plural(report.policy.weakCopyleft.length, 'license')} only for dependencies used ` +
-          'unmodified.',
-        'File-level copyleft, as in the Mozilla, Eclipse, and Common Development and Distribution licenses, ' +
-          'doesn&#39;t extend to the project&#39;s own source when the component is used as published.',
-        'Neither does library-level copyleft, as in the GNU Lesser General Public License.',
-      ]) +
-      idList(report.policy.weakCopyleft) +
-      subheading('policy-outside') +
-      lettered([
-        'Every other license is outside the policy, including strong copyleft such as the GNU General ' +
-          'Public License and the GNU Affero General Public License, licenses that restrict the field of use, and ' +
-          'any package whose license can&#39;t be resolved.',
-        'A single such package fails the build.',
-      ]),
-  )
-
 const REVIEW_HEADINGS: readonly string[] = ['Package', 'Version', 'License', 'Scope', 'Relation']
 
 const reviewRow = (row: ReportPackage): string => {
@@ -271,16 +276,25 @@ const reviewRow = (row: ReportPackage): string => {
   ])
 }
 
-const copyleft = (report: ComplianceReport): string =>
-  section(
-    'copyleft',
-    lettered([
-      'This section lists every package version whose license carries any copyleft condition.',
-      'The policy admits weak copyleft only for components used unmodified.',
-      'Production components are part of the distributed application. Development components are build, test and ' +
-        'analysis tools that aren&#39;t distributed with it.',
+const licenses = (report: ComplianceReport): string => {
+  const total: number = report.packages.length
+  return section(
+    'licenses',
+    paragraphs([
+      `${plural(total, 'package version')} ${agreeing(total, 'is', 'are')} installed, ` +
+        `${formatCount(report.productionCount)} in the production dependency graph and ` +
+        `${formatCount(total - report.productionCount)} used only for development and build.`,
+      `Each license is judged against the policy in ${sectionReference('policy')}.`,
     ]) +
+      subheading('license-classes') +
+      classStack(report) +
+      subheading('common-licenses') +
+      licenseBars(report) +
       subheading('review-weak-copyleft') +
+      paragraphs([
+        'The policy admits weak copyleft only for components used unmodified. Development components are build, ' +
+          'test and analysis tools that aren&#39;t distributed with the application.',
+      ]) +
       table(
         REVIEW_HEADINGS,
         report.copyleft.map((row: ReportPackage): string => reviewRow(row)),
@@ -293,77 +307,36 @@ const copyleft = (report: ComplianceReport): string =>
         'No dependency declares a license outside the policy.',
       ),
   )
-
-const advisoryLink = (advisory: Advisory): string =>
-  advisory.url?.startsWith('https://') === true
-    ? `<a href="${escapeHtml(advisory.url)}" rel="noreferrer noopener">${nowrap(code(advisory.id))}</a>`
-    : nowrap(code(advisory.id))
-
-const aliasLine = (advisory: Advisory): string =>
-  advisory.aliases.length > 0 ? `<br><span class="mono">${escapeHtml(advisory.aliases.join(', '))}</span>` : ''
-
-const advisoryCells = (advisory: Advisory): readonly string[] => [
-  severityChip(advisory.severity),
-  `${advisoryLink(advisory)}${aliasLine(advisory)}<br>${escapeHtml(advisory.title)}`,
-  escapeHtml(advisory.packageName),
-]
-
-const ADVISORY_HEADINGS: readonly string[] = ['Severity', 'Advisory', 'Package']
-
-const excusedRow = (entry: SuppressedAdvisory): string =>
-  cells([
-    ...advisoryCells(entry.advisory),
-    escapeHtml(entry.exception.reason) +
-      (entry.isHarnessException ? '<br><span class="empty">Recorded by the build harness.</span>' : ''),
-    `<span class="mono">${nowrap(escapeHtml(entry.exception.addedOn))}</span>`,
-  ])
-
-const listItem = (text: string): string => `<li>${escapeHtml(text)}</li>`
-
-const staleExceptions = (entries: readonly string[]): string =>
-  entries.length > 0
-    ? `<ul>${entries.map((entry: string): string => listItem(entry)).join('')}</ul>`
-    : '<p class="empty">Every recorded exception still matches a finding.</p>'
-
-const vulnerabilityIntroduction = (report: ComplianceReport): string =>
-  lettered([
-    'Every package in the resolved set, development tools included, was checked against the npm registry ' +
-      'advisory service, which publishes the GitHub Advisory Database.',
-    `The query ran at ${escapeHtml(report.auditedAt)} and returned ` +
-      `${plural(report.advisoryRecords, 'advisory record')}.`,
-    `The build fails on any advisory at or above <strong>${escapeHtml(report.vulnerabilities.threshold)}</strong> ` +
-      'severity unless a recorded exception explains why the project can&#39;t reach it.',
-    'Unlike the rest of this report, this section reflects the database at the time of the query and can change ' +
-      'for the same source.',
-  ])
-
-const vulnerabilities = (report: ComplianceReport): string => {
-  const { threshold, unsuppressed, suppressed, belowThreshold, deadEntries } = report.vulnerabilities
-  return section(
-    'vulnerabilities',
-    vulnerabilityIntroduction(report) +
-      subheading('advisories-open') +
-      table(
-        ADVISORY_HEADINGS,
-        unsuppressed.map((advisory: Advisory): string => cells(advisoryCells(advisory))),
-        `No advisory at or above ${threshold} severity stands unresolved.`,
-      ) +
-      subheading('advisories-excused') +
-      table(
-        [...ADVISORY_HEADINGS, "Why it isn't reachable", 'Recorded'],
-        suppressed.map((entry: SuppressedAdvisory): string => excusedRow(entry)),
-        'No exception is in use.',
-      ) +
-      subheading('advisories-stale') +
-      staleExceptions(deadEntries) +
-      subheading('advisories-below') +
-      table(
-        ADVISORY_HEADINGS,
-        belowThreshold.map((advisory: Advisory): string => cells(advisoryCells(advisory))),
-        'No advisory below the threshold was reported.',
-      ),
-  )
 }
+
+const policy = (report: ComplianceReport): string =>
+  section(
+    'policy',
+    paragraphs([
+      'The build enforces this policy, rendered from the same definition the license check reads. A license is ' +
+        'identified by its Software Package Data Exchange (SPDX) identifier. In a compound expression, an OR is ' +
+        'satisfied by any admitted alternative, and an AND requires every part.',
+    ]) +
+      subheading('policy-permissive') +
+      paragraphs([
+        `The policy admits ${plural(report.policy.permissive.length, 'license')} with no copyleft obligation. ` +
+          `Attribution, where the license requires it, is satisfied by ${sectionReference('notices')}.`,
+      ]) +
+      idList(report.policy.permissive) +
+      subheading('policy-weak-copyleft') +
+      paragraphs([
+        `The policy admits ${plural(report.policy.weakCopyleft.length, 'license')} only for dependencies used ` +
+          'unmodified. Their copyleft, whether file-level or library-level, doesn&#39;t extend to the ' +
+          'project&#39;s own source when the component is used as published.',
+      ]) +
+      idList(report.policy.weakCopyleft) +
+      subheading('policy-outside') +
+      paragraphs([
+        'Every other license is outside the policy, including strong copyleft such as the GNU General ' +
+          'Public License, licenses that restrict the field of use, and any package whose license can&#39;t be ' +
+          'resolved. A single such package fails the build.',
+      ]),
+  )
 
 const inventoryRow = (row: ReportPackage): string =>
   `<tr data-scope="${row.isProduction ? 'production' : 'development'}" data-class="${row.licenseClass}">` +
@@ -394,7 +367,7 @@ const INVENTORY_HEADINGS: readonly string[] = ['Package', 'Version', 'License', 
 const inventory = (report: ComplianceReport, fileStem: string): string =>
   section(
     'inventory',
-    lettered([
+    paragraphs([
       `This section lists every installed package version, ${plural(report.packages.length, 'row')}, with the ` +
         'license its installed manifest declares.',
       'Scope is production when the version is reachable from a production dependency of any workspace package, ' +
@@ -453,7 +426,7 @@ const noticeGroup = (group: NoticeGroup, index: number): string =>
 
 const missingNotices = (report: ComplianceReport): string =>
   report.withoutNotice.length > 0
-    ? lettered([
+    ? paragraphs([
         'These production package versions ship no license file.',
         `Their declared license is listed in ${sectionReference('inventory')}, and no text is invented for them.`,
       ]) + idList(report.withoutNotice)
@@ -462,7 +435,7 @@ const missingNotices = (report: ComplianceReport): string =>
 const notices = (report: ComplianceReport): string =>
   section(
     'notices',
-    lettered([
+    paragraphs([
       'This section reproduces the license and notice files shipped by each production dependency, from the ' +
         'installed package.',
       'The words are unchanged. Only the fixed-width line breaks and the Markdown markers of the original files ' +
@@ -486,7 +459,7 @@ const digest = (value: string): string => `<span class="digest">${escapeHtml(val
 const provenance = (report: ComplianceReport): string =>
   section(
     'provenance',
-    lettered([
+    paragraphs([
       'This report is generated by the build, not written by hand.',
       'It reads the same installed dependency tree, license policy and advisory data that the license and ' +
         'vulnerability checks of the build use to pass or fail, so the report and the verdict can&#39;t disagree.',
@@ -504,7 +477,7 @@ const provenance = (report: ComplianceReport): string =>
         ['Regenerate', code('pnpm exec ploaness compliance-report')],
       ]) +
       subheading('provenance-scope') +
-      lettered([
+      paragraphs([
         'The report covers every package the pnpm workspace resolves, for every workspace package, including ' +
           'development and build tools.',
         'A license is the one the installed package manifest declares.',
@@ -513,11 +486,9 @@ const provenance = (report: ComplianceReport): string =>
   )
 
 const body = (report: ComplianceReport, fileStem: string): readonly string[] => [
-  opening(report),
-  summary(report),
-  policy(report),
-  copyleft(report),
   vulnerabilities(report),
+  licenses(report),
+  policy(report),
   inventory(report, fileStem),
   notices(report),
   provenance(report),
@@ -539,10 +510,10 @@ export const renderComplianceReport = (
     '<!doctype html>',
     '<html lang="en">',
     '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">',
-    `<title>Open source compliance report - ${escapeHtml(report.projectName)}</title>`,
+    `<title>Open source software report - ${escapeHtml(report.projectName)}</title>`,
     `<style>${fontFaces(attachments.fonts)}${REPORT_STYLE}</style></head>`,
     '<body class="article toc2 toc-left">',
-    header(),
+    header(report),
     '<div id="content">',
     ...body(report, fileStem),
     '</div>',

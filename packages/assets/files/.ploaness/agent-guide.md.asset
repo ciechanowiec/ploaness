@@ -128,7 +128,7 @@ invocations of a package gate. `tree-verify` runs after all other gates in eithe
 | `config-refs` | package | No analyzer setting carves out a path that no longer exists or matches nothing. |
 | `secrets` | repository | gitleaks over the git history, plus the declared `secretAllowlist`. |
 | `licenses` | repository | The license of every dependency sits inside the allowlist. |
-| `vulnerabilities` | repository | No resolved package carries an advisory at or above the declared severity. |
+| `vulnerabilities` | repository | Every advisory on a resolved package, whatever its severity, is repaired or has a recorded mitigation. |
 | `install-scripts` | repository | The allowlist naming which dependencies may run a build or postinstall script. |
 | `release-age` | repository | pnpm's release-age floor is strict, and only the ploaness packages are excluded from it. |
 | `blocklist` | repository | No container image, Dockerfile system package, or installed npm package is one ploaness refuses by name, and every image reference is pinned to a tag. |
@@ -215,9 +215,11 @@ PDF rendering of the same document beside it. That pair is what a project sends 
 license and vulnerability report on its open source dependencies. Earlier reports in the directory are removed,
 so it always holds the report for the current tree.
 
-The report states the verdict, a summary, the license policy the `licenses` gate enforces, and every weak
-copyleft or refused package with its scope. It lists every advisory the `vulnerabilities` gate read with each
-recorded exception and its reason, the full package inventory, and the license and notice files the production
+The first page states the verdict as checked or failed statements, without calling the project compliant, and
+lists the contents. The report then lists every vulnerability the `vulnerabilities` gate read with its scope and
+status, open or mitigated, and prints a mitigation plan for each mitigated one from its allowlist entry. It
+follows with the license classes, every weak copyleft or refused package with its scope, the license policy the
+`licenses` gate enforces, the full package inventory, and the license and notice files the production
 dependencies ship. It embeds the software bill of materials the `sbom` gate wrote, byte for byte, with its hash.
 The gate fails when that inventory doesn't describe the current tree, when the license inventory or the advisory
 database can't be read, or when the tree changes while the report is written. A dirty tree or a dependency
@@ -229,6 +231,34 @@ can change for the same source. The PDF is printed by the Chromium of the projec
 which the `e2e` gate already requires. A repository where no workspace package declares it gets the HTML alone.
 Run `ploaness compliance-report [--output <directory>]` to regenerate the inventory and the report outside full
 verification. A custom output directory must be ignored by Git or outside the repository.
+
+## Vulnerability Mitigations
+
+The `vulnerabilities` gate judges every advisory, whatever its severity. An advisory is open, which fails the gate,
+until the package is upgraded past it or an entry in `ploaness.vulnerabilityAllowlist` mitigates it. Upgrade
+whenever a release, or a pnpm override within the dependent's supported range, removes the vulnerable version.
+Record an entry only when none does. Every field is required, and an incomplete entry is ignored, so the advisory
+stays open:
+
+- `advisory`: the advisory identifier, such as a GHSA or CVE identifier.
+- `reason`: why the vulnerability can't be exploited in this repository. Name the path that reaches the package,
+  whether it runs in production or only in development and build, and why its input can't trigger the defect.
+- `mitigation`: the mitigation plan. State what limits the risk now and what will remove the package, such as
+  the upstream release or the dependent's upgrade it waits for.
+- `addedOn`: the date the entry was recorded, as `YYYY-MM-DD`.
+
+```json
+{
+  "advisory": "GHSA-xxxx-xxxx-xxxx",
+  "reason": "example-parser is reached only through example-bundler, which parses the repository's own build configuration during development and build. The defect needs attacker-supplied input, which that configuration isn't.",
+  "mitigation": "example-bundler never runs in the deployed application. The entry is removed once example-bundler releases a version that drops example-parser.",
+  "addedOn": "2026-01-15"
+}
+```
+
+The compliance report prints the reason and the mitigation plan to a reviewer outside the project, so write both
+as complete sentences that stand on their own. An entry that matches no current advisory fails the gate and must
+be removed.
 
 ## Consumer Settings
 
@@ -261,8 +291,7 @@ prefixes name URLs and are not checked against filesystem paths.
 | `pureLogicRoots` | `src/access`, `src/lib` | File-role entries naming additional pure-logic directories. |
 | `bundleBudgetBytes` | `1126400` | Positive integer; only a smaller budget is honored. |
 | `maxSuppressions` | earned ceiling | Nonnegative integer setting a stricter ceiling; zero permits none. |
-| `vulnerabilitySeverity` | `moderate` | Only a stricter severity is honored. Vulnerability checking is repository-scoped. |
-| `vulnerabilityAllowlist` | empty | Entries with `advisory`, `reason`, and `addedOn`; use only when no upgrade repairs the issue. Unused entries fail. |
+| `vulnerabilityAllowlist` | empty | Mitigations for advisories no upgrade repairs; see Vulnerability Mitigations. Unused entries fail. |
 | `secretAllowlist` | empty | Entries with `path` and `reason` for committed fake credentials. |
 | `serverUrl` | `http://localhost:3000` | Origin of the member's application under test. |
 | `auxiliaryServers` | empty | Entries with `command`, `url`, and optional member-relative `cwd`; starts additional application dependencies for browser tests. |

@@ -1,4 +1,4 @@
-// The compliance report on open source dependencies: the evidence behind the licence and vulnerability
+// The open source software report on dependencies: the evidence behind the licence and vulnerability
 // gates, assembled into one model a reviewer outside the project can read. Everything here is derived from
 // values already read.
 import { asRecord, readKey } from './json-shapes.js'
@@ -6,9 +6,10 @@ import { LICENSE_POLICY, type LicenseClass, licenseClassOf } from './license-all
 import { coordinateOf, type InventoryPackage } from './license-inventory.js'
 import {
   type Advisory,
-  SEVERITY_ORDER,
-  type SuppressedAdvisory,
+  type MitigatedAdvisory,
+  severityRank,
   type VulnerabilityClassification,
+  type VulnerabilityException,
 } from './vulnerability-policy.js'
 
 /** One licence file a package ships, as read from its installed directory. */
@@ -81,10 +82,14 @@ export interface NoticeGroup {
   readonly coordinates: readonly string[]
 }
 
-/** How many advisories were reported at one severity. */
-export interface SeverityCount {
-  readonly severity: string
-  readonly count: number
+/** One reported advisory as the report lists it, with the mitigation that covers it, if any. */
+export interface ReportAdvisory {
+  readonly advisory: Advisory
+  /** Whether any installed version of the package is in the production graph. */
+  readonly isProduction: boolean
+  /** Undefined while the advisory is open. */
+  readonly mitigation: VulnerabilityException | undefined
+  readonly isHarnessMitigation: boolean
 }
 
 /** The assembled report. */
@@ -94,7 +99,8 @@ export interface ComplianceReport {
   readonly source: ReportSource
   readonly generatedAt: string
   readonly harnessVersion: string
-  readonly isCompliant: boolean
+  /** Whether every license is within the policy and no advisory is open or recorded without a match. */
+  readonly isWithinPolicy: boolean
   /** Why the report is not release evidence; empty when it is. */
   readonly draftReasons: readonly string[]
   readonly packages: readonly ReportPackage[]
@@ -106,7 +112,8 @@ export interface ComplianceReport {
   readonly refused: readonly ReportPackage[]
   readonly policy: typeof LICENSE_POLICY
   readonly vulnerabilities: VulnerabilityClassification
-  readonly severityCounts: readonly SeverityCount[]
+  /** Every advisory, most severe first. */
+  readonly advisories: readonly ReportAdvisory[]
   readonly advisoryRecords: number
   readonly auditedAt: string
   readonly sbom: ReportSbom
@@ -170,27 +177,36 @@ const countClasses = (packages: readonly ReportPackage[]): Readonly<Record<Licen
   refused: packages.filter((row: ReportPackage): boolean => row.licenseClass === 'refused').length,
 })
 
-// Every reported advisory, counted by severity from the most severe down, so the summary reads the way a
-// reviewer triages. A severity the scale does not know is counted under its own name rather than dropped.
-const countSeverities = (classification: VulnerabilityClassification): readonly SeverityCount[] => {
-  const all: readonly Advisory[] = [
-    ...classification.unsuppressed,
-    ...classification.suppressed.map((entry: SuppressedAdvisory): Advisory => entry.advisory),
-    ...classification.belowThreshold,
-  ]
-  const known: readonly string[] = SEVERITY_ORDER.toReversed()
-  const unknown: readonly string[] = [
-    ...new Set(
-      all
-        .map((advisory: Advisory): string => advisory.severity.toLowerCase())
-        .filter((severity: string): boolean => !known.includes(severity)),
+// Every advisory once, most severe first, so the list reads the way a reviewer triages.
+const reportAdvisories = (
+  classification: VulnerabilityClassification,
+  packages: readonly ReportPackage[],
+): readonly ReportAdvisory[] => {
+  const production: ReadonlySet<string> = new Set(
+    packages.filter((row: ReportPackage): boolean => row.isProduction).map((row: ReportPackage): string => row.name),
+  )
+  return [
+    ...classification.open.map(
+      (advisory: Advisory): ReportAdvisory => ({
+        advisory,
+        isProduction: production.has(advisory.packageName),
+        mitigation: undefined,
+        isHarnessMitigation: false,
+      }),
     ),
-  ]
-  return [...unknown, ...known].map(
-    (severity: string): SeverityCount => ({
-      severity,
-      count: all.filter((advisory: Advisory): boolean => advisory.severity.toLowerCase() === severity).length,
-    }),
+    ...classification.mitigated.map(
+      (entry: MitigatedAdvisory): ReportAdvisory => ({
+        advisory: entry.advisory,
+        isProduction: production.has(entry.advisory.packageName),
+        mitigation: entry.exception,
+        isHarnessMitigation: entry.isHarnessException,
+      }),
+    ),
+  ].toSorted(
+    (left: ReportAdvisory, right: ReportAdvisory): number =>
+      severityRank(right.advisory.severity) - severityRank(left.advisory.severity) ||
+      left.advisory.packageName.localeCompare(right.advisory.packageName) ||
+      left.advisory.id.localeCompare(right.advisory.id),
   )
 }
 
@@ -304,9 +320,9 @@ const groupNotices = (notices: readonly PackageNotices[], distributed: ReadonlyS
 const coordinateOfRow = (row: ReportPackage): string =>
   row.version.length > 0 ? coordinateOf(row.name, row.version) : row.name
 
-const draftReasonsOf = (input: ComplianceReportInput, isCompliant: boolean): readonly string[] => [
+const draftReasonsOf = (input: ComplianceReportInput, isWithinPolicy: boolean): readonly string[] => [
   ...(input.source.isDirty ? ['The working tree has uncommitted changes, so no commit describes this source.'] : []),
-  ...(isCompliant ? [] : ["The dependencies don't satisfy the policy this report states."]),
+  ...(isWithinPolicy ? [] : ["The dependencies don't satisfy the policy this report states."]),
 ]
 
 /**
@@ -319,10 +335,8 @@ export const buildComplianceReport = (input: ComplianceReportInput): ComplianceR
   const refused: readonly ReportPackage[] = packages.filter(
     (row: ReportPackage): boolean => row.licenseClass === 'refused',
   )
-  const isCompliant: boolean =
-    refused.length === 0 &&
-    input.vulnerabilities.unsuppressed.length === 0 &&
-    input.vulnerabilities.deadEntries.length === 0
+  const isMeetsPolicy: boolean =
+    refused.length === 0 && input.vulnerabilities.open.length === 0 && input.vulnerabilities.deadEntries.length === 0
   const distributed: ReadonlySet<string> = new Set(
     packages
       .filter((row: ReportPackage): boolean => row.isProduction)
@@ -339,8 +353,8 @@ export const buildComplianceReport = (input: ComplianceReportInput): ComplianceR
     source: input.source,
     generatedAt: input.generatedAt,
     harnessVersion: input.harnessVersion,
-    isCompliant,
-    draftReasons: draftReasonsOf(input, isCompliant),
+    isWithinPolicy: isMeetsPolicy,
+    draftReasons: draftReasonsOf(input, isMeetsPolicy),
     packages,
     productionCount: packages.filter((row: ReportPackage): boolean => row.isProduction).length,
     directCount: packages.filter((row: ReportPackage): boolean => row.isDirect).length,
@@ -350,7 +364,7 @@ export const buildComplianceReport = (input: ComplianceReportInput): ComplianceR
     refused,
     policy: LICENSE_POLICY,
     vulnerabilities: input.vulnerabilities,
-    severityCounts: countSeverities(input.vulnerabilities),
+    advisories: reportAdvisories(input.vulnerabilities, packages),
     advisoryRecords: input.advisoryRecords,
     auditedAt: input.auditedAt,
     sbom: input.sbom,
@@ -362,7 +376,7 @@ export const buildComplianceReport = (input: ComplianceReportInput): ComplianceR
 /** Where the compliance report is written unless the command names another directory. */
 export const DEFAULT_REPORT_OUTPUT: string = 'dist/compliance'
 
-/** The file name every compliance report starts with, which is also how a stale one is recognised. */
+/** The file name every report starts with, which is also how a stale one is recognised. */
 export const REPORT_FILE_PREFIX: string = 'oss-compliance-report-'
 
 const SHORT_COMMIT_LENGTH: number = 12

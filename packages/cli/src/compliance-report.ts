@@ -243,7 +243,6 @@ const assemble = (repository: Repository, fingerprint: string, sbom: EmbeddedSbo
     vulnerabilities: classifyVulnerabilities(
       reading.advisories,
       repository.settings.vulnerabilityAllowlist,
-      repository.settings.vulnerabilitySeverity,
       HARNESS_EXCEPTIONS,
     ),
     advisoryRecords: reading.advisories.length,

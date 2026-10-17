@@ -142,9 +142,7 @@ export interface Settings {
   readonly bundleBudgetBytes: number
   /** A stricter suppression ceiling than the earned one, or undefined to accept the earned ceiling. */
   readonly maxSuppressions: number | undefined
-  /** A stricter advisory severity than the shipped one, or undefined to accept the shipped one. */
-  readonly vulnerabilitySeverity: string | undefined
-  /** Recorded exceptions for advisories the project cannot reach. */
+  /** Recorded mitigations for advisories no upgrade repairs. */
   readonly vulnerabilityAllowlist: readonly VulnerabilityException[]
   /** Committed fake credentials the secret scan excuses, each with the reason it is committed. */
   readonly secretAllowlist: readonly SecretException[]
@@ -387,8 +385,8 @@ const readLayoutSettings = (raw: Record<string, unknown>): Pick<Settings, 'layou
   layoutViewports: asLayoutViewports(raw['layoutViewports']),
 })
 
-// An advisory date must be recorded as a date. An entry whose reason or date is missing or malformed is
-// dropped rather than honoured, so a typo re-exposes the finding instead of quietly excusing it.
+// An advisory date must be recorded as a date. An entry whose reason, mitigation plan or date is missing or
+// malformed is dropped rather than honoured, so the advisory stays open instead of being quietly excused.
 const ISO_DATE: RegExp = /^\d{4}-\d{2}-\d{2}$/
 
 const asVulnerabilityAllowlist = (raw: unknown): readonly VulnerabilityException[] =>
@@ -397,9 +395,11 @@ const asVulnerabilityAllowlist = (raw: unknown): readonly VulnerabilityException
         const record: Record<string, unknown> = asRecord(entry)
         const advisory: string = asText(record['advisory']).trim()
         const reason: string = asText(record['reason']).trim()
+        const mitigation: string = asText(record['mitigation']).trim()
         const addedOn: string = asText(record['addedOn'])
-        const isRecorded: boolean = advisory.length > 0 && reason.length > 0 && ISO_DATE.test(addedOn)
-        return isRecorded ? [{ advisory, reason, addedOn }] : []
+        const isRecorded: boolean =
+          advisory.length > 0 && reason.length > 0 && mitigation.length > 0 && ISO_DATE.test(addedOn)
+        return isRecorded ? [{ advisory, reason, mitigation, addedOn }] : []
       })
     : []
 
@@ -545,7 +545,6 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     coverageExclude: [...DEFAULT_COVERAGE_EXCLUDE, ...honoured(declaredCoverage)],
     bundleBudgetBytes: clampedCeiling(raw['bundleBudgetBytes'], DEFAULT_BUNDLE_BUDGET_BYTES),
     maxSuppressions: asNonNegativeInteger(raw['maxSuppressions']),
-    vulnerabilitySeverity: typeof raw['vulnerabilitySeverity'] === 'string' ? raw['vulnerabilitySeverity'] : undefined,
     vulnerabilityAllowlist: asVulnerabilityAllowlist(raw['vulnerabilityAllowlist']),
     secretAllowlist: asSecretAllowlist(raw['secretAllowlist']),
     publicAccess: asPublicAccess(raw['publicAccess']),

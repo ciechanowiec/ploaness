@@ -13,7 +13,7 @@ import { type ReportAttachments, renderComplianceReport } from '../src/complianc
 import { escapeHtml, inventoryCsv } from '../src/compliance-report-markup.js'
 import { subheading } from '../src/compliance-report-outline.js'
 import type { InventoryPackage } from '../src/license-inventory.js'
-import type { Advisory, VulnerabilityClassification } from '../src/vulnerability-policy.js'
+import type { Advisory, VulnerabilityClassification, VulnerabilityException } from '../src/vulnerability-policy.js'
 
 const inventoryPackage = (overrides: Partial<InventoryPackage> = {}): InventoryPackage => ({
   name: 'runtime-kit',
@@ -33,11 +33,17 @@ const advisory = (overrides: Partial<Advisory> = {}): Advisory => ({
   ...overrides,
 })
 
+const mitigation = (overrides: Partial<VulnerabilityException> = {}): VulnerabilityException => ({
+  advisory: 'GHSA-aaaa-bbbb-cccc',
+  reason: 'the defect needs input only the build configuration supplies',
+  mitigation: 'the tool never runs in production, and the next release removes it',
+  addedOn: '2026-10-01',
+  ...overrides,
+})
+
 const clean: VulnerabilityClassification = {
-  threshold: 'moderate',
-  unsuppressed: [],
-  suppressed: [],
-  belowThreshold: [advisory()],
+  open: [],
+  mitigated: [{ advisory: advisory(), exception: mitigation(), isHarnessException: false }],
   deadEntries: [],
 }
 
@@ -90,7 +96,7 @@ describe('compliance report model', () => {
       ['MPL-2.0', 1],
     ])
     expect(report.copyleft.map((row) => row.name)).toEqual(['build-tool', 'local-dir'])
-    expect(report.isCompliant).toBe(true)
+    expect(report.isWithinPolicy).toBe(true)
     expect(report.draftReasons).toEqual([])
   })
   it('reproduces notices for the production graph only, once per identical text', () => {
@@ -100,37 +106,39 @@ describe('compliance report model', () => {
     ])
     expect(report.withoutNotice).toEqual(['local-dir'])
   })
-  it('counts advisories by severity from the most severe, keeping a severity the scale does not know', () => {
+  it('lists every advisory once, most severe first, with its scope and whatever mitigates it', () => {
     const report: ComplianceReport = buildComplianceReport(
       input({
         vulnerabilities: {
           ...clean,
-          unsuppressed: [advisory({ severity: 'Critical' }), advisory({ severity: 'urgent' })],
+          open: [advisory({ id: 'GHSA-run', packageName: 'runtime-kit', severity: 'Critical' })],
         },
       }),
     )
-    expect(report.severityCounts).toEqual([
-      { severity: 'urgent', count: 1 },
-      { severity: 'critical', count: 1 },
-      { severity: 'high', count: 0 },
-      { severity: 'moderate', count: 0 },
-      { severity: 'low', count: 1 },
-      { severity: 'info', count: 0 },
+    expect(
+      report.advisories.map((entry) => [entry.advisory.id, entry.isProduction, entry.mitigation?.advisory]),
+    ).toEqual([
+      ['GHSA-run', true, undefined],
+      ['GHSA-aaaa-bbbb-cccc', false, 'GHSA-aaaa-bbbb-cccc'],
     ])
   })
-  it('is a draft and not compliant when the tree is dirty, a licence is refused or a finding stands', () => {
+  it('is a draft and misses the policy when the tree is dirty, a licence is refused or a finding stands', () => {
     expect(buildComplianceReport(input({ source: { ...input().source, isDirty: true } })).draftReasons).toEqual([
       expect.stringContaining('uncommitted changes'),
     ])
     const refused: ComplianceReport = buildComplianceReport(
       input({ packages: [inventoryPackage({ license: 'GPL-3.0-only' })] }),
     )
-    expect(refused.isCompliant).toBe(false)
+    expect(refused.isWithinPolicy).toBe(false)
     expect(refused.refused.map((row) => row.license)).toEqual(['GPL-3.0-only'])
     expect(refused.draftReasons).toEqual([expect.stringContaining('satisfy the policy')])
-    expect(buildComplianceReport(input({ vulnerabilities: { ...clean, deadEntries: ['stale'] } })).isCompliant).toBe(
+    expect(buildComplianceReport(input({ vulnerabilities: { ...clean, deadEntries: ['stale'] } })).isWithinPolicy).toBe(
       false,
     )
+    expect(
+      buildComplianceReport(input({ vulnerabilities: { ...clean, open: [advisory({ severity: 'info' })] } }))
+        .isWithinPolicy,
+    ).toBe(false)
   })
 })
 
@@ -146,14 +154,13 @@ describe('compliance report document', () => {
   it('is one self-contained document with every section and the exact SBOM bytes', () => {
     const html: string = renderComplianceReport(buildComplianceReport(input()), attachments, 'report')
     expect(html.startsWith('<!doctype html>')).toBe(true)
-    for (const id of ['summary', 'policy', 'copyleft', 'vulnerabilities', 'inventory', 'notices', 'provenance']) {
+    for (const id of ['vulnerabilities', 'licenses', 'policy', 'inventory', 'notices', 'provenance']) {
       expect(html).toContain(`id="${id}"`)
     }
     expect(html).not.toMatch(/<(?:link|img|iframe)\b|\bsrc=|@import|url\((?!data:)/u)
     expect(html.match(/href="[^"#][^"]*"/gu)).toEqual(['href="https://example.invalid/runtime-kit"'])
     const embedded: string = /<script type="application\/json" id="report-data">(.*?)<\/script>/su.exec(html)?.[1] ?? ''
     expect(JSON.parse(embedded)).toMatchObject({ sbom: attachments.sbom })
-    expect(html).toContain('Compliant')
     expect(html).not.toContain('is a draft')
     const ids: readonly string[] = [...html.matchAll(/\bid="([^"]+)"/gu)].map((match) => match[1] ?? '')
     expect(new Set(ids).size).toBe(ids.length)
@@ -169,11 +176,11 @@ describe('compliance report document', () => {
           notices: [{ coordinate: `${hostile}@1.0.0`, files: [{ name: hostile, text: hostile }] }],
           vulnerabilities: {
             ...clean,
-            unsuppressed: [advisory({ title: hostile, url: CLEAR_TEXT_URL })],
-            suppressed: [
+            open: [advisory({ title: hostile, packageName: hostile, url: CLEAR_TEXT_URL })],
+            mitigated: [
               {
                 advisory: advisory({ id: 'GHSA-x', url: 'https://github.com/advisories/GHSA-x', aliases: ['CVE-1'] }),
-                exception: { advisory: 'GHSA-x', reason: hostile, addedOn: '2026-01-01' },
+                exception: mitigation({ advisory: 'GHSA-x', reason: hostile, mitigation: hostile }),
                 isHarnessException: true,
               },
             ],
@@ -189,20 +196,21 @@ describe('compliance report document', () => {
     expect(html).not.toContain(CLEAR_TEXT_URL)
     expect(html.match(/<\/script>/gu)).toHaveLength(2)
     expect(html).toContain('This report is a draft and must not be treated as release evidence.')
-    expect(html).toContain('Not compliant')
-    expect(html).toContain('Recorded by the build harness.')
+    expect(html).toContain('by the build harness')
     expect(escapeHtml(`&<>"'`)).toBe('&amp;&lt;&gt;&quot;&#39;')
   })
   it('states the empty cases rather than printing empty tables', () => {
     const html: string = renderComplianceReport(
       buildComplianceReport(
-        input({ packages: [runtime], production: [], notices: [], vulnerabilities: { ...clean, belowThreshold: [] } }),
+        input({ packages: [runtime], production: [], notices: [], vulnerabilities: { ...clean, mitigated: [] } }),
       ),
       attachments,
       'report',
     )
     expect(html).toContain('No dependency carries a weak copyleft license.')
-    expect(html).toContain('No exception is in use.')
+    expect(html).toContain('No known vulnerability was reported.')
+    expect(html).toContain('No vulnerability needs a mitigation plan.')
+    expect(html).toContain('No known vulnerabilities.')
     expect(html).toContain('No production dependency ships a license file.')
   })
   it('folds the long tail of licences into one bar', () => {
@@ -254,6 +262,64 @@ describe('compliance report command and naming', () => {
   })
 })
 
+// What a reader who skims only the first page must take away.
+const render = (vulnerabilities: VulnerabilityClassification, extra: Partial<ComplianceReportInput> = {}): string =>
+  renderComplianceReport(buildComplianceReport(input({ vulnerabilities, ...extra })), attachments, 'report')
+
+describe('compliance report verdict', () => {
+  it('states the verdict before the contents, without calling the project compliant', () => {
+    const html: string = render(clean)
+    expect(html.indexOf('class="statements verdict"')).toBeLessThan(html.indexOf('id="toc"'))
+    expect(html).toContain('<li class="pass">All 5 package versions have a license within the policy.</li>')
+    expect(html).toContain('<li class="pass">No open vulnerabilities.</li>')
+    expect(html).toContain('1 vulnerability (1 low) is mitigated, with a mitigation plan in section 1.2.')
+    expect(reportProse(html)).not.toMatch(/\bcompliant\b/iu)
+  })
+
+  it('says "each" only when more than one vulnerability is mitigated', () => {
+    const html: string = render({ ...clean, mitigated: [...clean.mitigated, ...clean.mitigated] })
+    expect(html).toContain('2 vulnerabilities (2 low) are mitigated, each with a mitigation plan in section 1.2.')
+  })
+
+  it('fails the verdict on an open advisory of any severity and on a mitigation without a vulnerability', () => {
+    const html: string = render({
+      ...clean,
+      open: [advisory({ id: 'GHSA-low', severity: 'low' }), advisory({ id: 'GHSA-high', severity: 'high' })],
+      deadEntries: ['GHSA-gone matches no current advisory'],
+    })
+    expect(html).toContain(
+      '<li class="fail">2 vulnerabilities (1 high, 1 low) are open, with no mitigation plan. ' +
+        'Each is listed in section 1.1.</li>',
+    )
+    expect(html).toContain('<li class="fail">1 recorded mitigation matches no current vulnerability.')
+    expect(html.match(/class="chip status-open"/gu)).toHaveLength(2)
+  })
+
+  it('fails the verdict on a license outside the policy', () => {
+    const html: string = render(clean, { packages: [inventoryPackage({ license: 'GPL-3.0-only' })] })
+    expect(html).toContain('<li class="fail">1 package version has a license outside the policy.')
+  })
+
+  it('prints each mitigation plan with its scope, reason and plan, linked from the vulnerability list', () => {
+    const html: string = render({
+      ...clean,
+      mitigated: [
+        {
+          advisory: advisory({ packageName: 'runtime-kit', severity: 'high' }),
+          exception: mitigation(),
+          isHarnessException: false,
+        },
+      ],
+    })
+    expect(html).toContain('<td><span class="nowrap">Production</span></td>')
+    expect(html).toContain('<a class="plain" href="#plan-1">')
+    const plan: string = html.slice(html.indexOf('<div class="plan" id="plan-1">'))
+    expect(plan).toContain('the defect needs input only the build configuration supplies')
+    expect(plan).toContain('the tool never runs in production, and the next release removes it')
+    expect(plan).toContain('2026-10-01')
+  })
+})
+
 // The report's own sentences, with markup, styles, scripts, entities and license texts removed. Data a
 // project supplies, such as an exception's reason, is quoted rather than written by the report.
 const withoutElements = (html: string, open: string, close: string): string => {
@@ -280,7 +346,7 @@ describe('compliance report typesetting', () => {
         input({
           source: { ...input().source, isDirty: true },
           packages: [...input().packages, inventoryPackage({ name: 'gpl', license: 'GPL-3.0-only' })],
-          vulnerabilities: { ...clean, unsuppressed: [advisory({ severity: 'high' })], deadEntries: ['GHSA-gone'] },
+          vulnerabilities: { ...clean, open: [advisory({ severity: 'high' })], deadEntries: ['GHSA-gone'] },
         }),
       ),
       attachments,
@@ -295,9 +361,11 @@ describe('compliance report typesetting', () => {
     const html: string = renderComplianceReport(buildComplianceReport(input()), attachments, 'report')
     expect(html).toContain('@font-face{font-family:"Report Serif";font-style:normal;font-weight:400 700;')
     expect(html).toContain('url(data:font/woff2;base64,AAAA)')
-    expect(html).toContain('<h2 id="vulnerabilities-title"><span class="adnum">4.</span>')
-    expect(html).toContain('<a href="#advisories-excused"><span class="adnum">4.2.</span>')
-    expect(html).toContain('<h3 id="advisories-excused"><span class="adnum">4.2.</span>')
+    expect(html).toContain('<h2 id="vulnerabilities-title"><span class="adnum">1.</span>')
+    expect(html).toContain('<a href="#licenses"><span class="adnum">2.</span>')
+    expect(html).toContain('<h3 id="advisories-plans"><span class="adnum">1.2.</span>')
+    // The contents list the sections only, so they share the first page with the verdict.
+    expect(html).not.toContain('<a href="#advisories-plans">')
     expect(html).not.toContain('Generated by')
   })
 })

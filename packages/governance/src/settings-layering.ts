@@ -34,7 +34,7 @@ const STRICTEST_NUMBER: ReadonlySet<string> = new Set<string>([
 const STRICTEST_LARGER: ReadonlySet<string> = new Set<string>(['layoutMinimumGap'])
 
 /** Keys that are one value describing one package, where the member's answer replaces the repository's. */
-const REPLACED: ReadonlySet<string> = new Set<string>(['pretest', 'testWrapper', 'serverUrl', 'vulnerabilitySeverity'])
+const REPLACED: ReadonlySet<string> = new Set<string>(['pretest', 'testWrapper', 'serverUrl'])
 
 const mergeArrays = (base: unknown, overlay: unknown): unknown => [
   ...(isArray(base) ? base : []),

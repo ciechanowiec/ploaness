@@ -10,8 +10,8 @@ const pdf: string = [
   '4 0 obj\n<</Type /Pages\n/Count 2\n/Kids [5 0 R 6 0 R]>>\nendobj',
   '5 0 obj\n<</Type /Page\n/Length 4>>\nstream\n/Title (not a bookmark) endstream\nendobj',
   '6 0 obj\n<</Type /Page>>\nendobj',
-  '10 0 obj\n<</Title (1.Executive summary)\n/Dest [5 0 R /XYZ 0 0 0]>>\nendobj',
-  '11 0 obj\n<</Title (4.2.Excused by a recorded exception)\n/Dest [6 0 R /XYZ 0 0 0]>>\nendobj',
+  '10 0 obj\n<</Title (1.Vulnerabilities)\n/Dest [5 0 R /XYZ 0 0 0]>>\nendobj',
+  '11 0 obj\n<</Title (1.2.Mitigation plans)\n/Dest [6 0 R /XYZ 0 0 0]>>\nendobj',
   '12 0 obj\n<</Title <FEFF0032002E004C>\n/Dest [3 0 R /XYZ 0 0 0]>>\nendobj',
   '13 0 obj\n<</Title (Escaped \\(paren\\) \\101 \\n)\n/Dest [6 0 R /XYZ 0 0 0]>>\nendobj',
   '14 0 obj\n<</Title (Nowhere)\n/Dest [99 0 R /XYZ 0 0 0]>>\nendobj',
@@ -20,8 +20,8 @@ const pdf: string = [
 describe('PDF outline pages', () => {
   it('maps each bookmark to the page its destination is, in page-tree order', () => {
     expect([...outlinePages(pdf)]).toEqual([
-      ['1.Executive summary', 2],
-      ['4.2.Excused by a recorded exception', 3],
+      ['1.Vulnerabilities', 2],
+      ['1.2.Mitigation plans', 3],
       ['2.L', 1],
       ['Escaped (paren) A \n', 3],
     ])
@@ -31,8 +31,8 @@ describe('PDF outline pages', () => {
   })
   it('numbers the contents by matching each heading to its bookmark', () => {
     expect([...contentsPages(outlinePages(pdf))]).toEqual([
-      ['summary', 2],
-      ['advisories-excused', 3],
+      ['vulnerabilities', 2],
+      ['advisories-plans', 3],
     ])
   })
 })

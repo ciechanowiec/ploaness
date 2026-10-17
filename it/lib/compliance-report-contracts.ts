@@ -51,7 +51,11 @@ const isDirty: boolean = execFileSync('git', ['status', '--porcelain'], { encodi
 if (html.includes('working tree has uncommitted changes') !== isDirty) {
   throw new Error(`The report ${isDirty ? 'of a dirty tree does not say so' : 'of a clean tree calls it dirty'}`)
 }
-if (html.includes('satisfy the policy this report states') !== html.includes('<strong>Not compliant</strong>')) {
+const verdict: string = /<ul class="statements verdict">(.*?)<\/ul>/su.exec(html)?.[1] ?? ''
+if (verdict.length === 0 || /compliant/iu.test(verdict)) {
+  throw new Error('The report opens without its verdict statements, or calls the project compliant')
+}
+if (html.includes('satisfy the policy this report states') !== verdict.includes('<li class="fail">')) {
   throw new Error('The draft banner and the verdict disagree about the policy')
 }
 // A tree that changed after the inventory was written is not the tree the inventory describes.

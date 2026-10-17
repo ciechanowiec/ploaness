@@ -34,6 +34,7 @@ import {
   type ManifestSource,
   mapWithConcurrency,
   NETWORKED_TOOL_TIMEOUT_MS,
+  OPEN_ADVISORY_REPAIR,
   REGISTRY_CONCURRENCY,
   RELEASE_AGE_FLOOR_HOURS,
   REQUEST_TIMEOUT_MS,
@@ -526,9 +527,8 @@ const textAt = (raw: AuditAdvisory, key: string, fallback: string): string => {
 const asAdvisory = (key: string, raw: AuditAdvisory): Advisory => ({
   id: textAt(raw, 'github_advisory_id', key),
   packageName: textAt(raw, 'module_name', 'unknown'),
-  // An advisory whose severity the record does not carry is read as the most severe, not the least.
-  // Defaulting to `info` put it below the threshold, so a malformed record was silently a pass inside a
-  // gate that is fail-closed everywhere else.
+  // An advisory whose severity the record does not carry is reported as unknown, which the report
+  // orders above critical, rather than passed off as the least severe.
   severity: textAt(raw, 'severity', 'unknown'),
   title: textAt(raw, 'title', 'no title reported'),
   aliases: asStrings(raw['cves']),
@@ -590,7 +590,7 @@ export const readAdvisories = (context: Context): AuditReading => {
 /**
  * Read every package in the resolved set against the public advisory database.
  * @param context the resolved project environment.
- * @returns a failure for any finding at or above the declared severity, or for a stale exception.
+ * @returns a failure for any open advisory, or for a mitigation that covers nothing.
  */
 export const vulnerabilities = (context: Context): GateResult => {
   const reading: AuditReading = readAdvisories(context)
@@ -601,14 +601,14 @@ export const vulnerabilities = (context: Context): GateResult => {
   const report: VulnerabilityReport = judgeVulnerabilities(
     advisories,
     context.settings.vulnerabilityAllowlist,
-    context.settings.vulnerabilitySeverity,
     HARNESS_EXCEPTIONS,
   )
   const findings: readonly string[] = [
-    ...report.unsuppressed.map(
+    ...report.open.map(
       (advisory: Advisory): string =>
         `${advisory.severity} ${advisory.id} in ${advisory.packageName}: ${advisory.title}`,
     ),
+    ...(report.open.length > 0 ? [OPEN_ADVISORY_REPAIR] : []),
     ...report.deadEntries,
   ]
   // The evidence is the audit pnpm printed, kept whatever the verdict. A gate that reaches its verdict
@@ -617,10 +617,12 @@ export const vulnerabilities = (context: Context): GateResult => {
   // needs an answer.
   return withOutput(
     findings.length > 0
-      ? failed(`${String(findings.length)} vulnerability finding(s) at or above ${report.threshold}`, findings)
-      : passed(
-          `no vulnerability at or above ${report.threshold} across ${String(advisories.length)} advisory record(s)`,
-        ),
+      ? failed(
+          `${String(report.open.length)} open advisory(ies), ${String(findings.length - report.open.length)} ` +
+            'other finding(s)',
+          findings,
+        )
+      : passed(`no open advisory across ${String(advisories.length)} advisory record(s)`),
     reading.transcript,
   )
 }

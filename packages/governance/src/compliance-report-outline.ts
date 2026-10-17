@@ -14,14 +14,22 @@ interface OutlineSection extends OutlineEntry {
 
 const OUTLINE: readonly OutlineSection[] = [
   {
-    id: 'summary',
-    title: 'Executive summary',
+    id: 'vulnerabilities',
+    title: 'Vulnerabilities',
     subsections: [
-      { id: 'key-figures', title: 'Key figures' },
+      { id: 'advisories-all', title: 'All vulnerabilities' },
+      { id: 'advisories-plans', title: 'Mitigation plans' },
+      { id: 'advisories-stale', title: 'Recorded mitigations without a vulnerability' },
+    ],
+  },
+  {
+    id: 'licenses',
+    title: 'Licenses',
+    subsections: [
       { id: 'license-classes', title: 'License classes' },
       { id: 'common-licenses', title: 'Most common licenses' },
-      { id: 'severities', title: 'Advisories by severity' },
-      { id: 'findings', title: 'Findings' },
+      { id: 'review-weak-copyleft', title: 'Weak copyleft packages' },
+      { id: 'review-outside', title: 'Packages outside the policy' },
     ],
   },
   {
@@ -31,24 +39,6 @@ const OUTLINE: readonly OutlineSection[] = [
       { id: 'policy-permissive', title: 'Permissive licenses' },
       { id: 'policy-weak-copyleft', title: 'Weak copyleft licenses' },
       { id: 'policy-outside', title: 'Licenses outside the policy' },
-    ],
-  },
-  {
-    id: 'copyleft',
-    title: 'Copyleft and policy review',
-    subsections: [
-      { id: 'review-weak-copyleft', title: 'Weak copyleft' },
-      { id: 'review-outside', title: 'Outside the policy' },
-    ],
-  },
-  {
-    id: 'vulnerabilities',
-    title: 'Known vulnerabilities',
-    subsections: [
-      { id: 'advisories-open', title: 'Unresolved at or above the threshold' },
-      { id: 'advisories-excused', title: 'Excused by a recorded exception' },
-      { id: 'advisories-stale', title: 'Exceptions that no longer match' },
-      { id: 'advisories-below', title: 'Below the threshold' },
     ],
   },
   { id: 'inventory', title: 'Package inventory', subsections: [] },
@@ -122,21 +112,13 @@ const tocLink = (id: string): string =>
   '</span></a>'
 
 /**
- * The table of contents, read from the same outline as the headings.
+ * The table of contents, read from the same outline as the headings. It lists the sections only, so it
+ * stays short enough to share the first page with the verdict.
  * @returns the contents navigation.
  */
 export const tableOfContents = (): string =>
-  '<nav id="toc" aria-labelledby="toctitle"><div id="toctitle">Table of Contents</div><ul class="sectlevel1">' +
-  OUTLINE.map(
-    (entry: OutlineSection): string =>
-      `<li>${tocLink(entry.id)}` +
-      (entry.subsections.length > 0
-        ? `<ul class="sectlevel2">${entry.subsections
-            .map((child: OutlineEntry): string => `<li>${tocLink(child.id)}</li>`)
-            .join('')}</ul>`
-        : '') +
-      '</li>',
-  ).join('') +
+  '<nav id="toc" aria-labelledby="toctitle"><div id="toctitle">Contents</div><ul class="sectlevel1">' +
+  OUTLINE.map((entry: OutlineSection): string => `<li>${tocLink(entry.id)}</li>`).join('') +
   '</ul></nav>'
 
 /**
