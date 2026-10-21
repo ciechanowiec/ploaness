@@ -22,6 +22,19 @@ const blanked = (source: string): { readonly text: string; readonly sameLength: 
 }
 
 describe('stripComments: comments', () => {
+  it.each(['\n', '\r', '\r\n', '\u{2028}', '\u{2029}'])(
+    'preserves the line boundary and following code for %j',
+    (newline: string) => {
+      const source: string = `first // comment${newline}second`
+      expect(stripComments(source)).toHaveLength(source.length)
+      expect(stripComments(source).endsWith(`${newline}second`)).toBe(true)
+      expect(lineOf(source, source.indexOf('second'))).toBe(2)
+      const block: string = `/* 𠮷${newline}comment */ return true`
+      expect(maskLiterals(block)).toHaveLength(block.length)
+      expect(maskLiterals(block)).toContain(newline)
+    },
+  )
+
   it('blanks a line comment', () => {
     const { text, sameLength } = blanked('const a = 1 // why')
     expect(text.trimEnd()).toBe('const a = 1')

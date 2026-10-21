@@ -397,6 +397,24 @@ security_contracts() {
     expect license-workspace licenses FAIL 'copyleft-fixture: GPL-3.0-only'
 }
 
+secret_guard_contracts() {
+    new_case positive-secret-guard
+    cat > "$scratch/positive-secret-guard/src/lib/secret-guard.ts" <<'EOF'
+export const accepts = (secret: string | undefined, supplied: string): boolean => {
+  if (secret && supplied === secret) { return true }
+  return false
+}
+EOF
+    commit_case positive-secret-guard 'test(fixture): accept a closed positive secret guard' "$CONFORMING_BODY"
+    expect positive-secret-guard payload-rules PASS
+    replace_text "$scratch/positive-secret-guard/src/lib/secret-guard.ts" \
+        'if (secret && supplied === secret) { return true }
+  return false' \
+        'if (secret && supplied !== secret) { return false }
+  return true'
+    expect positive-secret-guard payload-rules FAIL no-fail-open-secret-guard
+}
+
 coverage_member_contracts() {
     new_case coverage-ownership
     node "$lib/make-workspace.ts" "$scratch/coverage-ownership"
@@ -554,6 +572,7 @@ configuration_contracts() {
     workspace_glob_contracts
     payload_extension_contracts
     coverage_configuration_contracts
+    secret_guard_contracts
 }
 
 # Declared focused subsets; the default run remains complete.

@@ -4,10 +4,18 @@
 // is called cron, webhook, or callback. The same defect has two spellings, and each is invisible to the
 // other's rule. A bare credential on the left of `&&` makes the rejection on the right disappear
 // precisely when configuration is absent. Its mirror tests for absence and then ADMITS the caller, so
-// the endpoint opens exactly when the credential is unset. The safe shape is the same in every context:
-// reject absence first, then compare the supplied credential.
+// the endpoint opens exactly when the credential is unset. Safe guards reject absence before comparing,
+// or return success for a configured, matching credential and deny every other case.
 import type { PayloadViolation } from './payload-source.js'
-import { balancedArguments, type Folded, lineOf, maskLiterals, type ScanStep, scanDelimited } from './source-text.js'
+import {
+  balancedArguments,
+  type Folded,
+  lineOf,
+  maskLiterals,
+  type ScanStep,
+  SOURCE_LINE_TERMINATOR,
+  scanDelimited,
+} from './source-text.js'
 
 const GUARDED_IF: RegExp = /\bif\s*\(\s*([a-z_$][\w$]*(?:\s*\.\s*[a-z_$][\w$]*)*)\s*&&/gi
 
@@ -34,12 +42,65 @@ const conditionClose = (masked: string, open: number): number | undefined => {
   return condition === undefined ? undefined : open + condition.length + 1
 }
 
+const CONTINUATION_CHARACTERS: ReadonlySet<string> = new Set('!%&(*+,-./:<=>?[^|')
+
+const canContinueExpression = (masked: string, start: number, newline: number): boolean => {
+  const before: string = masked.slice(start, newline).trimEnd()
+  if (/\b(?:return|throw)$/.test(before)) {
+    return false
+  }
+  const after: string = masked.slice(newline + 1).trimStart()
+  return (
+    CONTINUATION_CHARACTERS.has(before.at(-1) ?? '') ||
+    CONTINUATION_CHARACTERS.has(after[0] ?? '') ||
+    /^(?:in|instanceof|as|satisfies)\b/.test(after)
+  )
+}
+
+const endsStatement = (masked: string, start: number, step: ScanStep): boolean => {
+  if (step.depth < 0) {
+    return true
+  }
+  if (step.depth > 0) {
+    return false
+  }
+  return (
+    step.character === ';' ||
+    (SOURCE_LINE_TERMINATOR.test(step.character) && !canContinueExpression(masked, start, step.index))
+  )
+}
+
 const statementAt = (masked: string, start: number): string => {
   if (masked[start] === '{') {
     return balancedArguments(masked, start) ?? ''
   }
-  const newline: number = masked.indexOf('\n', start)
-  return masked.slice(start, newline === -1 ? masked.length : newline)
+  if (!/^return\b/.test(masked.slice(start))) {
+    const newline: number = masked.indexOf('\n', start)
+    return masked.slice(start, newline === -1 ? masked.length : newline)
+  }
+  const end: number = scanDelimited(
+    masked,
+    start,
+    (found: number, step: ScanStep): Folded<number> =>
+      endsStatement(masked, start, step) ? { state: step.index, stop: true } : { state: found, stop: false },
+    masked.length,
+  )
+  return masked.slice(start, end)
+}
+
+// A line terminator immediately after return ends the statement through automatic semicolon insertion.
+const isSuccessfulReturn = (value: string): boolean => {
+  const expression: string = value.trimStart()
+  const leading: string = value.slice(0, value.length - expression.length)
+  return !SOURCE_LINE_TERMINATOR.test(leading) && /^true\s*(?:[;}]|$)/.test(expression)
+}
+
+const containsRejection = (statement: string): boolean => {
+  const parts: readonly string[] = statement.split(/\b(return|throw)\b/)
+  return parts.some(
+    (part: string, index: number): boolean =>
+      part === 'throw' || (part === 'return' && !isSuccessfulReturn(parts[index + 1] ?? '')),
+  )
 }
 
 const hasRejectionAfter = (masked: string, close: number): boolean => {
@@ -49,7 +110,10 @@ const hasRejectionAfter = (masked: string, close: number): boolean => {
   }
   const start: number = close + 1 + statementStart
   const statement: string = statementAt(masked, start)
-  return /\b(?:return|throw)\b/.test(statement)
+  if (masked[start] !== '{' && !/^return\b/.test(statement)) {
+    return /\b(?:return|throw)\b/.test(statement)
+  }
+  return containsRejection(statement)
 }
 
 /** Report credential guards whose rejection disappears when the credential is absent. */

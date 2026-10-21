@@ -11,13 +11,17 @@ export const LAST_CHARACTER: number = -1
 /** The value `indexOf` and this module's readers return when there is nothing to point at. */
 export const NOT_FOUND: number = -1
 
+/** JavaScript line terminators carry statement-boundary meaning even inside comments. */
+export const SOURCE_LINE_TERMINATOR: RegExp = /[\r\n\u{2028}\u{2029}]/u
+const LINE_BOUNDARY: RegExp = new RegExp(String.raw`\r\n|${SOURCE_LINE_TERMINATOR.source}`, 'u')
+
 /**
  * The one-based line a source offset falls on.
  * @param source the file contents.
  * @param index the offset.
  * @returns the line number, counting from one.
  */
-export const lineOf = (source: string, index: number): number => source.slice(0, index).split('\n').length
+export const lineOf = (source: string, index: number): number => source.slice(0, index).split(LINE_BOUNDARY).length
 
 // A `/` begins a regular-expression literal only where a value may start. Tracking that lets the comment
 // scanner skip a literal such as /https:\/\// without mistaking its escaped slashes for a comment.
@@ -52,7 +56,9 @@ const lastMeaningful = (text: string): string => text.trimEnd().at(LAST_CHARACTE
 
 // A replacement FUNCTION rather than a replacement string: a string replacement reads `$&` and its
 // siblings as syntax, and the character to fill with is a parameter here rather than a literal.
-const fill = (text: string, character: string): string => text.replaceAll(/[^\n]/g, (): string => character)
+// No Unicode flag: replacement must preserve UTF-16 offsets, including both units of a surrogate pair.
+const fill = (text: string, character: string): string =>
+  text.replaceAll(/./gs, (current: string): string => (SOURCE_LINE_TERMINATOR.test(current) ? current : character))
 
 const blank = (text: string): string => fill(text, ' ')
 
@@ -67,8 +73,8 @@ const DELIMITER_WIDTH: number = 2
 const BLOCK_COMMENT_END: string = '*/'
 
 const endOfLineComment = (source: string, index: number): number => {
-  const end: number = source.indexOf('\n', index)
-  return end === NOT_FOUND ? source.length : end
+  const end: number = source.slice(index).search(SOURCE_LINE_TERMINATOR)
+  return end === NOT_FOUND ? source.length : index + end
 }
 
 const endOfBlockComment = (source: string, index: number): number => {
@@ -122,7 +128,7 @@ const afterRegexCharacter = (character: string, cursor: RegexCursor): RegexCurso
   if (character === '\\') {
     return { ...cursor, index: cursor.index + DELIMITER_WIDTH }
   }
-  if (character === '\n') {
+  if (SOURCE_LINE_TERMINATOR.test(character)) {
     return { ...cursor, end: cursor.index }
   }
   return character === '/' && !cursor.isInClass

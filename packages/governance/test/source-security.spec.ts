@@ -45,6 +45,44 @@ describe('no-fail-open-secret-guard', () => {
 })
 
 describe('fail-closed and unrelated conditions', () => {
+  it.each(['\n', '\r', '\u{2028}', '\u{2029}'])(
+    'retains automatic semicolon insertion inside a comment: %j',
+    (newline: string) => {
+      expect(rulesOf(`if (secret && supplied !== secret) { return /*${newline}*/ true } return true`)).toEqual([
+        'no-fail-open-secret-guard',
+      ])
+    },
+  )
+
+  it.each([
+    'if (secret && supplied === secret) { return true } return false',
+    'if (secret && supplied === secret) return true\nreturn false',
+    'if (secret && supplied === secret) return true; return false',
+    'if (secret && supplied === secret) { return /* accepted */ true; } return false',
+  ])('accepts an explicit successful secret comparison: %s', (source: string) => {
+    expect(rulesOf(source)).toEqual([])
+  })
+
+  it.each([
+    'if (secret && supplied !== secret) { return false }',
+    'if (secret && supplied !== secret) { return trueValue() }',
+    'if (secret && supplied !== secret) { return true && rejects() }',
+    'if (secret && supplied !== secret) { return\ntrue }',
+    'if (secret && supplied !== secret) { return true\n&& rejects() }',
+    'if (secret && supplied !== secret) return true\n&& rejects()\nreturn true',
+    'if (secret && supplied !== secret) return true\n? false : true\nreturn true',
+    'if (secret && supplied !== secret) return true &&\nrejects()\nreturn true',
+    'if (secret && supplied !== secret) return true\nin permissions\nreturn true',
+    'if (secret && supplied !== secret) return\nfalse\nreturn true',
+    'function reject(secret, supplied) { if (secret && supplied !== secret) throw unauthorized() }',
+    'if (secret && supplied !== secret) if (enabled) return true; else return false; return true',
+    'if (secret && supplied !== secret) if (enabled) return true; else throw new Error(); return true',
+    'if (secret && supplied !== secret) { if (enabled) return true; return false }',
+    'if (secret && supplied !== secret) { if (enabled) return true; throw new Error() }',
+  ])('retains a guarded rejection beside successful returns: %s', (source: string) => {
+    expect(rulesOf(source)).toEqual(['no-fail-open-secret-guard'])
+  })
+
   it('accepts a missing-secret rejection followed by a comparison', () => {
     const source: string = [
       'if (!secret) { return configurationError() }',
