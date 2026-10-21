@@ -4,6 +4,7 @@ import { isArray, isRecord } from './json-shapes.js'
 
 const WORKSPACE_FILE: string = 'pnpm-workspace.yaml'
 const MAX_ALIAS_COUNT: number = 100
+const PLAIN_MAPPING_PROTOTYPE: unknown = Object.getPrototypeOf({})
 
 const invalidValue = (key: string, expected: string): TypeError =>
   new TypeError(`${WORKSPACE_FILE} ${key}: must be ${expected}; correct the workspace configuration`)
@@ -13,7 +14,7 @@ const isMapping = (value: unknown): value is Record<string, unknown> => {
     return false
   }
   const prototype: unknown = Object.getPrototypeOf(value)
-  return prototype === Object.prototype || prototype === null
+  return prototype === PLAIN_MAPPING_PROTOTYPE || prototype === null
 }
 
 /** Read a workspace mapping, rejecting malformed evidence rather than treating it as absent. */
