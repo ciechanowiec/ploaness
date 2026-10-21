@@ -24,9 +24,9 @@ import {
   expectNoAxeDefects,
   type HitTargetClassification,
   type HitTargetProbe,
+  isSkippedSweepRoute,
   layoutDefectsOf,
   MAX_SWEEP_ROUTES,
-  SKIPPED_ROUTE_PREFIXES,
   scopedAxe,
   settleForScan,
   unsweptRoutes,
@@ -70,8 +70,7 @@ const toRoute = (href: string, origin: string): string | null => {
     return null
   }
   const routePath: string = url.pathname
-  const isSkipped: boolean = SKIPPED_ROUTE_PREFIXES.some((prefix: string): boolean => routePath.startsWith(prefix))
-  return isSkipped || STATIC_ASSET.test(routePath) ? null : routePath
+  return isSkippedSweepRoute(routePath) || STATIC_ASSET.test(routePath) ? null : routePath
 }
 
 /* eslint-disable functional/immutable-data -- a breadth-first crawl over a live site needs a frontier

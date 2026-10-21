@@ -15,6 +15,7 @@ import { GENERATED_ARTEFACTS } from './generated-denial.js'
 // malformed environment.
 import { asRecord, asStringRecord, asText, isArray, isRecord } from './json-shapes.js'
 import { LAYOUT_MINIMUM_GAP, type LayoutViewport } from './layout-defects.js'
+import { DEFAULT_SKIPPED_ROUTES } from './route-exclusions.js'
 import type { SecretException } from './secret-policy.js'
 import type { VulnerabilityException } from './vulnerability-policy.js'
 
@@ -176,6 +177,8 @@ export interface Settings {
    * carries. A project that mounts its admin panel elsewhere has to say so or the crawl walks into it.
    */
   readonly accessibilitySkipRoutes: readonly string[]
+  /** Effective project declarations, preserving provenance when a prefix repeats a built-in path. */
+  readonly accessibilityCustomSkipRoutes?: readonly string[]
   /**
    * How many routes the accessibility sweep may discover before it stops and fails.
    *
@@ -263,7 +266,6 @@ const DEFAULT_SERVER_URL: string = 'http://localhost:3000'
 // Payload's admin panel and REST API. Neither is a public page, both are reachable from a link on one,
 // and axe run against the admin bundle judges Payload's markup rather than the project's. A project
 // that moved either route adds its own; no project may take these away.
-const DEFAULT_SKIPPED_ROUTES: readonly string[] = ['/admin', '/api']
 
 // A CMS exists so that people who do not commit can publish pages, so the route count grows without any
 // change to the repository. A cap set where a small site sits therefore fails on an editor's ordinary
@@ -554,6 +556,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     serverUrl: typeof raw['serverUrl'] === 'string' ? raw['serverUrl'] : DEFAULT_SERVER_URL,
     auxiliaryServers: asAuxiliaryServers(raw['auxiliaryServers']),
     accessibilitySkipRoutes: [...DEFAULT_SKIPPED_ROUTES, ...honoured(declaredRoutes)],
+    accessibilityCustomSkipRoutes: honoured(declaredRoutes),
     accessibilityRouteBudget: clampedCeiling(raw['accessibilityRouteBudget'], DEFAULT_ACCESSIBILITY_ROUTE_BUDGET),
     ...readLayoutSettings(raw),
     analysisEnv: { ...DEFAULT_ANALYSIS_ENV, ...asStringRecord(raw['analysisEnv']) },

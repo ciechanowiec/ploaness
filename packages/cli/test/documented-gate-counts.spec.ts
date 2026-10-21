@@ -70,7 +70,8 @@ describe('the installed gate reference', () => {
       ...sectionAfter('## Consumer Settings').matchAll(/^\| `([a-z]+)` \|/gim),
     ].map((match: RegExpExecArray): string => match[1] ?? '')
     const settings: readonly string[] = Object.keys(readSettings({})).filter(
-      (key: string): boolean => key !== 'declaredExclusions',
+      // These fields preserve declaration provenance; neither is a configurable project setting.
+      (key: string): boolean => !['declaredExclusions', 'accessibilityCustomSkipRoutes'].includes(key),
     )
     expect(documented.toSorted((left: string, right: string): number => left.localeCompare(right))).toEqual(
       settings.toSorted((left: string, right: string): number => left.localeCompare(right)),

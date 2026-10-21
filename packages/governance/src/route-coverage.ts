@@ -1,4 +1,5 @@
 import { containsBuiltRoute, containsRoute, reachesAxe, reachesLayoutScan, type SpecSource } from './axe-coverage.js'
+import { isSkippedRoute } from './route-exclusions.js'
 import { type DeclaredRoute, matchesRoute, staticPrefixOf } from './route-map.js'
 
 // The pages the accessibility sweep never reached, and nobody was told about.
@@ -28,6 +29,8 @@ export interface RouteSweep {
   /** The addresses that answered, including those that forwarded off the public surface. */
   readonly answeredRoutes: readonly string[]
   readonly skippedPrefixes: readonly string[]
+  /** Explicit project prefixes; legacy callers infer non-framework entries from skippedPrefixes. */
+  readonly customSkippedPrefixes?: readonly string[] | undefined
   readonly specs: readonly SpecSource[]
   readonly everyFile: readonly SpecSource[]
 }
@@ -44,12 +47,6 @@ const REMEDIES: string =
   'link it from a page the crawl reaches, scan it in a specification of your own with ' +
   '`expectSweptPage(page)` from `ploaness/a11y`, or declare it in `ploaness.accessibilitySkipRoutes` ' +
   'with the reason it is out of scope'
-
-// The same plain prefix test the crawl itself applies in `toRoute`, deliberately. A stricter one -
-// requiring the prefix to end on a segment boundary - would report a route the crawl was told to skip
-// and did skip, which is a finding about the harness disagreeing with itself.
-const isSkipped = (route: string, prefixes: readonly string[]): boolean =>
-  prefixes.some((prefix: string): boolean => route.startsWith(prefix))
 
 // A page the crawl asked for, that answered, and that forwarded somewhere outside the public surface.
 // There is nothing at that address for axe to judge - what renders is wherever it forwarded to, which
@@ -116,7 +113,7 @@ const unsweptRoute = (sweep: RouteSweep, route: DeclaredRoute): UnsweptRoute[] =
  */
 export const findUnsweptRoutes = (sweep: RouteSweep): readonly UnsweptRoute[] =>
   sweep.declaredRoutes.flatMap((route: DeclaredRoute): UnsweptRoute[] => {
-    if (isSkipped(route.route, sweep.skippedPrefixes) || isScanned(sweep, route)) {
+    if (isSkippedRoute(route.route, sweep.skippedPrefixes, sweep.customSkippedPrefixes) || isScanned(sweep, route)) {
       return []
     }
     return isRedirect(sweep, route) ? [] : unsweptRoute(sweep, route)

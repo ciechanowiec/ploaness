@@ -34,6 +34,7 @@ import {
   declaredRoutesOf,
   findDefiniteIncomplete,
   findUnsweptRoutes,
+  isSkippedRoute,
   type SpecSource,
   type UnsweptRoute,
 } from '@ploaness/governance'
@@ -42,6 +43,10 @@ import { projectSettings } from './project-settings.js'
 import { settleForScan } from './settle.js'
 
 export const SKIPPED_ROUTE_PREFIXES: readonly string[] = projectSettings.accessibilitySkipRoutes
+
+/** Whether the configured sweep excludes this path. Shared with its completeness check. */
+export const isSkippedSweepRoute = (route: string): boolean =>
+  isSkippedRoute(route, SKIPPED_ROUTE_PREFIXES, projectSettings.accessibilityCustomSkipRoutes)
 
 export const MAX_SWEEP_ROUTES: number = projectSettings.accessibilityRouteBudget
 
@@ -162,6 +167,7 @@ export const unsweptRoutes = (
     visitedRoutes,
     answeredRoutes,
     skippedPrefixes: SKIPPED_ROUTE_PREFIXES,
+    customSkippedPrefixes: projectSettings.accessibilityCustomSkipRoutes,
     specs,
     everyFile: specs,
   }).map((unswept: UnsweptRoute): string => `${unswept.file} [${unswept.rule}] ${unswept.reason}`)

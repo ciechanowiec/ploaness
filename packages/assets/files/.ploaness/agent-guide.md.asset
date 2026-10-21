@@ -304,7 +304,7 @@ prefixes name URLs and are not checked against filesystem paths.
 | `serverUrl` | `http://localhost:3000` | Origin of the member's application under test. |
 | `auxiliaryServers` | empty | Entries with `command`, `url`, and optional member-relative `cwd`; starts additional application dependencies for browser tests. |
 | `publicAccess` | empty | Entries with `entity`, `operation`, `reason`, and optional `fields`, declaring intentional anonymous permissions. |
-| `accessibilitySkipRoutes` | `/admin`, `/api` | File-role-shaped entries whose patterns are additional URL prefixes; explain why each is outside the sweep. |
+| `accessibilitySkipRoutes` | `/admin`, `/api` | Built-ins match exact paths and child paths. File-role-shaped entries add URL prefixes; explain why each is outside the sweep. |
 | `accessibilityRouteBudget` | `250` | Positive integer; a smaller ceiling is honored. Reaching the ceiling fails rather than truncating coverage. |
 | `layoutMinimumGap` | `4` | Positive integer in CSS pixels; only a larger gap is honored. |
 | `layoutViewports` | empty | Entries with positive integer `width` and `height`, measured after the required 390x844 and 1280x800 viewports. |
@@ -403,7 +403,7 @@ outcome, so an anonymous response cannot accidentally satisfy the test.
 Ploaness pins three executable sweeps into applications where they apply:
 
 - Accessibility crawls public routes reachable from home, scans each default state with axe, and checks
-  hover/focus contrast. The crawl excludes `/admin` and `/api`; project-owned custom admin views need
+  hover/focus contrast. The crawl excludes `/admin`, `/api`, and their child paths; project-owned custom admin views need
   their own authenticated scans, scoped to the authored view.
 - Layout measures every route the same crawl reaches, at 390x844 and at 1280x800, before the axe pass.
   It reports every layout defect in the run rather than stopping at the first route.

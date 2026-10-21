@@ -275,3 +275,23 @@ describe('every declared page is judged on its own', () => {
     ).toEqual(['/welcome'])
   })
 })
+
+describe('built-in route boundaries', () => {
+  it.each(['/apiary', '/api-documentation', '/administration-help'])(
+    'reports the unvisited public route %s',
+    (route: string) => {
+      expect(routesOf({ declaredRoutes: [routeOf(route)] })).toEqual([route])
+    },
+  )
+
+  it.each(['/api', '/api/posts', '/admin', '/admin/users'])(
+    'retains the built-in exclusion for %s',
+    (route: string) => {
+      expect(routesOf({ declaredRoutes: [routeOf(route)] })).toEqual([])
+    },
+  )
+})
+
+it('preserves explicitly declared built-in prefixes in route coverage', () => {
+  expect(routesOf({ declaredRoutes: [routeOf('/apiary')], customSkippedPrefixes: ['/api'] })).toEqual([])
+})

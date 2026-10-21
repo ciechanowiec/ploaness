@@ -12,6 +12,7 @@ export {
   expectNoLayoutDefects,
   expectSweptPage,
   findDefiniteIncomplete,
+  isSkippedSweepRoute,
   LAYOUT_SCAN_VIEWPORTS,
   layoutDefectsOf,
   MAX_SWEEP_ROUTES,

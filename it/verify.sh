@@ -624,6 +624,20 @@ configuration_contracts() {
     analysis_environment_contracts
 }
 
+route_boundary_contracts() {
+    new_case route-boundary
+    node "$lib/create-a11y-page.ts" "$scratch/route-boundary" valid
+    node "$lib/create-route-boundary-case.ts" "$scratch/route-boundary"
+    commit_case route-boundary 'test(fixture): scan public pages sharing built-in prefixes' "$CONFORMING_BODY"
+    expect route-boundary build PASS
+    expect_command route-boundary FAIL 'button-name' \
+        env PLOANESS_VERIFICATION=1 pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+    edit_json "$scratch/route-boundary/package.json" ploaness.accessibilitySkipRoutes \
+        '[{"pattern":"/api","reason":"API-prefixed preview pages require a session"}]'
+    expect_command route-boundary PASS '1 passed' \
+        env PLOANESS_VERIFICATION=1 pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+}
+
 document_a11y_contracts() {
     (cd "$template" && pnpm exec playwright install chromium >/dev/null)
     new_case document-a11y
@@ -654,6 +668,7 @@ fi
 
 if [ -z "${1-}" ] || [ "${1-}" = --a11y-only ]; then
     document_a11y_contracts
+    route_boundary_contracts
     if [ "${1-}" = --a11y-only ]; then
         if [ "$failures" -ne 0 ]; then
             exit "$failures"
