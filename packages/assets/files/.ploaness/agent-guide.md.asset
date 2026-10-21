@@ -163,7 +163,7 @@ Extended verification adds 10 gates before the final tree check.
 | `commit-history` | repository | Every commit message in the history. |
 | `linear-history` | repository | No merge commit anywhere in the history. |
 | `build` | package | The production build. |
-| `bundle` | package | The gzipped client JavaScript stays under the bundle budget. |
+| `bundle` | package | The gzipped client JavaScript in Next's configured production output stays under the bundle budget. |
 | `e2e` | package | The end-to-end suite, including the three sweeps ploaness ships into it and the layout scan the accessibility sweep runs. |
 | `sbom` | repository | Generates and validates the resolved workspace dependency inventory and its source metadata. |
 | `compliance-report` | repository | Writes the shareable compliance report from the inventory `sbom` wrote for the current tree. |
@@ -309,8 +309,8 @@ prefixes name URLs and are not checked against filesystem paths.
 | `layoutMinimumGap` | `4` | Positive integer in CSS pixels; only a larger gap is honored. |
 | `layoutViewports` | empty | Entries with positive integer `width` and `height`, measured after the required 390x844 and 1280x800 viewports. |
 | `analysisEnv` | placeholders for `PAYLOAD_SECRET`, `DATABASE_URL` | String-valued map used by analysis gates that import the application. |
-| `pretest` | empty | Argument array for preparation before the test, build, and end-to-end gates. |
-| `testWrapper` | empty | Argument array wrapping those gate processes, for example to supply a disposable database. |
+| `pretest` | empty | Argument array for preparation before tests, builds, bundle inspection, and end-to-end tests. |
+| `testWrapper` | empty | Argument array wrapping those processes, including the bundle configuration probe, for example to supply a disposable database. |
 
 `publicAccess.fields` lists exact field paths such as `sessions.id`. `*` names the map Payload reports
 when every field is open. A suffix such as `sizes.**` declares that group and all descendants, including
@@ -365,7 +365,8 @@ Vitest collects:
 The `e2e` gate always starts fresh application and auxiliary servers, locally as well as in CI.
 Full verification tests the production build already produced in that run. Running `ploaness gate e2e`
 builds first. Ordinary Next output uses `next start`; standalone output uses its generated server with
-the public and static assets prepared under generated output. Static exports and custom server layouts
+the public and static assets prepared under generated output. Bundle measurement resolves the same
+configured build directory and fails when that output is missing. Static exports and custom server layouts
 are unsupported and fail explicitly. The normal pretest and test wrapper still supply isolated services.
 Before running `ploaness verify --extended` or `ploaness gate e2e`, stop servers already listening at
 the configured `serverUrl` and `auxiliaryServers` addresses. An occupied port fails the gate even when

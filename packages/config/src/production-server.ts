@@ -1,32 +1,14 @@
 // The verified browser suite starts the production artifact using the application's own Next install.
 import { type ChildProcess, spawn } from 'node:child_process'
-import { cpSync, existsSync, readFileSync } from 'node:fs'
+import { cpSync, existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { type ProductionOutput, productionOutputOf, readKey } from '@ploaness/governance'
-
-type ConfigLoader = (phase: string, directory: string) => Promise<unknown>
-const isLoader = (value: unknown): value is ConfigLoader => typeof value === 'function'
+import { type ProductionBuild, readProductionBuild } from './production-build.js'
 
 const root: string = process.cwd()
 const requireProject: NodeJS.Require = createRequire(path.join(root, 'package.json'))
-const loadModule: unknown = requireProject('next/dist/server/config.js')
-const load: unknown = readKey(loadModule, 'default')
-if (!isLoader(load)) {
-  throw new TypeError('the installed Next configuration loader is unavailable')
-}
-const config: unknown = await load('phase-production-server', root)
-const distributionDirectory: unknown = readKey(config, 'distDir')
-if (typeof distributionDirectory !== 'string' || readKey(config, 'output') === 'export') {
-  throw new TypeError('production browser verification needs Next server output; static export is unsupported')
-}
-const directory: string = path.resolve(root, distributionDirectory)
-if (!(existsSync(path.join(directory, 'BUILD_ID')) && existsSync(path.join(directory, 'required-server-files.json')))) {
-  throw new Error(`production output is missing under ${directory}; run ploaness gate e2e to rebuild and verify`)
-}
-const manifest: unknown = JSON.parse(readFileSync(path.join(directory, 'required-server-files.json'), 'utf8'))
-const output: ProductionOutput = productionOutputOf(manifest)
+const { directory, output }: ProductionBuild = await readProductionBuild(root)
 const standaloneRoot: string = path.join(directory, 'standalone', output.relativeAppDir)
 
 const copyAssets = (): void => {

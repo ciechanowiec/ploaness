@@ -624,6 +624,52 @@ configuration_contracts() {
     analysis_environment_contracts
 }
 
+bundle_environment_contracts() {
+    for mode in wrapper files; do
+        name="bundle-environment-$mode"
+        new_case "$name"
+        node "$lib/create-a11y-page.ts" "$scratch/$name" valid
+        node "$lib/configure-build-environment.ts" "$scratch/$name" "$mode"
+        commit_case "$name" 'test(fixture): retain the build environment during bundle measurement' "$CONFORMING_BODY"
+        expect "$name" build PASS
+        expect "$name" bundle PASS
+    done
+    edit_json "$scratch/bundle-environment-wrapper/package.json" ploaness.pretest '["false"]'
+    expect bundle-environment-wrapper bundle FAIL 'declared pretest command failed'
+}
+
+bundle_directory_contracts() {
+    (cd "$template" && pnpm exec playwright install chromium >/dev/null)
+    for mode in ordinary standalone; do
+        name="bundle-$mode"
+        new_case "$name"
+        node "$lib/create-a11y-page.ts" "$scratch/$name" valid
+        node "$lib/configure-build-directory.ts" "$scratch/$name" "$mode"
+        commit_case "$name" 'test(fixture): measure the configured production output' "$CONFORMING_BODY"
+        expect "$name" build PASS
+        expect_command "$name" PASS '\[PASS\] bundle' \
+            env NODE_ENV=development "$scratch/$name/node_modules/.bin/ploaness" gate bundle
+        expect_command "$name" PASS '1 passed' \
+            env PLOANESS_VERIFICATION=1 pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+        mkdir -p "$scratch/$name/.next/static"
+        printf 'console.log(1)\n' > "$scratch/$name/.next/static/stale.js"
+        edit_json "$scratch/$name/package.json" ploaness.bundleBudgetBytes 1024
+        expect "$name" bundle FAIL 'over budget'
+        mv "$scratch/$name/.production/static" "$scratch/$name/.production/static-saved"
+        expect "$name" bundle FAIL 'production build output is missing'
+        mv "$scratch/$name/.production/static-saved" "$scratch/$name/.production/static"
+        rm "$scratch/$name/.production/BUILD_ID"
+        expect "$name" bundle FAIL 'production output is missing'
+        printf 'export default () => { throw new Error("bundle configuration failure") }\n' \
+            > "$scratch/$name/next.config.ts"
+        expect "$name" bundle FAIL 'bundle configuration failure'
+    done
+    new_case bundle-library
+    edit_json "$scratch/bundle-library/package.json" dependencies '{}'
+    commit_case bundle-library 'test(fixture): retain libraries without client bundles' "$CONFORMING_BODY"
+    expect bundle-library bundle PASS 'no runtime of its own'
+}
+
 route_overlap_contracts() {
     new_case route-overlap
     node "$lib/create-a11y-page.ts" "$scratch/route-overlap" valid
@@ -673,8 +719,8 @@ document_a11y_contracts() {
 
 # Declared focused subsets; the default run remains complete.
 case "${1-}" in
-    ''|--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only) ;;
-    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only]' >&2; exit 1 ;;
+    ''|--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only) ;;
+    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only]' >&2; exit 1 ;;
 esac
 
 if [ -z "${1-}" ] || [ "${1-}" = --configuration-only ]; then
@@ -684,6 +730,18 @@ if [ -z "${1-}" ] || [ "${1-}" = --configuration-only ]; then
             exit "$failures"
         fi
         echo 'configuration contracts passed; run pnpm run verify for the complete verdict'
+        exit 0
+    fi
+fi
+
+if [ -z "${1-}" ] || [ "${1-}" = --bundle-only ]; then
+    bundle_directory_contracts
+    bundle_environment_contracts
+    if [ "${1-}" = --bundle-only ]; then
+        if [ "$failures" -ne 0 ]; then
+            exit "$failures"
+        fi
+        echo 'bundle directory contracts passed; run pnpm run verify for the complete verdict'
         exit 0
     fi
 fi

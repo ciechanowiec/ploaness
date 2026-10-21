@@ -15,40 +15,8 @@ import {
 } from '@ploaness/governance'
 import { browserServerProblems } from '../browser-servers.js'
 import { type Context, hasOwnRuntime, type Member, resolveProjectTool, workingTreeFiles } from '../context.js'
-import { asFindings, failed, fromRun, type GateResult, passed, type RunResult, run } from '../exec.js'
-
-// A Payload suite needs a database before it can boot, and how the project obtains one is a fact ploaness
-// cannot know. The project declares it; the thresholds and the gate itself stay ploaness's.
-const runPretest = (context: Context): RunResult | undefined => {
-  const [command, ...rest] = context.settings.pretest
-  return command === undefined ? undefined : run(command, rest, { cwd: context.root })
-}
-
-interface Invocation {
-  readonly command: string
-  readonly commandArguments: readonly string[]
-}
-
-const wrapped = (context: Context, interpreterArguments: readonly string[]): Invocation => {
-  const [wrapper, ...wrapperRest] = context.settings.testWrapper
-  if (wrapper === undefined) {
-    return { command: process.execPath, commandArguments: interpreterArguments }
-  }
-  return {
-    command: wrapper,
-    commandArguments: [...wrapperRest, process.execPath, ...interpreterArguments],
-  }
-}
-
-const withPretest = <Outcome extends GateResult | Promise<GateResult>>(
-  context: Context,
-  gate: () => Outcome,
-): GateResult | Outcome => {
-  const pretest: RunResult | undefined = runPretest(context)
-  return pretest !== undefined && pretest.code !== 0
-    ? failed('the declared pretest command failed', asFindings(pretest.output))
-    : gate()
-}
+import { failed, fromRun, type GateResult, passed, type RunResult, run } from '../exec.js'
+import { type Invocation, withPretest, wrapped } from '../test-invocation.js'
 
 // Resolution failure is an answer, not an exception to catch three times over.
 const resolveProjectToolOrUndefined = (context: Context, tool: string, binary?: string): string | undefined => {

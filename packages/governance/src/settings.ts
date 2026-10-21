@@ -151,13 +151,13 @@ export interface Settings {
   /** Anonymous permissions the project grants deliberately, each with the reason it does. */
   readonly publicAccess: readonly PublicAccess[]
   /**
-   * A command run once before the test and end-to-end gates, as argv. A Payload project needs a database
+   * A command run before tests, builds, bundle inspection, and end-to-end tests, as argv. A project needs a database
    * before its suite can boot, and how it obtains one (a compose service, a managed instance, an
    * ephemeral schema) is a fact ploaness cannot know. Declaring it does not weaken a rule: the gates and
    * their thresholds are unchanged, only the way the project reaches its database.
    */
   readonly pretest: readonly string[]
-  /** An argv prefix wrapping the test runner, for a project that runs its suite against a scratch database. */
+  /** An argv prefix wrapping tests, builds, and bundle inspection, for example to supply a scratch database. */
   readonly testWrapper: readonly string[]
   /**
    * The origin the end-to-end suite drives. The port a project serves on is a fact ploaness cannot
