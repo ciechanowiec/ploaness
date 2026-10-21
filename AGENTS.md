@@ -89,6 +89,7 @@ Use Node 26 or later and the exact pnpm version in `packageManager`.
 | `sh it/verify.sh --jsx-only` | Diagnostic JSX and browser-name subset. |
 | `sh it/verify.sh --layout-only` | Diagnostic layout-scan subset against real Next pages. |
 | `sh it/verify.sh --browser-servers-only` | Diagnostic browser-server ownership and production environment subset. |
+| `sh it/verify.sh --file-scopes-only` | Diagnostic file selection, generated-role, CommonJS, and SCSS subset. |
 | `sh it/verify.sh --security-only` | Diagnostic resolved-authentication and release-inventory subset. |
 | `sh it/verify.sh --bundle-only` | Diagnostic configured Next output and bundle subset. |
 | `sh it/verify.sh --a11y-only` | Diagnostic document and route accessibility subset. |

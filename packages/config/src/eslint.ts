@@ -1,3 +1,4 @@
+import { JAVASCRIPT_EXTENSIONS, TYPESCRIPT_SOURCE_EXTENSIONS } from '@ploaness/governance'
 // @ts-check
 //
 // Type-aware ESLint flat config - the second enforcement layer, alongside Biome.
@@ -23,6 +24,8 @@ import testingLibrary from 'eslint-plugin-testing-library'
 import {
   allowlistedJavaScript,
   baseLayers,
+  commonJavaScriptBlock,
+  commonTypeScriptBlock,
   compose,
   type FlatConfigBlock,
   guidelineRules,
@@ -100,6 +103,11 @@ const config: ReturnType<typeof compose> = compose(
     ],
   },
 
+  {
+    files: [...TYPESCRIPT_SOURCE_EXTENSIONS, ...JAVASCRIPT_EXTENSIONS].map(
+      (extension: string): string => `**/*${extension}`,
+    ),
+  },
   ...baseLayers,
 
   // Type-aware parsing against the consuming project's own tsconfig, plus the shared rule set.
@@ -116,7 +124,7 @@ const config: ReturnType<typeof compose> = compose(
   // The role is declarable rather than a fixed path, because a project that mounts its framework
   // elsewhere has the same generated files under a name ploaness cannot guess.
   immutabilityBlock(
-    ['**/*.ts', '**/*.tsx'],
+    TYPESCRIPT_SOURCE_EXTENSIONS.map((extension: string): string => `**/*${extension}`),
     [...settings.frameworkGlue, 'src/payload-types.ts', 'src/payload-generated-schema.ts'],
   ),
 
@@ -402,6 +410,8 @@ const config: ReturnType<typeof compose> = compose(
 
   // ── Formatting is Biome's job - disable every conflicting stylistic rule (must stay last) ────
   reexportConfigBlock,
+  commonJavaScriptBlock(settings.javascriptAllowlist, projectDirectory),
+  commonTypeScriptBlock(),
   prettierLast,
 )
 

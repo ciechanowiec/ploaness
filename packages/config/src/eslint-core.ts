@@ -3,18 +3,25 @@
 import path from 'node:path'
 import js from '@eslint/js'
 import comments from '@eslint-community/eslint-plugin-eslint-comments/configs'
-import { matchesRole, PROJECT_SETUP_FILE, type RolePattern } from '@ploaness/governance'
+import {
+  hasExtension,
+  JAVASCRIPT_EXTENSIONS,
+  matchesRole,
+  PROJECT_SETUP_FILE,
+  type RolePattern,
+} from '@ploaness/governance'
 import vitest from '@vitest/eslint-plugin'
 import type { Linter } from 'eslint'
 import { defineConfig } from 'eslint/config'
 import prettier from 'eslint-config-prettier'
-import functional from 'eslint-plugin-functional'
 import jsdoc from 'eslint-plugin-jsdoc'
 import regexp from 'eslint-plugin-regexp'
 import sonarjs from 'eslint-plugin-sonarjs'
 import unicorn from 'eslint-plugin-unicorn'
 import globals from 'globals'
 import tseslint from 'typescript-eslint'
+import { immutabilityPlugin as functional } from './eslint-immutability.js'
+import { javaScriptParser } from './eslint-javascript-parser.js'
 import { type RestrictedSyntax, SECURITY_RESTRICTIONS } from './eslint-security.js'
 
 /**
@@ -842,6 +849,7 @@ export type FileMatcher = string | ((filePath: string) => boolean)
 export const allowlistedJavaScript =
   (allowlist: readonly RolePattern[], memberDirectory: string): ((filePath: string) => boolean) =>
   (filePath: string): boolean =>
+    hasExtension(filePath, JAVASCRIPT_EXTENSIONS) &&
     matchesRole(path.relative(memberDirectory, filePath).split(path.sep).join('/'), allowlist)
 
 /**
@@ -858,16 +866,19 @@ export const allowlistedJavaScript =
  */
 export const javascriptBlock = (files: readonly FileMatcher[]): FlatConfigBlock => ({
   files,
+  plugins: { functional },
   extends: [tseslint.configs.disableTypeChecked],
   // Declared rather than inferred. `no-undef` is off for every TypeScript file here because the
   // compiler decides that question; on a JavaScript file the rule is live, and it has to be told which
   // names the runtime supplies. These programs run on node without a CommonJS wrapper.
-  languageOptions: { globals: globals.nodeBuiltin },
+  languageOptions: { globals: globals.nodeBuiltin, parser: javaScriptParser() },
   rules: {
     ...guidelineRules,
+    'functional/no-let': 'error',
+    'functional/immutable-data': immutableData([]),
     // Re-applied AFTER the rule list above. `extends` places the disabling block BEFORE the block's own
-    // rules, so spreading the list on top would switch every type-aware rule back on for a file that has
-    // no type information for one to read - which fails the run outright rather than reporting.
+    // rules. JavaScript gets inferred types for mutation analysis, while the checks that demand
+    // authored TypeScript types remain disabled.
     ...tseslint.configs.disableTypeChecked.rules,
     // A JavaScript file has nowhere to write a return type, a parameter type, or a variable annotation.
     '@typescript-eslint/explicit-function-return-type': 'off',
@@ -1033,3 +1044,18 @@ export {
   NO_NETWORK_GUARD_ESCAPE,
   NO_TEST_ORDER_ESCAPE,
 }
+
+/** CommonJS exports initialize the module interface; mutations of exported values remain governed. */
+export const commonJavaScriptBlock = (allowlist: readonly RolePattern[], directory: string): FlatConfigBlock => ({
+  files: [(file: string): boolean => file.endsWith('.cjs') && allowlistedJavaScript(allowlist, directory)(file)],
+  languageOptions: { sourceType: 'commonjs', globals: globals.node },
+  plugins: { functional },
+  rules: { '@typescript-eslint/no-require-imports': 'off' },
+})
+
+/** Typed CommonJS modules use import-equals so imports retain their declared types. */
+export const commonTypeScriptBlock = (): FlatConfigBlock => ({
+  files: ['**/*.cts'],
+  languageOptions: { sourceType: 'commonjs' },
+  rules: { '@typescript-eslint/no-require-imports': ['error', { allowAsImport: true }] },
+})

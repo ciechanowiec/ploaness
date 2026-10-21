@@ -26,7 +26,12 @@
         ]
       }
     ],
-    "at-rule-prelude-no-invalid": [true, { "ignoreAtRules": ["media", "apply"] }],
+    "at-rule-prelude-no-invalid": [
+      true,
+      {
+        "ignoreAtRules": ["media", "apply"]
+      }
+    ],
     "import-notation": "string",
     "selector-pseudo-class-no-unknown": [
       true,
@@ -47,5 +52,23 @@
     "lightness-notation": "number",
     "hue-degree-notation": "number",
     "selector-id-pattern": "^(__[a-zA-Z0-9]+|[a-z][a-z0-9]*(-[a-z0-9]+)*)$"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["**/*.scss"],
+      "customSyntax": "postcss-scss",
+      "plugins": ["stylelint-scss"],
+      "rules": {
+        "at-rule-no-unknown": null,
+        "scss/at-rule-no-unknown": true,
+        "at-rule-prelude-no-invalid": null,
+        "function-no-unknown": null,
+        "scss/function-no-unknown": true,
+        "declaration-property-value-no-unknown": null,
+        "color-no-invalid-hex": true,
+        "no-empty-source": null
+      },
+      "$comment": "An empty stylesheet is valid: Payload's template provides an empty custom.scss for optional application styles."
+    }
+  ]
 }

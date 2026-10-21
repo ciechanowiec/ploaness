@@ -1,3 +1,4 @@
+import { JAVASCRIPT_EXTENSIONS, TYPESCRIPT_SOURCE_EXTENSIONS } from './file-roles.js'
 import { GENERATED_ARTEFACTS } from './generated-denial.js'
 import { findAuditSilencingViolations } from './install-policy.js'
 import { asRecord, asStringRecord, declaredDependencies, isArray, type ParsedJson, parseJsonc } from './json-shapes.js'
@@ -127,26 +128,26 @@ const biomeGeneratedExclusion = (artefact: string): string =>
  */
 export const requiredBiomeFiles = (
   sourceRoots: readonly string[],
-  kind: MemberKind = 'payload',
+  _kind: MemberKind = 'payload',
   generatedArtefacts: readonly string[] = GENERATED_ARTEFACTS,
 ): Readonly<Record<string, unknown>> => ({
   ignoreUnknown: false,
   includes: [
-    ...sourceRoots.map((root: string): string => `${root}/**/*`),
+    ...sourceRoots.map((root: string): string => (root === '.' ? '**/*' : `${root}/**/*`)),
     'package.json',
     'biome.json',
     'tsconfig.json',
     '*.config.ts',
     '*.config.mts',
+    '*.config.cts',
+    '*.config.js',
+    '*.config.jsx',
+    '*.config.mjs',
+    '*.config.cjs',
     PROJECT_SETUP_FILE,
-    // Derived from the artefact list rather than written out. The two lists had to name the same paths
-    // and did not: `src/payload-generated-schema.ts` was denied to an agent and still handed to the
-    // formatter, so a generator and a formatter took turns rewriting one file.
-    // Only a Payload member has these. Negating them elsewhere would name paths that cannot exist,
-    // which `config-refs` reports as a carve-out reaching nothing.
-    ...(kind === 'payload'
-      ? generatedArtefacts.map((artefact: string): string => biomeGeneratedExclusion(artefact))
-      : []),
+    ...JAVASCRIPT_EXTENSIONS.map((extension: string): string => `**/*${extension}`),
+    ...generatedArtefacts.map((artefact: string): string => biomeGeneratedExclusion(artefact)),
+    '!**/*.scss',
     '!**/.next',
     '!**/node_modules',
   ],
@@ -161,7 +162,12 @@ export const requiredBiomeFiles = (
  * keeps ownership of their contents.
  */
 export const REQUIRED_TSCONFIG_PATHS: Readonly<Record<string, readonly string[]>> = {
-  include: ['next-env.d.ts', '**/*.ts', '**/*.tsx', '**/*.mts', '.next/types/**/*.ts', '.next/dev/types/**/*.ts'],
+  include: [
+    'next-env.d.ts',
+    ...TYPESCRIPT_SOURCE_EXTENSIONS.map((extension: string): string => `**/*${extension}`),
+    '.next/types/**/*.ts',
+    '.next/dev/types/**/*.ts',
+  ],
   exclude: ['node_modules'],
 }
 
@@ -173,7 +179,7 @@ export const REQUIRED_TSCONFIG_PATHS: Readonly<Record<string, readonly string[]>
  * them does not claim them.
  */
 export const LIBRARY_TSCONFIG_PATHS: Readonly<Record<string, readonly string[]>> = {
-  include: ['**/*.ts', '**/*.tsx', '**/*.mts'],
+  include: TYPESCRIPT_SOURCE_EXTENSIONS.map((extension: string): string => `**/*${extension}`),
   exclude: ['node_modules', 'dist'],
 }
 
@@ -238,9 +244,8 @@ const APPLICATION_TARGETS: MemberWiringTargets = {
  * The wiring one kind of member must declare.
  *
  * A Next application receives the same configurations as a Payload one: it renders React, it builds
- * through Next, and it serves pages a browser sweep can drive. What separates the two is the generated
- * files only Payload has, which {@link requiredBiomeFiles} handles by kind rather than by a second
- * configuration.
+ * through Next, and it serves pages a browser sweep can drive. Generated artifacts are declared
+ * by role and excluded by the same policy for every member kind.
  * @param kind the member's derived kind.
  * @returns the specifiers and globs that kind is held to.
  */
@@ -601,6 +606,7 @@ export const findPackageWiringViolations = (inputs: PackageWiringInputs): readon
   const targets: MemberWiringTargets = wiringTargetsFor(inputs.kind)
   return [
     ...checkDependency(packageJson),
+    ...repositoryOnlySettings(packageJson, inputs.isNestedMember),
     ...findPackageVersionViolations(packageJson, {
       expected: inputs.expectedTestLibraries,
       required: inputs.requiredTestLibraries,
@@ -617,6 +623,22 @@ export const findPackageWiringViolations = (inputs: PackageWiringInputs): readon
     ...checkBiome(inputs.biomeConfig, inputs.requiredBiomeFiles, targets.biomeExtends, inputs.isNestedMember),
     ...checkTsconfig(inputs.tsconfig, targets, inputs.nestedMembers),
   ]
+}
+
+const repositoryOnlySettings = (manifest: Record<string, unknown>, isNested: boolean): readonly WiringViolation[] => {
+  const settings: Record<string, unknown> = asRecord(manifest['ploaness'])
+  return isNested
+    ? ['secretAllowlist', 'vulnerabilityAllowlist']
+        .filter((key: string): boolean => Object.hasOwn(settings, key))
+        .map(
+          (key: string): WiringViolation => ({
+            location: `package.json ploaness.${key}`,
+            reason:
+              `${key} is repository-wide; move this declaration to ploaness.${key} ` +
+              'in the repository root package.json',
+          }),
+        )
+    : []
 }
 
 /**

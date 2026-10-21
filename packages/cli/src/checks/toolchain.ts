@@ -5,14 +5,25 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
+  allowedJavaScriptFiles,
   analysisBoundaries,
   asRecord,
+  biomeSelection,
   eslintArguments,
+  isArray,
   type MemberKind,
   memberKindOf,
   pureLogicRule,
+  requiredBiomeFiles,
 } from '@ploaness/governance'
-import { type Context, type Member, readJson, resolveTool, shippedDirectory } from '../context.js'
+import {
+  type Context,
+  type Member,
+  presentWorkingTreeFiles,
+  readJson,
+  resolveTool,
+  shippedDirectory,
+} from '../context.js'
 import { failed, fromRun, type GateResult, passed, type RunResult, runNode } from '../exec.js'
 
 const configFile = (name: string): string => path.join(shippedDirectory('@ploaness/config'), name)
@@ -27,21 +38,32 @@ export const types = (context: Context): GateResult =>
     'the project does not type-check under the ploaness compiler options',
   )
 
-// `--error-on-warnings` for the reason the Stylelint invocation below carries `--max-warnings=0`: a
-// check has two verdicts, and a diagnostic Biome ranks as a warning would otherwise print and exit 0.
-/** Formatting and fast lint. */
-export const biome = (context: Context): GateResult =>
+const biomeRun = (context: Member, mode: '--write' | '--error-on-warnings'): RunResult => {
+  const selection: Readonly<Record<string, unknown>> = requiredBiomeFiles(
+    context.settings.sourceRoots,
+    memberKindOf(context.packageJson),
+    context.settings.generatedArtefacts,
+  )
+  const files: readonly string[] = biomeSelection(
+    presentWorkingTreeFiles(context.root),
+    stringEntries(selection['includes']),
+    context.siblingPaths,
+  )
+  return files.length === 0
+    ? { code: 0, output: 'no owned files selected for Biome', stdout: '' }
+    : runNode(resolveTool('@biomejs/biome', 'biome'), ['check', mode, ...files], { cwd: context.root })
+}
+
+/** Formatting and fast lint, bounded to the current member's working-tree files. */
+export const biome = (context: Member): GateResult =>
   fromRun(
-    runNode(resolveTool('@biomejs/biome', 'biome'), ['check', '--error-on-warnings', '.'], {
-      cwd: context.root,
-    }),
+    biomeRun(context, '--error-on-warnings'),
     'Biome reports no formatting or lint defect',
     'Biome reports a formatting or lint defect',
   )
 
-/** Apply Biome's own fixes, used by `ploaness format`. */
-export const biomeWrite = (context: Context): RunResult =>
-  runNode(resolveTool('@biomejs/biome', 'biome'), ['check', '--write', '.'], { cwd: context.root })
+/** Apply the same selection the Biome gate checks. */
+export const biomeWrite = (context: Member): RunResult => biomeRun(context, '--write')
 
 const versionOf = (manifest: Record<string, unknown>): string =>
   typeof manifest['version'] === 'string' ? manifest['version'] : ''
@@ -93,29 +115,7 @@ export const eslintWrite = (context: Member): RunResult =>
     cwd: context.root,
   })
 
-// `--max-warnings=0` because the shipped config asks Stylelint to report a descriptionless, needless, or
-// wrongly scoped disable, and Stylelint reports those at warning severity. A warning severity does not
-// exist here: any finding is a failure.
-const stylesheetGlobs = (context: Context): readonly string[] =>
-  context.settings.sourceRoots.map((sourceRoot: string): string => `${sourceRoot}/**/*.css`)
-
-/** Style sheets. Biome remains the formatter, so Stylelint is lint-only. */
-export const css = (context: Context): GateResult =>
-  fromRun(
-    runNode(
-      resolveTool('stylelint'),
-      [
-        '--config',
-        configFile('stylelint.json'),
-        ...stylesheetGlobs(context),
-        '--allow-empty-input',
-        '--max-warnings=0',
-      ],
-      { cwd: context.root },
-    ),
-    'style sheets pass Stylelint',
-    'a style sheet does not pass Stylelint',
-  )
+export { css } from './stylesheets.js'
 
 /** Module architecture: layer boundaries, cycles, and import hygiene. */
 // The layer map is rendered rather than shipped, because the pure-logic floor is the one genuinely
@@ -127,7 +127,10 @@ const JSON_INDENT: number = 2
 
 const architectureConfig = (context: Context, kind: MemberKind): string => {
   const shipped: string = configFile(kind === 'library' ? 'dependency-cruiser-core.json' : 'dependency-cruiser.json')
-  const floor: Record<string, unknown> | undefined = pureLogicRule(context.settings.pureLogicRoots)
+  const floor: Record<string, unknown> | undefined = pureLogicRule(
+    context.settings.pureLogicRoots,
+    context.settings.sourceRoots,
+  )
   if (floor === undefined) {
     return shipped
   }
@@ -199,7 +202,13 @@ export const typeCoverage = (context: Context): GateResult =>
         '--strict',
         '--cache',
         'false',
-        ...TYPE_COVERAGE_IGNORE.flatMap((pattern: string): readonly string[] => ['--ignore-files', pattern]),
+        ...[
+          ...new Set([
+            ...TYPE_COVERAGE_IGNORE,
+            ...context.settings.generatedArtefacts,
+            ...context.settings.frameworkGlue,
+          ]),
+        ].flatMap((pattern: string): readonly string[] => ['--ignore-files', pattern]),
       ],
       { cwd: context.root },
     ),
@@ -211,15 +220,34 @@ export const typeCoverage = (context: Context): GateResult =>
 // The member boundary `analysisBoundaries` states, reaching knip. It takes the patterns as configuration
 // rather than as a flag, and its own config is a shipped file a project may not edit - so the boundary
 // has to be rendered into a copy for the run rather than passed on the command line as ESLint's is.
+const stringEntries = (value: unknown): readonly string[] =>
+  isArray(value) ? value.filter((entry: unknown): entry is string => typeof entry === 'string') : []
+
 const knipConfig = (context: Member): string => {
   const boundaries: readonly string[] = analysisBoundaries(context.siblingPaths)
-  if (boundaries.length === 0) {
+  const entries: readonly string[] = allowedJavaScriptFiles(
+    presentWorkingTreeFiles(context.root),
+    context.settings.javascriptAllowlist,
+    context.siblingPaths,
+  )
+  if (boundaries.length === 0 && entries.length === 0) {
     return configFile('knip.json')
   }
   const shipped: Record<string, unknown> = asRecord(readJson(configFile('knip.json')))
   const directory: string = mkdtempSync(path.join(tmpdir(), 'ploaness-knip-'))
   const rendered: string = path.join(directory, 'knip.json')
-  writeFileSync(rendered, `${JSON.stringify({ ...shipped, ignore: boundaries }, null, JSON_INDENT)}\n`)
+  writeFileSync(
+    rendered,
+    `${JSON.stringify(
+      {
+        ...shipped,
+        entry: [...stringEntries(shipped['entry']), ...entries],
+        ignore: [...stringEntries(shipped['ignore']), ...boundaries],
+      },
+      null,
+      JSON_INDENT,
+    )}\n`,
+  )
   return rendered
 }
 

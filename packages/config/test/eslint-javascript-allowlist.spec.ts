@@ -5,7 +5,7 @@ import { ESLint, type Linter } from 'eslint'
 import { defineConfig } from 'eslint/config'
 import { afterAll, describe, expect, it } from 'vitest'
 import payloadConfig from '../dist/eslint.js'
-import { allowlistedJavaScript, javascriptBlock } from '../dist/eslint-core.js'
+import { allowlistedJavaScript, commonJavaScriptBlock, javascriptBlock } from '../dist/eslint-core.js'
 import libraryConfig from '../dist/eslint-library.js'
 
 // A file the conventions gate admits through javascriptAllowlist must reach ESLint as JavaScript. The
@@ -16,7 +16,7 @@ const CONFIGURATIONS: Readonly<Record<string, readonly Linter.Config[]>> = {
   payload: payloadConfig,
   library: libraryConfig,
 }
-const ALLOWLIST: readonly string[] = [String.raw`^infra/edge-function\.js$`]
+const ALLOWLIST: readonly string[] = [String.raw`^infra/edge-function\.js$`, String.raw`\.cjs$`]
 const SOURCE: string = 'export const handler = (event) => event.request\n'
 const MAGIC_NUMBER: string = 'export const handler = (event) => event.request.uri.length > 42\n'
 
@@ -54,6 +54,7 @@ const lint = async (
         },
       },
       javascriptBlock([allowlistedJavaScript([...ALLOWLIST], directory)]),
+      commonJavaScriptBlock(ALLOWLIST, directory),
     ]),
   })
   const results: readonly ESLint.LintResult[] = await eslint.lintFiles([file])
@@ -69,6 +70,12 @@ describe('allowlistedJavaScript', () => {
     expect(isAllowlisted(path.join(directory, 'infra', 'edge-function.js'))).toBe(true)
     expect(isAllowlisted(path.join(directory, 'infra', 'other.js'))).toBe(false)
     expect(isAllowlisted(path.join(directory, 'nested', 'infra', 'edge-function.js'))).toBe(false)
+  })
+
+  it('does not relax TypeScript files reached by a broad allowlist', () => {
+    const isAllowlisted: (filePath: string) => boolean = allowlistedJavaScript(['^infra/'], directory)
+    expect(isAllowlisted(path.join(directory, 'infra', 'read.ts'))).toBe(false)
+    expect(isAllowlisted(path.join(directory, 'infra', 'view.jsx'))).toBe(true)
   })
 
   it('reads a member-scoped pattern within its member only', () => {
@@ -92,6 +99,54 @@ describe.each(Object.entries(CONFIGURATIONS))(
       const messages: readonly Linter.LintMessage[] = await lint(config, 'infra/edge-function.js', MAGIC_NUMBER)
       expect(fatal(messages)).toEqual([])
       expect(messages.map((message: Linter.LintMessage): string | null => message.ruleId)).toContain('no-magic-numbers')
+    })
+
+    it('accepts CommonJS exports without a global or mutation suppression', async () => {
+      const messages: readonly Linter.LintMessage[] = await lint(
+        config,
+        `infra/${kind}-exports.cjs`,
+        'const edge = (event) => event.request\nmodule.exports = edge\n',
+      )
+      expect(messages).toEqual([])
+    })
+
+    it('rejects mutation within an exported CommonJS value', async () => {
+      const messages: readonly Linter.LintMessage[] = await lint(
+        config,
+        `infra/${kind}-mutation.cjs`,
+        'module.exports = []\nmodule.exports.push(1)\n',
+      )
+      expect(messages.map((message) => message.ruleId)).toContain('functional/immutable-data')
+    })
+
+    it('does not exempt a local object shadowing the CommonJS runtime', async () => {
+      const messages: readonly Linter.LintMessage[] = await lint(
+        config,
+        `infra/${kind}-shadow.cjs`,
+        'const module = { exports: 1 }\nmodule.exports = 2\n',
+      )
+      expect(messages.map((message) => message.ruleId)).toContain('functional/immutable-data')
+    })
+
+    it('accepts the CommonJS dependency-loading syntax', async () => {
+      expect(
+        await lint(config, `infra/${kind}-require.cjs`, "const path = require('node:path')\nmodule.exports = path\n"),
+      ).toEqual([])
+    })
+
+    it('accepts a named CommonJS export during module initialization', async () => {
+      expect(await lint(config, `infra/${kind}-named.cjs`, 'module.exports.edge = (event) => event.request\n')).toEqual(
+        [],
+      )
+    })
+
+    it('rejects export mutation after module initialization', async () => {
+      const messages: readonly Linter.LintMessage[] = await lint(
+        config,
+        `infra/${kind}-late.cjs`,
+        'const refresh = () => { exports.value = 1 }\nmodule.exports = refresh\n',
+      )
+      expect(messages.map((message) => message.ruleId)).toContain('functional/immutable-data')
     })
 
     it('still reads a file outside the allowlist with the type-aware parser', async () => {

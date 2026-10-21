@@ -8,8 +8,8 @@
 // is the contract rather than a preference.
 
 import { BUNDLE_BUDGET_BYTES } from './bundle-budget.js'
-import { COVERAGE_ROLE_EXCLUDE, coverageIncludes, coverageOwnedFiles, isCoverageCandidate } from './coverage-policy.js'
-import { matchesGlob, matchesRole, type RolePattern } from './file-roles.js'
+import { COVERAGE_ROLE_EXCLUDE, coverageCandidates, coverageIncludes } from './coverage-policy.js'
+import { hasExtension, JAVASCRIPT_EXTENSIONS, matchesGlob, matchesRole, type RolePattern } from './file-roles.js'
 import { GENERATED_ARTEFACTS } from './generated-denial.js'
 // Only string-valued entries survive `asStringRecord`: a non-string would reach `spawn` as a
 // malformed environment.
@@ -545,7 +545,12 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
       ...declaredLayers,
     ],
     javascriptAllowlist: [...DEFAULT_JAVASCRIPT_ALLOWLIST, ...honoured(declaredJavascript)],
-    coverageExclude: [...DEFAULT_COVERAGE_EXCLUDE, ...honoured(declaredCoverage)],
+    coverageExclude: [
+      ...DEFAULT_COVERAGE_EXCLUDE,
+      ...GENERATED_ARTEFACTS,
+      ...honoured(declaredGenerated),
+      ...honoured(declaredCoverage),
+    ],
     bundleBudgetBytes: clampedCeiling(raw['bundleBudgetBytes'], DEFAULT_BUNDLE_BUDGET_BYTES),
     maxSuppressions: asNonNegativeInteger(raw['maxSuppressions']),
     vulnerabilityAllowlist: asVulnerabilityAllowlist(raw['vulnerabilityAllowlist']),
@@ -664,13 +669,6 @@ export const trackedDirectories = (tracked: readonly string[]): readonly string[
   ),
 ]
 
-const measuredByCoverage = (
-  tracked: readonly string[],
-  sourceRoots: readonly string[],
-  siblingPaths: readonly string[],
-): readonly string[] =>
-  coverageOwnedFiles(tracked, siblingPaths).filter((file: string): boolean => isCoverageCandidate(file, sourceRoots))
-
 /**
  * Which paths a setting's exclusions have to reach.
  *
@@ -686,8 +684,11 @@ const candidatesFor = (
   sourceRoots: readonly string[],
   siblingPaths: readonly string[],
 ): readonly string[] => {
+  if (setting === 'javascriptAllowlist') {
+    return tracked.filter((file: string): boolean => hasExtension(file, JAVASCRIPT_EXTENSIONS))
+  }
   if (setting === COVERAGE_SETTING) {
-    return measuredByCoverage(tracked, sourceRoots, siblingPaths)
+    return coverageCandidates(tracked, sourceRoots, siblingPaths)
   }
   return DIRECTORY_SETTINGS.has(setting) ? trackedDirectories(tracked) : tracked
 }

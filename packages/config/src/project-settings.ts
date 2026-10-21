@@ -1,7 +1,15 @@
 // Read the consumer's settings from the working directory, where its tools are invoked.
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { ploanessBlock, readMemberSettings, readSettings, type Settings } from '@ploaness/governance'
+import {
+  asRecord,
+  isArray,
+  parseJsonc,
+  ploanessBlock,
+  readMemberSettings,
+  readSettings,
+  type Settings,
+} from '@ploaness/governance'
 
 // A project whose package.json cannot be read gets the defaults, which are the strict end of every
 // setting. Failing to parse must never be the thing that loosens a threshold.
@@ -43,10 +51,33 @@ const settingsFor = (member: string): Settings => {
     // append every additive list to a copy of itself rather than leaving it alone.
     return readSettings(own)
   }
-  return readMemberSettings(ploanessBlock(readPackageJson(repositoryRoot)), ploanessBlock(own))
+  return readMemberSettings(
+    ploanessBlock(readPackageJson(repositoryRoot)),
+    ploanessBlock(own),
+    path.relative(repositoryRoot, member).split(path.sep).join('/'),
+  )
 }
 
 /** The member whose settings these are: the directory its tools are invoked in. */
 export const projectDirectory: string = process.cwd()
 
-export const projectSettings: Settings = settingsFor(projectDirectory)
+const settings: Settings = settingsFor(projectDirectory)
+
+// The wiring gate validates these exclusions against the discovered member boundaries.
+const compilerBoundaries = (): readonly string[] => {
+  try {
+    const contents: string = readFileSync(path.join(projectDirectory, 'tsconfig.json'), 'utf8')
+    const raw: unknown = asRecord(parseJsonc(contents).value)['exclude']
+    return isArray(raw) ? raw.filter((entry: unknown): entry is string => typeof entry === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+export const projectSettings: Settings = {
+  ...settings,
+  coverageExclude: [
+    ...settings.coverageExclude,
+    ...compilerBoundaries().map((directory: string): string => `${directory}/**`),
+  ],
+}

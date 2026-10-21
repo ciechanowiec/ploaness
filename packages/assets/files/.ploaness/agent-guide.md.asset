@@ -124,7 +124,7 @@ invocations of a package gate. `tree-verify` runs after all other gates in eithe
 | `conventions` | repository | The typography ban and the hand-written JavaScript ban, over tracked and non-ignored untracked text files, and documenting comments left above another comment rather than above what they document. |
 | `editorconfig` | repository | Every tracked and non-ignored untracked text file matches the pinned `.editorconfig`, and no code line passes 120 characters. |
 | `suppressions` | package | The suppression count against the earned ceiling, over the project's own files. |
-| `css` | package | Stylelint over every style sheet under the source roots, with Tailwind v4 accepted as written. |
+| `css` | package | Stylelint over authored CSS and SCSS under the source roots, plus SCSS formatting. Tailwind v4 is accepted as written. |
 | `tailwind-tokens` | package | Every visual value in the markup comes from the theme rather than an arbitrary value. |
 | `arch` | package | dependency-cruiser: layering, cycles, and orphans. |
 | `type-coverage` | package | 100% type coverage of authored production TypeScript; test assertions are excluded from this measurement. |
@@ -275,8 +275,10 @@ Their shared detector checks the complete file for NUL bytes and invalid UTF-8, 
 headers even when a PDF uses only text-encoded objects. Valid UTF-8 text remains in scope regardless
 of its extension, including SVG and JSON files.
 
-Settings live under `ploaness` in `package.json`. A member inherits the root settings. Source and role
-lists add entries; command arrays and origins describe one member and replace inherited values.
+Settings live under `ploaness` in `package.json`. A member inherits the root settings. Filesystem patterns and directory declarations retain their
+declaring directory: root declarations are repository-relative, and member declarations are member-relative.
+Use an explicit cross-member glob such as `**/scripts/deploy.ts` to reach matching paths in every member.
+The built-in source and role defaults apply separately to each member. Source and role lists add entries; command arrays and origins describe one member and replace inherited values.
 Numeric ceilings honor the smallest valid value and cannot weaken an ancestor; the layout gap is a
 floor and honors the largest. Environment maps merge
 by variable name. Malformed values use the strict default or contribute no exception; a malformed
@@ -287,20 +289,29 @@ not the convenience of excluding it. Patterns must reach files the relevant chec
 Regexes and globs are identified below; a member's regex applies to paths inside that member. Route
 prefixes name URLs and are not checked against filesystem paths.
 
+Generated-file roles are excluded from formatting, lint, type coverage, and test coverage in every member kind.
+Coverage includes eligible `.ts`, `.mts`, and `.cts` source under every source root; existing test,
+declaration, view, and framework roles remain excluded. Glob roles support comma-separated brace alternatives,
+such as `src/{read,write}.ts`. Each explicit exclusion must reach an eligible file.
+
+`ploaness format` formats SCSS with the harness's pinned Prettier settings. Stylelint owns SCSS rules;
+Biome owns formatting for its supported languages. `.cjs` is parsed as CommonJS and may initialize its
+exports, while ordinary mutations remain prohibited in every directory.
+
 | Setting | Default | Input and effect |
 | --- | --- | --- |
 | `sourceRoots` | `src`, `tests`, `scripts` | String array adding source directories, including coverage of `.ts`, `.mts`, and `.cts` logic. |
 | `unmanagedAssets` | empty | Entries with `path` and `reason` recording explicitly assigned project ownership. |
 | `typographyExclusions` | generated Payload files | File-role entries with regex patterns. |
-| `javascriptAllowlist` | ESLint config and generated import map | File-role entries with regex patterns for necessary JavaScript. |
+| `javascriptAllowlist` | ESLint/PostCSS configs and generated import map | Regex roles for necessary `.js`, `.jsx`, `.mjs`, or `.cjs` files; never TypeScript. Matching authored files are linted, formatted, and passed to knip as entry points. |
 | `coverageExclude` | framework glue, generated files, components | File-role entries with glob patterns; each must reach measured code. |
 | `frameworkGlue` | `src/app/(payload)/**`, `src/payload.config.ts` | File-role entries with globs for framework scaffolding; authored behavior is not scaffolding. |
 | `generatedArtefacts` | stock Payload types, import map, schema | File-role entries with globs for generator-owned files, added to the shipped set. |
 | `pureLogicRoots` | `src/access`, `src/lib` | File-role entries naming additional pure-logic directories. |
 | `bundleBudgetBytes` | `1126400` | Positive integer; only a smaller budget is honored. |
 | `maxSuppressions` | earned ceiling | Nonnegative integer setting a stricter ceiling; zero permits none. |
-| `vulnerabilityAllowlist` | empty | Mitigations for advisories no upgrade repairs; see Vulnerability Mitigations. Unused entries fail. |
-| `secretAllowlist` | empty | Entries with `path` and `reason` for committed fake credentials. |
+| `vulnerabilityAllowlist` | empty | Root only. Mitigations for advisories no upgrade repairs; see Vulnerability Mitigations. Unused entries fail. |
+| `secretAllowlist` | empty | Root only. Entries with repository-relative `path` and `reason` for committed fake credentials. |
 | `serverUrl` | `http://localhost:3000` | Origin of the member's application under test. |
 | `auxiliaryServers` | empty | Entries with `command`, `url`, and optional member-relative `cwd`; starts additional application dependencies for browser tests. |
 | `publicAccess` | empty | Entries with `entity`, `operation`, `reason`, and optional `fields`, declaring intentional anonymous permissions. |

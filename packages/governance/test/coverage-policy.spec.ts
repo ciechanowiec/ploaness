@@ -2,6 +2,7 @@ import micromatch from 'micromatch'
 import { describe, expect, it } from 'vitest'
 import {
   coverageBoundaries,
+  coverageCandidates,
   coverageIncludes,
   coverageOwnedFiles,
   isCoverageCandidate,
@@ -31,6 +32,15 @@ describe('coverage follows the member source roots', () => {
     const exclusions: readonly string[] = coverageBoundaries(['packages/ui(src)'])
     expect(micromatch.isMatch(files[0] ?? '', [...exclusions])).toBe(true)
     expect(micromatch.isMatch(files[1] ?? '', [...exclusions])).toBe(false)
+  })
+  it('selects owned executable files without counting colocated tests as coverage evidence', () => {
+    expect(
+      coverageCandidates(
+        ['domain/value.mts', 'domain/value.spec.ts', 'domain/value.test.cts', 'nested/domain/value.ts', 'notes.txt'],
+        ['.'],
+        ['nested'],
+      ),
+    ).toEqual(['domain/value.mts'])
   })
   it.each(['ts', 'mts', 'cts'])('measures an unimported %s module in a custom directory', (extension: string) => {
     const settings: ReturnType<typeof readSettings> = readSettings({ ploaness: { sourceRoots: ['domain'] } })

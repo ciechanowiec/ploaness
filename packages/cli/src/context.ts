@@ -33,7 +33,7 @@ import {
 
 import { workingTreeFiles } from './working-tree.js'
 
-export { workingTreeFiles } from './working-tree.js'
+export { presentWorkingTreeFiles, workingTreeFiles } from './working-tree.js'
 
 const nodeRequire: NodeJS.Require = createRequire(import.meta.url)
 const BYTES_PER_KIB: number = 1024
@@ -365,7 +365,7 @@ const createMember = ({ root, projectPath, isEnforced, repositoryBlock = {}, sib
     settings:
       projectPath === ROOT_MEMBER_PATH
         ? readSettings(packageJson)
-        : readMemberSettings(repositoryBlock, ploanessBlock(packageJson)),
+        : readMemberSettings(repositoryBlock, ploanessBlock(packageJson), projectPath),
     isEnforced,
     path: projectPath,
     isPayload: isPayloadProject(packageJson),

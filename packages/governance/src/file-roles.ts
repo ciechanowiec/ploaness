@@ -1,6 +1,7 @@
 // Identify source, generated, binary, and prose roles so exclusions follow file meaning rather than tool defaults.
 import { isUtf8 } from 'node:buffer'
 import path from 'node:path'
+import { globAlternatives } from './glob-alternatives.js'
 
 /** Normalize a declared source directory without allowing it to escape the member. */
 export const normalisedSourceRoot = (root: string): string => {
@@ -28,14 +29,16 @@ const UTF8: TextDecoder = new TextDecoder()
 export const TYPESCRIPT_SOURCE_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.mts', '.cts']
 
 /** Extensions the Code Rules apply to, used where a rule is about code rather than about any text. */
+export const JAVASCRIPT_EXTENSIONS: readonly string[] = ['.js', '.jsx', '.mjs', '.cjs']
+
+/** Every stylesheet format supported by the stylesheet gate. */
+export const STYLESHEET_EXTENSIONS: readonly string[] = ['.css', '.scss']
+
+/** Extensions the Code Rules govern. */
 export const CODE_EXTENSIONS: readonly string[] = [
   ...TYPESCRIPT_SOURCE_EXTENSIONS,
-  '.jsx',
-  '.js',
-  '.mjs',
-  '.cjs',
-  '.css',
-  '.scss',
+  ...JAVASCRIPT_EXTENSIONS,
+  ...STYLESHEET_EXTENSIONS,
 ]
 
 /** Extensions whose role is prose, where a code-shaped rule such as a line cap does not apply. */
@@ -59,11 +62,17 @@ export const hasExtension = (filePath: string, extensions: readonly string[]): b
   extensions.some((extension: string): boolean => filePath.endsWith(extension))
 
 /** A role regex evaluated either at the repository root or inside its declaring member. */
-export type RolePattern = string | { readonly memberPath: string; readonly pattern: string }
+export type RolePattern =
+  | string
+  | { readonly memberPath: string; readonly pattern: string }
+  | { readonly repositoryPath: string; readonly pattern: string }
 
 const matchesPattern = (filePath: string, pattern: RolePattern): boolean => {
   if (typeof pattern === 'string') {
     return new RegExp(pattern).test(filePath)
+  }
+  if ('repositoryPath' in pattern) {
+    return new RegExp(pattern.pattern).test(`${pattern.repositoryPath}/${filePath}`)
   }
   const prefix: string = `${pattern.memberPath}/`
   return filePath.startsWith(prefix) && new RegExp(pattern.pattern).test(filePath.slice(prefix.length))
@@ -78,13 +87,10 @@ const matchesPattern = (filePath: string, pattern: RolePattern): boolean => {
 export const matchesRole = (filePath: string, patterns: readonly RolePattern[]): boolean =>
   patterns.some((pattern: RolePattern): boolean => matchesPattern(filePath, pattern))
 
-// The glob dialect the coverage settings are written in, which is not the regex dialect `matchesRole`
-// reads. `**/` crosses directory boundaries and `*` does not, which is the whole distinction between
-// `src/**/*.tsx` and `src/*.tsx`; collapsing the two would silently widen every pattern that uses one.
-const GLOB_TOKEN: RegExp = /\*\*\/|\*\*|[*?.+^${}()|[\]\\]/g
+const GLOB_PARTS: RegExp = /\*\*\/|\*\*|[*?.+^${}()|[\]\\]/g
 
-const asRegexToken = (token: string): string => {
-  switch (token) {
+const regexPart = (part: string): string => {
+  switch (part) {
     case '**/': {
       return '(?:[^/]*/)*'
     }
@@ -98,19 +104,16 @@ const asRegexToken = (token: string): string => {
       return '[^/]'
     }
     default: {
-      return `\\${token}`
+      return `\\${part}`
     }
   }
 }
 
-/**
- * Whether a repo-relative path matches a glob pattern of the kind the coverage settings carry.
- * @param pattern the glob, such as `src/app/**` or `src/**\/*.tsx`.
- * @param filePath the repo-relative path to test.
- * @returns whether the whole path matches the whole pattern.
- */
+/** Match the complete path, allowing brace alternatives and literal framework directory names. */
 export const matchesGlob = (pattern: string, filePath: string): boolean =>
-  new RegExp(`^${pattern.replaceAll(GLOB_TOKEN, (token: string): string => asRegexToken(token))}$`).test(filePath)
+  globAlternatives(pattern).some((alternative: string): boolean =>
+    new RegExp(`^${alternative.replaceAll(GLOB_PARTS, (part: string): string => regexPart(part))}$`).test(filePath),
+  )
 
 /**
  * Decide whether a path holds code the Code Rules govern.

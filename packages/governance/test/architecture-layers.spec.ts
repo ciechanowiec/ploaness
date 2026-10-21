@@ -35,7 +35,15 @@ describe('pureLogicRule', () => {
   })
 
   it('still forbids reaching anything else under the source root', () => {
-    expect(pathOf(ruleFor(['src/lib']), 'to')).toBe('^src/')
+    expect(new RegExp(pathOf(ruleFor(['src/lib']), 'to')).test('src/app/read.ts')).toBe(true)
+  })
+
+  it('guards application code in every declared source root', () => {
+    const rule: Record<string, unknown> | undefined = pureLogicRule(['lib/core'], ['src', 'lib'])
+    expect(new RegExp(pathOf(rule, 'from')).test('lib/core/price.ts')).toBe(true)
+    expect(new RegExp(pathOf(rule, 'to')).test('lib/app/checkout.ts')).toBe(true)
+    expect(new RegExp(pathNotOf(rule)).test('lib/app/checkout.ts')).toBe(false)
+    expect(new RegExp(pathNotOf(rule)).test('lib/core/price.ts')).toBe(true)
   })
 
   it('renders no rule for a project with no declared floor', () => {

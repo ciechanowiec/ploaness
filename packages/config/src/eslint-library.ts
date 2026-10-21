@@ -5,10 +5,12 @@
 // the centralised environment module. Those are not relaxations a library is being granted; they are
 // carve-outs for files it does not contain, and applying them would have it judged against a layout it
 // never claimed. Every cap, ban and suppression rule in `eslint-core.ts` still applies in full.
-import { REEXPORT_CONFIG_FILES } from '@ploaness/governance'
+import { JAVASCRIPT_EXTENSIONS, REEXPORT_CONFIG_FILES, TYPESCRIPT_SOURCE_EXTENSIONS } from '@ploaness/governance'
 import {
   allowlistedJavaScript,
   baseLayers,
+  commonJavaScriptBlock,
+  commonTypeScriptBlock,
   compose,
   type FlatConfigBlock,
   guidelineRules,
@@ -40,13 +42,21 @@ const reexportConfigBlock: FlatConfigBlock = {
 }
 
 const config: ReturnType<typeof compose> = compose(
-  { ignores: [...IGNORED] },
+  { ignores: [...IGNORED, ...settings.generatedArtefacts] },
+  {
+    files: [...TYPESCRIPT_SOURCE_EXTENSIONS, ...JAVASCRIPT_EXTENSIONS].map(
+      (extension: string): string => `**/*${extension}`,
+    ),
+  },
   ...baseLayers,
   typeAwareParsing({ projectService: true }),
   { rules: { ...guidelineRules } } satisfies FlatConfigBlock,
-  // Immutability applies to every hand-written module. A library has no generated files to exempt, so
-  // the block is applied without the Payload carve-outs rather than with an empty list of them.
-  immutabilityBlock(['**/*.ts', '**/*.mts'], []),
+  // Every authored module format has the same mutation policy. Generated artifacts are globally
+  // ignored, and declared framework glue retains its role-specific allowance.
+  immutabilityBlock(
+    TYPESCRIPT_SOURCE_EXTENSIONS.map((extension: string): string => `**/*${extension}`),
+    settings.frameworkGlue,
+  ),
 
   // The setup file's role, straight after the block it narrows. It must come later: a block that sets
   // this rule replaces its options, so stating the role first would have the general block undo it.
@@ -77,6 +87,8 @@ const config: ReturnType<typeof compose> = compose(
     },
   } satisfies FlatConfigBlock,
   reexportConfigBlock,
+  commonJavaScriptBlock(settings.javascriptAllowlist, projectDirectory),
+  commonTypeScriptBlock(),
   prettierLast,
 )
 

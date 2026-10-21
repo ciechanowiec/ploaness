@@ -6,6 +6,8 @@ import path from 'node:path'
 import {
   asRecord,
   type ConfigReferenceViolation,
+  coverageCandidates,
+  type DeclaredExclusion,
   type DocumentLocation,
   type DocumentViolation,
   declaredDependencies,
@@ -14,18 +16,35 @@ import {
   findDocumentReferenceViolations,
   findMissingConfigReferences,
   findSkillManifestViolations,
+  findUnreachedExclusions,
   findUnreachedExclusionsBySetting,
+  memberKindOf,
+  ROOT_MEMBER_PATH,
   requiredBiomeFiles,
   type SkillViolation,
   VITEST_CONFIG_FILE,
 } from '@ploaness/governance'
-import { type Context, type Member, type Repository, shippedDirectory, workingTreeFiles } from '../context.js'
+import {
+  type Context,
+  createRepository,
+  type Member,
+  presentWorkingTreeFiles,
+  type Repository,
+  shippedDirectory,
+} from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
 
 const declaredScripts = (context: Context): Record<string, unknown> =>
   asRecord(asRecord(context.packageJson)['scripts'])
 
-const biomeFilesJson = (context: Context): string => JSON.stringify(requiredBiomeFiles(context.settings.sourceRoots))
+const biomeFilesJson = (context: Context): string =>
+  JSON.stringify(
+    requiredBiomeFiles(
+      context.settings.sourceRoots,
+      memberKindOf(context.packageJson),
+      context.settings.generatedArtefacts,
+    ),
+  )
 
 // A doc is read against its OWN member and against the repository, never against one alone. A member
 // doc legitimately names a command the root declares - "run `verify:unmanaged` at the root" - and the
@@ -109,13 +128,41 @@ const mandatedReferences = (context: Context): ReadonlySet<string> =>
 // Which file set an exclusion has to reach is decided by the SETTING it came from, not by how its
 // pattern is written - the partition itself lives in `governance`, where it is spec'd against file lists
 // no repository has to be built to produce. What is left here is the one read it needs.
-const deadExclusions = (context: Member): readonly string[] =>
-  findUnreachedExclusionsBySetting(
-    context.settings.declaredExclusions,
-    workingTreeFiles(context.root),
-    context.settings.sourceRoots,
-    context.siblingPaths,
+const repositoryCoverageFiles = (member: Member): readonly string[] =>
+  coverageCandidates(presentWorkingTreeFiles(member.root), member.settings.sourceRoots, member.siblingPaths).map(
+    (file: string): string => (member.path === ROOT_MEMBER_PATH ? file : `${member.path}/${file}`),
   )
+
+const deadExclusions = (context: Member): readonly string[] => {
+  if (context.path !== ROOT_MEMBER_PATH) {
+    return findUnreachedExclusionsBySetting(
+      context.settings.declaredExclusions,
+      presentWorkingTreeFiles(context.root),
+      context.settings.sourceRoots,
+      context.siblingPaths,
+    )
+  }
+  // Root declarations can target several members. Each contributes only the files its own coverage measures.
+  const candidates: readonly string[] = createRepository(context.root, context.isEnforced).members.flatMap(
+    (member: Member): readonly string[] => repositoryCoverageFiles(member),
+  )
+  return [
+    ...findUnreachedExclusions(
+      context.settings.declaredExclusions.filter(
+        (entry: DeclaredExclusion): boolean => entry.setting === 'coverageExclude',
+      ),
+      candidates,
+    ),
+    ...findUnreachedExclusionsBySetting(
+      context.settings.declaredExclusions.filter(
+        (entry: DeclaredExclusion): boolean => entry.setting !== 'coverageExclude',
+      ),
+      presentWorkingTreeFiles(context.root),
+      context.settings.sourceRoots,
+      context.siblingPaths,
+    ),
+  ]
+}
 
 /**
  * A concrete source file carved out of a tool config must still exist on disk, and a declared exclusion

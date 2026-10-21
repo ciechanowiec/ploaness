@@ -11,6 +11,7 @@ import {
   findTypographyViolations,
   hasExtension,
   isBinary,
+  JAVASCRIPT_EXTENSIONS,
   matchesRole,
   type TypographyViolation,
 } from '@ploaness/governance'
@@ -19,7 +20,6 @@ import { failed, type GateResult, passed } from '../exec.js'
 
 // Typography reaches text of every extension, including extensionless scripts and configuration.
 // Binary assets are identified from their complete contents through the shared file-role predicate.
-const JAVASCRIPT_EXTENSIONS: readonly string[] = ['.js', '.mjs', '.cjs']
 
 // Regions a tool rewrites byte for byte on every run, so a local edit is reverted rather than kept and
 // the ban has nothing to enforce against. `next dev` upserts its agent-rules block into AGENTS.md

@@ -339,3 +339,16 @@ describe("a hook's per-request state, and the one layer that may write it", () =
     expect(findings).toStrictEqual(everyConfig([RULE]))
   })
 })
+
+describe('TypeScript module mutation coverage', () => {
+  it.each(['ts', 'tsx', 'mts', 'cts'])(
+    'rejects object mutation in .%s under both shipped configurations',
+    async (extension: string) => {
+      const findings: Readonly<Record<string, readonly string[]>> = await findingsAt(
+        'const record = { value: 1 }; record.value = 2',
+        `src/lib/read.${extension}`,
+      )
+      expect(findings).toEqual(everyConfig([RULE]))
+    },
+  )
+})

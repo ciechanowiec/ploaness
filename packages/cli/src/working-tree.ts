@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { lstatSync, readFileSync, readlinkSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync, readlinkSync } from 'node:fs'
 import path from 'node:path'
 
 const BYTES_PER_KIB: number = 1024
@@ -21,6 +21,10 @@ export const workingTreeFiles = (root: string): readonly string[] =>
         .filter((file: string): boolean => file !== ''),
     ),
   ].toSorted((left: string, right: string): number => left.localeCompare(right, 'en'))
+
+/** Analyzer inputs omit absent paths; fingerprints still retain indexed deletions as evidence. */
+export const presentWorkingTreeFiles = (root: string): readonly string[] =>
+  workingTreeFiles(root).filter((file: string): boolean => existsSync(path.join(root, file)))
 
 const fileState = (root: string, file: string): readonly (string | number)[] => {
   const full: string = path.join(root, file)

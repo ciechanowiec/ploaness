@@ -1,5 +1,8 @@
 // Layer raw declarations before defaults, preserving inherited constraints and each member's ownership.
+
+import type { RolePattern } from './file-roles.js'
 import { asRecord, isArray } from './json-shapes.js'
+import { memberSettingBlock } from './member-patterns.js'
 import { type DeclaredExclusion, readRawSettings, type Settings } from './settings.js'
 
 /** Keys where a member ADDS to what the repository declared, the way `sourceRoots` always has. */
@@ -123,7 +126,24 @@ export const rebaseExclusion = (memberPath: string, entry: DeclaredExclusion): D
 export const readMemberSettings = (
   repositoryBlock: Record<string, unknown>,
   ownBlock: Record<string, unknown>,
-): Settings => ({
-  ...readRawSettings(layerSettingBlocks(repositoryBlock, ownBlock)),
-  declaredExclusions: readRawSettings(ownBlock).declaredExclusions,
-})
+  memberPath: string = '.',
+): Settings => {
+  const own: Settings = readRawSettings(ownBlock)
+  const inherited: Settings = readRawSettings(repositoryBlock)
+  const rootPatterns = (setting: string): readonly RolePattern[] =>
+    inherited.declaredExclusions
+      .filter(
+        (entry: DeclaredExclusion): boolean =>
+          entry.setting === setting && entry.pattern.length > 0 && entry.reason.length > 0,
+      )
+      .map(
+        (entry: DeclaredExclusion): RolePattern =>
+          memberPath === '.' ? entry.pattern : { repositoryPath: memberPath, pattern: entry.pattern },
+      )
+  return {
+    ...readRawSettings(layerSettingBlocks(memberSettingBlock(repositoryBlock, memberPath), ownBlock)),
+    typographyExclusions: [...own.typographyExclusions, ...rootPatterns('typographyExclusions')],
+    javascriptAllowlist: [...own.javascriptAllowlist, ...rootPatterns('javascriptAllowlist')],
+    declaredExclusions: own.declaredExclusions,
+  }
+}

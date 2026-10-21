@@ -105,7 +105,7 @@ pnpm exec ploaness init && pnpm install
 | Runs the default verification gates and the ten extended gates as well. Written as `pnpm run verify:full`.
 
 | `ploaness format`
-| Rewrites the files Biome selects and applies the fixes ESLint can make unaided. Written as `pnpm run format`.
+| Formats member-owned source with Biome, formats SCSS with the pinned Prettier settings, and applies the fixes ESLint can make unaided. Written as `pnpm run format`.
 
 | `ploaness sync`
 | Writes the xref:#managed-files[managed files], and names every file `ploaness sync` refuses to overwrite.

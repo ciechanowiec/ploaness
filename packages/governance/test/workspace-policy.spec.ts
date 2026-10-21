@@ -278,6 +278,8 @@ describe('eslintArguments', () => {
     expect(eslintArguments(['cms', 'fe'], 'fix')).toStrictEqual([
       '.',
       '--fix',
+      '--ext',
+      '.ts,.tsx,.mts,.cts,.js,.jsx,.mjs,.cjs',
       '--ignore-pattern',
       'cms/**',
       '--ignore-pattern',
@@ -286,7 +288,12 @@ describe('eslintArguments', () => {
   })
 
   it('renders a verdict when judging and applies fixes when writing', () => {
-    expect(eslintArguments([], 'report')).toStrictEqual(['.', '--max-warnings=0'])
-    expect(eslintArguments([], 'fix')).toStrictEqual(['.', '--fix'])
+    expect(eslintArguments([], 'report')).toStrictEqual([
+      '.',
+      '--max-warnings=0',
+      '--ext',
+      '.ts,.tsx,.mts,.cts,.js,.jsx,.mjs,.cjs',
+    ])
+    expect(eslintArguments([], 'fix')).toStrictEqual(['.', '--fix', '--ext', '.ts,.tsx,.mts,.cts,.js,.jsx,.mjs,.cjs'])
   })
 })

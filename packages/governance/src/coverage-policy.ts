@@ -1,5 +1,6 @@
 // Coverage includes follow member roots; component and test roles retain their separate checks.
 import { hasExtension, matchesGlob, normalisedSourceRoot, TYPESCRIPT_SOURCE_EXTENSIONS } from './file-roles.js'
+import { memberFiles } from './source-selection.js'
 import { escapeForRegex } from './text-escapes.js'
 
 const EXECUTABLE_EXTENSIONS: readonly string[] = TYPESCRIPT_SOURCE_EXTENSIONS.filter(
@@ -30,9 +31,15 @@ export const isCoverageCandidate = (file: string, sourceRoots: readonly string[]
 
 /** Owned files remain inside the member even when its source root is the whole directory. */
 export const coverageOwnedFiles = (files: readonly string[], siblingPaths: readonly string[]): readonly string[] =>
-  files.filter(
-    (file: string): boolean => !siblingPaths.some((sibling: string): boolean => file.startsWith(`${sibling}/`)),
-  )
+  memberFiles(files, siblingPaths)
+
+/** Files measured by coverage before project exclusions, respecting member boundaries and invariant roles. */
+export const coverageCandidates = (
+  files: readonly string[],
+  sourceRoots: readonly string[],
+  siblingPaths: readonly string[],
+): readonly string[] =>
+  coverageOwnedFiles(files, siblingPaths).filter((file: string): boolean => isCoverageCandidate(file, sourceRoots))
 
 /** Literal nested-member boundaries passed by the CLI, which owns repository discovery. */
 export const coverageBoundaries = (siblingPaths: readonly string[]): readonly string[] =>
@@ -45,4 +52,6 @@ export const COVERAGE_ROLE_EXCLUDE: readonly string[] = [
   '**/*.d.ts',
   '**/*.d.mts',
   '**/*.d.cts',
+  '**/*.spec.*',
+  '**/*.test.*',
 ]

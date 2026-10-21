@@ -26,10 +26,12 @@
         "@testing-library/jest-dom",
         "@testing-library/react",
         "@testing-library/user-event",
-        "fast-check",
-        "stylelint-config-standard"
+        "fast-check"
       ],
-      "ignoreUnresolved": ["next"]
+      "ignoreUnresolved": ["next"],
+      "stylelint": {
+        "config": ["stylelint.json"]
+      }
     },
     "packages/ploaness": {
       "entry": ["src/*.ts"],

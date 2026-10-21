@@ -1,6 +1,7 @@
 // Formatting. It writes; it never judges. Review what it
 // changed before committing, because a formatter that runs unattended is how unreviewed edits enter a
 // repository.
+import { scssWrite } from '../checks/stylesheets.js'
 import { biomeWrite, eslintWrite } from '../checks/toolchain.js'
 import type { Member, Repository } from '../context.js'
 import type { RunResult } from '../exec.js'
@@ -37,7 +38,9 @@ const formatMember = (member: Member, isSolo: boolean): number => {
   // ESLint exits non-zero for findings it cannot fix. Those are for `ploaness verify` to report, so
   // formatting succeeds as long as Biome could write - and the second run is the one that describes
   // the tree the caller is actually left with.
-  return biome.code === 0 && settled.code === 0 ? 0 : 1
+  const scss: RunResult = scssWrite(member)
+  console.info(scss.output)
+  return biome.code === 0 && settled.code === 0 && scss.code === 0 ? 0 : 1
 }
 
 /**

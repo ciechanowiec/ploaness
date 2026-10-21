@@ -1,4 +1,5 @@
 // Discover repository and package boundaries from manifests rather than project-selected labels.
+import { JAVASCRIPT_EXTENSIONS, TYPESCRIPT_SOURCE_EXTENSIONS } from './file-roles.js'
 import { HARNESS_PACKAGE } from './harness-package.js'
 import { declaredDependencies } from './json-shapes.js'
 import { NEXT_PACKAGE, PAYLOAD_PACKAGE } from './version-policy.js'
@@ -296,5 +297,7 @@ export type EslintRunMode = 'fix' | 'report'
 export const eslintArguments = (siblingPaths: readonly string[], mode: EslintRunMode): readonly string[] => [
   '.',
   mode === 'fix' ? '--fix' : '--max-warnings=0',
+  '--ext',
+  [...TYPESCRIPT_SOURCE_EXTENSIONS, ...JAVASCRIPT_EXTENSIONS].join(','),
   ...analysisBoundaries(siblingPaths).flatMap((pattern: string): readonly string[] => ['--ignore-pattern', pattern]),
 ]

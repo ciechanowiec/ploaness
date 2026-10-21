@@ -1,3 +1,5 @@
+import { DEFAULT_SOURCE_ROOTS } from './settings.js'
+
 // The pure-logic floor, as data rather than as a fixed path.
 //
 // The architecture contract calls the layer map "the one genuinely project-shaped part" and then named
@@ -22,7 +24,7 @@ const REGEX_METACHARACTERS: RegExp = /[$()*+.?[\\\]^{|}]/gu
 const asRoot = (directory: string): string => directory.replaceAll(REGEX_METACHARACTERS, String.raw`\$&`)
 
 const alternation = (directories: readonly string[]): string =>
-  directories.map((directory: string): string => `${asRoot(directory)}/`).join('|')
+  directories.map((directory: string): string => (directory === '.' ? '' : `${asRoot(directory)}/`)).join('|')
 
 /**
  * The forbidden rule that keeps the declared pure-logic directories pure.
@@ -33,7 +35,10 @@ const alternation = (directories: readonly string[]): string =>
  * @param pureLogicRoots the directories forming the floor, repo-relative and without a trailing slash.
  * @returns the dependency-cruiser rule, or undefined when the project declares no floor.
  */
-export const pureLogicRule = (pureLogicRoots: readonly string[]): Record<string, unknown> | undefined => {
+export const pureLogicRule = (
+  pureLogicRoots: readonly string[],
+  sourceRoots: readonly string[] = DEFAULT_SOURCE_ROOTS,
+): Record<string, unknown> | undefined => {
   if (pureLogicRoots.length === 0) {
     return undefined
   }
@@ -47,9 +52,9 @@ export const pureLogicRule = (pureLogicRoots: readonly string[]): Record<string,
     severity: 'error',
     comment:
       `${pureLogicRoots.join(' and ')} are the pure-logic floor: they must depend on nothing else ` +
-      'in src (only types and third-party libs). If you need framework data, pass it in as a plain ' +
+      `under ${sourceRoots.join(', ')} (only types and third-party libs). Pass framework data as a plain ` +
       'value. This is what keeps them unit-testable without mocks.',
     from: { path: `^(${floor})` },
-    to: { path: '^src/', pathNot: `^(${floor})|${exempt}` },
+    to: { path: `^(${alternation(sourceRoots)})`, pathNot: `^(${floor})|${exempt}` },
   }
 }

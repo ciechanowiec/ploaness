@@ -495,6 +495,10 @@ coverage_member_contracts() {
     expect_in coverage-ownership packages/ui tests FAIL 'Coverage for lines.*threshold.*uncovered'
     edit_json "$scratch/coverage-ownership/package.json" ploaness.coverageExclude \
         '[{"pattern":"packages/ui/**","reason":"code owned and measured by the nested member"}]'
+    expect coverage-ownership config-refs PASS
+    expect_in coverage-ownership packages/ui tests PASS
+    edit_json "$scratch/coverage-ownership/package.json" ploaness.coverageExclude \
+        '[{"pattern":"packages/ui/tests/**","reason":"only test files"}]'
     expect coverage-ownership config-refs FAIL 'excludes nothing'
 }
 
@@ -735,11 +739,155 @@ document_a11y_contracts() {
         env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/document.e2e.spec.ts --reporter=line
 }
 
+new_workspace() {
+    name="$1"
+    new_case "$name"
+    node "$here/lib/make-workspace.ts" "$scratch/$name"
+    # `init` runs AFTER the reshaping, so the pass case doubles as the regression test that the
+    # scaffolder writes each member the configuration its own kind is judged against.
+    (cd "$scratch/$name" && ./node_modules/.bin/ploaness init >/dev/null)
+    # Member discovery reads the tracked tree, so a workspace case needs a history before any rule about
+    # which packages exist can answer.
+    commit_case "$name" 'feat(fixture): a governed workspace' \
+        'A repository holding an application and a library, both declaring the harness.'
+}
+
+
+scope_javascript_contracts() {
+    new_workspace scope-javascript
+    edge_member="$scratch/scope-javascript/packages/ui"
+    mkdir -p "$edge_member/edge"
+    edit_json "$scratch/scope-javascript/package.json" ploaness.javascriptAllowlist \
+        '[{"pattern":"^packages/ui/edge/","reason":"external deployment entry points"}]'
+    printf 'const edge = (event) => event.request\nmodule.exports = edge\n' > "$edge_member/edge/handler.cjs"
+    expect scope-javascript conventions PASS
+    expect_in scope-javascript packages/ui eslint PASS
+    expect_in scope-javascript packages/ui config-refs PASS
+    expect_in scope-javascript packages/ui knip PASS
+    printf 'export const read = (value: any): any => value\n' > "$edge_member/edge/typed.ts"
+    expect_in scope-javascript packages/ui eslint FAIL '@typescript-eslint/no-explicit-any'
+    rm "$edge_member/edge/typed.ts"
+    printf 'const edge=(event)=>event.request;module.exports=edge;' > "$edge_member/edge/handler.cjs"
+    expect_in scope-javascript packages/ui biome FAIL 'handler.cjs'
+    expect_command scope-javascript PASS 'Formatting applied' ./node_modules/.bin/ploaness format
+    expect_in scope-javascript packages/ui biome PASS
+    printf 'export const view = <div />\n' > "$edge_member/view.jsx"
+    expect scope-javascript conventions FAIL 'view.jsx'
+    rm "$edge_member/view.jsx"
+    for scope_directory in edge tests src/hooks; do
+        mkdir -p "$edge_member/$scope_directory"
+        edit_json "$edge_member/package.json" ploaness.javascriptAllowlist \
+            '[{"pattern":"\\.cjs$","reason":"external CommonJS runtime"}]'
+        printf 'const edge = (event) => event.request\nmodule.exports = edge\n' > "$edge_member/$scope_directory/export.cjs"
+        expect_in scope-javascript packages/ui eslint PASS
+        rm "$edge_member/$scope_directory/export.cjs"
+    done
+    for setting in secretAllowlist vulnerabilityAllowlist; do
+        edit_json "$edge_member/package.json" "ploaness.$setting" '[]'
+        expect scope-javascript wiring FAIL "$setting is repository-wide"
+    done
+}
+
+scope_generated_contracts() {
+    new_workspace scope-generated
+    generated_member="$scratch/scope-generated/packages/ui"
+    edit_json "$generated_member/package.json" ploaness.generatedArtefacts \
+        '[{"pattern":"src/generated/**","reason":"generator-owned client"}]'
+    mkdir -p "$generated_member/src/generated"
+    printf 'export const generated=(input:any):any=>input;' > "$generated_member/src/generated/client.ts"
+    rm "$generated_member/biome.json"
+    expect_command scope-generated PASS 'biome.json: written' ./node_modules/.bin/ploaness init
+    expect_in scope-generated packages/ui config-refs PASS
+    expect_in scope-generated packages/ui type-coverage PASS
+    expect_in scope-generated packages/ui tests PASS
+    expect_command scope-generated PASS 'Formatting applied' ./node_modules/.bin/ploaness format
+    expect_in scope-generated packages/ui biome PASS
+    printf 'export const authored=(input:any):any=>input;' > "$generated_member/src/authored.ts"
+    expect_in scope-generated packages/ui type-coverage FAIL 'authored.ts'
+    rm "$generated_member/src/authored.ts"
+    edit_json "$scratch/scope-generated/package.json" ploaness.coverageExclude \
+        '[{"pattern":"scripts/deploy.ts","reason":"root deployment entry"}]'
+    mkdir -p "$generated_member/scripts" "$scratch/scope-generated/scripts"
+    printf 'export const deploy: number = 1\n' > "$generated_member/scripts/deploy.ts"
+    cp "$generated_member/scripts/deploy.ts" "$scratch/scope-generated/scripts/deploy.ts"
+    expect_in scope-generated packages/ui tests FAIL 'Coverage for lines.*threshold.*deploy.ts'
+    edit_json "$scratch/scope-generated/package.json" ploaness.coverageExclude \
+        '[{"pattern":"**/scripts/deploy.ts","reason":"deployment entries in every member"}]'
+    expect_in scope-generated packages/ui tests PASS
+    expect scope-generated config-refs PASS
+    edit_json "$generated_member/package.json" ploaness.sourceRoots '["lib"]'
+    mkdir -p "$generated_member/lib"
+    printf 'export const count: number = 1\n' > "$generated_member/lib/uncovered.mts"
+    expect_in scope-generated packages/ui tests FAIL 'Coverage for lines.*threshold.*uncovered.mts'
+    printf 'const broken: number = "wrong"\nexport = broken\n' > "$generated_member/src/broken.cts"
+    expect_in scope-generated packages/ui types FAIL 'TS2322'
+    rm "$generated_member/src/broken.cts"
+    printf 'import path = require("node:path")\nconst separator: string = path.sep\nexport = separator\n' \
+        > "$generated_member/src/valid.cts"
+    expect_in scope-generated packages/ui types PASS
+    expect_in scope-generated packages/ui eslint PASS
+    expect_in scope-generated packages/ui type-coverage PASS
+    rm "$generated_member/src/valid.cts"
+    edit_json "$generated_member/package.json" ploaness.coverageExclude \
+        '[{"pattern":"lib/{uncovered,other}.mts","reason":"operational entry points"}]'
+    expect_in scope-generated packages/ui config-refs PASS
+    expect_in scope-generated packages/ui tests PASS
+}
+
+scope_architecture_contracts() {
+    new_workspace scope-architecture
+    architecture_member="$scratch/scope-architecture/packages/ui"
+    edit_json "$architecture_member/package.json" ploaness.sourceRoots '["lib"]'
+    edit_json "$architecture_member/package.json" ploaness.pureLogicRoots \
+        '[{"pattern":"lib/core","reason":"pure domain layer"}]'
+    mkdir -p "$architecture_member/lib/core" "$architecture_member/lib/app"
+    printf 'export const checkout: number = 1\n' > "$architecture_member/lib/app/checkout.ts"
+    printf 'import { checkout } from "../app/checkout.js"\nexport const price: number = checkout\n' \
+        > "$architecture_member/lib/core/price.ts"
+    expect_in scope-architecture packages/ui arch FAIL 'pure-logic-stays-pure'
+    printf 'export const price: number = 1\n' > "$architecture_member/lib/core/price.ts"
+    expect_in scope-architecture packages/ui arch PASS
+}
+
+scope_stylesheet_contracts() {
+    new_case scope-stylesheets
+    printf '.card { color: red; }\n' > "$scratch/scope-stylesheets/src/custom.scss"
+    commit_case scope-stylesheets 'test(fixture): check authored SCSS stylesheets' "$CONFORMING_BODY"
+    printf '.card { color: #ggg; }\n' > "$scratch/scope-stylesheets/src/custom.scss"
+    expect scope-stylesheets css FAIL 'color-no-invalid-hex'
+    printf '.card{color:red}' > "$scratch/scope-stylesheets/src/custom.scss"
+    expect scope-stylesheets css FAIL 'SCSS formatting differs'
+    expect_command scope-stylesheets PASS 'Formatting applied' ./node_modules/.bin/ploaness format
+    expect scope-stylesheets css PASS
+    printf '.card { @incldue paint; }\n' > "$scratch/scope-stylesheets/src/custom.scss"
+    expect scope-stylesheets css FAIL 'scss/at-rule-no-unknown'
+    rm "$scratch/scope-stylesheets/src/custom.scss"
+    expect scope-stylesheets css PASS
+}
+
+file_scope_contracts() {
+    scope_javascript_contracts
+    scope_generated_contracts
+    scope_architecture_contracts
+    scope_stylesheet_contracts
+}
+
 # Declared focused subsets; the default run remains complete.
 case "${1-}" in
-    ''|--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only) ;;
-    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only]' >&2; exit 1 ;;
+    ''|--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only) ;;
+    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only]' >&2; exit 1 ;;
 esac
+
+if [ -z "${1-}" ] || [ "${1-}" = --file-scopes-only ]; then
+    file_scope_contracts
+    if [ "${1-}" = --file-scopes-only ]; then
+        if [ "$failures" -ne 0 ]; then
+            exit "$failures"
+        fi
+        echo 'file scope contracts passed; run pnpm run verify for the complete verdict'
+        exit 0
+    fi
+fi
 
 if [ -z "${1-}" ] || [ "${1-}" = --configuration-only ]; then
     configuration_contracts
@@ -3030,18 +3178,6 @@ expect pass-retained-type-properties eslint PASS
 # against the shape that shipped before members existed. These prove the other path, and two of them
 # fail on the code that preceded the scopes - which is why they are written as fixtures rather than left
 # to unit tests.
-new_workspace() {
-    name="$1"
-    new_case "$name"
-    node "$here/lib/make-workspace.ts" "$scratch/$name"
-    # `init` runs AFTER the reshaping, so the pass case doubles as the regression test that the
-    # scaffolder writes each member the configuration its own kind is judged against.
-    (cd "$scratch/$name" && ./node_modules/.bin/ploaness init >/dev/null)
-    # Member discovery reads the tracked tree, so a workspace case needs a history before any rule about
-    # which packages exist can answer.
-    commit_case "$name" 'feat(fixture): a governed workspace' \
-        'A repository holding an application and a library, both declaring the harness.'
-}
 
 new_workspace pass-workspace
 expect pass-workspace preflight PASS
