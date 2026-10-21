@@ -499,13 +499,18 @@ export const memberAt = (repository: Repository, cwd: string): Member | undefine
  * Parsing is `node:util`'s, which is the parser `process.loadEnvFile` uses, so a file read here and the
  * same file read by the runners cannot be read two different ways.
  * @param context the member whose environment files are read.
+ * @param defaults fallback values used only when the process and environment files supply none.
  * @returns the variables to add, already narrowed to those the run does not carry.
  */
-export const runEnvironment = (context: Context): Readonly<Record<string, string>> =>
+export const runEnvironment = (
+  context: Context,
+  defaults: Readonly<Record<string, string | undefined>> = {},
+): Readonly<Record<string, string>> =>
   runEnvironmentOverrides(
     process.env,
     runEnvironmentFiles((relativePath: string): boolean => existsSync(path.join(context.root, relativePath))).map(
       (file: string): Readonly<Record<string, string | undefined>> =>
         parseEnv(readFileSync(path.join(context.root, file), 'utf8')),
     ),
+    defaults,
   )

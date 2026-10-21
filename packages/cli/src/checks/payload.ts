@@ -49,13 +49,10 @@ import {
 import { asFindings, failed, type GateResult, passed, type RunResult, runNode, withOutput } from '../exec.js'
 
 // The environment of a gate that imports the project's configuration without running the application:
-// the `analysisEnv` placeholders, then the project's own environment over them, then the one option
-// ploaness owns, so a `.env` cannot silence the deprecation flag. A configuration that validates
-// `process.env` on import therefore loads in a checkout with no `.env`, and loads with the project's
-// real values where it has one.
+// process values win over environment files, which win over analysis placeholders. Forced harness
+// options are applied separately so a project cannot silence the deprecation flag.
 const analysisEnvironment = (context: Context): Readonly<Record<string, string>> => ({
-  ...context.settings.analysisEnv,
-  ...runEnvironment(context),
+  ...runEnvironment(context, context.settings.analysisEnv),
   NODE_OPTIONS: '--no-deprecation',
 })
 

@@ -397,6 +397,54 @@ security_contracts() {
     expect license-workspace licenses FAIL 'copyleft-fixture: GPL-3.0-only'
 }
 
+analysis_generation_contracts() {
+    executable="$scratch/analysis-environment/node_modules/.bin/ploaness"
+    mkdir -p "$scratch/analysis-environment/src/app/(payload)/admin"
+    replace_text "$scratch/analysis-environment/src/payload.config.ts" '  admin: { user: Users.slug },' \
+        "  admin: { user: Users.slug },
+  typescript: { outputFile: 'src/payload-types.ts' },"
+    expect_command analysis-environment FAIL 'generated Payload artefacts drifted' \
+        env ANALYSIS_MARKER=from-process EXPECTED_MARKER=from-process EXPECTED_MODE=development NODE_ENV=development \
+        "$executable" gate payload-generated
+    commit_case analysis-environment 'test(fixture): retain real generated Payload artifacts' "$CONFORMING_BODY"
+    expect_command analysis-environment PASS 'generated Payload artefacts match' \
+        env ANALYSIS_MARKER=from-process EXPECTED_MARKER=from-process EXPECTED_MODE=development NODE_ENV=development \
+        "$executable" gate payload-generated
+}
+
+analysis_environment_contracts() {
+    new_case analysis-environment
+    edit_json "$scratch/analysis-environment/package.json" ploaness.analysisEnv.ANALYSIS_MARKER from-default
+    cat >> "$scratch/analysis-environment/src/lib/environment.ts" <<'EOF'
+
+if (process.env['ANALYSIS_MARKER'] !== process.env['EXPECTED_MARKER']) {
+  throw new Error('analysis environment precedence mismatch')
+}
+if (process.env['NODE_ENV'] !== process.env['EXPECTED_MODE']) {
+  throw new Error('analysis mode override mismatch')
+}
+EOF
+    commit_case analysis-environment 'test(fixture): preserve supplied analysis environment' "$CONFORMING_BODY"
+    executable="$scratch/analysis-environment/node_modules/.bin/ploaness"
+    expect_command analysis-environment PASS '\[PASS\] payload-defaults' \
+        env ANALYSIS_MARKER=from-process EXPECTED_MARKER=from-process EXPECTED_MODE=production NODE_ENV=development \
+        "$executable" gate payload-defaults
+    expect_command analysis-environment PASS '\[PASS\] payload-defaults' \
+        env ANALYSIS_MARKER= EXPECTED_MARKER= EXPECTED_MODE=production "$executable" gate payload-defaults
+    printf 'ANALYSIS_MARKER=from-file\n' > "$scratch/analysis-environment/.env"
+    expect_command analysis-environment PASS '\[PASS\] payload-defaults' \
+        env -u ANALYSIS_MARKER EXPECTED_MARKER=from-file EXPECTED_MODE=production "$executable" gate payload-defaults
+    printf 'ANALYSIS_MARKER=from-local\n' > "$scratch/analysis-environment/.env.local"
+    expect_command analysis-environment PASS '\[PASS\] payload-defaults' \
+        env -u ANALYSIS_MARKER EXPECTED_MARKER=from-local EXPECTED_MODE=production "$executable" gate payload-defaults
+    rm "$scratch/analysis-environment/.env" "$scratch/analysis-environment/.env.local"
+    expect_command analysis-environment PASS '\[PASS\] payload-defaults' \
+        env -u ANALYSIS_MARKER EXPECTED_MARKER=from-default EXPECTED_MODE=production "$executable" gate payload-defaults
+    expect_command analysis-environment FAIL 'analysis environment precedence mismatch' \
+        env ANALYSIS_MARKER=from-process EXPECTED_MARKER=wrong EXPECTED_MODE=production "$executable" gate payload-defaults
+    analysis_generation_contracts
+}
+
 secret_guard_contracts() {
     new_case positive-secret-guard
     cat > "$scratch/positive-secret-guard/src/lib/secret-guard.ts" <<'EOF'
@@ -573,6 +621,7 @@ configuration_contracts() {
     payload_extension_contracts
     coverage_configuration_contracts
     secret_guard_contracts
+    analysis_environment_contracts
 }
 
 # Declared focused subsets; the default run remains complete.

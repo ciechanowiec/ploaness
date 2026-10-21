@@ -51,14 +51,16 @@ export const portOf = (serverUrl: string): string | undefined => {
  * to carry as empty rather than absent.
  * @param current the environment the run already has, typically `process.env`.
  * @param parsedFiles the parsed files, in the order {@link runEnvironmentFiles} returned them.
+ * @param defaults analysis placeholders used only when neither the current environment nor files supply a value.
  * @returns the names the run does not carry, each with the value of the FIRST file to declare it.
  */
 export const runEnvironmentOverrides = (
   current: Readonly<Record<string, string | undefined>>,
   parsedFiles: readonly Readonly<Record<string, string | undefined>>[],
+  defaults: Readonly<Record<string, string | undefined>> = {},
 ): Readonly<Record<string, string>> =>
   Object.fromEntries(
-    parsedFiles
+    [...parsedFiles, defaults]
       .flatMap((file: Readonly<Record<string, string | undefined>>): readonly [string, string | undefined][] =>
         Object.entries(file),
       )

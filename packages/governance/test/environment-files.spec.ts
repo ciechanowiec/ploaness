@@ -60,6 +60,26 @@ describe('portOf', () => {
 })
 
 describe('runEnvironmentOverrides', () => {
+  it('adds analysis defaults only for values absent from both the process and files', () => {
+    const current: Readonly<Record<string, string | undefined>> = { PRESENT: 'process', EMPTY: '' }
+    const added: Readonly<Record<string, string>> = runEnvironmentOverrides(
+      current,
+      [{ PRESENT: 'file', FROM_FILE: 'file', EMPTY: 'file' }],
+      { PRESENT: 'fallback', FROM_FILE: 'fallback', EMPTY: 'fallback', ABSENT: 'fallback' },
+    )
+    expect({ ...current, ...added }).toEqual({ PRESENT: 'process', EMPTY: '', FROM_FILE: 'file', ABSENT: 'fallback' })
+  })
+
+  it('keeps local-file precedence and an explicitly empty file value above defaults', () => {
+    expect(
+      runEnvironmentOverrides({}, [{ SHARED: 'local', EMPTY: '' }, { SHARED: 'env' }], {
+        SHARED: 'fallback',
+        EMPTY: 'fallback',
+        MISSING: 'fallback',
+      }),
+    ).toEqual({ SHARED: 'local', EMPTY: '', MISSING: 'fallback' })
+  })
+
   it('offers nothing when the project keeps no environment file', () => {
     expect(runEnvironmentOverrides({ DATABASE_URL: 'postgres://real' }, [])).toEqual({})
   })
