@@ -1,6 +1,6 @@
 import { containsBuiltRoute, containsRoute, reachesAxe, reachesLayoutScan, type SpecSource } from './axe-coverage.js'
 import { isSkippedRoute } from './route-exclusions.js'
-import { type DeclaredRoute, matchesRoute, staticPrefixOf } from './route-map.js'
+import { type DeclaredRoute, resolvedRouteOf, staticPrefixOf } from './route-map.js'
 
 // The pages the accessibility sweep never reached, and nobody was told about.
 //
@@ -48,15 +48,15 @@ const REMEDIES: string =
   '`expectSweptPage(page)` from `ploaness/a11y`, or declare it in `ploaness.accessibilitySkipRoutes` ' +
   'with the reason it is out of scope'
 
-// A page the crawl asked for, that answered, and that forwarded somewhere outside the public surface.
-// There is nothing at that address for axe to judge - what renders is wherever it forwarded to, which
-// has a declaration of its own - so a redirect is covered rather than unswept.
-const isRedirect = (sweep: RouteSweep, route: DeclaredRoute): boolean =>
-  sweep.answeredRoutes.some((answered: string): boolean => matchesRoute(route.route, answered)) &&
-  !sweep.visitedRoutes.some((visited: string): boolean => matchesRoute(route.route, visited))
-
-const isScanned = (sweep: RouteSweep, route: DeclaredRoute): boolean =>
-  sweep.visitedRoutes.some((visited: string): boolean => matchesRoute(route.route, visited))
+// An answered redirect is covered at its source address even if it leaves the public surface.
+// Both visits and redirects credit only the declaration selected from the complete route set.
+const coveredFiles = (sweep: RouteSweep): ReadonlySet<string> =>
+  new Set(
+    [...sweep.visitedRoutes, ...sweep.answeredRoutes].flatMap((visited: string): readonly string[] => {
+      const route: DeclaredRoute | undefined = resolvedRouteOf(sweep.declaredRoutes, visited)
+      return route === undefined ? [] : [route.file]
+    }),
+  )
 
 // What counts as a specification driving this route. A static address can be looked for as itself; a
 // dynamic one cannot, because a spec never contains `/posts/[slug]` - it contains `/posts/` and then a
@@ -111,10 +111,11 @@ const unsweptRoute = (sweep: RouteSweep, route: DeclaredRoute): UnsweptRoute[] =
  * @param sweep what the crawl reached, what the project declares, and where a scan would be written.
  * @returns one violation per page nothing looked at, in the order the routes were declared.
  */
-export const findUnsweptRoutes = (sweep: RouteSweep): readonly UnsweptRoute[] =>
-  sweep.declaredRoutes.flatMap((route: DeclaredRoute): UnsweptRoute[] => {
-    if (isSkippedRoute(route.route, sweep.skippedPrefixes, sweep.customSkippedPrefixes) || isScanned(sweep, route)) {
-      return []
-    }
-    return isRedirect(sweep, route) ? [] : unsweptRoute(sweep, route)
-  })
+export const findUnsweptRoutes = (sweep: RouteSweep): readonly UnsweptRoute[] => {
+  const covered: ReadonlySet<string> = coveredFiles(sweep)
+  return sweep.declaredRoutes.flatMap((route: DeclaredRoute): UnsweptRoute[] =>
+    isSkippedRoute(route.route, sweep.skippedPrefixes, sweep.customSkippedPrefixes) || covered.has(route.file)
+      ? []
+      : unsweptRoute(sweep, route),
+  )
+}

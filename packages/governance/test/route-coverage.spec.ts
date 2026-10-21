@@ -295,3 +295,37 @@ describe('built-in route boundaries', () => {
 it('preserves explicitly declared built-in prefixes in route coverage', () => {
   expect(routesOf({ declaredRoutes: [routeOf('/apiary')], customSkippedPrefixes: ['/api'] })).toEqual([])
 })
+
+describe('overlapping route coverage', () => {
+  const declarations: readonly DeclaredRoute[] = [routeOf('/posts/new'), routeOf('/posts/[slug]', true)]
+
+  it('does not credit a dynamic page for a visit to its static sibling', () => {
+    expect(routesOf({ declaredRoutes: declarations, visitedRoutes: ['/posts/new/'] })).toEqual(['/posts/[slug]'])
+  })
+
+  it('does not credit a dynamic page for its static sibling redirect', () => {
+    expect(routesOf({ declaredRoutes: declarations, answeredRoutes: ['/posts/new'] })).toEqual(['/posts/[slug]'])
+  })
+
+  it('credits a visit that actually selects the dynamic page', () => {
+    expect(routesOf({ declaredRoutes: declarations, visitedRoutes: ['/posts/new', '/posts/article'] })).toEqual([])
+  })
+
+  it('resolves against excluded declarations before granting coverage', () => {
+    expect(
+      routesOf({
+        declaredRoutes: [routeOf('/admin'), routeOf('/[slug]', true)],
+        answeredRoutes: ['/admin'],
+      }),
+    ).toEqual(['/[slug]'])
+  })
+
+  it('credits only the narrower dynamic route when a catch-all also matches', () => {
+    expect(
+      routesOf({
+        declaredRoutes: [routeOf('/posts/[...parts]', true), routeOf('/posts/[slug]', true)],
+        visitedRoutes: ['/posts/article'],
+      }),
+    ).toEqual(['/posts/[...parts]'])
+  })
+})

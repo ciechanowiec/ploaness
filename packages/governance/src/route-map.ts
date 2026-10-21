@@ -180,14 +180,56 @@ const matchesSegments = (pattern: readonly string[], actual: readonly string[]):
 }
 
 /**
- * Whether one visited address is a page the declared route produces.
+ * Whether a declared pattern admits one visited address.
  *
- * A static route matches itself. A dynamic one matches any address its segments admit, which is what
- * lets the crawl answer for it: if the sweep scanned `/posts/hello`, the file behind `/posts/[slug]`
- * has been scanned, whatever else it can also serve.
+ * This matches patterns independently. Use `resolvedRouteOf` to select the rendered page when
+ * several declarations admit the same URL.
  * @param route the declared address, dynamic segments in their file-tree spelling.
  * @param visited an address the crawl reached.
- * @returns true when scanning that address scanned this route.
+ * @returns true when the pattern admits the address; resolve overlaps before crediting coverage.
  */
 export const matchesRoute = (route: string, visited: string): boolean =>
   matchesSegments(segmentsOf(route), segmentsOf(visited))
+
+const EXACT_SPECIFICITY: number = 5
+const STATIC_SPECIFICITY: number = 4
+const DYNAMIC_SPECIFICITY: number = 3
+const CATCH_ALL_SPECIFICITY: number = 2
+const OPTIONAL_SPECIFICITY: number = 1
+
+const segmentSpecificity = (segment: string | undefined): number => {
+  if (segment === undefined) {
+    return EXACT_SPECIFICITY
+  }
+  if (isOptionalCatchAll(segment)) {
+    return OPTIONAL_SPECIFICITY
+  }
+  if (isCatchAll(segment)) {
+    return CATCH_ALL_SPECIFICITY
+  }
+  return isDynamicSegment(segment) ? DYNAMIC_SPECIFICITY : STATIC_SPECIFICITY
+}
+
+// Next selects the most specific branch at the first differing segment, not the route with the
+// largest total number of static segments. An exact endpoint also precedes an optional tail.
+const compareSpecificity = (left: readonly string[], right: readonly string[]): number => {
+  const difference: number = segmentSpecificity(left[0]) - segmentSpecificity(right[0])
+  return difference !== 0 || left.length === 0 ? difference : compareSpecificity(left.slice(1), right.slice(1))
+}
+
+/**
+ * Select the declaration rendered by a URL among the supported Next route patterns.
+ * @param routes the complete declared set, including routes excluded from the sweep.
+ * @param visited the requested URL path.
+ * @returns the most specific matching declaration, or nothing when no pattern matches.
+ */
+export const resolvedRouteOf = (routes: readonly DeclaredRoute[], visited: string): DeclaredRoute | undefined =>
+  routes
+    .filter((route: DeclaredRoute): boolean => matchesRoute(route.route, visited))
+    .reduce<DeclaredRoute | undefined>(
+      (selected: DeclaredRoute | undefined, route: DeclaredRoute): DeclaredRoute | undefined =>
+        selected === undefined || compareSpecificity(segmentsOf(route.route), segmentsOf(selected.route)) > 0
+          ? route
+          : selected,
+      undefined,
+    )

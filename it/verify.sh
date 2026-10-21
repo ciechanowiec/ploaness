@@ -624,6 +624,28 @@ configuration_contracts() {
     analysis_environment_contracts
 }
 
+route_overlap_contracts() {
+    new_case route-overlap
+    node "$lib/create-a11y-page.ts" "$scratch/route-overlap" valid
+    node "$lib/create-route-overlap-case.ts" "$scratch/route-overlap"
+    commit_case route-overlap 'test(fixture): require coverage of the selected route declaration' "$CONFORMING_BODY"
+    expect route-overlap build PASS
+    expect_command route-overlap FAIL 'route-unswept' \
+        env PLOANESS_VERIFICATION=1 pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+    cat > "$scratch/route-overlap/tests/e2e/dynamic.e2e.spec.ts" <<'EOF'
+import { test } from '@playwright/test'
+import { expectSweptPage } from 'ploaness/a11y'
+test('scans a dynamic post', async ({ page }) => {
+  const slug = 'article'
+  await page.goto(`/posts/${slug}`)
+  await expectSweptPage(page)
+})
+EOF
+    expect_command route-overlap PASS '2 passed' \
+        env PLOANESS_VERIFICATION=1 pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts \
+        tests/e2e/dynamic.e2e.spec.ts --reporter=line
+}
+
 route_boundary_contracts() {
     new_case route-boundary
     node "$lib/create-a11y-page.ts" "$scratch/route-boundary" valid
@@ -669,6 +691,7 @@ fi
 if [ -z "${1-}" ] || [ "${1-}" = --a11y-only ]; then
     document_a11y_contracts
     route_boundary_contracts
+    route_overlap_contracts
     if [ "${1-}" = --a11y-only ]; then
         if [ "$failures" -ne 0 ]; then
             exit "$failures"
