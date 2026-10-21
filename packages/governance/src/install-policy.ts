@@ -5,9 +5,7 @@
 // declaration untouched - so the gate passes while the code runs against a version ploaness never saw.
 // The same shape of escape silences the vulnerability gate through `pnpm.auditConfig`.
 //
-// The reader lives in `yaml-blocks.ts`. It is deliberately small and not a YAML parser: it looks for the
-// block keys pnpm reads at the top level of a workspace file, which is where they must appear to take
-// effect.
+// The shared YAML reader preserves the meaning of flow and block forms without performing I/O.
 
 import { HARNESS_PACKAGE, isHarnessPackage } from './harness-package.js'
 import { readKey } from './json-shapes.js'

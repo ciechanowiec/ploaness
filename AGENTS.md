@@ -90,6 +90,7 @@ Use Node 26 or later and the exact pnpm version in `packageManager`.
 | `sh it/verify.sh --layout-only` | Diagnostic layout-scan subset against real Next pages. |
 | `sh it/verify.sh --browser-servers-only` | Diagnostic browser-server ownership subset. |
 | `sh it/verify.sh --security-only` | Diagnostic resolved-authentication and release-inventory subset. |
+| `sh it/verify.sh --configuration-only` | Diagnostic installed configuration and workspace-discovery subset. |
 | `pnpm run format` | Apply the formatting and fixes judged by the lint checks. |
 | `pnpm run lint:eslint` | Type-aware lint subset. |
 

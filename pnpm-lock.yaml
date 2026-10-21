@@ -363,6 +363,10 @@ importers:
         version: 6.0.3
 
   packages/governance:
+    dependencies:
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
     devDependencies:
       '@types/node':
         specifier: 26.6.4

@@ -397,11 +397,52 @@ security_contracts() {
     expect license-workspace licenses FAIL 'copyleft-fixture: GPL-3.0-only'
 }
 
-# A declared focused subset for iterating on the new analyzer; the default run remains complete.
+# Workspace discovery must agree with pnpm regardless of the YAML presentation.
+configuration_contracts() {
+    for layout in flow comment; do
+        name="workspace-yaml-$layout"
+        new_case "$name"
+        node "$lib/make-workspace.ts" "$scratch/$name"
+        rm "$scratch/$name/apps/web/biome.json"
+        if [ "$layout" = flow ]; then
+            replacement='packages: ["apps/*", "packages/*"]'
+        else
+            replacement="packages:
+  - 'apps/*'
+# shared libraries
+  - 'packages/*'"
+        fi
+        replace_text "$scratch/$name/pnpm-workspace.yaml" "packages:
+  - 'apps/*'
+  - 'packages/*'" "$replacement"
+        expect_command "$name" PASS 'packages/ui' "$scratch/$name/node_modules/.bin/ploaness" init
+        commit_case "$name" 'test(fixture): discover every YAML workspace member' "$CONFORMING_BODY"
+        expect "$name" wiring PASS
+        node "$lib/delete-dependency.ts" "$scratch/$name/packages/ui/package.json" ploaness
+        expect "$name" wiring FAIL 'ploaness does not govern'
+    done
+    new_case workspace-yaml-invalid
+    printf '\npackages: [apps/cms\n' >> "$scratch/workspace-yaml-invalid/pnpm-workspace.yaml"
+    expect_command workspace-yaml-invalid FAIL 'pnpm-workspace.yaml' \
+        "$scratch/workspace-yaml-invalid/node_modules/.bin/ploaness" init
+}
+
+# Declared focused subsets; the default run remains complete.
 case "${1-}" in
-    ''|--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only) ;;
-    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only]' >&2; exit 1 ;;
+    ''|--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only) ;;
+    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only]' >&2; exit 1 ;;
 esac
+
+if [ -z "${1-}" ] || [ "${1-}" = --configuration-only ]; then
+    configuration_contracts
+    if [ "${1-}" = --configuration-only ]; then
+        if [ "$failures" -ne 0 ]; then
+            exit "$failures"
+        fi
+        echo 'configuration contracts passed; run pnpm run verify for the complete verdict'
+        exit 0
+    fi
+fi
 
 if [ "${1-}" = --browser-servers-only ]; then
     (cd "$template" && pnpm exec playwright install chromium >/dev/null)

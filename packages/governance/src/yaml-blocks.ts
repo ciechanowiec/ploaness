@@ -1,112 +1,109 @@
-// The small reader for the top-level blocks pnpm reads out of a workspace file.
-//
-// It is not a YAML parser and must not become one. pnpm honours these keys only at the top level of
-// `pnpm-workspace.yaml`, so what has to be recognised is exactly "an unindented key, and the indented
-// lines beneath it" - a shape a regex reads correctly and a parser would only read more expensively.
-//
-// It lives here rather than in `install-policy.ts`, which wrote it first, because `workspace-policy.ts`
-// needs the same three predicates to read the `packages:` block. Two crude readers in one package would
-// not stay equal, and the one that drifted would be the one deciding which directories are governed.
+// Decode workspace configuration without coupling policy to filesystem reads or YAML presentation.
+import { parseDocument, stringify } from 'yaml'
+import { isArray, isRecord } from './json-shapes.js'
 
-const isTopLevelKey = (line: string, key: string): boolean => new RegExp(String.raw`^${key}\s*:`).test(line)
+const WORKSPACE_FILE: string = 'pnpm-workspace.yaml'
+const MAX_ALIAS_COUNT: number = 100
 
-const isIndented = (line: string): boolean => /^\s+\S/.test(line)
+const invalidValue = (key: string, expected: string): TypeError =>
+  new TypeError(`${WORKSPACE_FILE} ${key}: must be ${expected}; correct the workspace configuration`)
 
-/**
- * Whether an install config declares a top-level key at all.
- *
- * Separate from reading the block because a key can be meaningful while its body is empty:
- * `onlyBuiltDependencies: []` permits no dependency to run a script, which is an answer rather than
- * an omission.
- * @param file the contents of a YAML file, or an empty string when it is absent.
- * @param key the top-level key to look for.
- * @returns true when the key appears unindented.
- */
-export const declaresTopLevelKey = (file: string, key: string): boolean =>
-  file.split('\n').some((line: string): boolean => isTopLevelKey(line, key))
-
-/**
- * The lines of one top-level block, which run until the next unindented line.
- * @param file the contents of a YAML file, or an empty string when it is absent.
- * @param key the top-level key whose body to read.
- * @returns the block's lines, or an empty array when the key is absent.
- */
-export const topLevelBlockLines = (file: string, key: string): readonly string[] => {
-  const lines: readonly string[] = file.split('\n')
-  const start: number = lines.findIndex((line: string): boolean => isTopLevelKey(line, key))
-  if (start === -1) {
-    return []
+const isMapping = (value: unknown): value is Record<string, unknown> => {
+  if (!isRecord(value)) {
+    return false
   }
-  const rest: readonly string[] = lines.slice(start + 1)
-  const end: number = rest.findIndex((line: string): boolean => line.trim().length > 0 && !isIndented(line))
-  return end === -1 ? rest : rest.slice(0, end)
+  const prototype: unknown = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
 }
 
-/**
- * Strip one layer of matching or unmatched surrounding quotes.
- * @param value the raw scalar.
- * @returns the value without its surrounding quote characters.
- */
+/** Read a workspace mapping, rejecting malformed evidence rather than treating it as absent. */
+export const readWorkspaceDocument = (file: string): Readonly<Record<string, unknown>> => {
+  try {
+    const document: ReturnType<typeof parseDocument> = parseDocument(file)
+    if (document.errors.length > 0 || document.warnings.length > 0) {
+      throw new TypeError([...document.errors, ...document.warnings].map((error): string => error.message).join('; '))
+    }
+    const value: unknown = document.toJS({ maxAliasCount: MAX_ALIAS_COUNT })
+    if (document.contents === null) {
+      return {}
+    }
+    if (!isMapping(value)) {
+      throw invalidValue('document', 'a mapping')
+    }
+    return value
+  } catch (error: unknown) {
+    const reason: string = error instanceof Error ? error.message : String(error)
+    throw new TypeError(`${WORKSPACE_FILE}: ${reason}; correct the YAML before verification`, { cause: error })
+  }
+}
+
+/** Whether a workspace mapping declares a key, including an explicitly empty sequence. */
+export const declaresTopLevelKey = (file: string, key: string): boolean =>
+  Object.hasOwn(readWorkspaceDocument(file), key)
+
+/** Canonical YAML lines for a declared value, independent of its original indentation or flow style. */
+export const topLevelBlockLines = (file: string, key: string): readonly string[] => {
+  const value: unknown = readWorkspaceDocument(file)[key]
+  return value === undefined ? [] : stringify(value).trimEnd().split('\n')
+}
+
+/** Strip surrounding quote characters from a non-YAML token, such as a container image reference. */
 export const withoutQuotes = (value: string): string => value.replaceAll(/^['"]|['"]$/g, '')
 
-// A whole-line comment is not content. Trailing text after a `#` is stripped only where it cannot be
-// part of a value: a path glob carries no `#`, but an override specifier does - `git+ssh://host/repo#tag`
-// is a legal pin, and cutting at the `#` would silently rewrite which commit the rule judges.
-const contentLines = (lines: readonly string[]): readonly string[] =>
-  lines
-    .map((line: string): string => line.trim())
-    .filter((line: string): boolean => line.length > 0 && !line.startsWith('#'))
-
-const withoutTrailingComment = (line: string): string => {
-  const hash: number = line.indexOf('#')
-  return hash === -1 ? line : line.slice(0, hash).trim()
-}
-
-/**
- * The value of a top-level `key: value` scalar, such as `minimumReleaseAgeStrict: true`.
- *
- * Read from the line itself rather than from the block beneath it, which a scalar does not have. A
- * trailing comment is stripped, because a boolean carries no `#` of its own.
- * @param file the contents of a YAML file, or an empty string when it is absent.
- * @param key the top-level key whose scalar to read.
- * @returns the unquoted value, or undefined when the key is absent or carries no inline value.
- */
+/** Read a scalar without changing the existing string-valued policy interface. */
 export const topLevelScalar = (file: string, key: string): string | undefined => {
-  const line: string | undefined = file.split('\n').find((candidate: string): boolean => isTopLevelKey(candidate, key))
-  if (line === undefined) {
+  const value: unknown = readWorkspaceDocument(file)[key]
+  if (value === undefined) {
     return undefined
   }
-  const inline: string = line.slice(line.indexOf(':') + 1).trim()
-  const value: string = withoutQuotes(withoutTrailingComment(inline))
-  return value.length > 0 ? value : undefined
+  if (typeof value !== 'string' && typeof value !== 'boolean' && typeof value !== 'number') {
+    throw invalidValue(key, 'a scalar')
+  }
+  return String(value)
 }
 
-/**
- * The items of a top-level YAML sequence, such as the `packages:` block of a workspace file.
- * @param file the contents of a YAML file, or an empty string when it is absent.
- * @param key the top-level key whose sequence to read.
- * @returns one unquoted entry per `- item` line, in declaration order.
- */
-export const topLevelListItems = (file: string, key: string): readonly string[] =>
-  contentLines(topLevelBlockLines(file, key))
-    .filter((line: string): boolean => line.startsWith('-'))
-    .map((line: string): string => withoutQuotes(withoutTrailingComment(line.slice(1).trim())))
-    .filter((entry: string): boolean => entry.length > 0)
+/** Read every sequence entry; an invalid entry cannot silently disappear from policy. */
+export const topLevelListItems = (file: string, key: string): readonly string[] => {
+  const value: unknown = readWorkspaceDocument(file)[key]
+  if (value === undefined) {
+    return []
+  }
+  if (!(isArray(value) && value.every((entry: unknown): entry is string => typeof entry === 'string'))) {
+    throw invalidValue(key, 'a sequence of strings')
+  }
+  return value
+}
 
-/**
- * The `key: value` entries of a top-level YAML mapping, such as an `overrides:` block.
- *
- * Split at the FIRST colon, not the last: a value carries colons of its own - `npm:preact@10`,
- * `link:../fork`, `git+ssh://...` - and splitting at the last one read `react: npm:preact@10` as a
- * package called "react: npm", so every alias form walked straight through the rule meant to catch it.
- * @param file the contents of a YAML file, or an empty string when it is absent.
- * @param key the top-level key whose mapping to read.
- * @returns one `[name, value]` pair per entry, both unquoted.
- */
-export const topLevelMappingEntries = (file: string, key: string): readonly (readonly [string, string])[] =>
-  contentLines(topLevelBlockLines(file, key)).flatMap((line: string): readonly (readonly [string, string])[] => {
-    const separator: number = line.indexOf(':')
-    return separator === -1
-      ? []
-      : [[withoutQuotes(line.slice(0, separator).trim()), withoutQuotes(line.slice(separator + 1).trim())]]
-  })
+// Package extensions carry nested dependency mappings. Preserve that value without flattening its
+// children into independent override entries; scalar specifiers remain exactly what pnpm reads.
+const plainValue = (_key: string, value: unknown): unknown => {
+  if (isRecord(value) && !isArray(value) && !isMapping(value)) {
+    throw invalidValue('override', 'a plain mapping or sequence')
+  }
+  return value
+}
+
+const entryValue = (value: unknown): string => {
+  try {
+    return typeof value === 'string' ? value : JSON.stringify(value, plainValue)
+  } catch (error: unknown) {
+    throw new TypeError(`${WORKSPACE_FILE}: override values must be plain, acyclic values; correct the YAML`, {
+      cause: error,
+    })
+  }
+}
+
+/** Read one override entry per mapping key, preserving structured values and complete specifiers. */
+export const topLevelMappingEntries = (file: string, key: string): readonly (readonly [string, string])[] => {
+  const value: unknown = readWorkspaceDocument(file)[key]
+  if (value === undefined) {
+    return []
+  }
+  if (!isMapping(value)) {
+    throw invalidValue(key, 'a mapping')
+  }
+  return Object.entries(value).map(([name, specifier]: readonly [string, unknown]): readonly [string, string] => [
+    name,
+    entryValue(specifier),
+  ])
+}
