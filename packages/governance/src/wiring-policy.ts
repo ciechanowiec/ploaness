@@ -1,5 +1,5 @@
 import { GENERATED_ARTEFACTS } from './generated-denial.js'
-import { findSilencedAdvisories } from './install-policy.js'
+import { findAuditSilencingViolations } from './install-policy.js'
 import { asRecord, asStringRecord, declaredDependencies, isArray, type ParsedJson, parseJsonc } from './json-shapes.js'
 import { type DeclaredExclusion, findConvenienceExclusions } from './settings.js'
 import { escapeForRegex } from './text-escapes.js'
@@ -499,18 +499,6 @@ const checkTsconfig = (
 // while the code runs against something ploaness never saw. The ploaness packages themselves are not
 // pinned this way, so a pre-publication consumer may still point them at a local tarball.
 
-// The sanctioned route for an advisory a project cannot reach is `ploaness.vulnerabilityAllowlist`,
-// which records a reason, a mitigation plan and a date and fails once the entry matches no advisory.
-const checkSilencedAdvisories = (packageJson: unknown): readonly WiringViolation[] =>
-  findSilencedAdvisories(packageJson).map(
-    (key: string): WiringViolation => ({
-      location: `package.json pnpm.auditConfig.${key}`,
-      reason:
-        'silences the vulnerability gate; record the advisory in ' +
-        'ploaness.vulnerabilityAllowlist instead, with a reason, a mitigation plan and a date',
-    }),
-  )
-
 /** The repository-level files and declarations the wiring gate reads once, at the git root. */
 export interface RepositoryWiringInputs {
   readonly packageJson: unknown
@@ -576,7 +564,7 @@ export const findRepositoryWiringViolations = (inputs: RepositoryWiringInputs): 
       workspaceFile: inputs.workspaceFile,
       declaredAcrossMembers: inputs.declaredAcrossMembers,
     } satisfies RepositoryVersionInputs),
-    ...checkSilencedAdvisories(inputs.packageJson),
+    ...findAuditSilencingViolations(inputs.packageJson, inputs.workspaceFile),
     ...findConvenienceExclusions(inputs.declaredExclusions).map(
       (reason: string): WiringViolation => ({ location: 'package.json ploaness', reason }),
     ),

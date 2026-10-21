@@ -217,11 +217,12 @@ const assemble = (repository: Repository, fingerprint: string, sbom: EmbeddedSbo
   const production: readonly InventoryPackage[] = readInventory(repository, true)
   const auditedAt: string = timestamp()
   const reading: AuditReading = readAdvisories(repository)
-  if (reading.kind === 'unreachable') {
+  if (reading.kind !== 'read') {
     throw new Error(
-      ['the advisory database was unreachable, so the report cannot state vulnerabilities', ...reading.findings].join(
-        '\n',
-      ),
+      [
+        'complete advisory evidence is unavailable, so the report cannot state vulnerabilities',
+        ...reading.findings,
+      ].join('\n'),
     )
   }
   return buildComplianceReport({

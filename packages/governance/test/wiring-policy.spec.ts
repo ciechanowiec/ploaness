@@ -54,6 +54,24 @@ describe('a correctly wired project', () => {
   })
 })
 
+describe('workspace audit settings cannot filter vulnerability evidence', () => {
+  it.each([
+    ['audit:\n  ignore:\n    - GHSA-example', 'audit.ignore'],
+    ['audit: {ignore: [GHSA-example]}', 'audit.ignore'],
+    ['auditConfig: {ignoreGhsas: [GHSA-example]}', 'auditConfig.ignoreGhsas'],
+    ['auditConfig: {ignoreCves: [CVE-example]}', 'auditConfig.ignoreCves'],
+  ])('rejects %s at its workspace location', (workspaceFile: string, setting: string) => {
+    expect(locations(wiredInputs({ workspaceFile }))).toContain(`pnpm-workspace.yaml ${setting}`)
+    expect(reasonFor(wiredInputs({ workspaceFile }), `pnpm-workspace.yaml ${setting}`)).toContain(
+      'ploaness.vulnerabilityAllowlist',
+    )
+  })
+
+  it('accepts audit settings that do not suppress advisories', () => {
+    expect(findWiringViolations(wiredInputs({ workspaceFile: 'audit: {level: low}' }))).toEqual([])
+  })
+})
+
 describe('script tampering', () => {
   it('catches a neutered verify script', () => {
     const packageJson: Record<string, unknown> = {

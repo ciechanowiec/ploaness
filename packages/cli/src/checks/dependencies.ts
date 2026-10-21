@@ -17,6 +17,7 @@ import {
   type FreshnessReport,
   type FreshnessScope,
   type FreshnessSection,
+  findAuditSilencingViolations,
   findFreshnessViolations,
   findLicenseViolations,
   HARNESS_EXCEPTIONS,
@@ -44,7 +45,7 @@ import {
   sectionFreshnessReport,
   type VulnerabilityReport,
 } from '@ploaness/governance'
-import { type Context, manifestPathFrom, readJson, workingTreeFiles } from '../context.js'
+import { type Context, manifestPathFrom, readJson, readText, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed, type RunResult, run, TIMED_OUT_CODE, withOutput } from '../exec.js'
 import { type ImageReport, imageFreshness } from './images.js'
 import { runLicenseInventory } from './license-inventory.js'
@@ -554,7 +555,7 @@ const parseAudit = (output: string): readonly Advisory[] | undefined => {
 /** What the advisory database answered, or why it could not be read. */
 export type AuditReading =
   | { readonly kind: 'read'; readonly advisories: readonly Advisory[]; readonly transcript: string }
-  | { readonly kind: 'unreachable'; readonly findings: readonly string[] }
+  | { readonly kind: 'unreachable' | 'refused'; readonly findings: readonly string[] }
 
 /**
  * Ask the public advisory database about every package in the resolved set.
@@ -562,6 +563,13 @@ export type AuditReading =
  * @returns the reported advisories with the audit transcript, or why the database could not be read.
  */
 export const readAdvisories = (context: Context): AuditReading => {
+  const silenced: readonly string[] = findAuditSilencingViolations(
+    context.packageJson,
+    readText(path.join(context.root, 'pnpm-workspace.yaml')) ?? '',
+  ).map((violation): string => `${violation.location}: ${violation.reason}`)
+  if (silenced.length > 0) {
+    return { kind: 'refused', findings: silenced }
+  }
   // No `--prod` filter: the standard is explicit that build and test packages count, because a build
   // tool runs with build privileges and its vulnerability is reachable by anyone who can change the repo.
   // Deadlined because it asks the advisory database over the network. Without one, a registry that
@@ -594,8 +602,8 @@ export const readAdvisories = (context: Context): AuditReading => {
  */
 export const vulnerabilities = (context: Context): GateResult => {
   const reading: AuditReading = readAdvisories(context)
-  if (reading.kind === 'unreachable') {
-    return failed('the advisory database was unreachable, so vulnerabilities cannot be proven', reading.findings)
+  if (reading.kind !== 'read') {
+    return failed('complete advisory evidence could not be established', reading.findings)
   }
   const { advisories } = reading
   const report: VulnerabilityReport = judgeVulnerabilities(

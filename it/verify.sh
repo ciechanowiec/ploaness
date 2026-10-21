@@ -397,6 +397,21 @@ security_contracts() {
     expect license-workspace licenses FAIL 'copyleft-fixture: GPL-3.0-only'
 }
 
+audit_configuration_contracts() {
+    for setting in audit.ignore auditConfig.ignoreGhsas auditConfig.ignoreCves; do
+        name="audit-filter-$setting"
+        new_case "$name"
+        printf '\n%s: {%s: [GHSA-example]}\n' "${setting%%.*}" "${setting#*.}" \
+            >> "$scratch/$name/pnpm-workspace.yaml"
+        commit_case "$name" 'test(fixture): reject filtered audit evidence' "$CONFORMING_BODY"
+        expect "$name" wiring FAIL "pnpm-workspace.yaml $setting"
+        # Without a lockfile, accidentally launching pnpm fails for a different reason. The expected
+        # setting-specific refusal proves the audit reader validates its inputs before launching it.
+        rm "$scratch/$name/pnpm-lock.yaml"
+        expect "$name" vulnerabilities FAIL "pnpm-workspace.yaml $setting"
+    done
+}
+
 # Workspace discovery must agree with pnpm regardless of the YAML presentation.
 configuration_contracts() {
     for layout in flow comment; do
@@ -425,6 +440,7 @@ configuration_contracts() {
     printf '\npackages: [apps/cms\n' >> "$scratch/workspace-yaml-invalid/pnpm-workspace.yaml"
     expect_command workspace-yaml-invalid FAIL 'pnpm-workspace.yaml' \
         "$scratch/workspace-yaml-invalid/node_modules/.bin/ploaness" init
+    audit_configuration_contracts
 }
 
 # Declared focused subsets; the default run remains complete.

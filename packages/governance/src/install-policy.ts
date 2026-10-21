@@ -9,6 +9,7 @@
 
 import { HARNESS_PACKAGE, isHarnessPackage } from './harness-package.js'
 import { readKey } from './json-shapes.js'
+import type { WiringViolation } from './wiring-violation.js'
 import { declaresTopLevelKey, topLevelListItems, topLevelMappingEntries, topLevelScalar } from './yaml-blocks.js'
 
 /**
@@ -71,6 +72,35 @@ export const declaresInstallScriptAllowlist = (workspaceFile: string, packageJso
 export const findSilencedAdvisories = (packageJson: unknown): readonly string[] => {
   const auditConfig: unknown = readKey(readKey(packageJson, 'pnpm'), 'auditConfig')
   return SILENCING_KEYS.filter((key: string): boolean => Array.isArray(readKey(auditConfig, key)))
+}
+
+const WORKSPACE_AUDIT_KEYS: Readonly<Record<string, readonly string[]>> = {
+  audit: ['ignore'],
+  auditConfig: SILENCING_KEYS,
+}
+
+/** Reject audit filters before either wiring or an audit reader can accept filtered evidence. */
+export const findAuditSilencingViolations = (
+  packageJson: unknown,
+  workspaceFile: string,
+): readonly WiringViolation[] => {
+  const locations: readonly string[] = [
+    ...findSilencedAdvisories(packageJson).map((key: string): string => `package.json pnpm.auditConfig.${key}`),
+    ...Object.entries(WORKSPACE_AUDIT_KEYS).flatMap(
+      ([section, keys]: readonly [string, readonly string[]]): readonly string[] =>
+        topLevelMappingEntries(workspaceFile, section)
+          .filter(([key]: readonly [string, string]): boolean => keys.includes(key))
+          .map(([key]: readonly [string, string]): string => `pnpm-workspace.yaml ${section}.${key}`),
+    ),
+  ]
+  return locations.map(
+    (location: string): WiringViolation => ({
+      location,
+      reason:
+        'silences the vulnerability gate; record the advisory in ' +
+        'ploaness.vulnerabilityAllowlist instead, with a reason, a mitigation plan and a date',
+    }),
+  )
 }
 
 /**
