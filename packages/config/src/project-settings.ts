@@ -46,4 +46,7 @@ const settingsFor = (member: string): Settings => {
   return readMemberSettings(ploanessBlock(readPackageJson(repositoryRoot)), ploanessBlock(own))
 }
 
-export const projectSettings: Settings = settingsFor(process.cwd())
+/** The member whose settings these are: the directory its tools are invoked in. */
+export const projectDirectory: string = process.cwd()
+
+export const projectSettings: Settings = settingsFor(projectDirectory)

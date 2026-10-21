@@ -2769,6 +2769,14 @@ node "$lib/edit-json.ts" "$scratch/scoped-member-exclusion/apps/web/package.json
     ploaness.javascriptAllowlist '[{"pattern":"generated-code\\.js$","reason":"generated fixture"}]'
 printf 'export const generated = 1\n' > "$scratch/scoped-member-exclusion/apps/web/generated-code.js"
 expect scoped-member-exclusion conventions PASS
+# The file the allowlist lets be JavaScript is linted as JavaScript, in an application and in a library,
+# rather than handed to the type-aware parser, which knows only the TypeScript project and fails on it.
+edge_member="$scratch/scoped-member-exclusion/packages/ui"
+node "$lib/edit-json.ts" "$edge_member/package.json" \
+    ploaness.javascriptAllowlist '[{"pattern":"^edge-function\\.js$","reason":"edge runtime fixture"}]'
+printf 'export const handler = (event) => event.request\n' > "$edge_member/edge-function.js"
+expect_in scoped-member-exclusion apps/web eslint PASS
+expect_in scoped-member-exclusion packages/ui eslint PASS
 printf 'export const authored = 1\n' > "$scratch/scoped-member-exclusion/packages/ui/generated-code.js"
 expect scoped-member-exclusion conventions FAIL 'packages/ui/generated-code.js'
 

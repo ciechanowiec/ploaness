@@ -1,7 +1,9 @@
 // Framework-neutral lint policy shared by this repository and the configurations shipped to consumers.
+
+import path from 'node:path'
 import js from '@eslint/js'
 import comments from '@eslint-community/eslint-plugin-eslint-comments/configs'
-import { PROJECT_SETUP_FILE } from '@ploaness/governance'
+import { matchesRole, PROJECT_SETUP_FILE, type RolePattern } from '@ploaness/governance'
 import vitest from '@vitest/eslint-plugin'
 import type { Linter } from 'eslint'
 import { defineConfig } from 'eslint/config'
@@ -823,6 +825,25 @@ export const testSuiteSyntaxRules: RuleTable = {
   ],
 }
 
+/** One entry of a flat-config `files` list: a glob, or a function ESLint calls with a file's absolute path. */
+export type FileMatcher = string | ((filePath: string) => boolean)
+
+/**
+ * The files a project's JavaScript allowlist admits, as a `files` matcher.
+ *
+ * The conventions gate lets an allowlisted file be JavaScript, so the same list decides which files are
+ * linted as JavaScript; otherwise the type-aware parser, which knows only the TypeScript project, fails
+ * on every file the allowlist admits. ESLint passes the absolute path, and the member's own patterns are
+ * written relative to the member, the directory ESLint runs in.
+ * @param allowlist the javascriptAllowlist patterns of the member.
+ * @param memberDirectory the directory the patterns are relative to.
+ * @returns a matcher that is true for an allowlisted file.
+ */
+export const allowlistedJavaScript =
+  (allowlist: readonly RolePattern[], memberDirectory: string): ((filePath: string) => boolean) =>
+  (filePath: string): boolean =>
+    matchesRole(path.relative(memberDirectory, filePath).split(path.sep).join('/'), allowlist)
+
 /**
  * The same contract, applied to a file that is JavaScript rather than TypeScript.
  *
@@ -832,10 +853,10 @@ export const testSuiteSyntaxRules: RuleTable = {
  * restated here: it is the same object, minus the four rules that ask for syntax a JavaScript file
  * cannot carry, and with the bare-number ban expressed through the base rule because the typed variant
  * reads type information such a file does not have. The allowlist it reads is the same one.
- * @param files the glob patterns this block governs.
+ * @param files the glob patterns and matchers this block governs.
  * @returns a flat-config block.
  */
-export const javascriptBlock = (files: readonly string[]): FlatConfigBlock => ({
+export const javascriptBlock = (files: readonly FileMatcher[]): FlatConfigBlock => ({
   files,
   extends: [tseslint.configs.disableTypeChecked],
   // Declared rather than inferred. `no-undef` is off for every TypeScript file here because the

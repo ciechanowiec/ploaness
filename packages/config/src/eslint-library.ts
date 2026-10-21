@@ -7,6 +7,7 @@
 // never claimed. Every cap, ban and suppression rule in `eslint-core.ts` still applies in full.
 import { REEXPORT_CONFIG_FILES } from '@ploaness/governance'
 import {
+  allowlistedJavaScript,
   baseLayers,
   compose,
   type FlatConfigBlock,
@@ -22,11 +23,9 @@ import {
   typeAwareParsing,
   vitestPlugin,
 } from './eslint-core.js'
+import { projectDirectory, projectSettings as settings } from './project-settings.js'
 
 const IGNORED: readonly string[] = ['dist/**', 'node_modules/**', 'coverage/**', '.next/**']
-
-/** The JavaScript a library may legitimately carry: its own flat ESLint config, and nothing else. */
-const JAVASCRIPT_FILES: readonly string[] = ['eslint.config.mjs']
 
 // `unicorn/prefer-export-from` rewrites `import x from 'y'` + `export default x` into
 // `export { default } from 'y'` - and it AUTOFIXES, so `ploaness format` turned a correctly wired
@@ -54,7 +53,9 @@ const config: ReturnType<typeof compose> = compose(
   processConfigBlock(),
   // And the spec's, which is to vary the environment rather than to fix it. Same ordering constraint.
   specEnvironmentBlock(),
-  javascriptBlock(JAVASCRIPT_FILES),
+  // The JavaScript a library may carry is what its allowlist admits, its own flat ESLint config among
+  // the defaults, so the file the conventions gate lets be JavaScript is linted as JavaScript here.
+  javascriptBlock([allowlistedJavaScript(settings.javascriptAllowlist, projectDirectory)]),
   // A library's specs are held to the same integrity rules as an application's: the suite is a gate, so
   // a test that cannot fail is a gate that cannot fail.
   //

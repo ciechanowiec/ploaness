@@ -21,12 +21,14 @@ import { APPLICATION_JSX_IGNORES, ENVIRONMENT_READ_EXEMPTIONS, REEXPORT_CONFIG_F
 import playwright from 'eslint-plugin-playwright'
 import testingLibrary from 'eslint-plugin-testing-library'
 import {
+  allowlistedJavaScript,
   baseLayers,
   compose,
   type FlatConfigBlock,
   guidelineRules,
   hookContextBlock,
   immutabilityBlock,
+  javascriptBlock,
   NO_INHERITANCE,
   NO_MOCK_PROPERTIES,
   NO_NETWORK_GUARD_ESCAPE,
@@ -41,7 +43,7 @@ import {
   withoutWarnings,
 } from './eslint-core.js'
 import { SECURITY_RESTRICTIONS } from './eslint-security.js'
-import { projectSettings as settings } from './project-settings.js'
+import { projectDirectory, projectSettings as settings } from './project-settings.js'
 
 // Where a Payload project writes its hooks, and therefore the one place `req.context` is written.
 const PAYLOAD_HOOK_FILES: readonly string[] = ['src/hooks/**']
@@ -124,6 +126,9 @@ const config: ReturnType<typeof compose> = compose(
 
   // And the spec's, which is to vary the environment rather than to fix it. Same ordering constraint.
   specEnvironmentBlock(),
+  // The JavaScript the allowlist admits is linted as JavaScript, because the type-aware parser knows only
+  // the TypeScript project. The allowlisted configs ignored above stay ignored.
+  javascriptBlock([allowlistedJavaScript(settings.javascriptAllowlist, projectDirectory)]),
   // The hook directories, where Payload's per-request state is written. `src/hooks` is the layer the
   // project layout names for hooks; a hook written into `src/lib` is the pure floor claiming to be pure
   // and is held to the full rule.
