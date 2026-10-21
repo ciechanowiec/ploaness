@@ -12,6 +12,7 @@ import {
   ROOT_MEMBER_PATH,
   requiredBiomeFiles,
   tsconfigPathsFor,
+  VITEST_CONFIG_FILE,
   wiringTargetsFor,
 } from '@ploaness/governance'
 import { hasSeededFile } from '../checks/assets.js'
@@ -62,7 +63,7 @@ const stubs = (member: Member): Readonly<Record<string, string>> => {
     'eslint.config.mjs': reexportStub(targets.eslintSpecifier),
     'biome.json': biomeStub(member, kind, targets),
     'tsconfig.json': tsconfigStub(kind, targets, member.siblingPaths),
-    'vitest.config.mts': reexportStub(targets.vitestSpecifier),
+    [VITEST_CONFIG_FILE]: reexportStub(targets.vitestSpecifier),
     // A member with no application is not given a browser configuration, because the rule does not ask
     // it for one.
     ...(targets.playwrightSpecifier !== undefined && {

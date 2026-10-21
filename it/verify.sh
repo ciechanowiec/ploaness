@@ -397,6 +397,36 @@ security_contracts() {
     expect license-workspace licenses FAIL 'copyleft-fixture: GPL-3.0-only'
 }
 
+vitest_configuration_contracts() {
+    new_case vitest-shadow
+    # The application config's jsdom suite needs its real install inside the Vite workspace boundary.
+    rm "$scratch/vitest-shadow/node_modules"
+    install_case "$scratch/vitest-shadow"
+    mkdir -p "$scratch/vitest-shadow/tests/unit" "$scratch/vitest-shadow/tests/int"
+    printf 'unit' > "$scratch/vitest-shadow/unit-evidence.txt"
+    printf 'incorrect' > "$scratch/vitest-shadow/integration-evidence.txt"
+    cat > "$scratch/vitest-shadow/vitest.config.ts" <<'EOF'
+export default { test: { include: ['tests/unit/**/*.unit.spec.ts'] } }
+EOF
+    cat > "$scratch/vitest-shadow/tests/unit/selection.unit.spec.ts" <<'EOF'
+import { readFileSync } from 'node:fs'
+import { expect, it } from 'vitest'
+it('reads unit evidence', () => {
+  expect(readFileSync('unit-evidence.txt', 'utf8')).toBe('unit')
+})
+EOF
+    cat > "$scratch/vitest-shadow/tests/int/selection.int.spec.ts" <<'EOF'
+import { readFileSync } from 'node:fs'
+import { expect, it } from 'vitest'
+it('canonical integration sentinel', () => {
+  expect(readFileSync('integration-evidence.txt', 'utf8')).toBe('correct')
+})
+EOF
+    commit_case vitest-shadow 'test(fixture): select the canonical test configuration' "$CONFORMING_BODY"
+    expect vitest-shadow wiring PASS
+    expect vitest-shadow tests FAIL 'canonical integration sentinel'
+}
+
 biome_configuration_contracts() {
     new_case biome-override
     edit_json "$scratch/biome-override/biome.json" overrides \
@@ -455,6 +485,7 @@ configuration_contracts() {
         "$scratch/workspace-yaml-invalid/node_modules/.bin/ploaness" init
     audit_configuration_contracts
     biome_configuration_contracts
+    vitest_configuration_contracts
 }
 
 # Declared focused subsets; the default run remains complete.

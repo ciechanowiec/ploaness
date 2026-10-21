@@ -334,6 +334,9 @@ const withoutPreamble = (config: string): string =>
     .join('\n')
     .trim()
 
+/** The configuration scaffolded, validated, and explicitly selected by the test gate. */
+export const VITEST_CONFIG_FILE: string = 'vitest.config.mts'
+
 // `vitest.config.mts` was seeded by `init` and then checked by nothing, while the tests gate runs the
 // project's vitest with the project's config - so rewriting that file dropped the coverage thresholds,
 // the include globs, and the environment without a single finding.
@@ -350,7 +353,7 @@ const withoutPreamble = (config: string): string =>
  */
 export const REEXPORT_CONFIG_FILES: readonly string[] = [
   'eslint.config.mjs',
-  'vitest.config.mts',
+  VITEST_CONFIG_FILE,
   'playwright.config.ts',
 ]
 
@@ -607,7 +610,7 @@ export const findPackageWiringViolations = (inputs: PackageWiringInputs): readon
       (reason: string): WiringViolation => ({ location: 'package.json ploaness', reason }),
     ),
     ...checkReexport(inputs.eslintConfig, 'eslint.config.mjs', targets.eslintSpecifier),
-    ...checkReexport(inputs.vitestConfig, 'vitest.config.mts', targets.vitestSpecifier),
+    ...checkReexport(inputs.vitestConfig, VITEST_CONFIG_FILE, targets.vitestSpecifier),
     ...(targets.playwrightSpecifier === undefined
       ? []
       : checkReexport(inputs.playwrightConfig, 'playwright.config.ts', targets.playwrightSpecifier)),

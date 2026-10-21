@@ -9,6 +9,7 @@ import {
   diagnoseBuildFailure,
   hasExtension,
   VERIFICATION_ENVIRONMENT_VARIABLE,
+  VITEST_CONFIG_FILE,
 } from '@ploaness/governance'
 import { browserServerProblems } from '../browser-servers.js'
 import { type Context, hasOwnRuntime, type Member, resolveProjectTool, workingTreeFiles } from '../context.js'
@@ -76,7 +77,7 @@ export const tests = (context: Member): GateResult =>
         'the project must declare vitest itself, because its specs import it directly',
       ])
     }
-    const invocation: Invocation = wrapped(context, [vitest, 'run', '--coverage'])
+    const invocation: Invocation = wrapped(context, [vitest, 'run', `--config=${VITEST_CONFIG_FILE}`, '--coverage'])
     return fromRun(
       run(invocation.command, invocation.commandArguments, {
         cwd: context.root,

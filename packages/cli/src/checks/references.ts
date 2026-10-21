@@ -17,6 +17,7 @@ import {
   findUnreachedExclusionsBySetting,
   requiredBiomeFiles,
   type SkillViolation,
+  VITEST_CONFIG_FILE,
 } from '@ploaness/governance'
 import { type Context, type Member, type Repository, shippedDirectory, workingTreeFiles } from '../context.js'
 import { failed, type GateResult, passed } from '../exec.js'
@@ -89,7 +90,7 @@ const configTargets = (context: Context): readonly string[] => {
     path.join(owned, 'dependency-cruiser.json'),
     path.join(owned, 'knip.json'),
     path.join(context.root, 'biome.json'),
-    path.join(context.root, 'vitest.config.mts'),
+    path.join(context.root, VITEST_CONFIG_FILE),
   ].filter((file: string): boolean => existsSync(file))
 }
 

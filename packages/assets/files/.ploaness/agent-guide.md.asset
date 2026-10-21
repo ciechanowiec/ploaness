@@ -39,7 +39,8 @@ Ploaness requires the root verification scripts and each member's inherited conf
 - `tsconfig.json` extends `ploaness/tsconfig.json` or `ploaness/tsconfig-core.json`. Only the project
   paths and compiler options the wiring gate permits may be added.
 - `eslint.config.mjs` and `vitest.config.mts` contain only the appropriate Ploaness import and default
-  re-export. Libraries use `ploaness/eslint-library` and `ploaness/vitest-library`.
+  re-export. The test gate selects `vitest.config.mts` explicitly. Libraries use `ploaness/eslint-library`
+  and `ploaness/vitest-library`.
 - Applications also re-export `ploaness/playwright` from `playwright.config.ts`.
 
 The workspace install policy belongs in the root `pnpm-workspace.yaml`: declare the install-script

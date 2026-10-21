@@ -19,6 +19,7 @@ import {
   ROOT_MEMBER_PATH,
   readKey,
   requiredBiomeFiles,
+  VITEST_CONFIG_FILE,
   type WiringViolation,
 } from '@ploaness/governance'
 import { type Member, type Repository, readJson, readPins, readText, shippedDirectory } from '../context.js'
@@ -203,7 +204,7 @@ const memberViolations = (member: Member): readonly WiringViolation[] => {
     nestedMembers: member.siblingPaths,
     requiredBiomeFiles: requiredBiomeFiles(member.settings.sourceRoots, kind, member.settings.generatedArtefacts),
     eslintConfig: readText(path.join(member.root, 'eslint.config.mjs')),
-    vitestConfig: readText(path.join(member.root, 'vitest.config.mts')),
+    vitestConfig: readText(path.join(member.root, VITEST_CONFIG_FILE)),
     playwrightConfig: readText(path.join(member.root, 'playwright.config.ts')),
     declaredExclusions: member.settings.declaredExclusions,
     biomeConfig: readText(path.join(member.root, 'biome.json')),
