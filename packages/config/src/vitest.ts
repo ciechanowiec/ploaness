@@ -8,7 +8,7 @@
 // instead of silently escaping an allowlist nobody remembered to extend. With `include` set, Vitest
 // counts every matching file even when no test imports it, so an untested unit scores zero and fails the
 // gate rather than being invisible.
-import { COVERAGE_INCLUDE } from '@ploaness/governance'
+import { coverageIncludes } from '@ploaness/governance'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 import { projectSettings as settings } from './project-settings.js'
@@ -17,6 +17,7 @@ import {
   DETERMINISTIC_SEQUENCE,
   harnessSetupFile,
   projectSetupFiles,
+  TEST_TRANSFORM_INCLUDE,
   testReporters,
 } from './vitest-core.js'
 
@@ -67,6 +68,7 @@ const SUITES: readonly Suite[] = [
 const suiteProject = (suite: Suite): Record<string, unknown> => ({
   extends: false,
   plugins: [react()],
+  oxc: { include: TEST_TRANSFORM_INCLUDE },
   // Vite resolves the project's path aliases from tsconfig natively, so no extra plugin is needed.
   resolve: { tsconfigPaths: true },
   test: {
@@ -101,6 +103,7 @@ const suiteProject = (suite: Suite): Record<string, unknown> => ({
 // the dependency the annotation below exists to avoid. This binding is module-local, so it reaches no
 // declaration file either way.
 const declared: ReturnType<typeof defineConfig> = defineConfig({
+  oxc: { include: TEST_TRANSFORM_INCLUDE },
   test: {
     // Vitest resolves the seed and cross-project file order from the root configuration.
     sequence: DETERMINISTIC_SEQUENCE,
@@ -114,7 +117,7 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
       reporter: ['text', 'html', 'lcov'],
       // Imported rather than written here: the exclusion-reach rule judges a declared exclusion against
       // exactly this set, and a second copy of it would decide a verdict the report never agreed with.
-      include: [...COVERAGE_INCLUDE],
+      include: [...coverageIncludes(settings.sourceRoots)],
       exclude: [...settings.coverageExclude],
       thresholds: {
         // perFile: every covered file must independently clear the bar. Without it one fully covered

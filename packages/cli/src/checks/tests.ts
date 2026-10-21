@@ -6,6 +6,8 @@ import path from 'node:path'
 import {
   CODE_EXTENSIONS,
   carriesSourceCode,
+  coverageBoundaries,
+  coverageOwnedFiles,
   diagnoseBuildFailure,
   hasExtension,
   VERIFICATION_ENVIRONMENT_VARIABLE,
@@ -62,9 +64,18 @@ const resolveProjectToolOrUndefined = (context: Context, tool: string, binary?: 
 // empty include - reporting a package with nothing to test as one that failed to test it. A member
 // holding code and no suite is untouched by this and still fails.
 const hasSourceToTest = (context: Member): boolean =>
-  carriesSourceCode(workingTreeFiles(context.root), context.settings.sourceRoots, (filePath: string) =>
-    hasExtension(filePath, CODE_EXTENSIONS),
+  carriesSourceCode(
+    coverageOwnedFiles(workingTreeFiles(context.root), context.siblingPaths),
+    context.settings.sourceRoots,
+    (filePath: string) => hasExtension(filePath, CODE_EXTENSIONS),
   )
+
+const coverageArguments = (context: Member): readonly string[] =>
+  context.siblingPaths.length === 0
+    ? []
+    : [...context.settings.coverageExclude, ...coverageBoundaries(context.siblingPaths)].map(
+        (pattern: string): string => `--coverage.exclude=${pattern}`,
+      )
 
 export const tests = (context: Member): GateResult =>
   withPretest(context, (): GateResult => {
@@ -77,7 +88,13 @@ export const tests = (context: Member): GateResult =>
         'the project must declare vitest itself, because its specs import it directly',
       ])
     }
-    const invocation: Invocation = wrapped(context, [vitest, 'run', `--config=${VITEST_CONFIG_FILE}`, '--coverage'])
+    const invocation: Invocation = wrapped(context, [
+      vitest,
+      'run',
+      `--config=${VITEST_CONFIG_FILE}`,
+      '--coverage',
+      ...coverageArguments(context),
+    ])
     return fromRun(
       run(invocation.command, invocation.commandArguments, {
         cwd: context.root,

@@ -8,6 +8,7 @@
 // is the contract rather than a preference.
 
 import { BUNDLE_BUDGET_BYTES } from './bundle-budget.js'
+import { COVERAGE_ROLE_EXCLUDE, coverageIncludes, coverageOwnedFiles, isCoverageCandidate } from './coverage-policy.js'
 import { matchesGlob, matchesRole, type RolePattern } from './file-roles.js'
 import { GENERATED_ARTEFACTS } from './generated-denial.js'
 // Only string-valued entries survive `asStringRecord`: a non-string would reach `spawn` as a
@@ -279,7 +280,7 @@ const DEFAULT_ACCESSIBILITY_ROUTE_BUDGET: number = 250
  * things need to agree about it: the config that produces the report, and the rule that judges whether
  * a declared exclusion reaches anything the report measured. Two literals that must stay equal will not.
  */
-export const COVERAGE_INCLUDE: readonly string[] = ['src/**/*.ts', 'scripts/**/*.ts']
+export const COVERAGE_INCLUDE: readonly string[] = coverageIncludes(DEFAULT_SOURCE_ROOTS)
 
 // Only framework entry points receive the App Router exclusion. Colocated helpers remain measured.
 const APP_ENTRY_NAMES: readonly string[] = [
@@ -305,11 +306,11 @@ const APP_ENTRY_NAMES: readonly string[] = [
 ]
 
 const DEFAULT_COVERAGE_EXCLUDE: readonly string[] = [
+  ...COVERAGE_ROLE_EXCLUDE,
   ...APP_ENTRY_NAMES.map((name: string): string => `src/app/**/${name}.ts`),
   'src/payload.config.ts',
   'src/payload-types.ts',
   'src/seed/**',
-  'src/**/*.d.ts',
   'src/**/*.tsx',
   // Seeded by ploaness rather than written by the project, and verified end to end by
   // `security-headers.e2e.spec.ts` - an asset ploaness also seeds, and which shipping made the
@@ -660,10 +661,12 @@ export const trackedDirectories = (tracked: readonly string[]): readonly string[
   ),
 ]
 
-const measuredByCoverage = (tracked: readonly string[]): readonly string[] =>
-  tracked.filter((file: string): boolean =>
-    COVERAGE_INCLUDE.some((pattern: string): boolean => matchesGlob(pattern, file)),
-  )
+const measuredByCoverage = (
+  tracked: readonly string[],
+  sourceRoots: readonly string[],
+  siblingPaths: readonly string[],
+): readonly string[] =>
+  coverageOwnedFiles(tracked, siblingPaths).filter((file: string): boolean => isCoverageCandidate(file, sourceRoots))
 
 /**
  * Which paths a setting's exclusions have to reach.
@@ -674,9 +677,14 @@ const measuredByCoverage = (tracked: readonly string[]): readonly string[] =>
  * artefact appears in the coverage report, which is precisely where it does not, and it asks a
  * directory declaration to name a file.
  */
-const candidatesFor = (setting: string, tracked: readonly string[]): readonly string[] => {
+const candidatesFor = (
+  setting: string,
+  tracked: readonly string[],
+  sourceRoots: readonly string[],
+  siblingPaths: readonly string[],
+): readonly string[] => {
   if (setting === COVERAGE_SETTING) {
-    return measuredByCoverage(tracked)
+    return measuredByCoverage(tracked, sourceRoots, siblingPaths)
   }
   return DIRECTORY_SETTINGS.has(setting) ? trackedDirectories(tracked) : tracked
 }
@@ -685,14 +693,18 @@ const candidatesFor = (setting: string, tracked: readonly string[]): readonly st
  * Report every declared exclusion that reaches none of the paths ITS OWN setting could have excluded.
  *
  * A composition over `findUnreachedExclusions`: it groups the entries by setting and hands each group
- * the candidate set that setting governs, so a caller supplies the tracked file list and nothing else.
+ * the candidate set that setting governs, with the member's effective source roots and boundaries.
  * @param entries the exclusions the project declared, across every setting.
  * @param tracked the repo-relative paths of the tracked files.
+ * @param sourceRoots the member's effective source directories.
+ * @param siblingPaths nested members owned by their own coverage invocations.
  * @returns one message per entry that reaches nothing.
  */
 export const findUnreachedExclusionsBySetting = (
   entries: readonly DeclaredExclusion[],
   tracked: readonly string[],
+  sourceRoots: readonly string[] = DEFAULT_SOURCE_ROOTS,
+  siblingPaths: readonly string[] = [],
 ): readonly string[] =>
   [...new Set<string>(entries.map((entry: DeclaredExclusion): string => entry.setting))].flatMap(
     (setting: string): readonly string[] =>
@@ -700,7 +712,7 @@ export const findUnreachedExclusionsBySetting = (
         entries
           .filter((entry: DeclaredExclusion): boolean => entry.setting === setting)
           .map((entry: DeclaredExclusion): DeclaredExclusion => normalised(entry)),
-        candidatesFor(setting, tracked),
+        candidatesFor(setting, tracked, sourceRoots, siblingPaths),
       ),
   )
 

@@ -6,7 +6,16 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PROJECT_SETUP_FILE as PROJECT_SETUP_FILE_NAME } from '@ploaness/governance'
+import {
+  escapeForRegex,
+  PROJECT_SETUP_FILE as PROJECT_SETUP_FILE_NAME,
+  TYPESCRIPT_SOURCE_EXTENSIONS,
+} from '@ploaness/governance'
+
+/** Vite must transform every accepted TypeScript format, including CommonJS TypeScript. */
+export const TEST_TRANSFORM_INCLUDE: RegExp = new RegExp(
+  `(?:${[...TYPESCRIPT_SOURCE_EXTENSIONS, '.jsx'].map((extension: string): string => escapeForRegex(extension)).join('|')})$`,
+)
 
 /**
  * The sequence block both Vitest configs declare, named so each carries the same shape rather than a

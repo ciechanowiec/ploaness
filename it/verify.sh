@@ -397,6 +397,38 @@ security_contracts() {
     expect license-workspace licenses FAIL 'copyleft-fixture: GPL-3.0-only'
 }
 
+coverage_member_contracts() {
+    new_case coverage-ownership
+    node "$lib/make-workspace.ts" "$scratch/coverage-ownership"
+    node "$lib/create-coverage-case.ts" "$scratch/coverage-ownership" library packages/root-logic/covered.ts
+    node "$lib/create-coverage-case.ts" "$scratch/coverage-ownership" library packages/root-logic/covered.ts covered
+    node "$lib/create-coverage-case.ts" "$scratch/coverage-ownership/packages/ui" library src/uncovered.ts
+    edit_json "$scratch/coverage-ownership/package.json" ploaness.sourceRoots '["packages"]'
+    rm "$scratch/coverage-ownership/apps/web/biome.json"
+    expect_command coverage-ownership PASS 'packages/ui' "$scratch/coverage-ownership/node_modules/.bin/ploaness" init
+    commit_case coverage-ownership 'test(fixture): keep member coverage ownership separate' "$CONFORMING_BODY"
+    expect coverage-ownership tests PASS
+    expect_in coverage-ownership packages/ui tests FAIL 'Coverage for lines.*threshold.*uncovered'
+    edit_json "$scratch/coverage-ownership/package.json" ploaness.coverageExclude \
+        '[{"pattern":"packages/ui/**","reason":"code owned and measured by the nested member"}]'
+    expect coverage-ownership config-refs FAIL 'excludes nothing'
+}
+
+coverage_configuration_contracts() {
+    for kind in application library; do
+        for target in domain/uncovered.ts src/uncovered.mts src/uncovered.cts 'domain|logic/uncovered.ts'; do
+            name="coverage-$kind-${target%/*}-${target##*.}"
+            new_case "$name"
+            node "$lib/create-coverage-case.ts" "$scratch/$name" "$kind" "$target"
+            commit_case "$name" 'test(fixture): measure every declared source format' "$CONFORMING_BODY"
+            expect "$name" tests FAIL 'Coverage for lines.*threshold.*uncovered'
+            node "$lib/create-coverage-case.ts" "$scratch/$name" "$kind" "$target" covered
+            expect "$name" tests PASS
+        done
+    done
+    coverage_member_contracts
+}
+
 payload_extension_contracts() {
     for extension in ts tsx mts cts; do
         name="payload-extension-$extension"
@@ -521,6 +553,7 @@ configuration_contracts() {
     vitest_configuration_contracts
     workspace_glob_contracts
     payload_extension_contracts
+    coverage_configuration_contracts
 }
 
 # Declared focused subsets; the default run remains complete.

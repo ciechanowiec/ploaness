@@ -1,5 +1,22 @@
 // Identify source, generated, binary, and prose roles so exclusions follow file meaning rather than tool defaults.
 import { isUtf8 } from 'node:buffer'
+import path from 'node:path'
+
+/** Normalize a declared source directory without allowing it to escape the member. */
+export const normalisedSourceRoot = (root: string): string => {
+  const normalised: string = path.posix.normalize(root)
+  if (normalised === '..' || root.length === 0 || path.posix.isAbsolute(normalised) || normalised.startsWith('../')) {
+    throw new TypeError('ploaness.sourceRoots must name directories within the member; use a member-relative path')
+  }
+  return normalised.endsWith('/') ? normalised.slice(0, -1) : normalised
+}
+
+/** Match literal member-relative directories, including the explicitly declared member root. */
+export const isWithinSourceRoots = (file: string, roots: readonly string[]): boolean =>
+  roots.some((root: string): boolean => {
+    const normalised: string = normalisedSourceRoot(root)
+    return normalised === '.' || file.startsWith(`${normalised}/`)
+  })
 
 const NUL_BYTE: number = 0
 // A PDF can use ASCII for every object and stream and still carry byte offsets that formatting would break.

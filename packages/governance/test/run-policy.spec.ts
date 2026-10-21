@@ -39,6 +39,14 @@ const isTypeScript = (filePath: string): boolean => filePath.endsWith('.ts')
 describe('carriesSourceCode', () => {
   const Roots: readonly string[] = ['src', 'tests', 'scripts']
 
+  it('recognizes code directly under an explicitly declared member root', () => {
+    expect(carriesSourceCode(['value.ts'], ['.'], isTypeScript)).toBe(true)
+  })
+
+  it('recognizes normalized source directories when deciding whether tests must run', () => {
+    expect(carriesSourceCode(['domain/value.ts'], ['./domain/'], isTypeScript)).toBe(true)
+  })
+
   it('finds source under a declared root', () => {
     expect(carriesSourceCode(['src/index.ts'], Roots, isTypeScript)).toBe(true)
   })

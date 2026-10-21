@@ -1,3 +1,5 @@
+import { isWithinSourceRoots } from './file-roles.js'
+
 // When a verification run stops.
 //
 // The two modes want opposite things from a failure. An enforcing run stops at the first one: nothing
@@ -49,7 +51,4 @@ export const carriesSourceCode = (
   sourceRoots: readonly string[],
   isCode: (filePath: string) => boolean,
 ): boolean =>
-  trackedPaths.some(
-    (filePath: string): boolean =>
-      isCode(filePath) && sourceRoots.some((root: string): boolean => filePath.startsWith(`${root}/`)),
-  )
+  trackedPaths.some((filePath: string): boolean => isCode(filePath) && isWithinSourceRoots(filePath, sourceRoots))

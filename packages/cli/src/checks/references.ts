@@ -109,15 +109,20 @@ const mandatedReferences = (context: Context): ReadonlySet<string> =>
 // Which file set an exclusion has to reach is decided by the SETTING it came from, not by how its
 // pattern is written - the partition itself lives in `governance`, where it is spec'd against file lists
 // no repository has to be built to produce. What is left here is the one read it needs.
-const deadExclusions = (context: Context): readonly string[] =>
-  findUnreachedExclusionsBySetting(context.settings.declaredExclusions, workingTreeFiles(context.root))
+const deadExclusions = (context: Member): readonly string[] =>
+  findUnreachedExclusionsBySetting(
+    context.settings.declaredExclusions,
+    workingTreeFiles(context.root),
+    context.settings.sourceRoots,
+    context.siblingPaths,
+  )
 
 /**
  * A concrete source file carved out of a tool config must still exist on disk, and a declared exclusion
  * must exclude something. Both are the same defect at different scales: a carve-out that reaches
  * nothing leaves the report reading exactly as it would have read without it.
  */
-export const configReferences = (context: Context): GateResult => {
+export const configReferences = (context: Member): GateResult => {
   const isExistingFile = (relativePath: string): boolean => existsSync(path.join(context.root, relativePath))
   const mandated: ReadonlySet<string> = mandatedReferences(context)
   const dangling: readonly string[] = configTargets(context).flatMap((configPath: string): readonly string[] =>

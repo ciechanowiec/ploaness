@@ -60,6 +60,39 @@ describe('findUnreachedExclusionsBySetting', () => {
 })
 
 describe('findUnreachedExclusionsBySetting, per setting', () => {
+  it.each(['tests/helper.ts', 'domain/types.d.ts', 'domain/types.d.mts', 'domain/types.d.cts'])(
+    'does not count an invariant role as measured code: %s',
+    (file: string) => {
+      expect(findUnreachedExclusionsBySetting([entry('coverageExclude', file)], [file], ['.'])).toHaveLength(1)
+    },
+  )
+
+  it('does not validate a root exclusion against a nested member source', () => {
+    expect(
+      findUnreachedExclusionsBySetting(
+        [entry('coverageExclude', 'packages/ui/**')],
+        ['packages/ui/src/value.ts'],
+        ['.'],
+        ['packages/ui'],
+      ),
+    ).toHaveLength(1)
+  })
+
+  it('recognizes measured code in an effective member source root', () => {
+    expect(
+      findUnreachedExclusionsBySetting([entry('coverageExclude', 'domain/**')], ['domain/value.ts'], ['src', 'domain']),
+    ).toEqual([])
+  })
+
+  it.each(['mts', 'cts'])('recognizes measured %s modules', (extension: string) => {
+    expect(
+      findUnreachedExclusionsBySetting(
+        [entry('coverageExclude', `src/value.${extension}`)],
+        [`src/value.${extension}`],
+      ),
+    ).toEqual([])
+  })
+
   it('still judges a file-shaped setting against the tracked files', () => {
     expect(findUnreachedExclusionsBySetting([entry('generatedArtefacts', 'src/payload-types.ts')], TRACKED)).toEqual([])
     expect(findUnreachedExclusionsBySetting([entry('generatedArtefacts', 'src/gone.ts')], TRACKED)).toHaveLength(1)

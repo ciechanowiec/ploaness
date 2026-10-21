@@ -289,7 +289,7 @@ prefixes name URLs and are not checked against filesystem paths.
 
 | Setting | Default | Input and effect |
 | --- | --- | --- |
-| `sourceRoots` | `src`, `tests`, `scripts` | String array adding source directories. |
+| `sourceRoots` | `src`, `tests`, `scripts` | String array adding source directories, including coverage of `.ts`, `.mts`, and `.cts` logic. |
 | `unmanagedAssets` | empty | Entries with `path` and `reason` recording explicitly assigned project ownership. |
 | `typographyExclusions` | generated Payload files | File-role entries with regex patterns. |
 | `javascriptAllowlist` | ESLint config and generated import map | File-role entries with regex patterns for necessary JavaScript. |

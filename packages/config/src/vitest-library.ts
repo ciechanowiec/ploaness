@@ -5,12 +5,19 @@
 // paying for jsdom on every file would be waste; and the React plugin is not loaded, because a package
 // with no components has nothing for it to transform. The coverage floors, the deterministic sequence
 // and the network guard are the same ones an application is held to.
-import { COVERAGE_INCLUDE } from '@ploaness/governance'
+import { coverageIncludes } from '@ploaness/governance'
 import { defineConfig } from 'vitest/config'
 import { projectSettings as settings } from './project-settings.js'
-import { COVERAGE_THRESHOLD, DETERMINISTIC_SEQUENCE, harnessSetupFile, projectSetupFiles } from './vitest-core.js'
+import {
+  COVERAGE_THRESHOLD,
+  DETERMINISTIC_SEQUENCE,
+  harnessSetupFile,
+  projectSetupFiles,
+  TEST_TRANSFORM_INCLUDE,
+} from './vitest-core.js'
 
 const declared: ReturnType<typeof defineConfig> = defineConfig({
+  oxc: { include: TEST_TRANSFORM_INCLUDE },
   resolve: { tsconfigPaths: true },
   test: {
     environment: 'node',
@@ -19,7 +26,7 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
     sequence: DETERMINISTIC_SEQUENCE,
     coverage: {
       provider: 'v8',
-      include: [...COVERAGE_INCLUDE],
+      include: [...coverageIncludes(settings.sourceRoots)],
       exclude: [...settings.coverageExclude],
       thresholds: {
         perFile: true,
