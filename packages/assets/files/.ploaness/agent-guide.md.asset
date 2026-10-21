@@ -33,7 +33,8 @@ and have no application build or browser suite.
 
 Ploaness requires the root verification scripts and each member's inherited configuration:
 
-- `biome.json` extends `ploaness/biome` for applications or `ploaness/biome-core` for libraries. Its
+- `biome.json` extends only `ploaness/biome` for applications or `ploaness/biome-core` for libraries.
+  Local overrides, language rules, formatting, plugins, and VCS selection are harness-owned. Its
   member-relative file-selection block is governed; nested configurations also carry `root: false`.
 - `tsconfig.json` extends `ploaness/tsconfig.json` or `ploaness/tsconfig-core.json`. Only the project
   paths and compiler options the wiring gate permits may be added.

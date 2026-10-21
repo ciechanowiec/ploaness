@@ -397,6 +397,19 @@ security_contracts() {
     expect license-workspace licenses FAIL 'copyleft-fixture: GPL-3.0-only'
 }
 
+biome_configuration_contracts() {
+    new_case biome-override
+    edit_json "$scratch/biome-override/biome.json" overrides \
+        '[{"includes":["src/**"],"linter":{"enabled":false}}]'
+    commit_case biome-override 'test(fixture): refuse disabled application linting' "$CONFORMING_BODY"
+    expect biome-override wiring FAIL 'biome.json overrides'
+    new_case biome-extra-extends
+    edit_json "$scratch/biome-extra-extends/biome.json" extends '["ploaness/biome","./local.json"]'
+    printf '%s\n' '{"linter":{"enabled":false}}' > "$scratch/biome-extra-extends/local.json"
+    commit_case biome-extra-extends 'test(fixture): refuse extra inherited lint configuration' "$CONFORMING_BODY"
+    expect biome-extra-extends wiring FAIL 'must declare "extends"'
+}
+
 audit_configuration_contracts() {
     for setting in audit.ignore auditConfig.ignoreGhsas auditConfig.ignoreCves; do
         name="audit-filter-$setting"
@@ -441,6 +454,7 @@ configuration_contracts() {
     expect_command workspace-yaml-invalid FAIL 'pnpm-workspace.yaml' \
         "$scratch/workspace-yaml-invalid/node_modules/.bin/ploaness" init
     audit_configuration_contracts
+    biome_configuration_contracts
 }
 
 # Declared focused subsets; the default run remains complete.

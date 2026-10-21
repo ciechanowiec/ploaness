@@ -90,6 +90,29 @@ describe('script tampering', () => {
 })
 
 describe('config tampering', () => {
+  it.each([
+    { overrides: [{ includes: ['src/**'], linter: { enabled: false } }] },
+    { overrides: [{ includes: ['src/**'], linter: { rules: { suspicious: { noDebugger: 'off' } } } }] },
+    { html: { linter: { enabled: false } } },
+    { css: { linter: { enabled: false } } },
+    { json: { linter: { enabled: false } } },
+    { graphql: { linter: { enabled: false } } },
+    { grit: { linter: { enabled: false } } },
+    { vcs: { root: '../unrelated', enabled: true, clientKind: 'git', useIgnoreFile: true } },
+  ])('rejects local rule scope changes: %j', (local: Record<string, unknown>) => {
+    const biomeConfig: string = JSON.stringify({ extends: ['ploaness/biome'], files: BIOME_FILES, ...local })
+    expect(locations(wiredInputs({ biomeConfig }))).toContain(`biome.json ${Object.keys(local)[0] ?? ''}`)
+  })
+
+  it.each([
+    ['ploaness/biome', './local.json'],
+    ['./local.json', 'ploaness/biome'],
+    ['ploaness/biome', 'ploaness/biome'],
+  ])('rejects additional inherited configurations: %j', (...extendsValue: readonly string[]) => {
+    const biomeConfig: string = JSON.stringify({ extends: extendsValue, files: BIOME_FILES })
+    expect(reasonFor(wiredInputs({ biomeConfig }), 'biome.json')).toContain('must declare "extends"')
+  })
+
   it('catches rules appended after the harness ESLint config', () => {
     const eslintConfig: string = [
       "import ploaness from 'ploaness/eslint'",

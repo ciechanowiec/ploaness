@@ -264,7 +264,20 @@ const ALLOWED_TSCONFIG_COMPILER_OPTIONS: ReadonlySet<string> = new Set([
 // caught the thing it meant to - a project's own GritQL rules shadowing the shipped ones - and also any
 // unrelated directory that happened to share the name. What actually shadows is the key that loads
 // them, and a project declaring it is replacing ploaness's rules for that section like any other.
-const OWNED_BIOME_SECTIONS: readonly string[] = ['linter', 'formatter', 'javascript', 'assist', 'plugins']
+const OWNED_BIOME_SECTIONS: readonly string[] = [
+  'linter',
+  'formatter',
+  'javascript',
+  'css',
+  'graphql',
+  'grit',
+  'html',
+  'json',
+  'assist',
+  'plugins',
+  'overrides',
+  'vcs',
+]
 
 const checkDependency = (packageJson: Record<string, unknown>): readonly WiringViolation[] =>
   Object.hasOwn(declaredDependencies(packageJson), 'ploaness')
@@ -418,7 +431,7 @@ const checkBiome = (
   const parsed: Record<string, unknown> = asRecord(read.value)
   const extendsValue: unknown = parsed['extends']
   const missingExtends: readonly WiringViolation[] =
-    isArray(extendsValue) && extendsValue.includes(biomeExtends)
+    isArray(extendsValue) && extendsValue.length === 1 && extendsValue[0] === biomeExtends
       ? []
       : [
           {
