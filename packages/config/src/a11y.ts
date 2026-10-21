@@ -48,26 +48,12 @@ export const MAX_SWEEP_ROUTES: number = projectSettings.accessibilityRouteBudget
 /** What axe answers, taken from the builder's own surface rather than from a transitive package. */
 export type AxeResults = Awaited<ReturnType<AxeBuilder['analyze']>>
 
-// Scan the site's semantic regions - chrome and content alike - but not a framework's dev-only overlay,
-// which lives in a separate portal outside them and would otherwise raise findings about the framework.
-// Only regions actually present are included, so a page carrying just <main> scans cleanly rather than
-// erroring on a missing include target.
-const REGIONS: readonly string[] = ['header', 'main', 'footer']
-
 /**
- * An axe builder scoped to the page's semantic regions.
+ * An axe builder covering the complete document, including dialogs and application portals.
  * @param page the page to scan.
- * @returns a builder including each of `header`, `main` and `footer` the page has.
+ * @returns a builder without selector restrictions.
  */
-export const scopedAxe = async (page: Page): Promise<AxeBuilder> => {
-  const builder: AxeBuilder = new AxeBuilder({ page })
-  for (const region of REGIONS) {
-    if ((await page.locator(region).count()) > 0) {
-      builder.include(region)
-    }
-  }
-  return builder
-}
+export const scopedAxe = (page: Page): Promise<AxeBuilder> => Promise.resolve(new AxeBuilder({ page }))
 
 // axe answers in three buckets. `incomplete` means "the check ran and could not decide", and an EXACTLY
 // equal foreground and background is filed there rather than as a violation, because axe reads two

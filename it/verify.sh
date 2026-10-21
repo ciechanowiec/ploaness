@@ -624,10 +624,21 @@ configuration_contracts() {
     analysis_environment_contracts
 }
 
+document_a11y_contracts() {
+    (cd "$template" && pnpm exec playwright install chromium >/dev/null)
+    new_case document-a11y
+    node "$lib/create-a11y-page.ts" "$scratch/document-a11y" valid
+    node "$lib/create-document-a11y-case.ts" "$scratch/document-a11y"
+    commit_case document-a11y 'test(fixture): scan controls throughout the document' "$CONFORMING_BODY"
+    expect document-a11y build PASS
+    expect_command document-a11y PASS '2 passed' \
+        env PLOANESS_VERIFICATION=1 pnpm exec playwright test tests/e2e/document.e2e.spec.ts --reporter=line
+}
+
 # Declared focused subsets; the default run remains complete.
 case "${1-}" in
-    ''|--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only) ;;
-    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only]' >&2; exit 1 ;;
+    ''|--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only) ;;
+    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only]' >&2; exit 1 ;;
 esac
 
 if [ -z "${1-}" ] || [ "${1-}" = --configuration-only ]; then
@@ -637,6 +648,17 @@ if [ -z "${1-}" ] || [ "${1-}" = --configuration-only ]; then
             exit "$failures"
         fi
         echo 'configuration contracts passed; run pnpm run verify for the complete verdict'
+        exit 0
+    fi
+fi
+
+if [ -z "${1-}" ] || [ "${1-}" = --a11y-only ]; then
+    document_a11y_contracts
+    if [ "${1-}" = --a11y-only ]; then
+        if [ "$failures" -ne 0 ]; then
+            exit "$failures"
+        fi
+        echo 'document accessibility contracts passed; run pnpm run verify for the complete verdict'
         exit 0
     fi
 fi
