@@ -350,6 +350,23 @@ layout_contracts() {
         pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 }
 
+browser_environment_contracts() {
+    new_case browser-environment
+    node "$lib/create-a11y-page.ts" "$scratch/browser-environment" valid
+    node "$lib/configure-build-environment.ts" "$scratch/browser-environment" files
+    node "$lib/create-production-environment-case.ts" "$scratch/browser-environment"
+    commit_case browser-environment 'test(fixture): align production browser environment loading' "$CONFORMING_BODY"
+    expect_command browser-environment PASS '\[PASS\] build' \
+        env ENV_PRIORITY=from-process "$scratch/browser-environment/node_modules/.bin/ploaness" gate build
+    # This minimal Next fixture exercises browser configuration; it serves no Payload access endpoint.
+    expect_command browser-environment PASS '2 passed' \
+        env PLOANESS_VERIFICATION=1 NODE_ENV=production ENV_PRIORITY=from-process \
+        pnpm exec playwright test tests/e2e/environment.e2e.spec.ts tests/e2e/a11y.e2e.spec.ts --reporter=line
+    expect_command browser-environment PASS '1 passed' \
+        env -u PLOANESS_VERIFICATION NODE_ENV=development ENV_PRIORITY=from-process EXPECTED_DIRECTORY=.generic \
+        pnpm exec playwright test tests/e2e/environment.e2e.spec.ts --reporter=line
+}
+
 browser_server_contracts() {
     new_case browser-servers
     node "$lib/create-a11y-page.ts" "$scratch/browser-servers" valid
@@ -357,6 +374,7 @@ browser_server_contracts() {
     expect_command browser-servers PASS 'browser server ownership contracts passed' \
         node --import=tsx/esm "$lib/browser-server-contracts.ts" \
         "$scratch/browser-servers/node_modules/.bin/ploaness"
+    browser_environment_contracts
 }
 
 security_contracts() {
@@ -650,7 +668,7 @@ bundle_directory_contracts() {
         expect_command "$name" PASS '\[PASS\] bundle' \
             env NODE_ENV=development "$scratch/$name/node_modules/.bin/ploaness" gate bundle
         expect_command "$name" PASS '1 passed' \
-            env PLOANESS_VERIFICATION=1 pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+            env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
         mkdir -p "$scratch/$name/.next/static"
         printf 'console.log(1)\n' > "$scratch/$name/.next/static/stale.js"
         edit_json "$scratch/$name/package.json" ploaness.bundleBudgetBytes 1024
@@ -677,7 +695,7 @@ route_overlap_contracts() {
     commit_case route-overlap 'test(fixture): require coverage of the selected route declaration' "$CONFORMING_BODY"
     expect route-overlap build PASS
     expect_command route-overlap FAIL 'route-unswept' \
-        env PLOANESS_VERIFICATION=1 pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+        env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
     cat > "$scratch/route-overlap/tests/e2e/dynamic.e2e.spec.ts" <<'EOF'
 import { test } from '@playwright/test'
 import { expectSweptPage } from 'ploaness/a11y'
@@ -688,7 +706,7 @@ test('scans a dynamic post', async ({ page }) => {
 })
 EOF
     expect_command route-overlap PASS '2 passed' \
-        env PLOANESS_VERIFICATION=1 pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts \
+        env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts \
         tests/e2e/dynamic.e2e.spec.ts --reporter=line
 }
 
@@ -699,11 +717,11 @@ route_boundary_contracts() {
     commit_case route-boundary 'test(fixture): scan public pages sharing built-in prefixes' "$CONFORMING_BODY"
     expect route-boundary build PASS
     expect_command route-boundary FAIL 'button-name' \
-        env PLOANESS_VERIFICATION=1 pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+        env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
     edit_json "$scratch/route-boundary/package.json" ploaness.accessibilitySkipRoutes \
         '[{"pattern":"/api","reason":"API-prefixed preview pages require a session"}]'
     expect_command route-boundary PASS '1 passed' \
-        env PLOANESS_VERIFICATION=1 pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+        env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 }
 
 document_a11y_contracts() {
@@ -714,7 +732,7 @@ document_a11y_contracts() {
     commit_case document-a11y 'test(fixture): scan controls throughout the document' "$CONFORMING_BODY"
     expect document-a11y build PASS
     expect_command document-a11y PASS '2 passed' \
-        env PLOANESS_VERIFICATION=1 pnpm exec playwright test tests/e2e/document.e2e.spec.ts --reporter=line
+        env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/document.e2e.spec.ts --reporter=line
 }
 
 # Declared focused subsets; the default run remains complete.

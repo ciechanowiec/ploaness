@@ -317,9 +317,12 @@ when every field is open. A suffix such as `sizes.**` declares that group and al
 future fields; other wildcard positions are literal. Missing fields remain undeclared, and permissions
 or fields the application does not grant make the corresponding declaration stale.
 
-Runtime tests use the real environment. Vitest and Playwright load `.env.local` followed by `.env`
-without replacing already-set variables, including empty strings. `analysisEnv` fills only variables
-missing from both the process and those files; it is for import-only analysis, not a substitute for
+Runtime tests use the real environment. Vitest and direct local Playwright runs load `.env.local`
+followed by `.env` without replacing already-set variables, including empty strings. Production browser
+verification uses the installed Next environment loader before importing specs, retaining production-file
+precedence, variable expansion, and supplied process values as the production build does.
+`analysisEnv` fills only variables missing from both the process and `.env.local`/`.env`; it is for
+import-only analysis, not a substitute for
 the database and services that runtime verification starts. Keep environment reads in
 `src/lib/environment.ts`, validate them there, and document required variables in the example file.
 

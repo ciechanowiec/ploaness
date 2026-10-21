@@ -12,7 +12,6 @@
       "ignoreDependencies": [
         "@biomejs/biome",
         "@ploaness/assets",
-        "@ploaness/config",
         "dependency-cruiser",
         "eslint",
         "oxlint",

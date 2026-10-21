@@ -20,6 +20,7 @@ import {
   shellArgument,
   VERIFICATION_ENVIRONMENT_VARIABLE,
 } from '@ploaness/governance'
+import { loadProductionEnvironment } from './production-environment.js'
 import { projectSettings } from './project-settings.js'
 
 // Read before anything else, because a spec module is what needs it. Playwright evaluates this config
@@ -29,13 +30,17 @@ import { projectSettings } from './project-settings.js'
 // import time, and that config validates `process.env` at module scope. Nothing else here reads these
 // variables; the specs and the application do. A `globalSetup` hook would not serve, because it runs
 // in a process of its own and its environment never reaches a worker.
-for (const file of runEnvironmentFiles(existsSync)) {
-  process.loadEnvFile(file)
+const isVerification: boolean = process.env[VERIFICATION_ENVIRONMENT_VARIABLE] !== undefined
+if (isVerification) {
+  loadProductionEnvironment(process.cwd())
+} else {
+  for (const file of runEnvironmentFiles(existsSync)) {
+    process.loadEnvFile(file)
+  }
 }
 
 const isContinuousIntegration: boolean = Boolean(process.env['CI'])
 const isReuseExistingServer: boolean = canReuseBrowserServer(process.env)
-const isVerification: boolean = process.env[VERIFICATION_ENVIRONMENT_VARIABLE] !== undefined
 const productionLauncher: string = fileURLToPath(new URL('production-server.js', import.meta.url))
 
 // The web server is `next dev`, which compiles a route on its first request. The first hit to the heavy
