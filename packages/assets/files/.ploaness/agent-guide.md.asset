@@ -31,6 +31,12 @@ member, and Payload gates run only for Payload members. Registry order determine
 workspace report labels each member invocation. Libraries receive the framework-neutral configurations
 and have no application build or browser suite.
 
+Workspace package patterns support plain directory names, `*`, `?`, `**`, and explicit brace
+alternatives such as `packages/{ui,shared}`. Plain names use letters, numbers, spaces, `_`, `-`, `.`,
+`@`, and `!`. Brackets, quotes, backslashes, other special syntax, adjacent `**` segments, ranges,
+empty alternatives, and singleton or literal brace groups fail with a diagnostic. Spell out supported
+alternatives and use separate leading-`!` exclusion patterns instead.
+
 Ploaness requires the root verification scripts and each member's inherited configuration:
 
 - `biome.json` extends only `ploaness/biome` for applications or `ploaness/biome-core` for libraries.

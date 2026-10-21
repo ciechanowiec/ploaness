@@ -52,7 +52,7 @@
     "vulnerabilityAllowlist": [
       {
         "advisory": "GHSA-vfj7-8cjw-p6xm",
-        "reason": "braces 3.0.3 is reached only through micromatch in fast-glob, under @next/eslint-plugin-next, stylelint's globby and type-coverage; the stack exhaustion needs a deeply nested brace pattern, and the only patterns braces expands there are the file globs of analyzer configurations the harness and the repository author. There is no upgrade: 3.0.3 is the latest release of braces",
+        "reason": "braces 3.0.3 is reached through micromatch in workspace discovery and in fast-glob, under @next/eslint-plugin-next, stylelint's globby and type-coverage; the stack exhaustion needs a deeply nested brace pattern, and the only patterns braces expands there are workspace and analyzer globs authored by the harness and the repository author. There is no upgrade: 3.0.3 is the latest release of braces",
         "mitigation": "These analyzers run only on developer machines and in continuous integration, never in a published package's runtime code. The entry is removed once braces publishes a fix or the analyzers stop depending on it.",
         "addedOn": "2026-10-04"
       }

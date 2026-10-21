@@ -1,8 +1,8 @@
 // Discover repository and package boundaries from manifests rather than project-selected labels.
-import { matchesGlob } from './file-roles.js'
 import { HARNESS_PACKAGE } from './harness-package.js'
 import { declaredDependencies } from './json-shapes.js'
 import { NEXT_PACKAGE, PAYLOAD_PACKAGE } from './version-policy.js'
+import { compileWorkspacePatterns, type WorkspacePattern } from './workspace-globs.js'
 import { topLevelListItems } from './yaml-blocks.js'
 
 /** The repo-relative path of the member that sits at the repository root. */
@@ -62,18 +62,16 @@ export const findRepositoryRoot = (
 export const readWorkspacePackages = (workspaceFile: string): readonly string[] =>
   topLevelListItems(workspaceFile, PACKAGES_KEY)
 
-const EXCLUSION_MARKER: string = '!'
-
 // pnpm applies every exclusion after every inclusion rather than in written order, so a directory named
 // by both is excluded whichever came first. Reading them in order would make the result depend on how
 // the file happens to be arranged.
-const isSelected = (patterns: readonly string[], directory: string): boolean => {
+const isSelected = (patterns: readonly WorkspacePattern[], directory: string): boolean => {
   const isIncluded: boolean = patterns
-    .filter((pattern: string): boolean => !pattern.startsWith(EXCLUSION_MARKER))
-    .some((pattern: string): boolean => matchesGlob(pattern, directory))
+    .filter((pattern: WorkspacePattern): boolean => !pattern.isExcluded)
+    .some((pattern: WorkspacePattern): boolean => pattern.expression.test(`${directory}/package.json`))
   const isExcluded: boolean = patterns
-    .filter((pattern: string): boolean => pattern.startsWith(EXCLUSION_MARKER))
-    .some((pattern: string): boolean => matchesGlob(pattern.slice(EXCLUSION_MARKER.length), directory))
+    .filter((pattern: WorkspacePattern): boolean => pattern.isExcluded)
+    .some((pattern: WorkspacePattern): boolean => pattern.expression.test(`${directory}/package.json`))
   return isIncluded && !isExcluded
 }
 
@@ -90,12 +88,15 @@ const isSelected = (patterns: readonly string[], directory: string): boolean => 
 export const selectProjects = (
   patterns: readonly string[],
   directoriesWithManifest: readonly string[],
-): readonly string[] => [
-  ...(directoriesWithManifest.includes(ROOT_MEMBER_PATH) ? [ROOT_MEMBER_PATH] : []),
-  ...directoriesWithManifest.filter(
-    (directory: string): boolean => directory !== ROOT_MEMBER_PATH && isSelected(patterns, directory),
-  ),
-]
+): readonly string[] => {
+  const compiled: readonly WorkspacePattern[] = compileWorkspacePatterns(patterns)
+  return [
+    ...(directoriesWithManifest.includes(ROOT_MEMBER_PATH) ? [ROOT_MEMBER_PATH] : []),
+    ...directoriesWithManifest.filter(
+      (directory: string): boolean => directory !== ROOT_MEMBER_PATH && isSelected(compiled, directory),
+    ),
+  ]
+}
 
 const declaresPackage = (packageJson: unknown, packageName: string): boolean =>
   Object.hasOwn(declaredDependencies(packageJson), packageName)

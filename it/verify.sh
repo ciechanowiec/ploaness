@@ -397,6 +397,21 @@ security_contracts() {
     expect license-workspace licenses FAIL 'copyleft-fixture: GPL-3.0-only'
 }
 
+workspace_glob_contracts() {
+    new_case workspace-globs
+    expect_command workspace-globs PASS 'workspace patterns agree with pinned pnpm' \
+        node "$lib/workspace-glob-contracts.ts"
+    new_case workspace-braces
+    node "$lib/make-workspace.ts" "$scratch/workspace-braces"
+    rm "$scratch/workspace-braces/apps/web/biome.json"
+    replace_text "$scratch/workspace-braces/pnpm-workspace.yaml" "  - 'packages/*'" "  - 'packages/{ui,shared}'"
+    expect_command workspace-braces PASS 'packages/ui' "$scratch/workspace-braces/node_modules/.bin/ploaness" init
+    commit_case workspace-braces 'test(fixture): discover brace-selected workspace members' "$CONFORMING_BODY"
+    expect workspace-braces wiring PASS
+    node "$lib/delete-dependency.ts" "$scratch/workspace-braces/packages/ui/package.json" ploaness
+    expect workspace-braces wiring FAIL 'ploaness does not govern'
+}
+
 vitest_configuration_contracts() {
     new_case vitest-shadow
     # The application config's jsdom suite needs its real install inside the Vite workspace boundary.
@@ -486,6 +501,7 @@ configuration_contracts() {
     audit_configuration_contracts
     biome_configuration_contracts
     vitest_configuration_contracts
+    workspace_glob_contracts
 }
 
 # Declared focused subsets; the default run remains complete.
