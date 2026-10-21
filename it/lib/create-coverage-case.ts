@@ -60,7 +60,11 @@ if (phase === 'covered') {
   write('domain/contracts.d.mts', 'export interface Contract { readonly value: string }\n')
   write(
     'domain/Component.tsx',
-    "import type { ReactElement } from 'react'\nexport const Component = (): ReactElement => <span>component role</span>\n",
+    [
+      "import type { ReactElement } from 'react'",
+      'export const Component = (): ReactElement => <span>component role</span>',
+      '',
+    ].join('\n'),
   )
   write(
     'tests/int/covered.int.spec.ts',

@@ -12,10 +12,12 @@ import {
   TYPESCRIPT_SOURCE_EXTENSIONS,
 } from '@ploaness/governance'
 
+const TRANSFORM_EXTENSION_PATTERN: string = [...TYPESCRIPT_SOURCE_EXTENSIONS, '.jsx']
+  .map((extension: string): string => escapeForRegex(extension))
+  .join('|')
+
 /** Vite must transform every accepted TypeScript format, including CommonJS TypeScript. */
-export const TEST_TRANSFORM_INCLUDE: RegExp = new RegExp(
-  `(?:${[...TYPESCRIPT_SOURCE_EXTENSIONS, '.jsx'].map((extension: string): string => escapeForRegex(extension)).join('|')})$`,
-)
+export const TEST_TRANSFORM_INCLUDE: RegExp = new RegExp(`(?:${TRANSFORM_EXTENSION_PATTERN})$`)
 
 /**
  * The sequence block both Vitest configs declare, named so each carries the same shape rather than a
