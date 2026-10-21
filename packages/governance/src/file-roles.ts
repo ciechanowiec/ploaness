@@ -7,13 +7,13 @@ const PDF_HEADER_BYTES: number = 9
 const PDF_HEADER: RegExp = /^%PDF-\d\.\d[\r\n]/
 const UTF8: TextDecoder = new TextDecoder()
 
+/** TypeScript source formats accepted by the harness, independent of a file's test or generated role. */
+export const TYPESCRIPT_SOURCE_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.mts', '.cts']
+
 /** Extensions the Code Rules apply to, used where a rule is about code rather than about any text. */
 export const CODE_EXTENSIONS: readonly string[] = [
-  '.ts',
-  '.tsx',
+  ...TYPESCRIPT_SOURCE_EXTENSIONS,
   '.jsx',
-  '.mts',
-  '.cts',
   '.js',
   '.mjs',
   '.cjs',

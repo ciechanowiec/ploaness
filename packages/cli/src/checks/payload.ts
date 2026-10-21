@@ -18,6 +18,7 @@ import {
   findUnconstrainedDraftReads,
   findUnguardedRelationships,
   findUnscannedAdminViews,
+  hasExtension,
   type InheritedAccessReport,
   type LocatedViolation,
   type MigrationDirectory,
@@ -31,6 +32,7 @@ import {
   type RegeneratedArtefact,
   type SpecSource,
   stripComments,
+  TYPESCRIPT_SOURCE_EXTENSIONS,
 } from '@ploaness/governance'
 import {
   type Context,
@@ -222,8 +224,6 @@ export const payloadDefaults = (context: Member): GateResult => {
   return withOutput(judgeProbe(result), result.output)
 }
 
-const SOURCE_EXTENSIONS: readonly string[] = ['.ts', '.tsx']
-
 // The language rules apply to every package; the Payload ones only to a package that has Payload to
 // misuse. Held together, the import rule ran only where Payload did - so a frontend beside the CMS, the
 // place a parent-relative import is MOST likely because it has no Payload config to anchor on, was the
@@ -238,7 +238,7 @@ const sourceCandidates = (context: Member): readonly string[] => {
   const roots: readonly string[] = context.settings.sourceRoots
   return workingTreeFiles(context.root).filter(
     (file: string): boolean =>
-      SOURCE_EXTENSIONS.some((extension: string): boolean => file.endsWith(extension)) &&
+      hasExtension(file, TYPESCRIPT_SOURCE_EXTENSIONS) &&
       roots.some((root: string): boolean => file.startsWith(`${root}/`)) &&
       !file.endsWith('payload-types.ts') &&
       existsSync(path.join(context.root, file)),

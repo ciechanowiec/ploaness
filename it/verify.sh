@@ -397,6 +397,24 @@ security_contracts() {
     expect license-workspace licenses FAIL 'copyleft-fixture: GPL-3.0-only'
 }
 
+payload_extension_contracts() {
+    for extension in ts tsx mts cts; do
+        name="payload-extension-$extension"
+        new_case "$name"
+        commit_case "$name" 'test(fixture): enforce Payload source extension parity' "$CONFORMING_BODY"
+        source="$scratch/$name/src/lib/reads.$extension"
+        if [ "$extension" != ts ]; then
+            mv "$scratch/$name/src/lib/reads.ts" "$source"
+        fi
+        expect "$name" payload-rules PASS
+        drop_text "$source" ', overrideAccess: false'
+        expect "$name" payload-rules FAIL require-user-access-control
+    done
+    mv "$scratch/payload-extension-mts/src/lib/reads.mts" "$scratch/payload-extension-mts/src/lib/ignored.mts"
+    printf '\nsrc/lib/ignored.mts\n' >> "$scratch/payload-extension-mts/.gitignore"
+    expect payload-extension-mts payload-rules PASS
+}
+
 workspace_glob_contracts() {
     new_case workspace-globs
     expect_command workspace-globs PASS 'workspace patterns agree with pinned pnpm' \
@@ -502,6 +520,7 @@ configuration_contracts() {
     biome_configuration_contracts
     vitest_configuration_contracts
     workspace_glob_contracts
+    payload_extension_contracts
 }
 
 # Declared focused subsets; the default run remains complete.
