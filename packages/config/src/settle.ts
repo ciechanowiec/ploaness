@@ -54,6 +54,19 @@ import type { Page } from '@playwright/test'
 // navigation destroys.
 const SETTLE_BUDGET_MS: number = 1000
 
+// WHY A BUSY REGION IS WAITED FOR, AND ON A CEILING OF ITS OWN. `aria-busy="true"` is a page saying
+// in so many words that a region is still being filled, and a framework's loading fallback says it:
+// Next streams a route's content into a hidden container and React reveals it in place of the busy
+// fallback a moment later, throttled, so on a loaded machine the fallback is still what a reader sees
+// two quiet frames after `load`. Scanned then, the sweep judged a spinner instead of the page - the
+// page's heading sat in the hidden container, so a document that has one was reported without it, and a
+// region-scoped scan before that had passed the spinner without judging the page at all. Only a
+// VISIBLE busy element holds the settle, because a fallback React has hidden is not what anyone reads.
+// The wait is bounded separately because it is for a server rather than a frame: a cold application
+// compiling its first request takes seconds, while a region that is busy forever is a defect the scan
+// that follows should see rather than one this wait should hide by hanging.
+const BUSY_BUDGET_MS: number = 30_000
+
 // The browser surface the page function touches, declared rather than pulled in with lib.dom. This
 // package builds under `lib: ["ES2023"]`, and `tsconfig.lint.json` compiles every package as ONE
 // program - so adding "DOM" here would put `document` in scope for `@ploaness/governance` too, a
@@ -67,10 +80,14 @@ interface PageAnimation {
   readonly effect: { readonly getComputedTiming: () => { readonly iterations: number } } | null
 }
 
+interface PageElement {
+  readonly checkVisibility: () => boolean
+}
+
 declare const document: {
   readonly fonts: { readonly ready: Promise<unknown> } | undefined
   readonly getAnimations: (() => readonly PageAnimation[]) | undefined
-  readonly querySelectorAll: (selectors: string) => { readonly length: number }
+  readonly querySelectorAll: (selectors: string) => ArrayLike<PageElement>
 }
 declare const requestAnimationFrame: (callback: () => void) => number
 declare const setTimeout: (callback: () => void, delayMs: number) => unknown
@@ -141,19 +158,54 @@ const settleInPage = async (budgetMs: number): Promise<void> => {
   await Promise.race([settled(), deadline()])
 }
 
+// Self-contained for the same reason as the settle above. Frame by frame, like the count, so a region
+// revealed between two checks is seen on the next. Answers whether anything was busy at all, so a page
+// that never was is not settled a second time.
+const wasBusyInPage = async (budgetMs: number): Promise<boolean> => {
+  const busySelector: string = '[aria-busy="true"]'
+  const isBusy = (): boolean =>
+    Array.from(document.querySelectorAll(busySelector)).some((element: PageElement): boolean =>
+      element.checkVisibility(),
+    )
+  const wasBusy: boolean = isBusy()
+  const revealed = async (): Promise<void> => {
+    if (!isBusy()) {
+      return
+    }
+    await new Promise<void>((resolve: () => void): void => {
+      requestAnimationFrame((): void => {
+        resolve()
+      })
+    })
+    await revealed()
+  }
+  await Promise.race([
+    revealed(),
+    new Promise<void>((resolve: () => void): void => {
+      setTimeout(resolve, budgetMs)
+    }),
+  ])
+  return wasBusy
+}
+
 /**
  * Wait for a page to finish rendering, before anything measures it.
  *
  * Call it after a navigation, and after a state change a scan is about to judge. A still document
  * costs two animation frames; one that is animating costs however long its animations have left; a
  * document that never stops changing costs the budget and no more, so a page nobody can settle slows
- * the sweep rather than hanging it.
+ * the sweep rather than hanging it. A visible `aria-busy="true"` region is waited for until it clears,
+ * on a longer ceiling of its own, and the page is then settled again.
  * @param page the page about to be scanned, left on whatever route it holds.
  * @returns nothing. It resolves whether the page settled or the budget ran out.
  */
 export const settleForScan = async (page: Page): Promise<void> => {
   try {
     await page.evaluate(settleInPage, SETTLE_BUDGET_MS)
+    // Revealing the content changes the tree, so a page that was busy is settled once more after it.
+    if (await page.evaluate(wasBusyInPage, BUSY_BUDGET_MS)) {
+      await page.evaluate(settleInPage, SETTLE_BUDGET_MS)
+    }
   } catch {
     // A route that redirects on mount destroys the execution context while this is in flight, and a
     // closed page cannot be asked anything. Neither is an accessibility finding, and neither should end

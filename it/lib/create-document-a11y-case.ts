@@ -31,7 +31,20 @@ const page = (labelKind: ButtonLabel): string =>
     '',
   ].join('\n')
 
+// A region that declares itself busy, as a streamed route's loading fallback does while the server is
+// still answering. The spec reveals the page after longer than the frame budget, so what is measured is
+// the settle rather than how a framework happens to schedule its reveal.
+const BUSY_MS: number = 1500
+const busyPage: string = [
+  'export default function Page(): React.JSX.Element {',
+  '  return <div id="busy" aria-busy="true">Loading</div>',
+  '}',
+  '',
+].join('\n')
+
 const app: string = path.join(directory, 'src/app')
+mkdirSync(path.join(app, 'busy'), { recursive: true })
+writeFileSync(path.join(app, 'busy/page.tsx'), busyPage)
 mkdirSync(path.join(app, 'invalid'), { recursive: true })
 mkdirSync(path.join(app, 'mismatched'), { recursive: true })
 writeFileSync(path.join(app, 'page.tsx'), page('matching'))
@@ -41,7 +54,7 @@ writeFileSync(
   path.join(directory, 'tests/e2e/document.e2e.spec.ts'),
   [
     "import { expect, test } from '@playwright/test'",
-    "import { expectNoAxeDefects, scopedAxe } from 'ploaness/a11y'",
+    "import { expectNoAxeDefects, scopedAxe, settleForScan } from 'ploaness/a11y'",
     "test('reports unnamed controls throughout the document', async ({ page }) => {",
     "  await page.goto('/invalid')",
     '  const scan = await (await scopedAxe(page)).analyze()',
@@ -55,6 +68,17 @@ writeFileSync(
     "  const targets = scan.violations.filter(({ id }) => id === 'label-content-name-mismatch')",
     '    .flatMap(({ nodes }) => nodes.flatMap(({ target }) => target))',
     "  expect(targets).toEqual(expect.arrayContaining(['#navigation', '#dialog', '#cookies']))",
+    '})',
+    "test('judges the page a busy region reveals, not the region', async ({ page }) => {",
+    "  await page.goto('/busy')",
+    '  await page.evaluate((delayMs: number) => {',
+    '    setTimeout(() => {',
+    "      const main = Object.assign(document.createElement('main'), { innerHTML: '<h1>Ready</h1>' })",
+    "      document.querySelector('#busy')?.replaceWith(main)",
+    '    }, delayMs)',
+    `  }, ${String(BUSY_MS)})`,
+    '  await settleForScan(page)',
+    "  expectNoAxeDefects(await (await scopedAxe(page)).analyze(), 'revealed document')",
     '})',
     "test('accepts named controls throughout the document', async ({ page }) => {",
     "  await page.goto('/')",

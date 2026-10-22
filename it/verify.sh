@@ -735,7 +735,7 @@ document_a11y_contracts() {
     node "$lib/create-document-a11y-case.ts" "$scratch/document-a11y"
     commit_case document-a11y 'test(fixture): scan controls throughout the document' "$CONFORMING_BODY"
     expect document-a11y build PASS
-    expect_command document-a11y PASS '3 passed' \
+    expect_command document-a11y PASS '4 passed' \
         env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/document.e2e.spec.ts --reporter=line
 }
 
