@@ -98,9 +98,9 @@ const validateJpeg = (bytes: Uint8Array): string | null => {
   ) {
     return 'not a valid JPEG (bad SOI marker)'
   }
-  return bytes.at(SECOND_TO_LAST_BYTE) !== JPEG_MARKER_PREFIX || bytes.at(LAST_BYTE) !== JPEG_END_OF_IMAGE
-    ? 'truncated JPEG (missing EOI marker)'
-    : null
+  return bytes.at(SECOND_TO_LAST_BYTE) === JPEG_MARKER_PREFIX && bytes.at(LAST_BYTE) === JPEG_END_OF_IMAGE
+    ? null
+    : 'truncated JPEG (missing EOI marker)'
 }
 
 const GIF_HEADER_BYTES: number = 6

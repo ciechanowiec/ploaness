@@ -33,7 +33,7 @@ export const withPretest = <Outcome extends GateResult | Promise<GateResult>>(
   gate: () => Outcome,
 ): GateResult | Outcome => {
   const pretest: RunResult | undefined = runPretest(context)
-  return pretest !== undefined && pretest.code !== 0
-    ? failed('the declared pretest command failed', asFindings(pretest.output))
-    : gate()
+  return pretest === undefined || pretest.code === 0
+    ? gate()
+    : failed('the declared pretest command failed', asFindings(pretest.output))
 }

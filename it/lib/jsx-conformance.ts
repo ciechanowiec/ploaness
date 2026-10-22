@@ -53,7 +53,7 @@ const readCases = (file: string): readonly JsxCase[] => {
 const findingsIn = (output: string): readonly Finding[] =>
   output.split('\n').flatMap((line: string): readonly Finding[] => {
     const match: RegExpExecArray | null = /^src\/jsx-contract\/([^ ]+)\.tsx jsx-a11y\(([^)]+)\):/u.exec(line.trim())
-    return match?.[1] !== undefined && match[2] !== undefined ? [{ name: match[1], rule: `jsx-a11y/${match[2]}` }] : []
+    return match?.[1] === undefined || match[2] === undefined ? [] : [{ name: match[1], rule: `jsx-a11y/${match[2]}` }]
   })
 
 const checkCase = (fixture: JsxCase, findings: readonly Finding[]): readonly string[] => {

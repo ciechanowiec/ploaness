@@ -16,6 +16,12 @@ interface Example {
 
 const examples: readonly Example[] = [
   {
+    rule: 'unicorn/no-repeated-call-wrappers',
+    invalid:
+      'function count(value) { return value.count; } const first = Number(count(one)), second = Number(count(two));',
+    valid: 'function count(value) { return Number(value.count); } const first = count(one), second = count(two);',
+  },
+  {
     rule: 'unicorn/no-async-iterator-callback',
     invalid: 'const result = Iterator.from([1]).filter(async value => value > 0);',
     valid: 'const result = Iterator.from([1]).filter(value => value > 0);',
@@ -183,7 +189,7 @@ const rulesFor = async (config: readonly Linter.Config[], filePath: string): Pro
 const rulesByConfig: Readonly<Record<string, Partial<Linter.RulesRecord>>> = Object.fromEntries(
   await Promise.all(
     Object.entries(configurations).flatMap(([name, config]: [string, readonly Linter.Config[]]) =>
-      ['src/lib/example.ts', 'src/lib/example.tsx'].map(
+      ['src/lib/example.ts', 'src/lib/example.tsx', 'tests/unit/example.unit.spec.ts'].map(
         async (filePath: string): Promise<readonly [string, Partial<Linter.RulesRecord>]> => [
           `${name} ${filePath}`,
           await rulesFor(config, filePath),
@@ -225,6 +231,37 @@ for (const [name, rules] of Object.entries(rulesByConfig)) {
     })
   })
 }
+
+const CALL_WRAPPER_RULE: string = 'unicorn/no-repeated-call-wrappers'
+const EXPLICIT_ARGUMENT_RULE: string = 'unicorn/no-unnecessary-default-arguments'
+const EXPLICIT_ARGUMENTS: string = 'function read(value = 1) { return value; } const result = read(1);'
+
+describe('local conversion ownership', () => {
+  it.each(Object.keys(rulesByConfig))('preserves shared contracts and distinct callers in %s', (name: string) => {
+    const rules: Partial<Linter.RulesRecord> = rulesByConfig[name] ?? {}
+    const sources: readonly string[] = [
+      'export function count(value) { return value.count; } Number(count(one)); Number(count(two));',
+      'function count(value) { return value.count; } Number(count(one)); consume(count(two));',
+      'function count(value) { return value.count; } Number(count(one)); Boolean(count(two));',
+      'function count(value) { return value.count; } Number(count(one)); register(count);',
+    ]
+    expect(sources.flatMap((source: string) => messagesFor(source, CALL_WRAPPER_RULE, rules))).toEqual([])
+  })
+})
+
+describe('explicit argument ownership', () => {
+  it('establishes that the upstream rule removes an explicit default argument', () => {
+    expect(
+      messagesFor(EXPLICIT_ARGUMENTS, EXPLICIT_ARGUMENT_RULE, { [EXPLICIT_ARGUMENT_RULE]: 'error' }).map(
+        (message: Linter.LintMessage): string | null => message.ruleId,
+      ),
+    ).toEqual([EXPLICIT_ARGUMENT_RULE])
+  })
+
+  it.each(Object.keys(rulesByConfig))('preserves explicit default arguments in %s', (name: string) => {
+    expect(messagesFor(EXPLICIT_ARGUMENTS, EXPLICIT_ARGUMENT_RULE, rulesByConfig[name] ?? {})).toEqual([])
+  })
+})
 
 const ZIP_RULE: string = 'unicorn/prefer-iterator-zip'
 const PARALLEL_ARRAYS: string =

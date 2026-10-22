@@ -108,10 +108,7 @@ export const layerSettingBlocks = (
  * @returns a scoped regex, a rebased glob, or the unchanged root/route declaration.
  */
 export const rebaseExclusion = (memberPath: string, entry: DeclaredExclusion): DeclaredExclusion => {
-  if (memberPath === '.') {
-    return entry
-  }
-  if (entry.kind === 'route') {
+  if (memberPath === '.' || entry.kind === 'route') {
     return entry
   }
   return entry.kind === 'glob' ? { ...entry, pattern: `${memberPath}/${entry.pattern}` } : { ...entry, memberPath }

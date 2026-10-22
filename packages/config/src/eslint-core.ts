@@ -483,6 +483,10 @@ export const guidelineRules: RuleTable = {
   'sonarjs/no-unused-vars': 'off', // the typed rule above decides this, with the project's options.
   // SonarJS owns ignored built-in results with type information; Unicorn overlaps on array methods.
   'unicorn/no-unused-builtin-method-return': 'off',
+  // A local function with only known callers owns a conversion every caller repeats.
+  'unicorn/no-repeated-call-wrappers': 'error',
+  // Explicit arguments document behavior even when they match today's dependency defaults.
+  'unicorn/no-unnecessary-default-arguments': 'off',
   // ploaness exists to invoke analyzers, and it invokes them by name so the project's own installed
   // version is the one that runs. Resolving each to an absolute path would pin the harness to one
   // layout and defeat that. The governing standard says nothing about PATH.

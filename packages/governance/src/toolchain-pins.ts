@@ -6,7 +6,7 @@ export type ContainerTool = 'gitleaks' | 'hadolint' | 'actionlint' | 'shellcheck
 
 /** The exact image each containerised analyzer runs, by digest. */
 export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
-  cdxgen: 'ghcr.io/cdxgen/cdxgen:13.3.0@sha256:0e2eef6dbc92a91d037531e7e3d8190f396d84d7bf0c1029807fbdebcb53a4c8',
+  cdxgen: 'ghcr.io/cdxgen/cdxgen:13.4.0@sha256:c1c933ce31df8b3978566b4dc8369ce3ac049a802aa90cb8f02a29be4820c798',
   gitleaks: 'zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f',
   hadolint: 'hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d',
   actionlint: 'rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667',
@@ -19,7 +19,7 @@ export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
   // catalogue cannot change underneath it, so the enabled ids stay the ones somebody confirmed with
   // `--list`. The provider standings beside the catalogue rest on the same listing: which providers
   // the image has no check for at all. Re-confirm both whenever this pin moves.
-  checkov: 'bridgecrew/checkov:3.3.26@sha256:8e63f217cb084f1c1a067326a9cf6e37d54bdc82e5822210d50ca4e2f647dd93',
+  checkov: 'bridgecrew/checkov:3.3.30@sha256:4b65e89f1fde292249fc0aa0d0db43302c036dfe39f7370b2d3517571082b894',
 }
 
 /** Matches a reference that names image bytes AND the release they are, and only such a reference. */

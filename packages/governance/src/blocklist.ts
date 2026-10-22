@@ -147,7 +147,7 @@ export const refuseImage = (raw: string): Refusal | undefined => {
   if (entry === undefined || isAllowedTag(entry, reference.tag)) {
     return undefined
   }
-  return entry.from !== undefined && !reachesFloor(reference.tag, entry.from) ? undefined : refusalOf(raw, entry)
+  return entry.from === undefined || reachesFloor(reference.tag, entry.from) ? refusalOf(raw, entry) : undefined
 }
 
 /**
@@ -163,9 +163,9 @@ export const refusePackage = (name: string, version: string): Refusal | undefine
   if (entry === undefined) {
     return undefined
   }
-  return entry.from !== undefined && !reachesFloor(version, entry.from)
-    ? undefined
-    : refusalOf(`${name}@${version}`, entry)
+  return entry.from === undefined || reachesFloor(version, entry.from)
+    ? refusalOf(`${name}@${version}`, entry)
+    : undefined
 }
 
 /**
