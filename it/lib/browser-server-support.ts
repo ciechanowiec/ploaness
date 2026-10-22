@@ -12,6 +12,9 @@ const HTTP_NOT_FOUND: number = 404
 const POLL_INTERVAL_MS: number = 100
 const STARTUP_TIMEOUT_MS: number = 180_000
 
+/** Set only in the environment file of the directory a helper service starts in. */
+export const SIBLING_ENVIRONMENT_VARIABLE: string = 'PLOANESS_FIXTURE_SIBLING_ENVIRONMENT'
+
 /** An external command's observable outcome. */
 export interface CommandResult {
   readonly code: number

@@ -65,6 +65,13 @@ const withPort = (
 
 const declaredPort: string | undefined = portOf(projectSettings.serverUrl)
 
+// Next's environment loader marks the process once it has loaded the environment files, and skips
+// loading in any process that inherits the mark. A verification run loads this package's files above,
+// and Playwright starts every server on top of the runner's own environment, so without clearing the
+// mark a sibling application would boot without the files in its own directory. The loader treats an
+// empty value as unset; Playwright offers no way to remove an inherited variable.
+const NEXT_PROCESSED_ENVIRONMENT_MARK: string = '__NEXT_PROCESSED_ENV'
+
 const declared: ReturnType<typeof defineConfig> = defineConfig({
   testDir: './tests/e2e',
   timeout: TEST_TIMEOUT_MS,
@@ -108,7 +115,7 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
       // is long.
       timeout: SERVER_TIMEOUT_MS,
       ...(server.cwd !== undefined && { cwd: server.cwd }),
-      env: withPort({ NODE_OPTIONS: '--no-deprecation' }, portOf(server.url)),
+      env: withPort({ NODE_OPTIONS: '--no-deprecation', [NEXT_PROCESSED_ENVIRONMENT_MARK]: '' }, portOf(server.url)),
     })),
     {
       // Invoked as a bare binary rather than through a package script, because a nested package manager

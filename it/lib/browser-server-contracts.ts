@@ -15,6 +15,7 @@ import {
   invoke,
   listen,
   requireResult,
+  SIBLING_ENVIRONMENT_VARIABLE,
   stopApp,
   waitForApp,
 } from './browser-server-support.js'
@@ -34,6 +35,11 @@ if (executable === undefined) {
 const JSON_INDENT: number = 2
 const ESCAPED_QUOTE: string = String.raw`'\''`
 const shellQuote = (value: string): string => `'${value.replaceAll("'", (): string => ESCAPED_QUOTE)}'`
+
+// What each helper answers. The second starts in `services/` and answers with the value only that
+// directory's environment file holds, so the spec fails when a started sibling never read its own files.
+const SIBLING_VALUE: string = 'from-services'
+const HELPER_BODIES: readonly string[] = ['alpha', `beta ${SIBLING_VALUE}`]
 
 const helperCommand = (identity: string): string =>
   [
@@ -124,7 +130,7 @@ const writeBrowserSpec = (helperUrls: readonly string[]): void => {
       '  for (const [index, url] of urls.entries()) {',
       '    const response = await request.get(url)',
       '    expect(response.ok()).toBe(true)',
-      "    expect(await response.text()).toBe(['alpha', 'beta'][index])",
+      `    expect(await response.text()).toBe(${JSON.stringify(HELPER_BODIES)}[index])`,
       '  }',
       "  writeFileSync('.browser-tests-ran', 'passed')",
       '})',
@@ -153,7 +159,7 @@ const freshStartup = async (ports: readonly number[]): Promise<void> => {
 
 const manualReuse = async (helperPorts: readonly number[]): Promise<void> => {
   const consumerRequire: NodeJS.Require = createRequire(manifestPath)
-  const helpers: readonly HttpServer[] = [healthServer('alpha'), healthServer('beta')]
+  const helpers: readonly HttpServer[] = HELPER_BODIES.map((body: string): HttpServer => healthServer(body))
   const app: ChildProcess = spawn(
     process.execPath,
     [consumerRequire.resolve('next/dist/bin/next'), 'dev', '--port', String(appPort)],
@@ -198,6 +204,10 @@ const settings: Readonly<Record<string, unknown>> = {
   testWrapper: [process.execPath, path.join(library, 'browser-test-wrapper.ts')],
 }
 mkdirSync('services', { recursive: true })
+writeFileSync('services/.env', `${SIBLING_ENVIRONMENT_VARIABLE}=${SIBLING_VALUE}\n`)
+// The application has an environment file of its own as well: Next's loader marks the runner only after
+// it has loaded a file, and that mark is what reaches the helpers.
+writeFileSync('.env', 'PLOANESS_FIXTURE_APPLICATION_ENVIRONMENT=present\n')
 writeSettings(settings)
 writeBrowserSpec(helperUrls)
 await configContracts()
