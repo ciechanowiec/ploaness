@@ -281,7 +281,10 @@ jobs:
       # lag between them is short, unstated, and not zero. So each package is polled, on the
       # abbreviated packument npm itself resolves against, until the release version is listed -
       # bounded, because a version still absent after minutes is a failed publish rather than a
-      # slow one, and that must fail rather than wait.
+      # slow one, and that must fail rather than wait. The registry's CDN serves that packument
+      # with `max-age=300`, so a copy cached just before the publish can stay stale for a whole
+      # cache lifetime; the 1.11.0 release waited 283 seconds for one package. Each package's
+      # budget therefore spans three cache lifetimes rather than one.
       #
       # The install that follows is still the verdict. A per-package probe proves each exists; it
       # is the install that proves they resolve TOGETHER, which is the failure the publication
@@ -303,7 +306,7 @@ jobs:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           set -eu
-          attempts=30
+          attempts=90
           pause_seconds=10
           for package in $PUBLISH_ORDER; do
             name="${package/#ploaness-/@ploaness/}"
