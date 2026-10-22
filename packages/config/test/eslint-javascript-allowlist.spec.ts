@@ -149,6 +149,36 @@ describe.each(Object.entries(CONFIGURATIONS))(
       expect(messages.map((message) => message.ruleId)).toContain('functional/immutable-data')
     })
 
+    it('accepts an export guarded by a test of the CommonJS runtime', async () => {
+      const guarded: string = "if (typeof module !== 'undefined') {\n  module.exports = edge\n}\n"
+      expect(
+        await lint(config, `infra/${kind}-guarded.cjs`, `const edge = (event) => event.request\n${guarded}`),
+      ).toEqual([])
+    })
+
+    it('accepts the guard in either order and without a block', async () => {
+      const messages: readonly Linter.LintMessage[] = await lint(
+        config,
+        `infra/${kind}-guarded-statement.cjs`,
+        "const edge = (event) => event.request\nif ('undefined' != typeof module) module.exports = edge\n",
+      )
+      expect(messages.map((message) => message.ruleId)).not.toContain('functional/immutable-data')
+    })
+
+    it.each([
+      ['other-test', "if (typeof edge !== 'undefined') {\n  module.exports = edge\n}\n"],
+      ['else', "if (typeof module !== 'undefined') {\n} else {\n  module.exports = edge\n}\n"],
+      ['nested', "if (typeof module !== 'undefined') {\n  if (edge) {\n    module.exports = edge\n  }\n}\n"],
+      ['mutation', "if (typeof module !== 'undefined') {\n  module.exports = []\n  module.exports.push(edge)\n}\n"],
+    ])('rejects an export outside a guard of the CommonJS runtime (%s)', async (shape: string, guard: string) => {
+      const messages: readonly Linter.LintMessage[] = await lint(
+        config,
+        `infra/${kind}-unguarded-${shape}.cjs`,
+        `const edge = (event) => event.request\n${guard}`,
+      )
+      expect(messages.map((message) => message.ruleId)).toContain('functional/immutable-data')
+    })
+
     it('still reads a file outside the allowlist with the type-aware parser', async () => {
       const messages: readonly Linter.LintMessage[] = await lint(config, `infra/${kind}-stray.js`, SOURCE)
       expect(fatal(messages)).toEqual([expect.objectContaining({ severity: 2 })])
