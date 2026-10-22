@@ -67,7 +67,8 @@ The EditorConfig gate retains the code-role line cap and generated-file exceptio
 - **Section:** Ploaness owns the leading marked block of `AGENTS.md`; project instructions follow it.
 - **Seed:** written only when absent, then owned by the project, such as the initial proxy and ignore file.
 - **Reference:** an optional agent-specific instruction file may contain only a reference to `AGENTS.md`.
-- **Forbidden:** a local analyzer configuration that would shadow the harness may not exist.
+- **Forbidden:** a local analyzer configuration that would shadow the harness may not exist. Neither
+  may `CLAUDE.md`, `CLAUDE.local.md`, or `.claude/CLAUDE.md` in any directory: Claude Code reads `AGENTS.md`.
 
 Repair pinned drift with `ploaness sync`, not a hand edit. Malformed or duplicate managed markers require
 manual repair before synchronization. Generated application files change through their generator.

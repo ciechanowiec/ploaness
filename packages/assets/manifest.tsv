@@ -4,14 +4,13 @@
 # SEED: written when absent, then owned by the project.
 # SECTION: the leading marked block is owned; the remainder belongs to the project.
 # REFERENCE: optional file containing only a reference to AGENTS.md.
-# FORBIDDEN: a local configuration that could shadow the harness must not exist.
+# FORBIDDEN: a local file that could shadow the harness must not exist.
 # REPOSITORY: root only. APPLICATION: each application. PAYLOAD: each Payload member.
 # EVERYWHERE: root and all members.
 
 README-guideline-software-project.adoc	PINNED	REPOSITORY
 .ploaness/agent-guide.md	PINNED	REPOSITORY
 AGENTS.md	SECTION	REPOSITORY
-CLAUDE.md	PINNED	REPOSITORY
 .editorconfig	PINNED	REPOSITORY
 .gitattributes	PINNED	REPOSITORY
 .nvmrc	PINNED	REPOSITORY
@@ -28,6 +27,10 @@ GEMINI.md	REFERENCE	REPOSITORY
 .windsurfrules	REFERENCE	REPOSITORY
 .clinerules	REFERENCE	REPOSITORY
 .github/copilot-instructions.md	REFERENCE	REPOSITORY
+
+CLAUDE.md	FORBIDDEN	EVERYWHERE
+CLAUDE.local.md	FORBIDDEN	EVERYWHERE
+.claude/CLAUDE.md	FORBIDDEN	EVERYWHERE
 
 .stylelintrc.json	FORBIDDEN	EVERYWHERE
 .dependency-cruiser.json	FORBIDDEN	EVERYWHERE

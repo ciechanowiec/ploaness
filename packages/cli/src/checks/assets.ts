@@ -9,6 +9,7 @@ import {
   applyManagedSection,
   findAssetViolations,
   hasRuntime,
+  isClaudeInstructionFile,
   isOxlintConfig,
   type ManagedAsset,
   memberAssets,
@@ -122,15 +123,28 @@ export const assets = (repository: Repository): GateResult => {
     ])
   }
   const sites: readonly AssetSite[] = sitesOf(repository, parsed.assets)
+  // A catalogue site already reports its own forbidden instruction files, with the repair sync performs.
+  // A path the project took over is not judged there, so the scan still reports it: the ban has no owner.
+  const judged: ReadonlySet<string> = new Set(
+    sites.flatMap((site: AssetSite): readonly string[] =>
+      site.assets
+        .filter((asset: ManagedAsset): boolean => !site.unmanaged.includes(asset.path))
+        .map((asset: ManagedAsset): string => `${site.label}${asset.path}`),
+    ),
+  )
+  const files: readonly string[] = workingTreeFiles(repository.root)
   const findings: readonly string[] = [
     ...sites.flatMap((site: AssetSite): readonly string[] =>
       findAssetViolations(site.assets, site.unmanaged, stateOf(site.root)).map(
         (violation: AssetViolation): string => `${site.label}${violation.path}: ${violation.reason}`,
       ),
     ),
-    ...workingTreeFiles(repository.root)
-      .filter(isOxlintConfig)
-      .map((file: string): string => `${file}: Oxlint configuration is owned by ploaness`),
+    ...files.filter(isOxlintConfig).map((file: string): string => `${file}: Oxlint configuration is owned by ploaness`),
+    ...files
+      .filter((file: string): boolean => isClaudeInstructionFile(file) && !judged.has(file))
+      .map(
+        (file: string): string => `${file}: Claude Code reads AGENTS.md, so this second instruction file is forbidden`,
+      ),
   ]
   const checked: number = sites.reduce((total: number, site: AssetSite): number => total + site.assets.length, 0)
   return findings.length > 0

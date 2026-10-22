@@ -11,8 +11,6 @@
       "Write(packages/assets/files/.npmrc.asset)",
       "Edit(packages/assets/files/.nvmrc.asset)",
       "Write(packages/assets/files/.nvmrc.asset)",
-      "Edit(packages/assets/files/CLAUDE.md.asset)",
-      "Write(packages/assets/files/CLAUDE.md.asset)",
       "Edit(packages/assets/files/README-guideline-software-project.adoc.asset)",
       "Write(packages/assets/files/README-guideline-software-project.adoc.asset)",
       "Edit(packages/ploaness/biome.json)",

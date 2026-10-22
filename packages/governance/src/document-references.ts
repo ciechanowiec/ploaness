@@ -1,4 +1,4 @@
-// Doc-rot policy: the pure logic that finds references in the agent docs (AGENTS.md, CLAUDE.md) which
+// Doc-rot policy: the pure logic that finds references in the agent docs (AGENTS.md) which
 // no longer match reality. The `docs` gate in packages/cli/src/checks/references.ts reads the files.
 //
 // Two reference kinds are validated, both chosen to be HIGH-SIGNAL and false-positive-free:
@@ -128,7 +128,7 @@ export const findDocumentReferenceViolations = (inputs: DocumentReferenceInputs)
 // for the other.
 
 /** The instruction files an agent reads, in the order it meets them. */
-const DOCUMENT_FILES: readonly string[] = ['AGENTS.md', 'CLAUDE.md']
+const DOCUMENT_FILES: readonly string[] = ['AGENTS.md']
 
 /** One instruction file, paired with the member that owns it. */
 export interface DocumentLocation {

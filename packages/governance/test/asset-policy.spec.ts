@@ -7,6 +7,7 @@ import {
   applyManagedSection,
   checkAsset,
   findAssetViolations,
+  isClaudeInstructionFile,
   type ManagedAsset,
   memberAssets,
   type ParsedManifest,
@@ -227,8 +228,7 @@ describe('splicing a managed section', () => {
 })
 
 // The standard puts the rules in the root instruction file and lets a tool-specific one carry only a
-// reference to it. ploaness pinned CLAUDE.md and constrained nothing else, so a project could hand
-// Gemini or Cursor a second, contradicting set of instructions and no gate would say a word.
+// reference to it, so no tool is handed a second, contradicting set of instructions.
 const holding = (actual: string | undefined): AssetState => ({
   isPresent: actual !== undefined,
   actual,
@@ -252,8 +252,8 @@ describe('a tool-specific instruction file', () => {
     expect(checkAsset(reference, holding('@AGENTS.md\n'))).toBeUndefined()
   })
 
-  // The pointer's form is the tool's own: `@AGENTS.md` is Claude's import syntax and means nothing to
-  // Cursor, so the rule reads for the name rather than demanding one spelling.
+  // The pointer's form is the tool's own: an `@AGENTS.md` import means nothing to Cursor, so the rule
+  // reads for the name rather than demanding one spelling.
   it('accepts a reference written in the tool own words', () => {
     const prose: string = 'Follow the rules in AGENTS.md at the repository root.\n'
     expect(checkAsset(reference, holding(prose))).toBeUndefined()
@@ -328,4 +328,21 @@ describe('where a managed path applies', () => {
     expect(atRoot).toContain('EVERYWHERE')
     expect(inMember).toContain('EVERYWHERE')
   })
+})
+
+// Claude Code reads AGENTS.md itself, so a CLAUDE.md anywhere is a second contract beside it.
+describe('a Claude-specific instruction file', () => {
+  it.each(['CLAUDE.md', 'CLAUDE.local.md', '.claude/CLAUDE.md', 'cms/src/CLAUDE.md', 'docs/claude.md'])(
+    'is forbidden at %s',
+    (file: string) => {
+      expect(isClaudeInstructionFile(file)).toBe(true)
+    },
+  )
+
+  it.each(['AGENTS.md', 'GEMINI.md', 'docs/NOTCLAUDE.md', 'CLAUDE.md.bak', '.claude/settings.json'])(
+    'leaves %s alone',
+    (file: string) => {
+      expect(isClaudeInstructionFile(file)).toBe(false)
+    },
+  )
 })

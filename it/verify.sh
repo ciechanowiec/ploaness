@@ -2454,6 +2454,20 @@ printf 'See AGENTS.md.\n\nAlways use tabs for indentation in this project.\n' \
 commit_case fail-agent-reference 'feat(fixture): give Gemini rules of its own' "$CONFORMING_BODY"
 expect fail-agent-reference assets FAIL 'instructions of its own'
 
+# Claude Code reads AGENTS.md itself. A CLAUDE.md at a catalogue site is deleted by sync; a nested one is
+# found by the tree scan, which a catalogue entry cannot reach.
+new_case fail-claude-instructions
+printf '@AGENTS.md\n' > "$scratch/fail-claude-instructions/CLAUDE.md"
+mkdir -p "$scratch/fail-claude-instructions/src/nested"
+printf 'Always use tabs.\n' > "$scratch/fail-claude-instructions/src/nested/CLAUDE.md"
+commit_case fail-claude-instructions 'feat(fixture): add Claude-specific instructions' "$CONFORMING_BODY"
+expect fail-claude-instructions assets FAIL 'CLAUDE.md: ploaness supplies what this path would define'
+expect fail-claude-instructions assets FAIL 'src/nested/CLAUDE.md: Claude Code reads AGENTS.md'
+# Taking the root file over removes it from the catalogue site, not from the ban.
+edit_json "$scratch/fail-claude-instructions/package.json" ploaness.unmanagedAssets \
+    '[{"path":"CLAUDE.md","reason":"the fixture tries to keep Claude-specific instructions"}]'
+expect fail-claude-instructions assets FAIL '^ *CLAUDE.md: Claude Code reads AGENTS.md'
+
 # Ambiguous markers are a separate verdict from drift, because they are the one managed-file defect
 # `ploaness sync` cannot repair: the gate must send the project to a human rather than round a loop.
 new_case fail-section-duplicated

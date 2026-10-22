@@ -29,7 +29,7 @@ describe('readSettings', () => {
   it('ignores an unmanaged entry that records no reason', () => {
     const settings: Settings = readSettings({
       ploaness: {
-        unmanagedAssets: [{ path: 'CLAUDE.md' }, { path: '.editorconfig', reason: 'the monorepo root owns it' }],
+        unmanagedAssets: [{ path: '.nvmrc' }, { path: '.editorconfig', reason: 'the monorepo root owns it' }],
       },
     })
     expect(settings.unmanagedAssets).toEqual([{ path: '.editorconfig', reason: 'the monorepo root owns it' }])

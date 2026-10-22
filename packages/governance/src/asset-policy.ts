@@ -233,7 +233,7 @@ const checkForbidden = (asset: ManagedAsset, state: AssetState): AssetViolation 
   state.isPresent
     ? {
         path: asset.path,
-        reason: 'ploaness supplies this configuration, so a working-tree copy shadows it; delete the file',
+        reason: 'ploaness supplies what this path would define, so a working-tree copy shadows it; delete it',
       }
     : undefined
 
@@ -255,11 +255,21 @@ const checkPinned = (asset: ManagedAsset, state: AssetState): AssetViolation | u
 /** The instruction file every other one points at. */
 const ROOT_INSTRUCTION_FILE: string = 'AGENTS.md'
 
+/**
+ * Whether a working-tree path is an instruction file Claude Code would load instead of, or beside,
+ * `AGENTS.md`. Claude Code reads `AGENTS.md` itself, so any such file is a second contract. Claude Code
+ * also loads a nested one on demand, so the rule covers every directory, not only the catalogue sites.
+ * The match ignores case because a case-insensitive filesystem serves `claude.md` under either name.
+ * @param file a repo-relative path.
+ * @returns whether the path must not exist.
+ */
+export const isClaudeInstructionFile = (file: string): boolean => /(?:^|\/)CLAUDE(?:\.local)?\.md$/iu.test(file)
+
 // Every line that says anything must say the same thing: read AGENTS.md. A line that does not name it
 // is this file stating a rule of its own, which is what makes two agents answerable to two contracts.
 const checkReference = (asset: ManagedAsset, state: AssetState): AssetViolation | undefined => {
-  // Optional, unlike every other disposition: a project that uses no coding agent but Claude carries no
-  // entry point for one, and requiring the file would be ploaness deciding which tools it uses.
+  // Optional, unlike every other disposition: a project that does not use this tool carries no entry
+  // point for it, and requiring the file would be ploaness deciding which tools it uses.
   if (!state.isPresent) {
     return undefined
   }

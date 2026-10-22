@@ -186,11 +186,8 @@ describe('findAgentDocuments', () => {
     const found: readonly DocumentLocation[] = findAgentDocuments(['cms', 'fe'], (): boolean => true)
     expect(found.map((location: DocumentLocation): string => location.file)).toEqual([
       'AGENTS.md',
-      'CLAUDE.md',
       'cms/AGENTS.md',
-      'cms/CLAUDE.md',
       'fe/AGENTS.md',
-      'fe/CLAUDE.md',
     ])
   })
 
@@ -206,7 +203,7 @@ describe('findAgentDocuments', () => {
   // candidate twice and every finding in it would be reported twice.
   it('doesNotReadTheRootTwiceWhenItIsAlsoAMember', () => {
     const found: readonly DocumentLocation[] = findAgentDocuments(['.'], (): boolean => true)
-    expect(found.map((location: DocumentLocation): string => location.file)).toEqual(['AGENTS.md', 'CLAUDE.md'])
+    expect(found.map((location: DocumentLocation): string => location.file)).toEqual(['AGENTS.md'])
   })
 
   it('dropsAFileTheRepositoryDoesNotHave', () => {
