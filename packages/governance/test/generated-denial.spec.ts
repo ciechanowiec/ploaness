@@ -13,8 +13,8 @@ const complete: Record<string, unknown> = {
 }
 
 describe('requiredDenyRules', () => {
-  it('denies both writing forms for every generated artefact', () => {
-    expect(requiredDenyRules(GENERATED_ARTEFACTS)).toHaveLength(GENERATED_ARTEFACTS.length * 2)
+  it('denies every generated artefact in the one form the runtime matches', () => {
+    expect(requiredDenyRules(['src/x.ts', 'src/y.ts'])).toEqual(['Edit(src/x.ts)', 'Edit(src/y.ts)'])
   })
 
   // The joint: adding an artefact to the shared list must extend the denial without anyone editing a
@@ -46,7 +46,7 @@ describe('findDenialViolations', () => {
 
   it('reports a local override that re-permits a denied artefact', () => {
     const local: Record<string, unknown> = {
-      permissions: { allow: [`Write(${firstArtefact})`] },
+      permissions: { allow: [`Edit(${firstArtefact})`] },
     }
     const found: readonly string[] = findDenialViolations(complete, local, GENERATED_ARTEFACTS)
     expect(found[0]).toContain('re-permit')
@@ -95,6 +95,14 @@ describe('applyDenyRules', () => {
     const merged: Record<string, unknown> = applyDenyRules(existing, GENERATED_ARTEFACTS)
     const deny: readonly string[] = (merged['permissions'] as Record<string, unknown>)['deny'] as readonly string[]
     expect(deny).toContain('Write(secrets.env)')
+  })
+
+  it('removes the Write form of a generated denial, which the runtime never matches', () => {
+    const existing: Record<string, unknown> = {
+      permissions: { deny: ['Edit(src/x.ts)', 'Write(src/x.ts)', 'Write(secrets.env)'] },
+    }
+    const merged: Record<string, unknown> = applyDenyRules(existing, ['src/x.ts'])
+    expect((merged['permissions'] as Record<string, unknown>)['deny']).toEqual(['Edit(src/x.ts)', 'Write(secrets.env)'])
   })
 })
 

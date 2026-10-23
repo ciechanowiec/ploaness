@@ -19,11 +19,20 @@ export const GENERATED_ARTEFACTS: readonly string[] = [
  * ploaness repository denies its own regenerated asset bodies through the same shaped list, written by
  * hand in `.claude/settings.json` because nothing here runs `ploaness sync`. Closing over the constant
  * would have made the rule untestable against any set but that one.
+ *
+ * The runtime matches a file path only through `Edit(...)`, which binds every tool that writes a file;
+ * it reports a `Write(...)` path rule as one that never matches.
  * @param artefacts the repo-relative paths a generator owns.
- * @returns the Edit and Write denials the runtime settings must carry.
+ * @returns the denials the runtime settings must carry.
  */
 export const requiredDenyRules = (artefacts: readonly string[]): readonly string[] =>
-  artefacts.flatMap((artefact: string): readonly string[] => [`Edit(${artefact})`, `Write(${artefact})`])
+  artefacts.map((artefact: string): string => `Edit(${artefact})`)
+
+// The `Write(...)` form of a required denial never matches, so it protects nothing and only makes the
+// runtime warn. It is removed for the artefacts given; a `Write(...)` rule for any other path is the
+// project's and stays.
+const isInertDenial = (rule: string, artefacts: readonly string[]): boolean =>
+  artefacts.some((artefact: string): boolean => rule === `Write(${artefact})`)
 
 const permissionStrings = (settings: unknown, key: string): readonly string[] => {
   const inner: unknown = readKey(readKey(settings, 'permissions'), key)
@@ -39,7 +48,9 @@ const permissionStrings = (settings: unknown, key: string): readonly string[] =>
 export const applyDenyRules = (existing: unknown, artefacts: readonly string[]): Record<string, unknown> => {
   const base: Record<string, unknown> = { ...asRecord(existing) }
   const permissions: Record<string, unknown> = { ...asRecord(base['permissions']) }
-  const deny: readonly string[] = permissionStrings(base, 'deny')
+  const deny: readonly string[] = permissionStrings(base, 'deny').filter(
+    (rule: string): boolean => !isInertDenial(rule, artefacts),
+  )
   const merged: readonly string[] = [
     ...deny,
     ...requiredDenyRules(artefacts).filter((rule: string): boolean => !deny.includes(rule)),
