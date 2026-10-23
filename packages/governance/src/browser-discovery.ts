@@ -191,3 +191,19 @@ export const localAddress = (
     return undefined
   }
 }
+
+/**
+ * One story per component, the first one listed, for the passes that sample instead of covering all.
+ *
+ * A component's stories are its states, rendered by one template, the way a dynamic route's pages are
+ * one route file's output. The passes that cover everything still judge every story.
+ * @param stories the discovered stories, in index order.
+ * @returns the first story of each title.
+ */
+export const storySamples = (stories: readonly DiscoveredStory[]): readonly DiscoveredStory[] =>
+  stories.filter(
+    (story: DiscoveredStory, index: number): boolean =>
+      stories.findIndex(
+        (other: DiscoveredStory): boolean => other.title === story.title && other.server === story.server,
+      ) === index,
+  )

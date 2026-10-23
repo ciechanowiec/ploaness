@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   alternateHrefs,
+  type DiscoveredStory,
   localAddress,
   onOrigin,
   sitemapEntries,
   storiesOfIndex,
   storyLocation,
+  storySamples,
   storyUrl,
   templateSamples,
 } from '../src/browser-discovery.js'
@@ -117,5 +119,25 @@ describe('links on the application under test', () => {
       localAddress('https://www.example.com/en', page, '', origin),
       localAddress('https://[', page, '', origin),
     ]).toEqual([undefined, undefined, undefined])
+  })
+})
+
+const story = (id: string, title: string, server: string = 'http://localhost:6106'): DiscoveredStory => ({
+  id,
+  title,
+  name: id,
+  server,
+})
+
+describe('story sampling', () => {
+  it('picks the first story of each component on each server', () => {
+    expect(
+      storySamples([
+        story('button--primary', 'UI/Button'),
+        story('button--ghost', 'UI/Button'),
+        story('card--default', 'UI/Card'),
+        story('button--other', 'UI/Button', 'http://localhost:6107'),
+      ]).map((sampled: DiscoveredStory): string => sampled.id),
+    ).toEqual(['button--primary', 'card--default', 'button--other'])
   })
 })

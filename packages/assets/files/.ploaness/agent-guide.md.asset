@@ -515,15 +515,15 @@ compared or committed.
 | Resting rules | Chromium | baseline, both sides of every stylesheet breakpoint, declared | every route and story |
 | Interaction states | Chromium | 390x844 and 1280x800; hover at 1280 | every route and story |
 | Disclosures | Chromium | 390x844 and 1280x800 | every route and story |
-| Text stress | Chromium | spacing at 390x844 and 1280x800; resize at 1280x800 | one route per template, every story |
-| Width sweep | Chromium | 320 to 1920 px in 16 px steps, bisected | one route per template, every story |
+| Text stress | Chromium | spacing at 390x844 and 1280x800; resize at 1280x800 | one route per template, one story per component |
+| Width sweep | Chromium | 320 to 1920 px in 16 px steps, bisected | one route per template, one story per component |
 | Dark scheme | Chromium | baseline | pages whose stylesheets declare a dark scheme |
-| Engine | Firefox, WebKit | baseline | one route per template, every story |
+| Engine | Firefox, WebKit | baseline | one route per template, one story per component |
 
 The baseline is 320x568, 360x800, 390x844, 430x932, 844x390, 768x1024, 1024x768, 1280x800, 1440x900
 and 1920x1080. Each viewport is a fresh load. Breakpoints are read from every `@media` width condition in
 the page's stylesheets, `px`, `rem` and `em`, legacy and range syntax. A template is the route file a URL
-resolves to; sampling one route does not prove its siblings equivalent, and the resting pass still
+resolves to, and a story's template is its component; sampling one route does not prove its siblings equivalent, and the resting pass still
 covers every route.
 
 Every page is loaded still: reduced motion, animations and transitions at zero duration, a hidden caret,

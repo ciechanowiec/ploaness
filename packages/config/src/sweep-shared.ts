@@ -25,6 +25,8 @@ import {
   RESTING_ELEMENT_RULES,
   SETTLED_STORY_PHASES,
   type SweepPass,
+  storyLocation,
+  storySamples,
   type TemplateSample,
   type UsedExemption,
 } from '@ploaness/governance'
@@ -518,7 +520,10 @@ export const sampledLocations = (discovery: Discovery): readonly SweepLocation[]
   const sampled: ReadonlySet<string> = new Set<string>(
     discovery.samples.map((sample: TemplateSample): string => sample.route),
   )
-  return discovery.locations.filter(
-    (location: SweepLocation): boolean => location.isStory || sampled.has(location.location),
+  const stories: ReadonlySet<string> = new Set<string>(
+    storySamples(discovery.stories).map((story: DiscoveredStory): string => storyLocation(story)),
+  )
+  return discovery.locations.filter((location: SweepLocation): boolean =>
+    (location.isStory ? stories : sampled).has(location.location),
   )
 }

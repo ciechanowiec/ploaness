@@ -14,7 +14,7 @@
 // has its own budget, derived from the work discovery found, and reports every defect it finds rather
 // than stopping at the first; the summary judges the exemptions no pass used and prints what was
 // covered. Under `ploaness verify` the sweep also runs in Firefox and WebKit, where the engine pass
-// covers one route per template and every story.
+// covers one route per template and one story per component.
 import { test } from '@playwright/test'
 import {
   expectDarkScheme,
