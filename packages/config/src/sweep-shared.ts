@@ -1,6 +1,6 @@
 // What every pass of the managed browser sweep shares: the browser surface its page functions touch,
 // the files the passes hand each other, loading a location, and the budget each pass runs under.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, type Page, type TestInfo, test } from '@playwright/test'
 import {
@@ -24,6 +24,8 @@ import {
   REAL_CLOCK,
   RESTING_ELEMENT_RULES,
   SETTLED_STORY_PHASES,
+  type Shard,
+  type ShardItem,
   type SweepPass,
   storyLocation,
   storySamples,
@@ -33,6 +35,8 @@ import {
 import { outlineElements } from './layout.js'
 import { projectSettings } from './project-settings.js'
 import { engineOf, type HealthReading, healthFindings, type PlaceScan } from './scanner.js'
+
+export type { Shard } from '@ploaness/governance'
 
 // The browser surface the page functions below touch, declared rather than taken from lib.dom for the
 // reason `settle.ts` records. These names resolve in the page at run time.
@@ -126,10 +130,11 @@ export interface Discovery {
   readonly samples: readonly TemplateSample[]
 }
 
-/** What a pass leaves for the summary. */
+/** What a shard of a pass leaves for the summary. */
 export interface PassReport {
   readonly pass: SweepPass
   readonly engine: string
+  readonly shard: Shard
   readonly findings: readonly BrowserFinding[]
   readonly used: readonly UsedExemption[]
   readonly declared: readonly DeclaredExemption[]
@@ -137,7 +142,20 @@ export interface PassReport {
   readonly places: number
   readonly locations: readonly string[]
   readonly notes: readonly string[]
-  /** How long the pass took, which is what its budget allowance is calibrated against. */
+  /** How long the shard took, which is what its budget allowance is calibrated against. */
+  readonly elapsedMs: number
+}
+
+/**
+ * What discovery leaves for the summary. Discovery records its problems rather than failing on them,
+ * because every pass depends on it and a failed dependency would stop them all; the summary judges them.
+ */
+export interface DiscoveryReport {
+  readonly findings: readonly BrowserFinding[]
+  /** Why the discovery is incomplete: the seed did not answer, the route cap, declared pages unswept. */
+  readonly problems: readonly string[]
+  readonly places: number
+  readonly locations: readonly string[]
   readonly elapsedMs: number
 }
 
@@ -199,12 +217,20 @@ export const DESKTOP: FindingViewport = { width: 1280, height: 800 }
 // Files
 
 /**
- * The directory the passes of one Playwright project hand their files through.
+ * The directory every engine's passes hand their files through. Every project shares the config's
+ * output directory, so discovery, run once, is read from here by every engine.
  * @param info the running test.
  * @returns the directory.
  */
-export const sweepDirectory = (info: TestInfo): string =>
-  path.join(info.project.outputDir, SWEEP_DIRECTORY, info.project.name)
+export const sweepRoot = (info: TestInfo): string => path.join(info.project.outputDir, SWEEP_DIRECTORY)
+
+/**
+ * The directory the passes of one engine write their reports and progress to.
+ * @param info the running test.
+ * @param engine the engine.
+ * @returns the directory.
+ */
+export const engineDirectory = (info: TestInfo, engine: string): string => path.join(sweepRoot(info), engine)
 
 const JSON_INDENT: number = 2
 
@@ -232,19 +258,38 @@ export const readJson = (file: string): unknown => {
 }
 
 /**
- * The file discovery writes for every later pass.
+ * The file discovery writes for every later pass, in every engine.
  * @param info the running test.
  * @returns the file.
  */
-export const discoveryFile = (info: TestInfo): string => path.join(sweepDirectory(info), 'discovered.json')
+export const discoveryFile = (info: TestInfo): string => path.join(sweepRoot(info), 'discovered.json')
 
 /**
- * The file one pass writes its report to.
+ * The file discovery writes its findings and problems to, for the summary.
  * @param info the running test.
- * @param pass the pass.
  * @returns the file.
  */
-export const reportFile = (info: TestInfo, pass: SweepPass): string => path.join(sweepDirectory(info), `${pass}.json`)
+export const discoveryReportFile = (info: TestInfo): string => path.join(sweepRoot(info), 'discovery.json')
+
+/**
+ * How a report file names one shard of a pass.
+ * @param pass the pass.
+ * @param shard the shard.
+ * @returns the file's name.
+ */
+export const reportName = (pass: SweepPass, shard: Shard): string =>
+  `${pass}-${String(shard.index + 1)}-of-${String(shard.count)}.json`
+
+/**
+ * The file one shard of a pass writes its report to.
+ * @param info the running test.
+ * @param engine the engine it ran in.
+ * @param pass the pass.
+ * @param shard the shard.
+ * @returns the file.
+ */
+export const reportFile = (info: TestInfo, engine: string, pass: SweepPass, shard: Shard): string =>
+  path.join(engineDirectory(info, engine), reportName(pass, shard))
 
 /**
  * What discovery recorded, failing the test when it recorded nothing.
@@ -393,50 +438,82 @@ export const screenshotOf = async (page: Page, scan: PlaceScan, place: FindingPl
 // ---------------------------------------------------------------------------------------------------
 // Budgets
 
-/** The time a pass may spend. */
+const MS_PER_SECOND: number = 1000
+
+/** The whole of a pass that is not split, which is discovery. */
+export const WHOLE_PASS: Shard = { index: 0, count: 1 }
+
+/** The time one shard of a pass may spend, and where it records its progress. */
 export interface Budget {
   readonly pass: SweepPass
+  readonly shard: Shard
+  readonly progressFile: string
   readonly startedAt: number
   readonly deadline: number
 }
 
 /**
- * Start a pass's budget and set its test's timeout beyond it.
+ * Start a shard's budget and set its test's timeout beyond it.
+ * @param page the test's page, whose engine names the progress log.
  * @param pass the pass.
- * @param units how many units of work it has.
+ * @param shard the shard.
+ * @param units how many units of work the shard has.
  * @returns the budget.
  */
-export const armBudget = (pass: SweepPass, units: number): Budget => {
+export const armBudget = (page: Page, pass: SweepPass, shard: Shard, units: number): Budget => {
   const budgetMs: number = passBudgetMs(pass, units)
   test.info().setTimeout(budgetMs + TIMEOUT_GRACE_MS)
+  const directory: string = engineDirectory(test.info(), engineOf(page))
+  mkdirSync(directory, { recursive: true })
   const startedAt: number = performance.now()
-  return { pass, startedAt, deadline: startedAt + budgetMs }
+  return { pass, shard, progressFile: path.join(directory, 'progress.log'), startedAt, deadline: startedAt + budgetMs }
 }
+
+/**
+ * How many units of work a shard's items carry, for its budget.
+ * @param items the shard's items.
+ * @param unitsOf the units one item carries.
+ * @returns their sum.
+ */
+export const shardUnits = <Item>(items: readonly ShardItem<Item>[], unitsOf: (item: Item) => number): number =>
+  items.reduce((total: number, shardItem: ShardItem<Item>): number => total + unitsOf(shardItem.item), 0)
 
 /** How a pass visits its items. */
 interface ItemVisitor<Item> {
   readonly budget: Budget
   readonly labelOf: (item: Item) => string
+  /** Visit an item; the index is its place in the whole pass, not in the shard. */
   readonly visit: (item: Item, index: number) => Promise<Visit>
 }
 
+// A pass of thousands of loads otherwise says nothing until it ends, and the e2e gate shows its output
+// only then too. One line per item, written as it finishes, lets anyone see how far a pass has got and
+// how fast it goes. Seconds since the shard started, because the runner's own clock is the shifted one.
+// The shards of every pass in one engine append to one log, a line at a time.
+const recordProgress = (budget: Budget, item: string): void => {
+  const seconds: string = ((performance.now() - budget.startedAt) / MS_PER_SECOND).toFixed(1)
+  const part: string = `${String(budget.shard.index + 1)}/${String(budget.shard.count)}`
+  appendFileSync(budget.progressFile, `${budget.pass} part ${part} ${seconds}s ${item}\n`)
+}
+
 /**
- * Visit each item in turn, stopping with a finding when the pass runs out of budget.
- * @param items the items of the pass.
+ * Visit each item of a shard in turn, stopping with a finding when the shard runs out of budget.
+ * @param items the items of the shard, each with its index in the whole pass.
  * @param visitor the budget, and how to name and visit an item.
- * @param index the item to visit next.
- * @returns one visit per item visited, and a budget finding when the pass stopped early.
+ * @param index the item of the shard to visit next.
+ * @returns one visit per item visited, and a budget finding when the shard stopped early.
  */
 export const visitAll = async <Item>(
-  items: readonly Item[],
+  items: readonly ShardItem<Item>[],
   visitor: ItemVisitor<Item>,
   index: number = 0,
 ): Promise<readonly Visit[]> => {
   const { budget, labelOf, visit }: ItemVisitor<Item> = visitor
-  const item: Item | undefined = items[index]
-  if (item === undefined) {
+  const next: ShardItem<Item> | undefined = items[index]
+  if (next === undefined) {
     return []
   }
+  const { item }: ShardItem<Item> = next
   if (performance.now() > budget.deadline) {
     return [
       {
@@ -445,14 +522,15 @@ export const visitAll = async <Item>(
           findingAt(
             { location: labelOf(item), state: budget.pass, engine: '', viewport: undefined },
             PASS_BUDGET_RULE,
-            `the ${budget.pass} pass ran out of its budget at this item, with ${String(items.length - index)} of ` +
-              `${String(items.length)} items unvisited`,
+            `part ${String(budget.shard.index + 1)} of the ${budget.pass} pass ran out of its budget at this item, ` +
+              `with ${String(items.length - index)} of its ${String(items.length)} items unvisited`,
           ),
         ],
       },
     ]
   }
-  const visited: Visit = await visit(item, index)
+  const visited: Visit = await visit(item, next.index)
+  recordProgress(budget, `${String(index + 1)}/${String(items.length)} ${labelOf(item)}`)
   return [visited, ...(await visitAll(items, visitor, index + 1))]
 }
 
@@ -466,7 +544,7 @@ interface FinishedPass {
 }
 
 /**
- * Write a pass's report for the summary, and fail the pass's test on any finding.
+ * Write a shard's report for the summary, and fail the shard's test on any finding.
  * @param page the test's page.
  * @param finished the pass, its visits, the rules it judged and the locations it covered.
  */
@@ -474,9 +552,11 @@ export const finishPass = (page: Page, finished: FinishedPass): void => {
   const { budget, pass, visits, judgedRules, locations }: FinishedPass = finished
   const all: Visit = merged(visits)
   const findings: readonly BrowserFinding[] = distinctFindings(all.findings)
+  const engine: string = engineOf(page)
   const report: PassReport = {
     pass,
-    engine: engineOf(page),
+    engine,
+    shard: budget.shard,
     findings,
     used: all.used,
     declared: all.declared,
@@ -486,7 +566,7 @@ export const finishPass = (page: Page, finished: FinishedPass): void => {
     notes: [...new Set<string>(all.notes)],
     elapsedMs: Math.round(performance.now() - budget.startedAt),
   }
-  writeJson(reportFile(test.info(), pass), report)
+  writeJson(reportFile(test.info(), engine, pass, budget.shard), report)
   expect(
     findings.map((finding: BrowserFinding): string => findingLine(finding)),
     `${pass} pass findings`,
@@ -513,6 +593,26 @@ export interface PlaceItem {
  */
 export const itemLabel = (item: PlaceItem): string =>
   `${item.location.location} @${String(item.viewport.width)}x${String(item.viewport.height)}`
+
+/**
+ * The locations a shard's items cover, each once.
+ * @param items the shard's items.
+ * @param locationOf the location an item visits.
+ * @returns the locations' names.
+ */
+export const shardLocations = <Item>(
+  items: readonly ShardItem<Item>[],
+  locationOf: (item: Item) => SweepLocation,
+): readonly string[] => [
+  ...new Set<string>(items.map((shardItem: ShardItem<Item>): string => locationOf(shardItem.item).location)),
+]
+
+/**
+ * The location of a place item.
+ * @param item the location and viewport.
+ * @returns the location.
+ */
+export const locationOfItem = (item: PlaceItem): SweepLocation => item.location
 
 /** The rules a resting scan judges. */
 export const RESTING_JUDGED: readonly string[] = [...LAYOUT_RULES, ...RESTING_ELEMENT_RULES, FONT_LOAD_RULE]

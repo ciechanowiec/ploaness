@@ -10,12 +10,15 @@
 // rules a project's own specs reach through `expectSweptPage`. A page, story, breakpoint or locale is
 // therefore checked the moment it exists, with no test to add.
 //
-// One test per pass, run in order. Discovery writes what it found for the passes after it; each pass
-// has its own budget, derived from the work discovery found, and reports every defect it finds rather
-// than stopping at the first; the summary judges the exemptions no pass used and prints what was
-// covered. Under `ploaness verify` the sweep also runs in Firefox and WebKit, where the engine pass
-// covers one route per template and one story per component.
-import { test } from '@playwright/test'
+// Discovery runs first, once, in Chromium, and writes what it found for every pass; its problems
+// are recorded rather than failing it, because every pass depends on it. Each pass is split into
+// shards, one test each, and the shards run on parallel workers while the project's own specs keep to
+// one. Each shard has its own budget, derived from the work discovery found, and reports every defect
+// it finds rather than stopping at the first. The summary runs last, whatever failed before it: it
+// judges discovery's problems and the exemptions no pass used, reports a shard that did not finish,
+// and prints what was covered. Under `ploaness verify` the sweep also runs in Firefox and WebKit, where
+// the engine pass covers one route per template and one story per component.
+import { type Page, test } from '@playwright/test'
 import {
   expectDarkScheme,
   expectDisclosureStates,
@@ -26,42 +29,67 @@ import {
   expectSweepSummary,
   expectTextStress,
   expectWidthSweep,
+  type Shard,
+  SWEEP_SHARDS,
 } from 'ploaness/sweep'
 
+type ShardedPass = (page: Page, shard: Shard) => Promise<void>
+
+interface PassTest {
+  readonly title: string
+  readonly tag: string
+  readonly run: ShardedPass
+}
+
+const PASSES: readonly PassTest[] = [
+  {
+    title: 'every page passes the resting rules at every viewport',
+    tag: '@ploaness-chromium',
+    run: expectRestingRules,
+  },
+  {
+    title: 'every control passes in hover and keyboard focus',
+    tag: '@ploaness-chromium',
+    run: expectInteractionStates,
+  },
+  {
+    title: 'every disclosure passes open and answers the keyboard',
+    tag: '@ploaness-chromium',
+    run: expectDisclosureStates,
+  },
+  { title: 'text survives WCAG spacing and doubled size', tag: '@ploaness-chromium', run: expectTextStress },
+  { title: 'layout holds across the whole width range', tag: '@ploaness-chromium', run: expectWidthSweep },
+  { title: 'every page passes in its dark scheme', tag: '@ploaness-chromium', run: expectDarkScheme },
+  { title: 'every sampled page passes in this engine', tag: '@ploaness-engine', run: expectEngineRules },
+]
+
+const SHARDS: readonly Shard[] = Array.from(
+  { length: SWEEP_SHARDS },
+  (_unused: unknown, index: number): Shard => ({
+    index,
+    count: SWEEP_SHARDS,
+  }),
+)
+
+const DISCOVERY_TITLE: string = 'discovers every route, story, breakpoint and colour scheme'
+
+const partTitle = (pass: PassTest, shard: Shard): string =>
+  `${pass.title} (part ${String(shard.index + 1)} of ${String(shard.count)})`
+
 test.describe('Ploaness browser sweep', () => {
-  test('discovers every route, story, breakpoint and colour scheme', async ({ page }) => {
+  test(DISCOVERY_TITLE, { tag: '@ploaness-discovery' }, async ({ page }) => {
     await expectDiscoveredSite(page)
   })
 
-  test('every page passes the resting rules at every viewport', async ({ page }) => {
-    await expectRestingRules(page)
-  })
+  for (const pass of PASSES) {
+    for (const shard of SHARDS) {
+      test(partTitle(pass, shard), { tag: pass.tag }, async ({ page }) => {
+        await pass.run(page, shard)
+      })
+    }
+  }
 
-  test('every control passes in hover and keyboard focus', async ({ page }) => {
-    await expectInteractionStates(page)
-  })
-
-  test('every disclosure passes open and answers the keyboard', async ({ page }) => {
-    await expectDisclosureStates(page)
-  })
-
-  test('text survives WCAG spacing and doubled size', async ({ page }) => {
-    await expectTextStress(page)
-  })
-
-  test('layout holds across the whole width range', async ({ page }) => {
-    await expectWidthSweep(page)
-  })
-
-  test('every page passes in its dark scheme', async ({ page }) => {
-    await expectDarkScheme(page)
-  })
-
-  test('every sampled page passes in this engine', async ({ page }) => {
-    await expectEngineRules(page)
-  })
-
-  test('every exemption excuses something, and every pass finished', async ({ page }) => {
-    await expectSweepSummary(page)
+  test('every exemption excuses something, and every pass finished', { tag: '@ploaness-summary' }, async () => {
+    await expectSweepSummary()
   })
 })

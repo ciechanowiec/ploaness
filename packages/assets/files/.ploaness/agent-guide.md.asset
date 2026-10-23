@@ -405,7 +405,15 @@ a verification verdict.
 The `e2e` gate measures in the browsers of the Playwright image matching the project's resolved
 Playwright, `mcr.microsoft.com/playwright:v<version>-noble`, started in Docker for the run and removed
 after it. The image is never pulled during verification; pull it beforehand with the command the gate
-prints. The application stays on the host. Under verification the build, the pretest command, the suite
+prints. On Linux the container shares the host network and reaches the application's loopback origins
+directly. Docker Desktop does not share the host's loopback, so on macOS and Windows every request a
+page makes travels through Playwright's tunnel, which makes each load several times slower; expect a
+local run there to take longer than the same run in Linux CI.
+
+Serve Storybook to the sweep as a static build: an auxiliary server such as
+`storybook build -o .storybook-static --quiet && vite preview --outDir .storybook-static --port 6106 --strictPort`
+loads each story in a fraction of the time `storybook dev` takes to compile it, and judges the stories a
+release would ship. The application stays on the host. Under verification the build, the pretest command, the suite
 runner and every application server start their clock at `ploaness.clock`, which then advances normally,
 and the browser pages of the sweep read the same fixed instant. Declare `"clock": "real"` only when
 sign-in depends on an external service validating real time, and cover date-dependent content with
@@ -497,27 +505,35 @@ tests may also import the re-export from `ploaness/runtime`.
 
 ### Browser Sweep
 
-The sweep is one test per pass, run in order, each with a budget derived from the work discovery found.
-A pass reports every defect it finds; one failing pass hides nothing another reports. The final test
-judges stale exemptions and fails when a pass did not finish. Each finding is one line:
+Discovery runs first, once, in Chromium, as a setup project every pass depends on. It records what to
+scan, and its findings and problems - the seed did not answer, the route cap was reached, a declared page
+nothing scans - rather than failing, so every pass still runs. Each pass is then split into four shards,
+one test each, spread over parallel workers; each page is loaded fresh and judged alone, so the split
+changes no verdict. The project's own specs run on one worker beside them. Each shard has a budget derived
+from the work discovery found and reports every defect it finds; one failing shard hides nothing another
+reports. The summary runs last, whatever failed before it: it fails on discovery's findings and problems,
+on a shard that recorded no report, and on exemptions no shard in that engine used. Each finding is one
+line:
 
 ```text
 [rule] /route @390x844 (chromium, resting): what is wrong: element "its text"
 ```
 
-`story:<id>` names a story. The same findings, a coverage summary and outlined failure screenshots are
-written under `test-results/ploaness-sweep/<engine>/`; screenshots show where a finding is and are never
-compared or committed.
+`story:<id>` names a story. Each shard writes its report under `test-results/ploaness-sweep/<engine>/`,
+with a `progress.log` there that gains a line as each item finishes; the discovery record, the summary's
+`report.json` and the `coverage.txt` it prints sit in `test-results/ploaness-sweep/`. Outlined failure
+screenshots are attached to the failing test; they show where a finding is and are never compared or
+committed.
 
 | Pass | Engines | Viewports | Pages |
 | --- | --- | --- | --- |
-| Discovery | every engine | desktop | every route and story |
+| Discovery | Chromium, once | desktop | every route and story |
 | Resting rules | Chromium | baseline, both sides of every stylesheet breakpoint, declared | every route and story |
 | Interaction states | Chromium | 390x844 and 1280x800; hover at 1280 | every route and story |
 | Disclosures | Chromium | 390x844 and 1280x800 | every route and story |
 | Text stress | Chromium | spacing at 390x844 and 1280x800; resize at 1280x800 | one route per template, one story per component |
 | Width sweep | Chromium | 320 to 1920 px in 16 px steps, bisected | one route per template, one story per component |
-| Dark scheme | Chromium | baseline | pages whose stylesheets declare a dark scheme |
+| Dark scheme | Chromium | 390x844 and 1280x800 | pages whose stylesheets declare a dark scheme |
 | Engine | Firefox, WebKit | baseline | one route per template, one story per component |
 
 The baseline is 320x568, 360x800, 390x844, 430x932, 844x390, 768x1024, 1024x768, 1280x800, 1440x900

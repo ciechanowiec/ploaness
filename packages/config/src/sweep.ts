@@ -1,48 +1,59 @@
-// The passes of the managed browser sweep. The pinned spec calls one of these per test, so each pass has
-// its own budget and one failing pass hides nothing another would have reported.
+// The passes of the managed browser sweep. The pinned spec calls one of these per test, so each part of
+// a pass has its own budget and one failing part hides nothing another would have reported.
 //
-// Discovery runs first and writes what it found - routes, stories, breakpoints, colour schemes, control
-// counts - to the ignored output directory. Every later pass reads that file instead of crawling again,
-// and writes its own findings and coverage beside it. The last test reads them all, judges the
-// exemptions no pass used, and prints the coverage summary. A pass that did not finish is reported there
-// too, so reduced coverage never reads as a full pass.
+// Discovery runs once, in Chromium, as the setup project every pass depends on, and writes what it
+// found - routes, stories, breakpoints, colour schemes, control counts - to the ignored output
+// directory. Every pass is split into shards that run as separate tests on parallel workers; each
+// reads that file instead of crawling again, and writes its own findings and coverage under its
+// engine's directory. The summary is the teardown: it runs after every part of every engine has
+// finished, whatever their outcome, judges discovery's problems and the exemptions no part used, and
+// prints the coverage. A part that did not finish is reported there too, so reduced coverage never
+// reads as a full pass.
 //
 // Nothing here decides what a defect is. Each verdict is a `@ploaness/governance` function over what the
 // browser measured; the `sweep-*` modules drive the browser into each state and hand over the
 // measurements. This module is the entry point: it holds the summary and re-exports every pass.
-import { writeFileSync } from 'node:fs'
+import { readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { expect, type Page, type TestInfo, test } from '@playwright/test'
+import { expect, type TestInfo, test } from '@playwright/test'
 import {
+  BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE,
+  BROWSER_ENGINES,
   type BrowserFinding,
   type DeclaredExemption,
   distinctFindings,
   findingLine,
+  type Shard,
+  SWEEP_SHARDS,
   type SweepPass,
   staleExemptions,
   type TemplateSample,
   type UsedExemption,
 } from '@ploaness/governance'
-import { engineOf } from './scanner.js'
 import {
   type Discovery,
+  type DiscoveryReport,
   discoveryFile,
-  isChromium,
+  discoveryReportFile,
   type PassReport,
   readJson,
   reportFile,
-  sweepDirectory,
+  reportName,
+  sweepRoot,
   writeJson,
 } from './sweep-shared.js'
 
+export { SWEEP_SHARDS } from '@ploaness/governance'
 export { expectDisclosureStates } from './sweep-disclosures.js'
 export { expectDiscoveredSite } from './sweep-discovery.js'
 export { expectInteractionStates } from './sweep-interaction.js'
 export { expectTextStress, expectWidthSweep } from './sweep-reflow.js'
 export { expectDarkScheme, expectEngineRules, expectRestingRules } from './sweep-resting.js'
+export type { Shard } from './sweep-shared.js'
+
+const CHROMIUM: string = 'chromium'
 
 const CHROMIUM_PASSES: readonly SweepPass[] = [
-  'discovery',
   'resting',
   'interaction',
   'disclosures',
@@ -51,75 +62,190 @@ const CHROMIUM_PASSES: readonly SweepPass[] = [
   'dark-scheme',
 ]
 
-const ENGINE_PASSES: readonly SweepPass[] = ['discovery', 'engine']
+const ENGINE_PASSES: readonly SweepPass[] = ['engine']
 
-const discoveryText = (discovery: Discovery | undefined): string =>
-  `discovered ${String(discovery?.routes.length ?? 0)} routes, ${String(discovery?.stories.length ?? 0)} stories, ` +
-  `${String(discovery?.samples.length ?? 0)} templates`
+const SHARDS: readonly Shard[] = Array.from(
+  { length: SWEEP_SHARDS },
+  (_unused: unknown, index: number): Shard => ({
+    index,
+    count: SWEEP_SHARDS,
+  }),
+)
+
+/** One part of a pass the summary expects a report from. */
+interface ExpectedReport {
+  readonly engine: string
+  readonly pass: SweepPass
+  readonly shard: Shard
+}
+
+const presentEngines = (info: TestInfo): readonly string[] => {
+  try {
+    return readdirSync(sweepRoot(info), { withFileTypes: true }).flatMap((entry): readonly string[] =>
+      entry.isDirectory() && BROWSER_ENGINES.includes(entry.name) ? [entry.name] : [],
+    )
+  } catch {
+    return []
+  }
+}
+
+// Chromium always runs; the other engines run when the pinned browsers do, and whatever ran in them
+// is judged even when the endpoint is no longer named.
+const expectedEngines = (info: TestInfo): readonly string[] => {
+  const isPinned: boolean = process.env[BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE] !== undefined
+  const present: ReadonlySet<string> = new Set<string>(presentEngines(info))
+  return BROWSER_ENGINES.filter((engine: string): boolean => engine === CHROMIUM || isPinned || present.has(engine))
+}
+
+const expectedReports = (engines: readonly string[]): readonly ExpectedReport[] =>
+  engines.flatMap((engine: string): readonly ExpectedReport[] =>
+    (engine === CHROMIUM ? CHROMIUM_PASSES : ENGINE_PASSES).flatMap((pass: SweepPass): readonly ExpectedReport[] =>
+      SHARDS.map((shard: Shard): ExpectedReport => ({ engine, pass, shard })),
+    ),
+  )
+
+const missingLine = (expected: ExpectedReport): string =>
+  `${expected.engine} ${expected.pass} part ${String(expected.shard.index + 1)} of ${String(expected.shard.count)}: ` +
+  `did not record ${reportName(expected.pass, expected.shard)}`
 
 const MS_PER_SECOND: number = 1000
 
-const coverageText = (
-  discovery: Discovery | undefined,
-  reports: readonly PassReport[],
-  missing: readonly SweepPass[],
-): string =>
+const NOTHING_DISCOVERED: Discovery = { routes: [], stories: [], locations: [], samples: [] }
+
+const NO_DISCOVERY_REPORT: DiscoveryReport = { findings: [], problems: [], places: 0, locations: [], elapsedMs: 0 }
+
+const discoveryText = (discovery: Discovery, report: DiscoveryReport): string =>
+  `discovery (${CHROMIUM}): ${String(discovery.routes.length)} routes, ${String(discovery.stories.length)} stories, ` +
+  `${String(discovery.samples.length)} templates, ${String(report.findings.length)} findings, ` +
+  `${String(Math.round(report.elapsedMs / MS_PER_SECOND))}s`
+
+// One line per pass in each engine: the places and findings of its parts summed, the locations they
+// covered, and the slowest part, which is how long the pass held the run.
+const passLine = (engine: string, pass: SweepPass, reports: readonly PassReport[]): string => {
+  const parts: readonly PassReport[] = reports.filter(
+    (report: PassReport): boolean => report.engine === engine && report.pass === pass,
+  )
+  const places: number = parts.reduce((total: number, report: PassReport): number => total + report.places, 0)
+  const findings: number = parts.reduce(
+    (total: number, report: PassReport): number => total + report.findings.length,
+    0,
+  )
+  const locations: number = new Set<string>(parts.flatMap((report: PassReport): readonly string[] => report.locations))
+    .size
+  const slowestMs: number = Math.max(0, ...parts.map((report: PassReport): number => report.elapsedMs))
+  return (
+    `${pass} (${engine}): ${String(places)} places over ${String(locations)} locations, ${String(findings)} ` +
+    `findings, ${String(parts.length)} of ${String(SWEEP_SHARDS)} parts, slowest part ` +
+    `${String(Math.round(slowestMs / MS_PER_SECOND))}s`
+  )
+}
+
+/** Everything the summary read. */
+interface SweepRecord {
+  readonly discovery: Discovery | undefined
+  readonly discoveryReport: DiscoveryReport | undefined
+  readonly engines: readonly string[]
+  readonly reports: readonly PassReport[]
+  readonly missing: readonly string[]
+}
+
+const coverageText = (record: SweepRecord): string =>
   [
-    discoveryText(discovery),
-    ...(discovery?.samples ?? []).map(
+    discoveryText(record.discovery ?? NOTHING_DISCOVERED, record.discoveryReport ?? NO_DISCOVERY_REPORT),
+    ...(record.discovery?.samples ?? []).map(
       (sample: TemplateSample): string =>
         `  template ${sample.template}: sampled by ${sample.route} (${String(sample.routes)} routes)`,
     ),
-    ...reports.map(
-      (report: PassReport): string =>
-        `${report.pass} (${report.engine}): ${String(report.places)} places over ${String(report.locations.length)} ` +
-        `locations, ${String(report.findings.length)} findings, ${String(Math.round(report.elapsedMs / MS_PER_SECOND))}s`,
+    ...record.engines.flatMap((engine: string): readonly string[] =>
+      (engine === CHROMIUM ? CHROMIUM_PASSES : ENGINE_PASSES).map((pass: SweepPass): string =>
+        passLine(engine, pass, record.reports),
+      ),
     ),
-    ...reports.flatMap((report: PassReport): readonly string[] =>
-      report.notes.map((note: string): string => `  note: ${note}`),
+    ...[...new Set<string>(record.reports.flatMap((report: PassReport): readonly string[] => report.notes))].map(
+      (note: string): string => `  note: ${note}`,
     ),
-    ...missing.map((pass: SweepPass): string => `${pass}: did not record a report`),
+    ...record.missing,
   ].join('\n')
 
+// An exemption is stale in an engine when no part of any pass in that engine used it.
+const staleIn = (engine: string, reports: readonly PassReport[]): readonly BrowserFinding[] => {
+  const own: readonly PassReport[] = reports.filter((report: PassReport): boolean => report.engine === engine)
+  return own.length === 0
+    ? []
+    : staleExemptions(
+        own.flatMap((report: PassReport): readonly DeclaredExemption[] => report.declared),
+        own.flatMap((report: PassReport): readonly UsedExemption[] => report.used),
+        [...new Set<string>(own.flatMap((report: PassReport): readonly string[] => report.judgedRules))],
+        engine,
+      )
+}
+
+const readRecord = (info: TestInfo): SweepRecord => {
+  const engines: readonly string[] = expectedEngines(info)
+  const expected: readonly ExpectedReport[] = expectedReports(engines)
+  const read: readonly (PassReport | undefined)[] = expected.map(
+    (part: ExpectedReport): PassReport | undefined =>
+      readJson(reportFile(info, part.engine, part.pass, part.shard)) as PassReport | undefined,
+  )
+  return {
+    discovery: readJson(discoveryFile(info)) as Discovery | undefined,
+    discoveryReport: readJson(discoveryReportFile(info)) as DiscoveryReport | undefined,
+    engines,
+    reports: read.flatMap((report: PassReport | undefined): readonly PassReport[] =>
+      report === undefined ? [] : [report],
+    ),
+    missing: expected.flatMap((part: ExpectedReport, index: number): readonly string[] =>
+      read[index] === undefined ? [missingLine(part)] : [],
+    ),
+  }
+}
+
 /**
- * Judge the exemptions no pass used, write the report and the coverage summary, and fail when a pass
- * did not finish.
- * @param page the test's page.
+ * Judge discovery's problems and findings and the exemptions no part of a pass used, write the report
+ * and the coverage summary, and fail when a part of a pass did not finish. It runs as the sweep's
+ * teardown, after every part of every engine, whatever their outcome.
  */
-export const expectSweepSummary = async (page: Page): Promise<void> => {
+export const expectSweepSummary = async (): Promise<void> => {
   const info: TestInfo = test.info()
-  const expected: readonly SweepPass[] = isChromium(page) ? CHROMIUM_PASSES : ENGINE_PASSES
-  const reports: readonly PassReport[] = expected.flatMap((pass: SweepPass): readonly PassReport[] => {
-    const report: PassReport | undefined = readJson(reportFile(info, pass)) as PassReport | undefined
-    return report === undefined ? [] : [report]
-  })
-  const missing: readonly SweepPass[] = expected.filter(
-    (pass: SweepPass): boolean => !reports.some((report: PassReport): boolean => report.pass === pass),
+  const record: SweepRecord = readRecord(info)
+  const problems: readonly string[] =
+    record.discovery === undefined || record.discoveryReport === undefined
+      ? ['discovery did not record what to scan; its own test names the reason']
+      : record.discoveryReport.problems
+  const discoveryFindings: readonly BrowserFinding[] = distinctFindings(record.discoveryReport?.findings ?? [])
+  const stale: readonly BrowserFinding[] = record.engines.flatMap((engine: string): readonly BrowserFinding[] =>
+    staleIn(engine, record.reports),
   )
-  const stale: readonly BrowserFinding[] = staleExemptions(
-    reports.flatMap((report: PassReport): readonly DeclaredExemption[] => report.declared),
-    reports.flatMap((report: PassReport): readonly UsedExemption[] => report.used),
-    [...new Set<string>(reports.flatMap((report: PassReport): readonly string[] => report.judgedRules))],
-    engineOf(page),
-  )
-  const coverage: string = coverageText(readJson(discoveryFile(info)) as Discovery | undefined, reports, missing)
-  writeJson(path.join(sweepDirectory(info), 'report.json'), {
+  const coverage: string = coverageText(record)
+  writeJson(path.join(sweepRoot(info), 'report.json'), {
     findings: distinctFindings([
-      ...reports.flatMap((report: PassReport): readonly BrowserFinding[] => report.findings),
+      ...discoveryFindings,
+      ...record.reports.flatMap((report: PassReport): readonly BrowserFinding[] => report.findings),
       ...stale,
     ]),
-    passes: reports.map((report: PassReport) => ({
+    problems,
+    passes: record.reports.map((report: PassReport) => ({
       pass: report.pass,
+      engine: report.engine,
+      shard: report.shard,
       places: report.places,
       locations: report.locations,
       notes: report.notes,
+      elapsedMs: report.elapsedMs,
     })),
-    missing,
+    missing: record.missing,
   })
-  writeFileSync(path.join(sweepDirectory(info), 'coverage.txt'), `${coverage}\n`)
+  writeFileSync(path.join(sweepRoot(info), 'coverage.txt'), `${coverage}\n`)
   await info.attach('coverage', { body: coverage, contentType: 'text/plain' })
-  process.stdout.write(`\nploaness sweep coverage (${info.project.name}):\n${coverage}\n`)
-  expect.soft(missing, 'sweep passes that did not finish; their own tests name the reason').toEqual([])
+  process.stdout.write(`\nploaness sweep coverage:\n${coverage}\n`)
+  expect.soft(problems, 'discovery is incomplete').toEqual([])
+  expect
+    .soft(
+      discoveryFindings.map((finding: BrowserFinding): string => findingLine(finding)),
+      'discovery findings',
+    )
+    .toEqual([])
+  expect.soft(record.missing, 'sweep parts that did not finish; their own tests name the reason').toEqual([])
   expect(
     stale.map((finding: BrowserFinding): string => findingLine(finding)),
     'exemptions no pass used',

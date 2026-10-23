@@ -7,9 +7,7 @@ import {
   type BrowserFinding,
   breakpointEdges,
   type DiscoveredStory,
-  distinctFindings,
   findingAt,
-  findingLine,
   localAddress,
   onOrigin,
   type SitemapEntries,
@@ -31,16 +29,17 @@ import {
   type CssRule,
   DESKTOP,
   type Discovery,
+  type DiscoveryReport,
   type DomElement,
   type DomWindow,
   discoveryFile,
+  discoveryReportFile,
   loadLocation,
   origin,
-  type PassReport,
   placeAt,
   preparePage,
-  reportFile,
   type SweepLocation,
+  WHOLE_PASS,
   writeJson,
 } from './sweep-shared.js'
 
@@ -287,7 +286,7 @@ const storiesOf = async (page: Page): Promise<readonly DiscoveredStory[]> => {
   return lists.flat()
 }
 
-const storyLocationOf = async (page: Page, story: DiscoveredStory): Promise<SweepLocation> => {
+const readStoryLocation = async (page: Page, story: DiscoveredStory): Promise<SweepLocation> => {
   const location: SweepLocation = {
     location: storyLocation(story),
     url: storyUrl(story),
@@ -309,14 +308,32 @@ const storyLocationOf = async (page: Page, story: DiscoveredStory): Promise<Swee
   }
 }
 
-const storyLocations = async (page: Page, stories: readonly DiscoveredStory[]): Promise<readonly SweepLocation[]> =>
-  await stories.reduce(
-    async (earlier: Promise<readonly SweepLocation[]>, story: DiscoveredStory): Promise<readonly SweepLocation[]> => [
-      ...(await earlier),
-      await storyLocationOf(page, story),
-    ],
-    Promise.resolve<readonly SweepLocation[]>([]),
+// Each story is read on a page of its own, so a story's state cannot reach the next one.
+const storyLocationOf = async (page: Page, story: DiscoveredStory): Promise<SweepLocation> => {
+  const storyPage: Page = await page.context().newPage()
+  try {
+    await preparePage(storyPage)
+    return await readStoryLocation(storyPage, story)
+  } finally {
+    await storyPage.close()
+  }
+}
+
+// Stories are read this many at a time. Each read is one load, independent of the others; the route
+// crawl stays sequential, because the routes it visits next depend on the links it has read.
+const STORY_CONCURRENCY: number = 4
+
+const storyLocations = async (page: Page, stories: readonly DiscoveredStory[]): Promise<readonly SweepLocation[]> => {
+  if (stories.length === 0) {
+    return []
+  }
+  const batch: readonly SweepLocation[] = await Promise.all(
+    stories
+      .slice(0, STORY_CONCURRENCY)
+      .map(async (story: DiscoveredStory): Promise<SweepLocation> => await storyLocationOf(page, story)),
   )
+  return [...batch, ...(await storyLocations(page, stories.slice(STORY_CONCURRENCY)))]
+}
 
 // The seed route first, then every page the sitemaps list.
 const crawlStart = (fromSitemap: readonly string[]): CrawlState =>
@@ -333,16 +350,40 @@ const crawlStart = (fromSitemap: readonly string[]): CrawlState =>
     'sitemap.xml',
   )
 
+const wasRecorded = (file: string, value: unknown): boolean => {
+  try {
+    writeJson(file, value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const problemsOf = (crawled: CrawlState, routes: readonly string[]): readonly string[] => [
+  ...(crawled.answered.has(SEED_ROUTE) ? [] : [`the crawl could not start: ${SEED_ROUTE} did not answer`]),
+  ...(crawled.dropped.size === 0
+    ? []
+    : [
+        `the sweep reached the ${String(MAX_SWEEP_ROUTES)}-route cap; raise the harness limit only after ` +
+          'measuring the resulting run time',
+      ]),
+  ...unsweptRoutes(routes, [...crawled.answered]).map(
+    (unswept: string): string => `a page this project declares that nothing scans: ${unswept}`,
+  ),
+]
+
 /**
- * Discover every page the sweep scans, and fail when the discovery is incomplete.
+ * Discover every page the sweep scans, and record it with whatever made the discovery incomplete.
  *
  * Routes come from a link crawl from `/`, every same-origin `hreflang` alternate, and `sitemap.xml`;
  * stories from each auxiliary server that answers `/index.json`; breakpoints and colour schemes from
- * each page's stylesheets. A crawled internal link that does not answer is a broken link.
+ * each page's stylesheets. A crawled internal link that does not answer is a broken link. Every pass
+ * depends on this test, so it fails only when it could not write its record; the summary judges the
+ * findings and problems it recorded.
  * @param page the test's page.
  */
 export const expectDiscoveredSite = async (page: Page): Promise<void> => {
-  const budget: Budget = armBudget('discovery', MAX_SWEEP_ROUTES)
+  const budget: Budget = armBudget(page, 'discovery', WHOLE_PASS, MAX_SWEEP_ROUTES)
   await preparePage(page)
   const fromSitemap: readonly string[] = await sitemapPages(page, [`${origin}/sitemap.xml`])
   const crawled: CrawlState = await crawl(page, crawlStart(fromSitemap))
@@ -354,32 +395,14 @@ export const expectDiscoveredSite = async (page: Page): Promise<void> => {
     locations: [...crawled.reachable, ...(await storyLocations(page, stories))],
     samples: templateSamples(routes, declaredRoutes()),
   }
-  writeJson(discoveryFile(test.info()), discovery)
-  writeJson(reportFile(test.info(), 'discovery'), {
-    pass: 'discovery',
-    engine: engineOf(page),
+  const report: DiscoveryReport = {
     findings: crawled.findings,
-    used: [],
-    declared: [],
-    judgedRules: [],
+    problems: problemsOf(crawled, routes),
     places: crawled.answered.size + stories.length,
-    elapsedMs: Math.round(performance.now() - budget.startedAt),
     locations: discovery.locations.map((location: SweepLocation): string => location.location),
-    notes: [],
-  } satisfies PassReport)
-  expect.soft(crawled.answered.has(SEED_ROUTE), `the crawl could not start: ${SEED_ROUTE} did not answer`).toBe(true)
-  expect
-    .soft(
-      crawled.dropped.size,
-      `the sweep reached the ${String(MAX_SWEEP_ROUTES)}-route cap; raise the harness limit only after ` +
-        'measuring the resulting run time',
-    )
-    .toBe(0)
-  expect
-    .soft(unsweptRoutes(routes, [...crawled.answered]), 'pages this project declares that nothing scans')
-    .toEqual([])
-  expect(
-    distinctFindings(crawled.findings).map((finding: BrowserFinding): string => findingLine(finding)),
-    'discovery findings',
-  ).toEqual([])
+    elapsedMs: Math.round(performance.now() - budget.startedAt),
+  }
+  const isRecorded: boolean =
+    wasRecorded(discoveryReportFile(test.info()), report) && wasRecorded(discoveryFile(test.info()), discovery)
+  expect(isRecorded, 'discovery could not write its record to the test output directory').toBe(true)
 }

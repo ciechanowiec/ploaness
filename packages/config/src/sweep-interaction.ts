@@ -14,7 +14,9 @@ import {
   hasVisibleFocus,
   judgeCarried,
   obscuringContent,
+  type ShardItem,
   STRESS_VIEWPORTS,
+  shardOf,
 } from '@ploaness/governance'
 import { type TargetFacts, targetFacts } from './layout.js'
 import { axeFindings, settleFindings } from './scanner.js'
@@ -36,14 +38,18 @@ import {
   isChromium,
   itemLabel,
   loadLocation,
+  locationOfItem,
   merged,
   type PlaceItem,
   PROBE_ATTRIBUTE,
   placeAt,
   preparePage,
   readDiscovery,
+  type Shard,
   STILL_STYLE,
   type SweepLocation,
+  shardLocations,
+  shardUnits,
   type Visit,
   visitAll,
 } from './sweep-shared.js'
@@ -321,21 +327,28 @@ const interactionVisit = async (page: Page, item: PlaceItem, isFirst: boolean): 
 const INTERACTION_RULES: readonly string[] = ['obscured', 'focus-obscured', 'focus-visible']
 
 /**
- * Drive every control into hover and keyboard focus, and judge contrast, reach and focus visibility.
+ * Drive every control of one shard of the locations into hover and keyboard focus, and judge contrast,
+ * reach and focus visibility.
  * @param page the test's page.
+ * @param shard the part of the pass this test visits.
  */
-export const expectInteractionStates = async (page: Page): Promise<void> => {
+export const expectInteractionStates = async (page: Page, shard: Shard): Promise<void> => {
   test.info().skip(!isChromium(page), 'the interaction pass runs in Chromium')
   const discovery: Discovery = readDiscovery(test.info())
-  const items: readonly PlaceItem[] = discovery.locations.flatMap((location: SweepLocation): readonly PlaceItem[] =>
-    STRESS_VIEWPORTS.map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
+  const items: readonly ShardItem<PlaceItem>[] = shardOf(
+    discovery.locations.flatMap((location: SweepLocation): readonly PlaceItem[] =>
+      STRESS_VIEWPORTS.map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
+    ),
+    shard,
   )
-  const units: number = items.reduce((total: number, item: PlaceItem): number => total + item.location.controls + 1, 0)
-  const budget: Budget = armBudget('interaction', units)
+  const units: number = shardUnits(items, (item: PlaceItem): number => item.location.controls + 1)
+  const budget: Budget = armBudget(page, 'interaction', shard, units)
   await preparePage(page)
   const visits: readonly Visit[] = await visitAll(items, {
     budget,
     labelOf: itemLabel,
+    // The index is the item's place in the whole pass, so the chrome is driven once per viewport
+    // across every shard, by whichever shard holds the first location.
     visit: async (item: PlaceItem, index: number): Promise<Visit> =>
       await interactionVisit(page, item, index < STRESS_VIEWPORTS.length),
   })
@@ -344,6 +357,6 @@ export const expectInteractionStates = async (page: Page): Promise<void> => {
     pass: 'interaction',
     visits,
     judgedRules: INTERACTION_RULES,
-    locations: discovery.locations.map((location: SweepLocation): string => location.location),
+    locations: shardLocations(items, locationOfItem),
   })
 }

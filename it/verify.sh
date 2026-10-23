@@ -338,7 +338,7 @@ visual_contracts() {
     node "$lib/create-visual-pages.ts" "$scratch/pass-visual" valid
     commit_case pass-visual 'test(fixture): render every browser-rule page repaired' "$CONFORMING_BODY"
     expect pass-visual build PASS
-    expect_command pass-visual PASS '8 passed' \
+    expect_command pass-visual PASS '26 passed' \
         pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 }
 
@@ -418,7 +418,7 @@ layout_contracts() {
     node "$lib/create-layout-pages.ts" "$scratch/pass-layout" repaired
     commit_case pass-layout 'test(fixture): lay every page out with room between its boxes' "$CONFORMING_BODY"
     expect pass-layout build PASS
-    expect_command pass-layout PASS '9 passed' \
+    expect_command pass-layout PASS '27 passed' \
         pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts tests/e2e/items.e2e.spec.ts --reporter=line
     # The exemption the repaired tab list carries is a suppression, and is counted as one.
     edit_json "$scratch/pass-layout/package.json" ploaness.maxSuppressions 0
@@ -443,7 +443,7 @@ browser_environment_contracts() {
     expect_command browser-environment PASS '\[PASS\] build' \
         env ENV_PRIORITY=from-process "$scratch/browser-environment/node_modules/.bin/ploaness" gate build
     # This minimal Next fixture exercises browser configuration; it serves no Payload access endpoint.
-    expect_command browser-environment PASS '9 passed' \
+    expect_command browser-environment PASS '27 passed' \
         env PLOANESS_VERIFICATION=1 NODE_ENV=production ENV_PRIORITY=from-process \
         pnpm exec playwright test tests/e2e/environment.e2e.spec.ts tests/e2e/a11y.e2e.spec.ts --reporter=line
     expect_command browser-environment PASS '1 passed' \
@@ -755,7 +755,7 @@ bundle_directory_contracts() {
         expect "$name" build PASS
         expect_command "$name" PASS '\[PASS\] bundle' \
             env NODE_ENV=development "$scratch/$name/node_modules/.bin/ploaness" gate bundle
-        expect_command "$name" PASS '8 passed' \
+        expect_command "$name" PASS '26 passed' \
             env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
         mkdir -p "$scratch/$name/.next/static"
         printf 'console.log(1)\n' > "$scratch/$name/.next/static/stale.js"
@@ -793,7 +793,7 @@ test('scans a dynamic post', async ({ page }) => {
   await expectSweptPage(page)
 })
 EOF
-    expect_command route-overlap PASS '9 passed' \
+    expect_command route-overlap PASS '27 passed' \
         env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts \
         tests/e2e/dynamic.e2e.spec.ts --reporter=line
 }
@@ -808,7 +808,7 @@ route_boundary_contracts() {
         env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
     edit_json "$scratch/route-boundary/package.json" ploaness.accessibilitySkipRoutes \
         '[{"pattern":"/api","reason":"API-prefixed preview pages require a session"}]'
-    expect_command route-boundary PASS '8 passed' \
+    expect_command route-boundary PASS '26 passed' \
         env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 }
 
@@ -1247,7 +1247,7 @@ new_case pass-browser-names
 node "$lib/create-a11y-page.ts" "$scratch/pass-browser-names" valid
 commit_case pass-browser-names 'test(fixture): render accessible controls in Next' "$CONFORMING_BODY"
 expect pass-browser-names build PASS
-expect_command pass-browser-names PASS '8 passed' \
+expect_command pass-browser-names PASS '26 passed' \
     pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 new_case fail-browser-headers
 node "$lib/create-a11y-page.ts" "$scratch/fail-browser-headers" valid

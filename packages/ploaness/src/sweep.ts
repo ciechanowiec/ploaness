@@ -10,4 +10,6 @@ export {
   expectSweepSummary,
   expectTextStress,
   expectWidthSweep,
+  type Shard,
+  SWEEP_SHARDS,
 } from '@ploaness/config/sweep'

@@ -3,9 +3,10 @@
 //
 // Everything here is policy rather than preference. `forbidOnly` is the end-to-end analogue of the
 // focused-test ban ploaness already enforces for Vitest: a left-behind `test.only` would otherwise turn
-// a local extended run into one green test. A single worker is not a performance choice either - every spec shares
-// one dev server that compiles routes on demand, and parallel workers starve the heavier specs against
-// it. The project-specific inputs are the origin and any server its own specs need started beside the
+// a local extended run into one green test. The project's own specs run on one worker, because they
+// may share database state and one server; the managed sweep's tests each load their pages fresh and
+// judge each one alone, so they spread over parallel workers without any verdict depending on it. The
+// project-specific inputs are the origin and any server its own specs need started beside the
 // application, both declared under the `ploaness` key of its package.json rather than by editing this
 // file. Neither reaches a rule: they say where the application answers and what else has to be running,
 // and every threshold, ban and pinned spec above is the same whatever they say.
@@ -14,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
 import {
   BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE,
+  BROWSER_TUNNEL_ENVIRONMENT_VARIABLE,
   browserServerEndpoint,
   CLOCK_ENVIRONMENT_VARIABLE,
   canReuseBrowserServer,
@@ -21,6 +23,7 @@ import {
   portOf,
   REAL_CLOCK,
   runEnvironmentFiles,
+  SWEEP_WORKERS,
   shellArgument,
   VERIFICATION_ENVIRONMENT_VARIABLE,
 } from '@ploaness/governance'
@@ -77,14 +80,34 @@ const declaredPort: string | undefined = portOf(projectSettings.serverUrl)
 // Under verification the browsers are the pinned ones the CLI started in the Playwright image, so the
 // same tree measures the same pixels on every machine. The application stays on the host: the remote
 // browser reaches its loopback origins through the client, so cookies, headers and the production
-// server are exactly what they are without the container. Outside verification the host's Chromium runs.
+// server are exactly what they are without the container. The remote browser reaches those origins
+// directly where the container shares the host's network, and through the client's tunnel otherwise. Outside verification the host's Chromium runs.
 const browserEndpoint: string | undefined = process.env[BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE]
 
 const remote: Readonly<Record<string, unknown>> =
-  browserEndpoint === undefined ? {} : { connectOptions: { wsEndpoint: browserEndpoint, exposeNetwork: '<loopback>' } }
+  browserEndpoint === undefined
+    ? {}
+    : {
+        connectOptions: {
+          wsEndpoint: browserEndpoint,
+          ...(process.env[BROWSER_TUNNEL_ENVIRONMENT_VARIABLE] !== undefined && { exposeNetwork: '<loopback>' }),
+        },
+      }
 
 // The sweep alone runs in the other engines; a project's own specs describe its behaviour once.
 const SWEEP_SPEC: RegExp = /a11y\.e2e\.spec\.ts$/u
+
+const chromiumDevice: Readonly<Record<string, unknown>> = {
+  ...devices['Desktop Chrome'],
+  deviceScaleFactor: DEVICE_SCALE_FACTOR,
+  ...(browserEndpoint === undefined && { channel: 'chromium' }),
+}
+
+// The sweep's projects, which select its tests by tag. Discovery runs once, in Chromium, and every
+// pass depends on it; the summary is its teardown, so it runs after every pass of every engine has
+// finished, whatever their outcome.
+const SWEEP_DISCOVERY: string = 'sweep-discovery'
+const SWEEP_SUMMARY: string = 'sweep-summary'
 
 // The application's clock, shifted by the preload in every server this config starts. The CLI sets the
 // variable for a verification run; a project that declared the real clock gets none.
@@ -111,7 +134,7 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
   // its own. Determinism is established by the fixed clock, motion, locale, timezone and pixel ratio
   // below, and by the settle and stability checks every scan makes.
   retries: 0,
-  workers: 1,
+  workers: SWEEP_WORKERS,
   // `open: 'never'` because the gate runs this non-interactively: a reporter that launches a browser
   // on failure would hang the run rather than report it.
   reporter: [['list'], ['html', { open: 'never' }]],
@@ -128,28 +151,43 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
     ...remote,
   },
   projects: [
+    { name: 'chromium', testIgnore: SWEEP_SPEC, workers: 1, use: chromiumDevice },
     {
-      name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        deviceScaleFactor: DEVICE_SCALE_FACTOR,
-        ...(browserEndpoint === undefined && { channel: 'chromium' }),
-      },
+      name: SWEEP_DISCOVERY,
+      testMatch: SWEEP_SPEC,
+      grep: /@ploaness-discovery/u,
+      teardown: SWEEP_SUMMARY,
+      use: chromiumDevice,
+    },
+    {
+      name: 'sweep-chromium',
+      testMatch: SWEEP_SPEC,
+      grep: /@ploaness-chromium/u,
+      dependencies: [SWEEP_DISCOVERY],
+      fullyParallel: true,
+      use: chromiumDevice,
     },
     ...(browserEndpoint === undefined
       ? []
       : [
           {
-            name: 'firefox',
+            name: 'sweep-firefox',
             testMatch: SWEEP_SPEC,
+            grep: /@ploaness-engine/u,
+            dependencies: [SWEEP_DISCOVERY],
+            fullyParallel: true,
             use: { ...devices['Desktop Firefox'], deviceScaleFactor: DEVICE_SCALE_FACTOR },
           },
           {
-            name: 'webkit',
+            name: 'sweep-webkit',
             testMatch: SWEEP_SPEC,
+            grep: /@ploaness-engine/u,
+            dependencies: [SWEEP_DISCOVERY],
+            fullyParallel: true,
             use: { ...devices['Desktop Safari'], deviceScaleFactor: DEVICE_SCALE_FACTOR },
           },
         ]),
+    { name: SWEEP_SUMMARY, testMatch: SWEEP_SPEC, grep: /@ploaness-summary/u, use: chromiumDevice },
   ],
   // Auxiliary servers first, then the application under test. Playwright awaits each entry in this
   // list before starting the next, so the order is the difference between a run and a deadlock: a

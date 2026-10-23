@@ -14,8 +14,10 @@ import {
   type LayoutSnapshot,
   REFLOW_RULES,
   reflowCandidates,
+  type ShardItem,
   STRESS_VIEWPORTS,
   SWEEP_HEIGHT,
+  shardOf,
   sweepWidths,
   type UsedExemption,
 } from '@ploaness/governance'
@@ -36,13 +38,16 @@ import {
   isChromium,
   itemLabel,
   loadLocation,
+  locationOfItem,
   merged,
   type PlaceItem,
   placeAt,
   preparePage,
   readDiscovery,
+  type Shard,
   type SweepLocation,
   sampledLocations,
+  shardLocations,
   type Visit,
   visitAll,
 } from './sweep-shared.js'
@@ -151,17 +156,21 @@ const stressVisit = async (page: Page, item: PlaceItem, mode: StressMode): Promi
 }
 
 /**
- * Apply the WCAG text-spacing overrides, then double every text size, and judge the reflow each time.
+ * Apply the WCAG text-spacing overrides, then double every text size, and judge the reflow each time,
+ * on one shard of the sampled locations.
  * @param page the test's page.
+ * @param shard the part of the pass this test visits.
  */
-export const expectTextStress = async (page: Page): Promise<void> => {
+export const expectTextStress = async (page: Page, shard: Shard): Promise<void> => {
   test.info().skip(!isChromium(page), 'the text-stress pass runs in Chromium')
   const discovery: Discovery = readDiscovery(test.info())
-  const locations: readonly SweepLocation[] = sampledLocations(discovery)
-  const items: readonly PlaceItem[] = locations.flatMap((location: SweepLocation): readonly PlaceItem[] =>
-    STRESS_VIEWPORTS.map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
+  const items: readonly ShardItem<PlaceItem>[] = shardOf(
+    sampledLocations(discovery).flatMap((location: SweepLocation): readonly PlaceItem[] =>
+      STRESS_VIEWPORTS.map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
+    ),
+    shard,
   )
-  const budget: Budget = armBudget('text-stress', items.length)
+  const budget: Budget = armBudget(page, 'text-stress', shard, items.length)
   await preparePage(page)
   const visits: readonly Visit[] = await visitAll(items, {
     budget,
@@ -179,7 +188,7 @@ export const expectTextStress = async (page: Page): Promise<void> => {
     pass: 'text-stress',
     visits,
     judgedRules: ['text-spacing', 'text-resize'],
-    locations: locations.map((location: SweepLocation): string => location.location),
+    locations: shardLocations(items, locationOfItem),
   })
 }
 
@@ -319,15 +328,16 @@ const sweepLocation = async (page: Page, location: SweepLocation): Promise<Visit
 }
 
 /**
- * Resize one route per template and every story across the whole width range, and report each reflow
- * defect with the exact widths it holds at.
+ * Resize one shard of one route per template and every story across the whole width range, and report
+ * each reflow defect with the exact widths it holds at.
  * @param page the test's page.
+ * @param shard the part of the pass this test visits.
  */
-export const expectWidthSweep = async (page: Page): Promise<void> => {
+export const expectWidthSweep = async (page: Page, shard: Shard): Promise<void> => {
   test.info().skip(!isChromium(page), 'the width sweep runs in Chromium')
   const discovery: Discovery = readDiscovery(test.info())
-  const locations: readonly SweepLocation[] = sampledLocations(discovery)
-  const budget: Budget = armBudget('width-sweep', locations.length * sweepWidths().length)
+  const locations: readonly ShardItem<SweepLocation>[] = shardOf(sampledLocations(discovery), shard)
+  const budget: Budget = armBudget(page, 'width-sweep', shard, locations.length * sweepWidths().length)
   await preparePage(page)
   const visits: readonly Visit[] = await visitAll(locations, {
     budget,
@@ -339,6 +349,6 @@ export const expectWidthSweep = async (page: Page): Promise<void> => {
     pass: 'width-sweep',
     visits,
     judgedRules: REFLOW_RULES,
-    locations: locations.map((location: SweepLocation): string => location.location),
+    locations: shardLocations(locations, (location: SweepLocation): SweepLocation => location),
   })
 }
