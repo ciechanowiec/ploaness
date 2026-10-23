@@ -188,7 +188,7 @@ export const LIBRARY_TSCONFIG_PATHS: Readonly<Record<string, readonly string[]>>
  *
  * The required `include` is a recursive TypeScript glob, which at a WORKSPACE ROOT sweeps every
  * member's sources into the root's own project - under the ROOT's `paths`, where a member's `@/*`
- * resolves to the wrong directory. eoc's root read the CMS scripts that way and failed `types` on
+ * resolves to the wrong directory. A root read that way fails `types` on a CMS member's scripts, on
  * imports that resolve perfectly well inside the CMS. Excluding them is not a relaxation: a member's
  * analysis stops at its own boundary, which is the rule `knipConfig` already applies for the same
  * reason, and each nested member is compiled by its own run.
