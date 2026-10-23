@@ -958,8 +958,8 @@ file_scope_contracts() {
 
 # Declared focused subsets; the default run remains complete.
 case "${1-}" in
-    ''|--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only) ;;
-    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only]' >&2; exit 1 ;;
+    ''|--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only|--consumer-gates-only) ;;
+    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only|--consumer-gates-only]' >&2; exit 1 ;;
 esac
 
 if [ -z "${1-}" ] || [ "${1-}" = --file-scopes-only ]; then
@@ -1032,6 +1032,8 @@ fi
 # The pass case: the untouched scaffold must satisfy every gate that judges a project's own shape.
 new_case pass
 commit_case pass 'feat(fixture): add the ploaness integration consumer' "$CONFORMING_BODY"
+# The consumer-gate subset needs only the pass case above, so it skips to the gates that judge it.
+if [ "${1-}" != --consumer-gates-only ]; then
 # The native accessibility contracts execute the actual packed CLI and its generated configuration.
 expect pass preflight PASS
 expect pass wiring PASS
@@ -1280,6 +1282,7 @@ layout_contracts
 visual_contracts
 clock_contracts
 browser_server_contracts
+fi
 
 # `install-scripts` is here because its only other fixture is a failure case, and this file's own
 # reasoning applies symmetrically: a rule that only ever failed proves as little as one that only ever
