@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import {
   BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE,
+  BROWSER_TUNNEL_ENVIRONMENT_VARIABLE,
   CODE_EXTENSIONS,
   carriesSourceCode,
   coverageBoundaries,
@@ -128,6 +129,7 @@ export const endToEnd = async (context: Context): Promise<GateResult> => {
             NODE_ENV: 'production',
             [VERIFICATION_ENVIRONMENT_VARIABLE]: '1',
             [BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE]: browsers.endpoint,
+            ...(browsers.isTunnelled && { [BROWSER_TUNNEL_ENVIRONMENT_VARIABLE]: '1' }),
           },
         }),
         'the end-to-end suite passes',

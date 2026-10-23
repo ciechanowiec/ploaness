@@ -7,6 +7,8 @@ import {
   pinnedBrowserServerArguments,
   playwrightImageOf,
   REAL_CLOCK,
+  type ShardItem,
+  shardOf,
   shiftedTime,
 } from '../src/browser-run.js'
 import { readSettings } from '../src/settings.js'
@@ -53,6 +55,40 @@ describe('the pinned browsers and the pass budgets', () => {
   })
 })
 
+describe('the shards of a sweep pass', () => {
+  const items: readonly string[] = ['a', 'b', 'c', 'd', 'e']
+  const shards: readonly (readonly ShardItem<string>[])[] = [0, 1, 2].map(
+    (index: number): readonly ShardItem<string>[] => shardOf(items, { index, count: 3 }),
+  )
+
+  it('deals the items round-robin and keeps the index each had in the whole pass', () => {
+    expect(shards).toEqual([
+      [
+        { item: 'a', index: 0 },
+        { item: 'd', index: 3 },
+      ],
+      [
+        { item: 'b', index: 1 },
+        { item: 'e', index: 4 },
+      ],
+      [{ item: 'c', index: 2 }],
+    ])
+  })
+
+  it('visits every item exactly once across the shards', () => {
+    expect(
+      shards
+        .flat()
+        .map((visited: ShardItem<string>): number => visited.index)
+        .toSorted((left: number, right: number): number => left - right),
+    ).toEqual([0, 1, 2, 3, 4])
+  })
+
+  it('leaves a shard beyond the items empty', () => {
+    expect(shardOf(['a'], { index: 1, count: 2 })).toEqual([])
+  })
+})
+
 describe('the pinned browser server', () => {
   it('runs the host Playwright, read-only, against the image browsers on a loopback port', () => {
     expect(
@@ -61,6 +97,7 @@ describe('the pinned browser server', () => {
         name: 'ploaness-browsers-4100',
         port: 4100,
         playwrightCore: '/repo/node_modules/playwright-core',
+        isHostNetwork: false,
       }),
     ).toEqual([
       'run',
@@ -80,5 +117,20 @@ describe('the pinned browser server', () => {
       '--host=0.0.0.0',
     ])
     expect(pinnedBrowserEndpoint(4100)).toBe('ws://127.0.0.1:4100/')
+  })
+
+  it('shares the host network instead of publishing a port where the host network reaches loopback', () => {
+    const hostArguments: readonly string[] = pinnedBrowserServerArguments({
+      image: 'mcr.microsoft.com/playwright:v1.64.1-noble',
+      name: 'ploaness-browsers-4100',
+      port: 4100,
+      playwrightCore: '/repo/node_modules/playwright-core',
+      isHostNetwork: true,
+    })
+    expect([
+      hostArguments.includes('--network=host'),
+      hostArguments.some((part: string): boolean => part.startsWith('--publish')),
+      hostArguments.at(-1),
+    ]).toEqual([true, false, '--host=127.0.0.1'])
   })
 })

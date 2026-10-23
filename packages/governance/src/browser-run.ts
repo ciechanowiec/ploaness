@@ -95,6 +95,38 @@ export const PASS_BUDGET_RULE: string = 'pass-budget'
 export const passBudgetMs = (pass: SweepPass, units: number): number =>
   PASS_OVERHEAD_MS + ALLOWANCES_MS[pass] * Math.max(0, units)
 
+// Every sweep test loads its pages fresh and judges each one alone, so which worker runs it, and what
+// runs beside it, cannot change a verdict. The project's own specs are held to one worker separately,
+// because they may share database state.
+/** The workers a browser run spreads the sweep's tests over. */
+export const SWEEP_WORKERS: number = 4
+
+/** How many tests each sweep pass is split into, so its parts run on parallel workers. */
+export const SWEEP_SHARDS: number = 4
+
+/** One part of a sweep pass: its zero-based index among `count` parts. */
+export interface Shard {
+  readonly index: number
+  readonly count: number
+}
+
+/** An item a shard visits, with its index in the whole pass. */
+export interface ShardItem<Item> {
+  readonly item: Item
+  readonly index: number
+}
+
+/**
+ * The items one shard of a pass visits, dealt round-robin so every shard gets a similar mix.
+ * @param items every item of the pass, in order.
+ * @param shard the shard.
+ * @returns the shard's items, each with its index in the whole pass.
+ */
+export const shardOf = <Item>(items: readonly Item[], shard: Shard): readonly ShardItem<Item>[] =>
+  items.flatMap((item: Item, index: number): readonly ShardItem<Item>[] =>
+    index % shard.count === shard.index ? [{ item, index }] : [],
+  )
+
 /** Where the container sees the host's Playwright, mounted read-only. */
 const CONTAINER_PLAYWRIGHT: string = '/ploaness/playwright-core'
 
@@ -105,13 +137,23 @@ export interface PinnedBrowserServer {
   readonly port: number
   /** The host's resolved `playwright-core` directory, which the container runs. */
   readonly playwrightCore: string
+  /**
+   * Whether the container shares the host's network. It then reaches the application's loopback
+   * origins directly; otherwise every request a page makes travels through the client's tunnel, which
+   * costs several times the load itself.
+   */
+  readonly isHostNetwork: boolean
 }
+
+/** The variable telling the suite its pinned browsers reach the application only through the tunnel. */
+export const BROWSER_TUNNEL_ENVIRONMENT_VARIABLE: string = 'PLOANESS_BROWSER_TUNNEL'
 
 /**
  * The `docker` arguments that start the pinned browser server.
  *
  * The container runs the host's own `playwright-core` against the image's browsers, so nothing is
- * fetched at test time and the protocol on both ends is one version. It listens on loopback only.
+ * fetched at test time and the protocol on both ends is one version. It listens on loopback only: on the
+ * host's own when the container shares the host network, or on a port published to it.
  * @param server the server to start.
  * @returns the arguments after `docker`.
  */
@@ -122,7 +164,7 @@ export const pinnedBrowserServerArguments = (server: PinnedBrowserServer): reado
   '--init',
   '--ipc=host',
   `--name=${server.name}`,
-  `--publish=127.0.0.1:${String(server.port)}:${String(server.port)}`,
+  server.isHostNetwork ? '--network=host' : `--publish=127.0.0.1:${String(server.port)}:${String(server.port)}`,
   `--volume=${server.playwrightCore}:${CONTAINER_PLAYWRIGHT}:ro`,
   '--workdir=/tmp',
   server.image,
@@ -130,7 +172,7 @@ export const pinnedBrowserServerArguments = (server: PinnedBrowserServer): reado
   `${CONTAINER_PLAYWRIGHT}/cli.js`,
   'run-server',
   `--port=${String(server.port)}`,
-  '--host=0.0.0.0',
+  server.isHostNetwork ? '--host=127.0.0.1' : '--host=0.0.0.0',
 ]
 
 /**

@@ -20,6 +20,10 @@ import { failed, type GateResult, type RunResult, run } from './exec.js'
 
 const START_TIMEOUT_MS: number = 60_000
 
+// Long enough for the server to start on a machine whose host network works, short enough that a machine
+// whose does not falls back to the tunnel without delaying the run much.
+const HOST_NETWORK_PROBE_MS: number = 20_000
+
 const POLL_MS: number = 250
 
 const MILLISECONDS_PER_SECOND: number = 1000
@@ -28,6 +32,8 @@ const MILLISECONDS_PER_SECOND: number = 1000
 export interface PinnedBrowsers {
   readonly endpoint: string
   readonly stop: () => void
+  /** Whether pages reach the application only through the client's tunnel. */
+  readonly isTunnelled: boolean
 }
 
 const freePort = async (): Promise<number> =>
@@ -111,28 +117,54 @@ export const startPinnedBrowsers = async (context: Context): Promise<PinnedBrows
       ...(inspected.output.length > 0 ? [inspected.output] : []),
     ])
   }
+  // A Linux Docker engine shares the host's network, so the container reaches the application without a
+  // tunnel. Docker Desktop's VM does not share the host's loopback, which shows as a server the host
+  // cannot reach on its own loopback, and the run then publishes a port and tunnels instead.
+  const shared: PinnedBrowsers | GateResult | undefined =
+    process.platform === 'linux'
+      ? await startServer(
+          context,
+          { image, playwrightCore: playwright.directory, isHostNetwork: true },
+          HOST_NETWORK_PROBE_MS,
+        )
+      : undefined
+  return shared === undefined || isStartFailure(shared)
+    ? await startServer(
+        context,
+        { image, playwrightCore: playwright.directory, isHostNetwork: false },
+        START_TIMEOUT_MS,
+      )
+    : shared
+}
+
+interface ServerPlan {
+  readonly image: string
+  readonly playwrightCore: string
+  readonly isHostNetwork: boolean
+}
+
+const startServer = async (
+  context: Context,
+  plan: ServerPlan,
+  timeoutMs: number,
+): Promise<PinnedBrowsers | GateResult> => {
   const port: number = await freePort()
   const name: string = `ploaness-browsers-${String(port)}`
-  const started: RunResult = run(
-    'docker',
-    pinnedBrowserServerArguments({ image, name, port, playwrightCore: playwright.directory }),
-    { cwd: context.root },
-  )
+  const started: RunResult = run('docker', pinnedBrowserServerArguments({ ...plan, name, port }), { cwd: context.root })
   if (started.code !== 0) {
     return failed('the pinned browser server did not start', [started.output])
   }
   const stop = (): void => {
     run('docker', ['rm', '--force', name], { cwd: context.root })
   }
-  if (!(await isListeningBy(port, performance.now() + START_TIMEOUT_MS))) {
+  if (!(await isListeningBy(port, performance.now() + timeoutMs))) {
     const logs: RunResult = run('docker', ['logs', name], { cwd: context.root })
     stop()
-    return failed(
-      `the pinned browser server did not listen within ${String(START_TIMEOUT_MS / MILLISECONDS_PER_SECOND)}s`,
-      [logs.output],
-    )
+    return failed(`the pinned browser server did not listen within ${String(timeoutMs / MILLISECONDS_PER_SECOND)}s`, [
+      logs.output,
+    ])
   }
-  return { endpoint: pinnedBrowserEndpoint(port), stop }
+  return { endpoint: pinnedBrowserEndpoint(port), stop, isTunnelled: !plan.isHostNetwork }
 }
 
 /** Whether a start answered a failure rather than browsers. */

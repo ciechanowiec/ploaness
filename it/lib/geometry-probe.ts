@@ -63,6 +63,8 @@ const serverArguments: readonly string[] = pinnedBrowserServerArguments({
   name,
   port: PORT,
   playwrightCore,
+  // The page is set directly, so it makes no request that a tunnel or a shared network would carry.
+  isHostNetwork: false,
 })
 execFileSync('docker', serverArguments)
 
