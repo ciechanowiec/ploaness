@@ -4,6 +4,7 @@
 // suite and removed after it. The image is never pulled during verification: a run that fetched it
 // would depend on the network and on what the registry serves that day, so a missing image is a failure
 // that names the command to fetch it beforehand.
+import { randomBytes } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createConnection, createServer, type Server, type Socket } from 'node:net'
@@ -19,6 +20,8 @@ import type { Context } from './context.js'
 import { failed, type GateResult, type RunResult, run } from './exec.js'
 
 const START_TIMEOUT_MS: number = 60_000
+
+const SECRET_BYTES: number = 16
 
 // Long enough for the server to start on a machine whose host network works, short enough that a machine
 // whose does not falls back to the tunnel without delaying the run much.
@@ -150,7 +153,10 @@ const startServer = async (
 ): Promise<PinnedBrowsers | GateResult> => {
   const port: number = await freePort()
   const name: string = `ploaness-browsers-${String(port)}`
-  const started: RunResult = run('docker', pinnedBrowserServerArguments({ ...plan, name, port }), { cwd: context.root })
+  const secret: string = randomBytes(SECRET_BYTES).toString('hex')
+  const started: RunResult = run('docker', pinnedBrowserServerArguments({ ...plan, name, port, secret }), {
+    cwd: context.root,
+  })
   if (started.code !== 0) {
     return failed('the pinned browser server did not start', [started.output])
   }
@@ -164,7 +170,7 @@ const startServer = async (
       logs.output,
     ])
   }
-  return { endpoint: pinnedBrowserEndpoint(port), stop, isTunnelled: !plan.isHostNetwork }
+  return { endpoint: pinnedBrowserEndpoint(port, secret), stop, isTunnelled: !plan.isHostNetwork }
 }
 
 /** Whether a start answered a failure rather than browsers. */

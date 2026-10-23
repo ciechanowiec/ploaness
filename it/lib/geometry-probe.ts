@@ -65,12 +65,13 @@ const serverArguments: readonly string[] = pinnedBrowserServerArguments({
   playwrightCore,
   // The page is set directly, so it makes no request that a tunnel or a shared network would carry.
   isHostNetwork: false,
+  secret: 'geometry',
 })
 execFileSync('docker', serverArguments)
 
 const connect = async (attempt: number): Promise<Browser> => {
   try {
-    return await chromium.connect(pinnedBrowserEndpoint(PORT))
+    return await chromium.connect(pinnedBrowserEndpoint(PORT, 'geometry'))
   } catch (error) {
     if (attempt >= START_ATTEMPTS) {
       throw error

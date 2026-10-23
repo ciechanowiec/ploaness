@@ -143,6 +143,12 @@ export interface PinnedBrowserServer {
    * costs several times the load itself.
    */
   readonly isHostNetwork: boolean
+  /**
+   * A random path the server answers on. The port is free when it is chosen and taken by the container
+   * a moment later, so another local process could take it first and pose as the browser server; it
+   * cannot complete the handshake on a path it was never told.
+   */
+  readonly secret: string
 }
 
 /** The variable telling the suite its pinned browsers reach the application only through the tunnel. */
@@ -173,11 +179,14 @@ export const pinnedBrowserServerArguments = (server: PinnedBrowserServer): reado
   'run-server',
   `--port=${String(server.port)}`,
   server.isHostNetwork ? '--host=127.0.0.1' : '--host=0.0.0.0',
+  `--path=/${server.secret}`,
 ]
 
 /**
  * The endpoint the suite connects to.
  * @param port the published port.
+ * @param secret the path the server answers on.
  * @returns the WebSocket URL.
  */
-export const pinnedBrowserEndpoint = (port: number): string => `ws://127.0.0.1:${String(port)}/`
+export const pinnedBrowserEndpoint = (port: number, secret: string): string =>
+  `ws://127.0.0.1:${String(port)}/${secret}`

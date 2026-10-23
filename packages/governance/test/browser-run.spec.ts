@@ -98,6 +98,7 @@ describe('the pinned browser server', () => {
         port: 4100,
         playwrightCore: '/repo/node_modules/playwright-core',
         isHostNetwork: false,
+        secret: 'f3a9',
       }),
     ).toEqual([
       'run',
@@ -115,8 +116,9 @@ describe('the pinned browser server', () => {
       'run-server',
       '--port=4100',
       '--host=0.0.0.0',
+      '--path=/f3a9',
     ])
-    expect(pinnedBrowserEndpoint(4100)).toBe('ws://127.0.0.1:4100/')
+    expect(pinnedBrowserEndpoint(4100, 'f3a9')).toBe('ws://127.0.0.1:4100/f3a9')
   })
 
   it('shares the host network instead of publishing a port where the host network reaches loopback', () => {
@@ -126,11 +128,12 @@ describe('the pinned browser server', () => {
       port: 4100,
       playwrightCore: '/repo/node_modules/playwright-core',
       isHostNetwork: true,
+      secret: 'f3a9',
     })
     expect([
       hostArguments.includes('--network=host'),
       hostArguments.some((part: string): boolean => part.startsWith('--publish')),
-      hostArguments.at(-1),
+      hostArguments.at(-2),
     ]).toEqual([true, false, '--host=127.0.0.1'])
   })
 })
