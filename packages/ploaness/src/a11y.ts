@@ -5,6 +5,7 @@ export type {
   HitTargetClassification,
   HitTargetProbe,
   HitTargetVerdict,
+  SettleOutcome,
 } from '@ploaness/config/a11y'
 export {
   classifyHitTarget,

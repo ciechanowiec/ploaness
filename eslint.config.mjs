@@ -65,12 +65,12 @@ export default compose(
   typeAwareParsing({ project: ['./tsconfig.lint.json'], tsconfigRootDir: import.meta.dirname }),
   { rules: guidelineRules },
 
-  // The network guard is the one exemption, and it is a role rather than a convenience: installing a
-  // guard on `net.Socket.prototype` and on the DNS resolvers IS mutation of an existing object, so the
-  // rule has nothing to propose there. Every other module in this repository is held to it. The
-  // exemption names one path rather than a directory, so a second file in `packages/config/src` does not
-  // inherit it by sitting next door.
-  immutabilityBlock([SOURCE, SPECS], ['packages/config/src/vitest-setup.ts']),
+  // The network guard and the verification clock are the two exemptions, and each is a role rather than
+  // a convenience: installing a guard on `net.Socket.prototype` and on the DNS resolvers, and replacing
+  // `globalThis.Date`, ARE mutations of an existing object, so the rule has nothing to propose there.
+  // Every other module in this repository is held to it. The exemptions name paths rather than a
+  // directory, so another file in `packages/config/src` does not inherit one by sitting next door.
+  immutabilityBlock([SOURCE, SPECS], ['packages/config/src/vitest-setup.ts', 'packages/config/src/clock-preload.ts']),
 
   // This repository's own root setup file, held to the same role the shipped configs give a consumer's.
   // It needs no environment today; carrying the block is what stops the three configs drifting again.

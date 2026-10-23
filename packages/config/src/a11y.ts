@@ -22,8 +22,9 @@ export type {
   HitTargetVerdict,
 } from '@ploaness/governance'
 export { classifyHitTarget, findDefiniteIncomplete } from '@ploaness/governance'
-export { expectNoLayoutDefects, LAYOUT_SCAN_VIEWPORTS, layoutDefectsOf } from './layout.js'
-export { settleForScan } from './settle.js'
+export { LAYOUT_SCAN_VIEWPORTS } from './layout.js'
+export { expectNoLayoutDefects, layoutDefectsOf } from './scanner.js'
+export { type SettleOutcome, settleForScan } from './settle.js'
 
 import { type Dirent, existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -31,16 +32,18 @@ import { AxeBuilder } from '@axe-core/playwright'
 import { expect, type Page } from '@playwright/test'
 import {
   appRootOf,
+  type BrowserFinding,
+  type DeclaredRoute,
   declaredRoutesOf,
   findDefiniteIncomplete,
+  findingLine,
   findUnsweptRoutes,
   isSkippedRoute,
   type SpecSource,
   type UnsweptRoute,
 } from '@ploaness/governance'
-import { expectNoLayoutDefects } from './layout.js'
 import { projectSettings } from './project-settings.js'
-import { settleForScan } from './settle.js'
+import { locationOf, scanPageInPlace } from './scanner.js'
 
 export const SKIPPED_ROUTE_PREFIXES: readonly string[] = projectSettings.accessibilitySkipRoutes
 
@@ -75,18 +78,18 @@ export const expectNoAxeDefects = (scan: AxeResults, label: string): void => {
 }
 
 /**
- * Run both of the sweep's scans on a page: axe in its default state, then layout at every viewport.
+ * Run the sweep's resting scan on a page: axe, and the layout, text and media rules at every viewport.
  *
  * The one call a project's own specification needs for a page the crawl cannot reach. The route
- * coverage check reads it as evidence of both scans.
+ * coverage check reads it as evidence of both scans. The page is resized in place rather than reloaded,
+ * so the state the specification drove it into is what is judged.
  * @param page the page, already on the route and in the state to judge.
- * @returns nothing; it fails the test on the first scan that finds a defect.
+ * @returns nothing; it fails the test with one line per defect.
  */
 export const expectSweptPage = async (page: Page): Promise<void> => {
-  await settleForScan(page)
-  const builder: AxeBuilder = await scopedAxe(page)
-  expectNoAxeDefects(await builder.analyze(), `default-state a11y on ${new URL(page.url()).pathname}`)
-  await expectNoLayoutDefects(page)
+  const scanned: readonly BrowserFinding[] = await scanPageInPlace(page, true)
+  const findings: readonly string[] = scanned.map((finding: BrowserFinding): string => findingLine(finding))
+  expect(findings, `defects on ${locationOf(page)}`).toEqual([])
 }
 
 // What the sweep cannot work out from inside the browser: which pages this project declares.
@@ -141,6 +144,16 @@ const readSpecs = (root: string, paths: readonly string[]): readonly SpecSource[
         source: readFileSync(path.join(root, file), 'utf8'),
       }),
     )
+
+/**
+ * The routes this project's file tree declares, for grouping crawled routes by template.
+ * @returns every declared route, or none when the member declares no application routes.
+ */
+export const declaredRoutes = (): readonly DeclaredRoute[] => {
+  const paths: readonly string[] = projectFiles(process.cwd())
+  const appRoot: string | undefined = appRootOf(paths)
+  return appRoot === undefined ? [] : declaredRoutesOf(paths, appRoot)
+}
 
 /**
  * The pages this project declares that the sweep did not cover, each with what to do about it.

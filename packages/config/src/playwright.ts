@@ -13,9 +13,13 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
 import {
+  BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE,
   browserServerEndpoint,
+  CLOCK_ENVIRONMENT_VARIABLE,
   canReuseBrowserServer,
+  DEVICE_SCALE_FACTOR,
   portOf,
+  REAL_CLOCK,
   runEnvironmentFiles,
   shellArgument,
   VERIFICATION_ENVIRONMENT_VARIABLE,
@@ -39,7 +43,6 @@ if (isVerification) {
   }
 }
 
-const isContinuousIntegration: boolean = Boolean(process.env['CI'])
 const isReuseExistingServer: boolean = canReuseBrowserServer(process.env)
 const productionLauncher: string = fileURLToPath(new URL('production-server.js', import.meta.url))
 
@@ -48,7 +51,6 @@ const productionLauncher: string = fileURLToPath(new URL('production-server.js',
 // compilation headroom instead of leaning on a retry to mask it.
 const TEST_TIMEOUT_MS: number = 90_000
 const SERVER_TIMEOUT_MS: number = 180_000
-const CI_RETRIES: number = 2
 
 // Structural rather than Playwright's own `PlaywrightTestConfig`, for the reason `vitest.ts` records:
 // the harness owns the config and the consumer owns the runner, so an emitted declaration should not
@@ -65,6 +67,28 @@ const withPort = (
 
 const declaredPort: string | undefined = portOf(projectSettings.serverUrl)
 
+// Under verification the browsers are the pinned ones the CLI started in the Playwright image, so the
+// same tree measures the same pixels on every machine. The application stays on the host: the remote
+// browser reaches its loopback origins through the client, so cookies, headers and the production
+// server are exactly what they are without the container. Outside verification the host's Chromium runs.
+const browserEndpoint: string | undefined = process.env[BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE]
+
+const remote: Readonly<Record<string, unknown>> =
+  browserEndpoint === undefined ? {} : { connectOptions: { wsEndpoint: browserEndpoint, exposeNetwork: '<loopback>' } }
+
+// The sweep alone runs in the other engines; a project's own specs describe its behaviour once.
+const SWEEP_SPEC: RegExp = /a11y\.e2e\.spec\.ts$/u
+
+// The application's clock, shifted by the preload in every server this config starts. The CLI sets the
+// variable for a verification run; a project that declared the real clock gets none.
+const clockOptions: string =
+  isVerification && projectSettings.clock !== REAL_CLOCK
+    ? ` --import=${new URL('clock-preload.js', import.meta.url).href}`
+    : ''
+
+const clockEnvironment: Readonly<Record<string, string>> =
+  clockOptions === '' ? {} : { [CLOCK_ENVIRONMENT_VARIABLE]: projectSettings.clock }
+
 // Next's environment loader marks the process once it has loaded the environment files, and skips
 // loading in any process that inherits the mark. A verification run loads this package's files above,
 // and Playwright starts every server on top of the runner's own environment, so without clearing the
@@ -76,17 +100,50 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
   testDir: './tests/e2e',
   timeout: TEST_TIMEOUT_MS,
   forbidOnly: true,
-  retries: isContinuousIntegration ? CI_RETRIES : 0,
+  // Never retried: a retry that passes hides a verdict that is not reproducible, which is a defect of
+  // its own. Determinism is established by the fixed clock, motion, locale, timezone and pixel ratio
+  // below, and by the settle and stability checks every scan makes.
+  retries: 0,
   workers: 1,
   // `open: 'never'` because the gate runs this non-interactively: a reporter that launches a browser
   // on failure would hang the run rather than report it.
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: projectSettings.serverUrl,
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    reducedMotion: 'reduce',
+    locale: 'en-US',
+    timezoneId: 'UTC',
+    colorScheme: 'light',
+    deviceScaleFactor: DEVICE_SCALE_FACTOR,
+    serviceWorkers: 'block',
+    ...remote,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel: 'chromium' } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        deviceScaleFactor: DEVICE_SCALE_FACTOR,
+        ...(browserEndpoint === undefined && { channel: 'chromium' }),
+      },
+    },
+    ...(browserEndpoint === undefined
+      ? []
+      : [
+          {
+            name: 'firefox',
+            testMatch: SWEEP_SPEC,
+            use: { ...devices['Desktop Firefox'], deviceScaleFactor: DEVICE_SCALE_FACTOR },
+          },
+          {
+            name: 'webkit',
+            testMatch: SWEEP_SPEC,
+            use: { ...devices['Desktop Safari'], deviceScaleFactor: DEVICE_SCALE_FACTOR },
+          },
+        ]),
+  ],
   // Auxiliary servers first, then the application under test. Playwright awaits each entry in this
   // list before starting the next, so the order is the difference between a run and a deadlock: a
   // frontend that renders from a headless CMS cannot answer its own origin until that CMS answers, and
@@ -115,7 +172,14 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
       // is long.
       timeout: SERVER_TIMEOUT_MS,
       ...(server.cwd !== undefined && { cwd: server.cwd }),
-      env: withPort({ NODE_OPTIONS: '--no-deprecation', [NEXT_PROCESSED_ENVIRONMENT_MARK]: '' }, portOf(server.url)),
+      env: withPort(
+        {
+          NODE_OPTIONS: `--no-deprecation${clockOptions}`,
+          [NEXT_PROCESSED_ENVIRONMENT_MARK]: '',
+          ...clockEnvironment,
+        },
+        portOf(server.url),
+      ),
     })),
     {
       // Invoked as a bare binary rather than through a package script, because a nested package manager
@@ -132,7 +196,8 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
       env: withPort(
         {
           NEXT_TELEMETRY_DISABLED: '1',
-          NODE_OPTIONS: '--no-deprecation',
+          NODE_OPTIONS: `--no-deprecation${clockOptions}`,
+          ...clockEnvironment,
           ...(isVerification && {
             NODE_ENV: 'production',
             HOSTNAME: browserServerEndpoint(projectSettings.serverUrl).host,

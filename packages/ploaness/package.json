@@ -39,6 +39,10 @@
       "types": "./dist/a11y.d.ts",
       "default": "./dist/a11y.js"
     },
+    "./sweep": {
+      "types": "./dist/sweep.d.ts",
+      "default": "./dist/sweep.js"
+    },
     "./access": {
       "types": "./dist/access.d.ts",
       "default": "./dist/access.js"

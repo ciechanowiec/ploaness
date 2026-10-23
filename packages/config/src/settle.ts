@@ -47,12 +47,19 @@ import type { Page } from '@playwright/test'
 // It is also unusable here in particular: the sweep runs against `next dev`, whose every page holds a
 // hot-reload socket open, so no page it ever visits goes idle.
 //
+// WHY IMAGES ARE PART OF IT. A rule that judges an image reads its natural size and whether it loaded,
+// and a lazy image below the fold has not started loading when the page settles. Every lazy image is
+// therefore asked to load now, and every image's decode is awaited. A decode that fails is swallowed
+// here: the image rule reports the broken image, with its element named.
+//
 // WHY THE CEILING IS A TIMER. `requestAnimationFrame` does not fire in a page the browser has
 // backgrounded, so a frame-counted ceiling is not a ceiling. A throttled background timer still fires.
 // The race is inside the page for the same reason the hit-target probe does its work in one
 // `evaluate`: a Node-side race would leave the in-page promise pending against a context the next
 // navigation destroys.
-const SETTLE_BUDGET_MS: number = 1000
+// Reaching it is a finding rather than a timeout the scan proceeds past: a page that has not settled
+// gives every verdict measured on it the standing of a coin toss.
+const SETTLE_BUDGET_MS: number = 10_000
 
 // WHY A BUSY REGION IS WAITED FOR, AND ON A CEILING OF ITS OWN. `aria-busy="true"` is a page saying
 // in so many words that a region is still being filled, and a framework's loading fallback says it:
@@ -84,10 +91,17 @@ interface PageElement {
   readonly checkVisibility: () => boolean
 }
 
+interface PageImage {
+  readonly loading: string
+  readonly decode: () => Promise<void>
+  readonly setAttribute: (name: string, value: string) => void
+}
+
 declare const document: {
   readonly fonts: { readonly ready: Promise<unknown> } | undefined
   readonly getAnimations: (() => readonly PageAnimation[]) | undefined
   readonly querySelectorAll: (selectors: string) => ArrayLike<PageElement>
+  readonly images: ArrayLike<PageImage>
 }
 declare const requestAnimationFrame: (callback: () => void) => number
 declare const setTimeout: (callback: () => void, delayMs: number) => unknown
@@ -96,7 +110,7 @@ declare const setTimeout: (callback: () => void, delayMs: number) => unknown
 // own source text, so a reference to anything at module scope here would be a ReferenceError in the
 // page rather than a compile error in this file - the one mistake this shape cannot be checked for.
 // It is also why the animation wait below is written inline rather than as a helper of its own.
-const settleInPage = async (budgetMs: number): Promise<void> => {
+const isSettledInPage = async (budgetMs: number): Promise<boolean> => {
   const quietFrames: number = 2
   // Recursive rather than a loop over a counter, because there is no mutable binding to count with:
   // this repository bans `let` and in-place mutation in its own source as well as in a consumer's. Each
@@ -109,25 +123,35 @@ const settleInPage = async (budgetMs: number): Promise<void> => {
       })
     })
     const current: number = document.querySelectorAll('*').length
-    if (current !== previous) {
-      await stable(current, quietFrames)
-      return
-    }
-    if (remaining > 1) {
-      await stable(current, remaining - 1)
+    // A change restarts the count of quiet frames; a quiet frame spends one of them.
+    const left: number = current === previous ? remaining - 1 : quietFrames
+    if (left > 0) {
+      await stable(current, left)
     }
   }
-  const settled = async (): Promise<void> => {
+  const hasSettled = async (): Promise<boolean> => {
     // The optional call covers a document carrying no font set at all, which must skip the wait
     // rather than fail the settle.
     await document.fonts?.ready
+    // Settled rather than all fulfilled: a broken image is the image rule's finding, reported with its
+    // element.
+    await Promise.allSettled(
+      Array.from(document.images, async (image: PageImage): Promise<void> => {
+        if (image.loading === 'lazy') {
+          image.setAttribute('loading', 'eager')
+        }
+        await image.decode()
+      }),
+    )
     // The element count FIRST, and this order is the whole of it. An animation does not exist until
     // something creates it, and on a hydrating page that something is the mount: measured before the
     // framework has mounted, `getAnimations` answers an honest empty list, and a settle that believed
     // it would scan the very frame the animation is about to start from. Waiting for the tree to stop
     // changing is waiting for the mount, which is what puts the animations on the page to be found.
     await stable(document.querySelectorAll('*').length, quietFrames)
-    await Promise.all(
+    // Settled rather than all fulfilled: a cancelled animation rejects rather than resolving. The
+    // cancellation is a state change like any other and the count below is what notices it.
+    await Promise.allSettled(
       (document.getAnimations?.() ?? [])
         .filter(
           (animation: PageAnimation): boolean =>
@@ -135,82 +159,89 @@ const settleInPage = async (budgetMs: number): Promise<void> => {
             animation.effect !== null &&
             Number.isFinite(animation.effect.getComputedTiming().iterations),
         )
-        .map(async (animation: PageAnimation): Promise<void> => {
-          try {
-            await animation.finished
-          } catch {
-            // A cancelled animation rejects rather than resolving. The cancellation is a state change
-            // like any other and the count below is what notices it.
-          }
-        }),
+        .map(async (animation: PageAnimation): Promise<unknown> => await animation.finished),
     )
     // And again afterwards, because an animation that ends by revealing a panel adds elements as it
     // finishes. This pass costs two frames on a page where nothing moved.
     await stable(document.querySelectorAll('*').length, quietFrames)
+    return true
   }
-  const deadline = async (): Promise<void> => {
+  const isSettledByDeadline = async (): Promise<boolean> => {
     await new Promise<void>((resolve: () => void): void => {
       setTimeout((): void => {
         resolve()
       }, budgetMs)
     })
+    return false
   }
-  await Promise.race([settled(), deadline()])
+  return await Promise.race([hasSettled(), isSettledByDeadline()])
+}
+
+interface BusyOutcome {
+  readonly wasBusy: boolean
+  readonly isRevealed: boolean
 }
 
 // Self-contained for the same reason as the settle above. Frame by frame, like the count, so a region
 // revealed between two checks is seen on the next. Answers whether anything was busy at all, so a page
 // that never was is not settled a second time.
-const wasBusyInPage = async (budgetMs: number): Promise<boolean> => {
+const busyInPage = async (budgetMs: number): Promise<BusyOutcome> => {
   const busySelector: string = '[aria-busy="true"]'
   const isBusy = (): boolean =>
     Array.from(document.querySelectorAll(busySelector)).some((element: PageElement): boolean =>
       element.checkVisibility(),
     )
   const wasBusy: boolean = isBusy()
-  const revealed = async (): Promise<void> => {
+  const hasCleared = async (): Promise<boolean> => {
     if (!isBusy()) {
-      return
+      return true
     }
     await new Promise<void>((resolve: () => void): void => {
       requestAnimationFrame((): void => {
         resolve()
       })
     })
-    await revealed()
+    return await hasCleared()
   }
-  await Promise.race([
-    revealed(),
-    new Promise<void>((resolve: () => void): void => {
-      setTimeout(resolve, budgetMs)
+  const isRevealed: boolean = await Promise.race([
+    hasCleared(),
+    new Promise<boolean>((resolve: (isCleared: boolean) => void): void => {
+      setTimeout((): void => {
+        resolve(false)
+      }, budgetMs)
     }),
   ])
-  return wasBusy
+  return { wasBusy, isRevealed }
 }
+
+/** How a settle ended. */
+export type SettleOutcome = 'settled' | 'ceiling' | 'busy' | 'interrupted'
 
 /**
  * Wait for a page to finish rendering, before anything measures it.
  *
  * Call it after a navigation, and after a state change a scan is about to judge. A still document
- * costs two animation frames; one that is animating costs however long its animations have left; a
- * document that never stops changing costs the budget and no more, so a page nobody can settle slows
- * the sweep rather than hanging it. A visible `aria-busy="true"` region is waited for until it clears,
- * on a longer ceiling of its own, and the page is then settled again.
+ * costs two animation frames; one that is animating costs however long its animations have left. A
+ * visible `aria-busy="true"` region is waited for until it clears, on a longer ceiling of its own, and
+ * the page is then settled again.
  * @param page the page about to be scanned, left on whatever route it holds.
- * @returns nothing. It resolves whether the page settled or the budget ran out.
+ * @returns `settled`, or what stopped it: the ceiling, a region that stayed busy, or a navigation that
+ * destroyed the page while it waited. The sweep reports every outcome but `settled` as a finding.
  */
-export const settleForScan = async (page: Page): Promise<void> => {
+export const settleForScan = async (page: Page): Promise<SettleOutcome> => {
   try {
-    await page.evaluate(settleInPage, SETTLE_BUDGET_MS)
-    // Revealing the content changes the tree, so a page that was busy is settled once more after it.
-    if (await page.evaluate(wasBusyInPage, BUSY_BUDGET_MS)) {
-      await page.evaluate(settleInPage, SETTLE_BUDGET_MS)
+    if (!(await page.evaluate(isSettledInPage, SETTLE_BUDGET_MS))) {
+      return 'ceiling'
     }
+    const busy: BusyOutcome = await page.evaluate(busyInPage, BUSY_BUDGET_MS)
+    if (!busy.isRevealed) {
+      return 'busy'
+    }
+    // Revealing the content changes the tree, so a page that was busy is settled once more after it.
+    return !busy.wasBusy || (await page.evaluate(isSettledInPage, SETTLE_BUDGET_MS)) ? 'settled' : 'ceiling'
   } catch {
     // A route that redirects on mount destroys the execution context while this is in flight, and a
-    // closed page cannot be asked anything. Neither is an accessibility finding, and neither should end
-    // a sweep: the scan that follows then runs on whatever the page holds, which is what every call
-    // site did before this function existed. A page that is genuinely broken still fails at `analyze`,
-    // with an axe result to read rather than a protocol error naming no route.
+    // closed page cannot be asked anything. The caller decides what that means for its scan.
+    return 'interrupted'
   }
 }

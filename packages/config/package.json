@@ -45,6 +45,14 @@
       "types": "./dist/a11y.d.ts",
       "default": "./dist/a11y.js"
     },
+    "./clock": {
+      "types": "./dist/clock-preload.d.ts",
+      "default": "./dist/clock-preload.js"
+    },
+    "./sweep": {
+      "types": "./dist/sweep.d.ts",
+      "default": "./dist/sweep.js"
+    },
     "./access": {
       "types": "./dist/access.d.ts",
       "default": "./dist/access.js"
