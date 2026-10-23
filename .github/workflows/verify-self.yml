@@ -56,6 +56,11 @@ jobs:
       - name: 'Install the pinned verification browser'
         run: packages/config/node_modules/.bin/playwright install --with-deps chromium
 
+      # The browser suite measures in the Playwright image matching the pinned Playwright, and a
+      # verification run never pulls it, so it is fetched here, before the run.
+      - name: 'Pull the pinned browser image'
+        run: docker pull "mcr.microsoft.com/playwright:v$(node -p "require('./packages/config/node_modules/@playwright/test/package.json').version")-noble"
+
       # Docker is preinstalled on the GitHub-hosted ubuntu runners, and the five analyzer images the
       # verification needs - gitleaks, hadolint, actionlint, shellcheck, checkov - are pinned by digest in
       # `packages/governance/src/toolchain-pins.ts`. Nothing is installed for them here: an image
@@ -65,3 +70,74 @@ jobs:
       # this single command covers the packaging and the consumer-resolution path as well.
       - name: 'Verify'
         run: pnpm run verify
+
+  # The pinned image is built for both architectures, and text shaping can differ between the two
+  # builds. Each runner measures the same page in it; the next job requires them to agree within the
+  # geometry tolerance, or a verdict reached on one architecture would not hold on the other.
+  geometry:
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: 'Install pnpm'
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: 'Set up Node from .nvmrc'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: 'Install dependencies and build'
+        run: pnpm install --frozen-lockfile && pnpm run build
+
+      - name: 'Pull the pinned browser image'
+        run: docker pull "mcr.microsoft.com/playwright:v$(node -p "require('./packages/config/node_modules/@playwright/test/package.json').version")-noble"
+
+      - name: 'Measure the geometry page'
+        run: node it/lib/geometry-probe.ts "geometry-${{ matrix.runner }}.json"
+
+      - name: 'Keep the measurement'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: 'geometry-${{ matrix.runner }}'
+          path: 'geometry-${{ matrix.runner }}.json'
+
+  geometry-agreement:
+    needs: geometry
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: 'Install pnpm'
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: 'Set up Node from .nvmrc'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: 'Install dependencies and build'
+        run: pnpm install --frozen-lockfile && pnpm run build
+
+      # Fetched with the runner's own `gh` rather than a further action, so no unpinned code joins the run.
+      - name: 'Fetch both measurements'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${{ github.run_id }}" --name geometry-ubuntu-24.04 --dir amd64
+          gh run download "${{ github.run_id }}" --name geometry-ubuntu-24.04-arm --dir arm64
+
+      - name: 'Require the two architectures to agree'
+        run: node it/lib/compare-geometry.ts amd64/geometry-ubuntu-24.04.json arm64/geometry-ubuntu-24.04-arm.json
