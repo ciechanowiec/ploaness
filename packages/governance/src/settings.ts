@@ -7,6 +7,7 @@
 // bundle may grow. There is no field that turns a gate off, because "do not disable the failing check"
 // is the contract rather than a preference.
 
+import { clockOf } from './browser-run.js'
 import { BUNDLE_BUDGET_BYTES } from './bundle-budget.js'
 import { COVERAGE_ROLE_EXCLUDE, coverageCandidates, coverageIncludes } from './coverage-policy.js'
 import { hasExtension, JAVASCRIPT_EXTENSIONS, matchesGlob, matchesRole, type RolePattern } from './file-roles.js'
@@ -201,6 +202,11 @@ export interface Settings {
    * Additive, so no declaration removes a required viewport.
    */
   readonly layoutViewports: readonly LayoutViewport[]
+  /**
+   * The instant a verification run starts the application's and the browser's clocks at, or `"real"`.
+   * Any other value is the default instant, so a typo cannot unpin the clock.
+   */
+  readonly clock: string
   /**
    * Placeholder environment supplied to the gates that must IMPORT the project to analyse it. A Payload
    * config validates `process.env` at module scope, so a purely static analyser cannot load it in a bare
@@ -614,6 +620,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     accessibilityCustomSkipRoutes: honoured(declaredRoutes),
     accessibilityRouteBudget: clampedCeiling(raw['accessibilityRouteBudget'], DEFAULT_ACCESSIBILITY_ROUTE_BUDGET),
     ...readLayoutSettings(raw),
+    clock: clockOf(raw['clock']),
     analysisEnv: { ...DEFAULT_ANALYSIS_ENV, ...asStringRecord(raw['analysisEnv']) },
   }
 }

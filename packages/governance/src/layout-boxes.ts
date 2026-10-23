@@ -4,6 +4,8 @@
 // neighbour, or the two read as one broken shape. Two elements are compared when they are siblings
 // once every wrapper that paints nothing has been looked through: `<p><a class="button">` beside a
 // notice is the button beside the notice, because the paragraph around it draws nothing a reader sees.
+
+import { exemptionRules } from './browser-exemptions.js'
 import {
   ATTACHED_EXEMPTION,
   hasArea,
@@ -155,7 +157,7 @@ const isBoxedToward = (snapshot: LayoutSnapshot, node: LayoutNode, other: Layout
       node.boxShadow !== 'none' ||
       hasBorderOn(node, facingSide(outerBox(node), outerBox(other)))
 
-const isAttached = (node: LayoutNode): boolean => node.exemption === ATTACHED_EXEMPTION
+const isAttached = (node: LayoutNode): boolean => exemptionRules(node.exemption).includes(ATTACHED_EXEMPTION)
 
 // Two bands that each span the full width of the page and sit one above the other are the page's
 // sections - a header above a hero, the two tones of a footer - so their shared edge is the page's own

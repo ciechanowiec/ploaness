@@ -1,0 +1,100 @@
+import { describe, expect, it } from 'vitest'
+import {
+  alternateHrefs,
+  onOrigin,
+  sitemapEntries,
+  storiesOfIndex,
+  storyLocation,
+  storyUrl,
+  templateSamples,
+} from '../src/browser-discovery.js'
+import type { DeclaredRoute } from '../src/route-map.js'
+
+describe('sitemap discovery', () => {
+  it('reads the pages of a url set, decoding entities and repeating none', () => {
+    expect(
+      sitemapEntries(
+        '<urlset><url><loc> http://localhost:3100/en </loc></url><url><loc>http://localhost:3100/en?a=1&amp;b=2</loc></url>' +
+          '<url><loc>http://localhost:3100/en</loc></url></urlset>',
+      ),
+    ).toEqual({ pages: ['http://localhost:3100/en', 'http://localhost:3100/en?a=1&b=2'], sitemaps: [] })
+  })
+
+  it('reads the nested sitemaps of an index', () => {
+    expect(
+      sitemapEntries('<sitemapindex><sitemap><loc>http://localhost:3100/sitemaps/1</loc></sitemap></sitemapindex>'),
+    ).toEqual({
+      pages: [],
+      sitemaps: ['http://localhost:3100/sitemaps/1'],
+    })
+  })
+})
+
+describe('locale discovery', () => {
+  it('follows every alternate that names a language, x-default included', () => {
+    expect(
+      alternateHrefs([
+        { hreflang: 'en', href: '/en/teams' },
+        { hreflang: 'x-default', href: '/en/teams' },
+        { hreflang: 'tr', href: ' /tr/takimlar ' },
+        { hreflang: '', href: '/feed' },
+      ]),
+    ).toEqual(['/en/teams', '/tr/takimlar'])
+  })
+})
+
+describe('story discovery', () => {
+  const server: string = 'http://localhost:6106'
+
+  it('lists each story and leaves docs entries out', () => {
+    expect(
+      storiesOfIndex(
+        {
+          v: 5,
+          entries: {
+            'ui-button--primary': { type: 'story', id: 'ui-button--primary', title: 'UI/Button', name: 'Primary' },
+            'ui-button--docs': { type: 'docs', id: 'ui-button--docs', title: 'UI/Button', name: 'Docs' },
+            broken: { type: 'story' },
+          },
+        },
+        server,
+      ),
+    ).toEqual([{ id: 'ui-button--primary', title: 'UI/Button', name: 'Primary', server }])
+  })
+
+  it('answers undefined for a document that is not a Storybook index', () => {
+    expect([storiesOfIndex({ entries: null }, server), storiesOfIndex([], server)]).toEqual([undefined, undefined])
+  })
+
+  it('addresses a story alone and reports it by its id', () => {
+    expect([storyUrl({ id: 'ui-button--primary', server }), storyLocation({ id: 'ui-button--primary' })]).toEqual([
+      'http://localhost:6106/iframe.html?id=ui-button--primary&viewMode=story',
+      'story:ui-button--primary',
+    ])
+  })
+})
+
+describe('template sampling', () => {
+  const declared: readonly DeclaredRoute[] = [
+    { file: 'src/app/page.tsx', route: '/', isDynamic: false },
+    { file: 'src/app/teams/[slug]/page.tsx', route: '/teams/[slug]', isDynamic: true },
+  ]
+
+  it('picks the first crawled route of each template and counts the rest', () => {
+    expect(templateSamples(['/', '/teams/ajax', '/teams/psv', '/rewritten'], declared)).toEqual([
+      { template: '/', route: '/', routes: 1 },
+      { template: '/teams/[slug]', route: '/teams/ajax', routes: 2 },
+      { template: '/rewritten', route: '/rewritten', routes: 1 },
+    ])
+  })
+})
+
+describe('sitemap locations on the run origin', () => {
+  it('reads the path of a canonical public URL on the application under test', () => {
+    expect([
+      onOrigin('https://www.example.com/en/teams?page=2', 'http://127.0.0.1:3100'),
+      onOrigin('/sitemaps/1', 'http://127.0.0.1:3100'),
+      onOrigin('https://[', 'http://127.0.0.1:3100'),
+    ]).toEqual(['http://127.0.0.1:3100/en/teams?page=2', 'http://127.0.0.1:3100/sitemaps/1', undefined])
+  })
+})

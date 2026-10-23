@@ -69,10 +69,42 @@ export interface LayoutNode {
   readonly clientHeight: number
   readonly title: string
   readonly ariaLabel: string
-  /** The value of `data-ploaness-layout`, or undefined when the attribute is absent. */
+  /** The value of `data-ploaness-layout`: the rule names it exempts, or undefined when it is absent. */
   readonly exemption: string | undefined
   /** The value of `data-ploaness-layout-reason`, trimmed. */
   readonly exemptionReason: string
+  /** The computed `font-size` in CSS pixels. */
+  readonly fontSize: number
+  /** The computed `font-family` stack. */
+  readonly fontFamily: string
+  /** What a replaced element reports about its content, or undefined for any other element. */
+  readonly media: MediaFacts | undefined
+}
+
+/** What an image, video, frame or embed reports about the content it shows. */
+export interface MediaFacts {
+  /** Whether an image has finished loading; always true for an element that is not an image. */
+  readonly isComplete: boolean
+  /** Whether the source is a vector image, which has no fixed resolution to judge. */
+  readonly isVector: boolean
+  /** The intrinsic size of the loaded source, 0 when it has none. */
+  readonly naturalWidth: number
+  readonly naturalHeight: number
+  /** The content box, inside padding and border. */
+  readonly contentWidth: number
+  readonly contentHeight: number
+  readonly objectFit: string
+  /** The box the same element takes with no source loaded: the space it reserves before loading. */
+  readonly reservedWidth: number
+  readonly reservedHeight: number
+}
+
+/** One `@font-face` the document declares, and how far it got. */
+export interface FontFaceFacts {
+  readonly family: string
+  readonly status: string
+  readonly weight: string
+  readonly style: string
 }
 
 /** One page measured at one viewport. */
@@ -85,9 +117,11 @@ export interface LayoutSnapshot {
   /** The computed background of `<html>`, which is what `<body>` sits on. */
   readonly rootBackground: string
   readonly nodes: readonly LayoutNode[]
+  /** Every `@font-face` the document declares. */
+  readonly fontFaces: readonly FontFaceFacts[]
 }
 
-/** The only exemption value: an edge shared on purpose, such as a tab joined to its panel. */
+/** The touching-boxes rule's name, which exempts an edge shared on purpose, such as a tab joined to its panel. */
 export const ATTACHED_EXEMPTION: string = 'attached'
 
 // The canvas a page is drawn on when neither `<html>` nor any ancestor paints a background.

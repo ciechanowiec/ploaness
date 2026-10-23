@@ -42,6 +42,9 @@ const nodeOf = (fields: Partial<LayoutNode> & Pick<LayoutNode, 'index' | 'parent
   ariaLabel: '',
   exemption: undefined,
   exemptionReason: '',
+  fontSize: 16,
+  fontFamily: 'sans-serif',
+  media: undefined,
   ...fields,
 })
 
@@ -63,6 +66,7 @@ const defectsOf = (nodes: readonly LayoutNode[], scrollWidth: number = 390): rea
         scrollWidth,
         rootBackground: 'rgb(255, 255, 255)',
         nodes,
+        fontFaces: [],
       } satisfies LayoutSnapshot,
     ],
     LAYOUT_MINIMUM_GAP,
@@ -93,7 +97,7 @@ const collidingText = (overlap: number, second: Partial<LayoutNode> = {}): reado
 describe('text that overlaps other text', () => {
   it('fails when two runs of text share more than one pixel row', () => {
     expect(defectsOf(collidingText(8))).toEqual([
-      '/news @390px: overlapping text: h2 "Results"  <->  p "Saturday fixtures"',
+      '[text-overlap] /news @390x844 (chromium, resting): overlapping text: h2 "Results"  <->  p "Saturday fixtures"',
     ])
   })
 
@@ -170,7 +174,7 @@ describe('text under a line height tighter than its font', () => {
 
   it('still fails lines pulled over each other', () => {
     expect(defectsOf(wordmark(16))).toEqual([
-      '/news @390px: overlapping text: span.wordmark-name "Canada Soccer"  <->  span.wordmark-tagline "Registration"',
+      '[text-overlap] /news @390x844 (chromium, resting): overlapping text: span.wordmark-name "Canada Soccer"  <->  span.wordmark-tagline "Registration"',
     ])
   })
 })
@@ -199,7 +203,7 @@ const label = (contentWidth: number, fields: Partial<LayoutNode> = {}): readonly
 describe('text its own box cuts off', () => {
   it('fails when the content is wider than the box that hides it', () => {
     expect(defectsOf(label(240))).toEqual([
-      '/news @390px: clipped text (content 240x20px in a 200x20px box): span.team-name "Borussia Mönchengladbach"',
+      '[clipped-text] /news @390x844 (chromium, resting): clipped text (content 240x20px in a 200x20px box): span.team-name "Borussia Mönchengladbach"',
     ])
   })
 
@@ -227,7 +231,7 @@ describe('text its own box cuts off', () => {
 
   it('fails an ellipsis that names its full text nowhere', () => {
     expect(defectsOf(label(240, { textOverflow: 'ellipsis' }))).toEqual([
-      '/news @390px: ' +
+      '[clipped-text] /news @390x844 (chromium, resting): ' +
         'truncated text without its full text in title or aria-label: span.team-name "Borussia Mönchengladbach"',
     ])
   })
@@ -256,7 +260,7 @@ describe('a page wider than its viewport', () => {
 
   it('names the outermost element that reaches past the viewport, once', () => {
     expect(defectsOf(wide, 412)).toEqual([
-      '/news @390px: horizontal overflow (page 412px wide in a 390px viewport): div.fixture-table',
+      '[overflow] /news @390x844 (chromium, resting): horizontal overflow (page 412px wide in a 390px viewport): div.fixture-table',
     ])
   })
 
@@ -271,7 +275,7 @@ describe('a page wider than its viewport', () => {
       nodeOf({ index: 2, parent: 1, tag: 'table', rects: [rect(0, 0, 600, 100)] }),
     ]
     expect(defectsOf(scrolled, 400)).toEqual([
-      '/news @390px: horizontal overflow (page 400px wide in a 390px viewport): document',
+      '[overflow] /news @390x844 (chromium, resting): horizontal overflow (page 400px wide in a 390px viewport): document',
     ])
   })
 
@@ -288,7 +292,7 @@ describe('a page wider than its viewport', () => {
       }),
     ]
     expect(defectsOf(fixed, 400)).toEqual([
-      '/news @390px: horizontal overflow (page 400px wide in a 390px viewport): document',
+      '[overflow] /news @390x844 (chromium, resting): horizontal overflow (page 400px wide in a 390px viewport): document',
     ])
   })
 })

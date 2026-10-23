@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { EXEMPTIBLE_RULES } from '../src/browser-exemptions.js'
 import {
   findLayoutDefects,
   LAYOUT_MINIMUM_GAP,
+  LAYOUT_VIEWPORTS,
   type LayoutViewport,
   layoutViewportsWith,
 } from '../src/layout-defects.js'
@@ -76,7 +78,7 @@ const verifyPage = (actionsTop: number): readonly LayoutNode[] => [
 describe('the email confirmation page that escaped every other gate', () => {
   it('fails while the notice and the button touch', () => {
     expect(defectsOf(verifyPage(100))).toEqual([
-      '/en/account/verify @390px: touching boxes (gap 0px): div.notice.notice-success  <->  a.button "Sign in"',
+      '[attached] /en/account/verify @390x844 (chromium, resting): touching boxes (gap 0px): div.notice.notice-success  <->  a.button "Sign in"',
     ])
   })
 
@@ -122,7 +124,7 @@ describe('what makes an element boxed', () => {
     }
     expect([defectsOf(stacked(leftOnly, {})), defectsOf(stacked(bottom, {}))]).toEqual([
       [],
-      ['/en/account/verify @390px: touching boxes (gap 0px): div#n1  <->  div#n2'],
+      ['[attached] /en/account/verify @390x844 (chromium, resting): touching boxes (gap 0px): div#n1  <->  div#n2'],
     ])
   })
 
@@ -156,7 +158,7 @@ describe('how close is too close', () => {
 
   it('rejects a gap one pixel under it', () => {
     expect(defectsOf(stacked({ backgroundColor: RED }, {}, 43))).toEqual([
-      '/en/account/verify @390px: touching boxes (gap 3px): div#n1  <->  div#n2',
+      '[attached] /en/account/verify @390x844 (chromium, resting): touching boxes (gap 3px): div#n1  <->  div#n2',
     ])
   })
 
@@ -166,7 +168,7 @@ describe('how close is too close', () => {
 
   it('reports overlapping boxes as overlapping rather than as a gap', () => {
     expect(defectsOf(stacked({ backgroundColor: RED }, {}, 30))).toEqual([
-      '/en/account/verify @390px: overlapping boxes: div#n1  <->  div#n2',
+      '[attached] /en/account/verify @390x844 (chromium, resting): overlapping boxes: div#n1  <->  div#n2',
     ])
   })
 
@@ -176,7 +178,9 @@ describe('how close is too close', () => {
       nodeOf({ index: 1, parent: 0, rects: [rect(0, 0, 100, 40)], backgroundColor: RED }),
       nodeOf({ index: 2, parent: 0, rects: [rect(102, 0, 200, 40)], backgroundColor: RED }),
     ]
-    expect(defectsOf(sideBySide)).toEqual(['/en/account/verify @390px: touching boxes (gap 2px): div#n1  <->  div#n2'])
+    expect(defectsOf(sideBySide)).toEqual([
+      '[attached] /en/account/verify @390x844 (chromium, resting): touching boxes (gap 2px): div#n1  <->  div#n2',
+    ])
   })
 
   // An inline link wrapped over two lines has a bounding box covering both lines. Judged on that box it
@@ -278,7 +282,9 @@ describe('what is not compared', () => {
       nodeOf({ index: 2, parent: 1, rects: [rect(0, 0, 200, 40)], backgroundColor: RED }),
       nodeOf({ index: 3, parent: 1, rects: [rect(0, 40, 200, 80)] }),
     ]
-    expect(defectsOf(cell)).toEqual(['/en/account/verify @390px: touching boxes (gap 0px): div#n2  <->  div#n3'])
+    expect(defectsOf(cell)).toEqual([
+      '[attached] /en/account/verify @390x844 (chromium, resting): touching boxes (gap 0px): div#n2  <->  div#n3',
+    ])
   })
 
   it('skips a sibling hidden from assistive technology as decoration', () => {
@@ -308,7 +314,9 @@ describe('what is not compared', () => {
       nodeOf({ index: 2, parent: 0, display: 'contents', backgroundColor: TINT }),
       nodeOf({ index: 3, parent: 2, rects: [rect(0, 40, 200, 80)] }),
     ]
-    expect(defectsOf(contents)).toEqual(['/en/account/verify @390px: touching boxes (gap 0px): div#n1  <->  div#n3'])
+    expect(defectsOf(contents)).toEqual([
+      '[attached] /en/account/verify @390x844 (chromium, resting): touching boxes (gap 0px): div#n1  <->  div#n3',
+    ])
   })
 
   it('does not look through a wrapper that carries text of its own', () => {
@@ -365,23 +373,23 @@ describe('an edge shared on purpose', () => {
 
   it('fails an exemption that states no reason', () => {
     expect(defectsOf(attachedTab({ exemption: 'attached' }))).toEqual([
-      '/en/account/verify @390px: ' +
+      `[exemption] /en/account/verify @390x844 (chromium, resting): ` +
         'layout exemption without a reason on div.tab; state it in data-ploaness-layout-reason',
     ])
   })
 
   it('fails a value the harness does not know, and does not excuse the pair', () => {
     expect(defectsOf(attachedTab({ exemption: 'joined', exemptionReason: 'tab' }))).toEqual([
-      '/en/account/verify @390px: touching boxes (gap 0px): div.tab  <->  div.panel',
-      '/en/account/verify @390px: ' +
-        'unknown layout exemption data-ploaness-layout="joined" on div.tab; the only value is "attached"',
+      '[attached] /en/account/verify @390x844 (chromium, resting): touching boxes (gap 0px): div.tab  <->  div.panel',
+      `[exemption] /en/account/verify @390x844 (chromium, resting): unknown rule "joined" in data-ploaness-layout on div.tab; ` +
+        `the exemptible rules are ${EXEMPTIBLE_RULES.join(', ')}`,
     ])
   })
 
   it('fails an exemption that excuses nothing', () => {
     expect(defectsOf(attachedTab(ATTACHED, 60))).toEqual([
-      '/en/account/verify: stale layout exemption on div.tab: ' +
-        'it excuses no touching or overlapping box at 390px; remove data-ploaness-layout',
+      '[exemption] /en/account/verify (chromium, every): stale layout exemption "attached" on div.tab: ' +
+        'it excuses nothing in any pass, viewport, engine or state; remove it from data-ploaness-layout',
     ])
   })
 
@@ -396,15 +404,15 @@ describe('an edge shared on purpose', () => {
     expect(findLayoutDefects([phone, desktop], LAYOUT_MINIMUM_GAP)).toEqual([])
   })
 
-  it('names every viewport it was measured at when it is stale at all of them', () => {
+  it('reports it once when it is stale at every viewport', () => {
     const phone: LayoutSnapshot = snapshotOf(attachedTab(ATTACHED, 60))
     const desktop: LayoutSnapshot = snapshotOf(attachedTab(ATTACHED, 60), {
       width: 1280,
       height: 800,
     })
     expect(findLayoutDefects([phone, desktop], LAYOUT_MINIMUM_GAP)).toEqual([
-      '/en/account/verify: stale layout exemption on div.tab: ' +
-        'it excuses no touching or overlapping box at 390px, 1280px; remove data-ploaness-layout',
+      '[exemption] /en/account/verify (chromium, every): stale layout exemption "attached" on div.tab: ' +
+        'it excuses nothing in any pass, viewport, engine or state; remove it from data-ploaness-layout',
     ])
   })
 })
@@ -413,12 +421,12 @@ const widthsOf = (viewports: readonly LayoutViewport[]): readonly number[] =>
   viewports.map((viewport: LayoutViewport): number => viewport.width)
 
 describe('the viewports a scan runs at', () => {
-  it('keeps the phone and desktop widths when a project adds its own', () => {
-    expect(widthsOf(layoutViewportsWith([{ width: 768, height: 1024 }]))).toEqual([390, 1280, 768])
+  it('keeps every baseline width when a project adds its own', () => {
+    expect(widthsOf(layoutViewportsWith([{ width: 1366, height: 768 }]))).toEqual([...widthsOf(LAYOUT_VIEWPORTS), 1366])
   })
 
   it('measures a viewport a project repeats only once', () => {
-    expect(widthsOf(layoutViewportsWith([{ width: 390, height: 844 }]))).toEqual([390, 1280])
+    expect(widthsOf(layoutViewportsWith([{ width: 390, height: 844 }]))).toEqual(widthsOf(LAYOUT_VIEWPORTS))
   })
 
   it('reports a defect at each viewport it appears at', () => {
@@ -428,7 +436,10 @@ describe('the viewports a scan runs at', () => {
       findLayoutDefects([phone, desktop], LAYOUT_MINIMUM_GAP).map(
         (line: string): string => line.split(':', 1)[0] ?? '',
       ),
-    ).toEqual(['/en/account/verify @390px', '/en/account/verify @1280px'])
+    ).toEqual([
+      '[attached] /en/account/verify @390x844 (chromium, resting)',
+      '[attached] /en/account/verify @1280x800 (chromium, resting)',
+    ])
   })
 })
 

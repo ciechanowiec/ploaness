@@ -56,14 +56,16 @@ describe('a neighbour that draws nothing toward the other box', () => {
   it('is measured by its text, so the padding under a heading is space rather than contact', () => {
     expect([defectsOf(headingAboveChip(40)), defectsOf(headingAboveChip(50))]).toEqual([
       [],
-      ['/en/account/verify @390px: touching boxes (gap 2px): h2 "Partners"  <->  li.chip'],
+      [
+        '[attached] /en/account/verify @390x844 (chromium, resting): touching boxes (gap 2px): h2 "Partners"  <->  li.chip',
+      ],
     ])
   })
 
   it('lets a rule drawn above a row meet the row before it while that row keeps its text clear', () => {
     expect([defectsOf(dividerRows(30)), defectsOf(dividerRows(38))]).toEqual([
       [],
-      ['/en/account/verify @390px: touching boxes (gap 2px): div#n1  <->  div#n2'],
+      ['[attached] /en/account/verify @390x844 (chromium, resting): touching boxes (gap 2px): div#n1  <->  div#n2'],
     ])
   })
 })
@@ -79,11 +81,13 @@ describe('sections that span the page', () => {
   it('may meet edge to edge only when both run the full width of the page', () => {
     expect([defectsOf(bands(390)), defectsOf(bands(380))]).toEqual([
       [],
-      ['/en/account/verify @390px: touching boxes (gap 0px): div#n1  <->  div#n2'],
+      ['[attached] /en/account/verify @390x844 (chromium, resting): touching boxes (gap 0px): div#n1  <->  div#n2'],
     ])
   })
 
   it('are still reported when they overlap', () => {
-    expect(defectsOf(bands(390, 30))).toEqual(['/en/account/verify @390px: overlapping boxes: div#n1  <->  div#n2'])
+    expect(defectsOf(bands(390, 30))).toEqual([
+      '[attached] /en/account/verify @390x844 (chromium, resting): overlapping boxes: div#n1  <->  div#n2',
+    ])
   })
 })

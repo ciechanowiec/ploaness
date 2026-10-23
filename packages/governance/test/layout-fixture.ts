@@ -46,6 +46,9 @@ export const nodeOf = (fields: Partial<LayoutNode> & Pick<LayoutNode, 'index' | 
   ariaLabel: '',
   exemption: undefined,
   exemptionReason: '',
+  fontSize: 16,
+  fontFamily: 'sans-serif',
+  media: undefined,
   ...fields,
 })
 
@@ -58,6 +61,7 @@ export const snapshotOf = (nodes: readonly LayoutNode[], viewport: LayoutViewpor
   scrollWidth: viewport.width,
   rootBackground: WHITE,
   nodes,
+  fontFaces: [],
 })
 
 export const defectsOf = (nodes: readonly LayoutNode[], minimumGap: number = LAYOUT_MINIMUM_GAP): readonly string[] =>
