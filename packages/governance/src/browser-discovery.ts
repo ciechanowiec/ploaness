@@ -99,8 +99,33 @@ export const storiesOfIndex = (index: unknown, server: string): readonly Discove
     )
 }
 
+const STORY_PREFIX: string = 'story:'
+
 /** The location a story is reported under. */
-export const storyLocation = (story: Pick<DiscoveredStory, 'id'>): string => `story:${story.id}`
+export const storyLocation = (story: Pick<DiscoveredStory, 'id'>): string => `${STORY_PREFIX}${story.id}`
+
+/**
+ * The axe rules that judge a whole document, which a story is not: it renders one component alone in a
+ * frame, without the page's landmarks, its level-one heading, its title or its skip link. Storybook's
+ * own accessibility addon leaves them out for the same reason. The page that places the component is
+ * judged by them where it is crawled or scanned.
+ */
+export const DOCUMENT_AXE_RULES: readonly string[] = [
+  'landmark-one-main',
+  'page-has-heading-one',
+  'region',
+  'bypass',
+  'document-title',
+  'html-has-lang',
+]
+
+/**
+ * The axe rules that do not apply where a finding was measured.
+ * @param location the route or `story:<id>` location.
+ * @returns the document rules for a story, and none for a route.
+ */
+export const axeRulesExcludedAt = (location: string): readonly string[] =>
+  location.startsWith(STORY_PREFIX) ? DOCUMENT_AXE_RULES : []
 
 /**
  * The address that renders one story alone.

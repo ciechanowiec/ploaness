@@ -7,6 +7,7 @@
 import { AxeBuilder } from '@axe-core/playwright'
 import { type ConsoleMessage, expect, type Page, type Request } from '@playwright/test'
 import {
+  axeRulesExcludedAt,
   type BrowserFinding,
   type ConsoleEntry,
   consolePageError,
@@ -136,7 +137,12 @@ export const axeFindings = async (
   place: FindingPlace,
   build: (builder: AxeBuilder) => AxeBuilder = (builder: AxeBuilder): AxeBuilder => builder,
 ): Promise<readonly BrowserFinding[]> => {
-  const results: Awaited<ReturnType<AxeBuilder['analyze']>> = await build(new AxeBuilder({ page })).analyze()
+  const excluded: readonly string[] = axeRulesExcludedAt(place.location)
+  const builder: AxeBuilder = build(new AxeBuilder({ page }))
+  const results: Awaited<ReturnType<AxeBuilder['analyze']>> = await (excluded.length === 0
+    ? builder
+    : builder.disableRules([...excluded])
+  ).analyze()
   return [
     ...results.violations.flatMap((violation): readonly BrowserFinding[] =>
       violation.nodes.map(

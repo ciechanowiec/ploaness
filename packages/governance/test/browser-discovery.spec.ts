@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   alternateHrefs,
+  axeRulesExcludedAt,
   type DiscoveredStory,
+  DOCUMENT_AXE_RULES,
   localAddress,
   onOrigin,
   sitemapEntries,
@@ -139,5 +141,14 @@ describe('story sampling', () => {
         story('button--other', 'UI/Button', 'http://localhost:6107'),
       ]).map((sampled: DiscoveredStory): string => sampled.id),
     ).toEqual(['button--primary', 'card--default', 'button--other'])
+  })
+})
+
+describe('axe rules for a story', () => {
+  it('leaves out the document rules for a story and keeps every rule for a route', () => {
+    expect([axeRulesExcludedAt('story:ui-button--primary'), axeRulesExcludedAt('/en')]).toEqual([
+      DOCUMENT_AXE_RULES,
+      [],
+    ])
   })
 })
