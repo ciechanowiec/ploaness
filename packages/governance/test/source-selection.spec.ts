@@ -13,6 +13,12 @@ const role = (pattern: string): { readonly pattern: string; readonly reason: str
   reason: 'generated fixture',
 })
 
+// An allowlist entry also declares the engine its file runs in.
+const script = (pattern: string): { readonly pattern: string; readonly reason: string; readonly runtime: string } => ({
+  ...role(pattern),
+  runtime: 'node',
+})
+
 describe('source selection', () => {
   it('selects formatter inputs without descending into generated directories or other members', () => {
     expect(
@@ -57,7 +63,7 @@ describe('source selection', () => {
   })
 
   it('rejects JavaScript exceptions reaching only TypeScript', () => {
-    const settings: Settings = readSettings({ ploaness: { javascriptAllowlist: [role('^edge/')] } })
+    const settings: Settings = readSettings({ ploaness: { javascriptAllowlist: [script('^edge/')] } })
     expect(findUnreachedExclusionsBySetting(settings.declaredExclusions, ['edge/read.ts'])).toHaveLength(1)
     expect(findUnreachedExclusionsBySetting(settings.declaredExclusions, ['edge/read.jsx'])).toEqual([])
   })
@@ -87,8 +93,8 @@ describe('declaration origins', () => {
   })
   it('keeps root regexes rooted while member declarations stay local', () => {
     const settings: Settings = readMemberSettings(
-      { javascriptAllowlist: [role('^app/edge/')], typographyExclusions: [role('^app/generated/')] },
-      { javascriptAllowlist: [role('^own/')] },
+      { javascriptAllowlist: [script('^app/edge/')], typographyExclusions: [role('^app/generated/')] },
+      { javascriptAllowlist: [script('^own/')] },
       'app',
     )
     expect(matchesRole('edge/read.cjs', settings.javascriptAllowlist)).toBe(true)

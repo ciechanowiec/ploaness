@@ -758,7 +758,7 @@ scope_javascript_contracts() {
     edge_member="$scratch/scope-javascript/packages/ui"
     mkdir -p "$edge_member/edge"
     edit_json "$scratch/scope-javascript/package.json" ploaness.javascriptAllowlist \
-        '[{"pattern":"^packages/ui/edge/","reason":"external deployment entry points"}]'
+        '[{"pattern":"^packages/ui/edge/","reason":"external deployment entry points","runtime":"node"}]'
     printf 'const edge = (event) => event.request\nmodule.exports = edge\n' > "$edge_member/edge/handler.cjs"
     expect scope-javascript conventions PASS
     expect_in scope-javascript packages/ui eslint PASS
@@ -777,7 +777,7 @@ scope_javascript_contracts() {
     for scope_directory in edge tests src/hooks; do
         mkdir -p "$edge_member/$scope_directory"
         edit_json "$edge_member/package.json" ploaness.javascriptAllowlist \
-            '[{"pattern":"\\.cjs$","reason":"external CommonJS runtime"}]'
+            '[{"pattern":"\\.cjs$","reason":"external CommonJS runtime","runtime":"node"}]'
         printf 'const edge = (event) => event.request\nmodule.exports = edge\n' > "$edge_member/$scope_directory/export.cjs"
         expect_in scope-javascript packages/ui eslint PASS
         rm "$edge_member/$scope_directory/export.cjs"
@@ -3290,14 +3290,14 @@ expect fail-missing-snapshot tree-verify FAIL 'no tree snapshot'
 
 new_workspace scoped-member-exclusion
 node "$lib/edit-json.ts" "$scratch/scoped-member-exclusion/apps/web/package.json" \
-    ploaness.javascriptAllowlist '[{"pattern":"generated-code\\.js$","reason":"generated fixture"}]'
+    ploaness.javascriptAllowlist '[{"pattern":"generated-code\\.js$","reason":"generated fixture","runtime":"node"}]'
 printf 'export const generated = 1\n' > "$scratch/scoped-member-exclusion/apps/web/generated-code.js"
 expect scoped-member-exclusion conventions PASS
 # The file the allowlist lets be JavaScript is linted as JavaScript, in an application and in a library,
 # rather than handed to the type-aware parser, which knows only the TypeScript project and fails on it.
 edge_member="$scratch/scoped-member-exclusion/packages/ui"
 node "$lib/edit-json.ts" "$edge_member/package.json" \
-    ploaness.javascriptAllowlist '[{"pattern":"^edge-function\\.js$","reason":"edge runtime fixture"}]'
+    ploaness.javascriptAllowlist '[{"pattern":"^edge-function\\.js$","reason":"edge runtime fixture","runtime":"node"}]'
 printf 'export const handler = (event) => event.request\n' > "$edge_member/edge-function.js"
 expect_in scoped-member-exclusion apps/web eslint PASS
 expect_in scoped-member-exclusion packages/ui eslint PASS

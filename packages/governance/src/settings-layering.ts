@@ -3,7 +3,13 @@
 import type { RolePattern } from './file-roles.js'
 import { asRecord, isArray } from './json-shapes.js'
 import { memberSettingBlock } from './member-patterns.js'
-import { type DeclaredExclusion, readRawSettings, type Settings } from './settings.js'
+import {
+  type DeclaredExclusion,
+  declaredRuntimeRoles,
+  isHonouredExclusion,
+  readRawSettings,
+  type Settings,
+} from './settings.js'
 
 /** Keys where a member ADDS to what the repository declared, the way `sourceRoots` always has. */
 const ADDITIVE: ReadonlySet<string> = new Set<string>([
@@ -127,20 +133,17 @@ export const readMemberSettings = (
 ): Settings => {
   const own: Settings = readRawSettings(ownBlock)
   const inherited: Settings = readRawSettings(repositoryBlock)
+  const rootRole = (entry: DeclaredExclusion): RolePattern =>
+    memberPath === '.' ? entry.pattern : { repositoryPath: memberPath, pattern: entry.pattern }
   const rootPatterns = (setting: string): readonly RolePattern[] =>
     inherited.declaredExclusions
-      .filter(
-        (entry: DeclaredExclusion): boolean =>
-          entry.setting === setting && entry.pattern.length > 0 && entry.reason.length > 0,
-      )
-      .map(
-        (entry: DeclaredExclusion): RolePattern =>
-          memberPath === '.' ? entry.pattern : { repositoryPath: memberPath, pattern: entry.pattern },
-      )
+      .filter((entry: DeclaredExclusion): boolean => entry.setting === setting && isHonouredExclusion(entry))
+      .map((entry: DeclaredExclusion): RolePattern => rootRole(entry))
   return {
     ...readRawSettings(layerSettingBlocks(memberSettingBlock(repositoryBlock, memberPath), ownBlock)),
     typographyExclusions: [...own.typographyExclusions, ...rootPatterns('typographyExclusions')],
     javascriptAllowlist: [...own.javascriptAllowlist, ...rootPatterns('javascriptAllowlist')],
+    javascriptRuntimes: [...own.javascriptRuntimes, ...declaredRuntimeRoles(inherited.declaredExclusions, rootRole)],
     declaredExclusions: own.declaredExclusions,
   }
 }

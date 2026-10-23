@@ -11,6 +11,7 @@ import { BUNDLE_BUDGET_BYTES } from './bundle-budget.js'
 import { COVERAGE_ROLE_EXCLUDE, coverageCandidates, coverageIncludes } from './coverage-policy.js'
 import { hasExtension, JAVASCRIPT_EXTENSIONS, matchesGlob, matchesRole, type RolePattern } from './file-roles.js'
 import { GENERATED_ARTEFACTS } from './generated-denial.js'
+import { isJavascriptRuntime, JAVASCRIPT_RUNTIMES, type RuntimeRole } from './javascript-runtimes.js'
 // Only string-valued entries survive `asStringRecord`: a non-string would reach `spawn` as a
 // malformed environment.
 import { asRecord, asStringRecord, asText, isArray, isRecord } from './json-shapes.js'
@@ -35,6 +36,8 @@ export interface DeclaredExclusion {
   readonly pattern: string
   readonly reason: string
   readonly kind: ExclusionKind
+  /** The engine a `javascriptAllowlist` entry declares its files run in, as written; absent elsewhere. */
+  readonly runtime?: string
 }
 
 /**
@@ -138,6 +141,8 @@ export interface Settings {
   readonly declaredExclusions: readonly DeclaredExclusion[]
   /** Repo-relative path patterns exempt from the hand-written-JavaScript ban. */
   readonly javascriptAllowlist: readonly RolePattern[]
+  /** The same roles, each with the engine its files run in, which decides how they are linted. */
+  readonly javascriptRuntimes: readonly RuntimeRole[]
   /** Glob patterns excluded from coverage measurement, by role rather than by convenience. */
   readonly coverageExclude: readonly string[]
   /** Ceiling for total gzipped client JavaScript, in bytes. */
@@ -251,6 +256,11 @@ const DEFAULT_JAVASCRIPT_ALLOWLIST: readonly string[] = [
   // have: the file is not hand-written JavaScript by choice.
   String.raw`${MEMBER_RELATIVE}postcss\.config\.(mjs|js)$`,
 ]
+
+// Every built-in entry is a file a Node.js tool loads.
+const DEFAULT_JAVASCRIPT_RUNTIMES: readonly RuntimeRole[] = DEFAULT_JAVASCRIPT_ALLOWLIST.map(
+  (role: string): RuntimeRole => ({ role, runtime: 'node' }),
+)
 
 /**
  * The directories a project holds first-party source in unless it says otherwise.
@@ -446,9 +456,19 @@ const asPublicAccess = (raw: unknown): readonly PublicAccess[] =>
 const asDeclaredExclusions = (raw: unknown, setting: string, kind: ExclusionKind): readonly DeclaredExclusion[] =>
   isArray(raw) ? raw.map((entry: unknown): DeclaredExclusion => readExclusion(entry, setting, kind)) : []
 
+const JAVASCRIPT_SETTING: string = 'javascriptAllowlist'
+
 // A bare string is kept with an empty reason rather than dropped silently, so the gate can name the
-// entry the project wrote instead of reporting that its exclusions simply stopped applying.
+// entry the project wrote instead of reporting that its exclusions simply stopped applying. The runtime
+// is read the same way, and only for the setting whose files have one.
 const readExclusion = (entry: unknown, setting: string, kind: ExclusionKind): DeclaredExclusion => {
+  const read: DeclaredExclusion = readExclusionFields(entry, setting, kind)
+  return setting === JAVASCRIPT_SETTING
+    ? { ...read, runtime: isRecord(entry) ? asText(entry['runtime']).trim() : '' }
+    : read
+}
+
+const readExclusionFields = (entry: unknown, setting: string, kind: ExclusionKind): DeclaredExclusion => {
   if (typeof entry === 'string') {
     return { setting, pattern: entry, reason: '', kind }
   }
@@ -463,10 +483,39 @@ const readExclusion = (entry: unknown, setting: string, kind: ExclusionKind): De
   }
 }
 
+/**
+ * Decide whether the harness honours a declared exclusion.
+ *
+ * An allowlisted file must also say which engine runs it. An entry that does not is not honoured, so its
+ * file stays banned rather than being linted for an engine nobody declared.
+ * @param entry one declared exclusion.
+ * @returns true when the entry states its pattern, its role, and any runtime its setting requires.
+ */
+export const isHonouredExclusion = (entry: DeclaredExclusion): boolean =>
+  entry.pattern.length > 0 &&
+  entry.reason.length > 0 &&
+  (entry.setting !== JAVASCRIPT_SETTING || isJavascriptRuntime(entry.runtime))
+
 const honoured = (entries: readonly DeclaredExclusion[]): readonly string[] =>
   entries
-    .filter((entry: DeclaredExclusion): boolean => entry.pattern.length > 0 && entry.reason.length > 0)
+    .filter((entry: DeclaredExclusion): boolean => isHonouredExclusion(entry))
     .map((entry: DeclaredExclusion): string => entry.pattern)
+
+/**
+ * The honoured allowlist entries with the engine each declares.
+ * @param entries the declared `javascriptAllowlist` entries.
+ * @param role how an entry's pattern is scoped for the reader that matches it.
+ * @returns one runtime role per honoured entry.
+ */
+export const declaredRuntimeRoles = (
+  entries: readonly DeclaredExclusion[],
+  role: (entry: DeclaredExclusion) => RolePattern = (entry: DeclaredExclusion): RolePattern => entry.pattern,
+): readonly RuntimeRole[] =>
+  entries.flatMap((entry: DeclaredExclusion): readonly RuntimeRole[] =>
+    entry.setting === JAVASCRIPT_SETTING && isHonouredExclusion(entry) && isJavascriptRuntime(entry.runtime)
+      ? [{ role: role(entry), runtime: entry.runtime }]
+      : [],
+  )
 
 /** The four exclusion lists a project may declare, each read under the matching kind its setting uses. */
 interface DeclaredLists {
@@ -545,6 +594,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
       ...declaredLayers,
     ],
     javascriptAllowlist: [...DEFAULT_JAVASCRIPT_ALLOWLIST, ...honoured(declaredJavascript)],
+    javascriptRuntimes: [...DEFAULT_JAVASCRIPT_RUNTIMES, ...declaredRuntimeRoles(declaredJavascript)],
     coverageExclude: [
       ...DEFAULT_COVERAGE_EXCLUDE,
       ...GENERATED_ARTEFACTS,
@@ -587,6 +637,26 @@ export const findConvenienceExclusions = (entries: readonly DeclaredExclusion[])
         ]
       : [],
   )
+
+/**
+ * Report every allowlist entry that names no engine its file runs in, or one the harness does not lint for.
+ * @param entries the exclusions the project declared.
+ * @returns one message per entry, listing the runtimes it may declare.
+ */
+export const findUndeclaredRuntimes = (entries: readonly DeclaredExclusion[]): readonly string[] =>
+  entries
+    .filter(
+      (entry: DeclaredExclusion): boolean =>
+        entry.setting === JAVASCRIPT_SETTING && !isJavascriptRuntime(entry.runtime),
+    )
+    .map(
+      (entry: DeclaredExclusion): string =>
+        `${entry.setting} entry "${entry.pattern}" ` +
+        (entry.runtime === undefined || entry.runtime.length === 0
+          ? 'declares no runtime'
+          : `declares unknown runtime "${entry.runtime}"`) +
+        `; declare the engine its file runs in, one of: ${JAVASCRIPT_RUNTIMES.join(', ')}`,
+    )
 
 /**
  * Report every declared exclusion that matches none of the paths it could have excluded.

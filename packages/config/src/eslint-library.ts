@@ -5,7 +5,13 @@
 // the centralised environment module. Those are not relaxations a library is being granted; they are
 // carve-outs for files it does not contain, and applying them would have it judged against a layout it
 // never claimed. Every cap, ban and suppression rule in `eslint-core.ts` still applies in full.
-import { JAVASCRIPT_EXTENSIONS, REEXPORT_CONFIG_FILES, TYPESCRIPT_SOURCE_EXTENSIONS } from '@ploaness/governance'
+import {
+  CLOUDFRONT_RUNTIME,
+  JAVASCRIPT_EXTENSIONS,
+  REEXPORT_CONFIG_FILES,
+  rolesFor,
+  TYPESCRIPT_SOURCE_EXTENSIONS,
+} from '@ploaness/governance'
 import {
   allowlistedJavaScript,
   baseLayers,
@@ -25,7 +31,14 @@ import {
   typeAwareParsing,
   vitestPlugin,
 } from './eslint-core.js'
+import { cloudFrontBlock } from './eslint-runtime.js'
 import { projectDirectory, projectSettings as settings } from './project-settings.js'
+
+// The allowlisted files whose entry declares the CloudFront runtime.
+const isCloudFrontFile: (filePath: string) => boolean = allowlistedJavaScript(
+  rolesFor(settings.javascriptRuntimes, CLOUDFRONT_RUNTIME),
+  projectDirectory,
+)
 
 const IGNORED: readonly string[] = ['dist/**', 'node_modules/**', 'coverage/**', '.next/**']
 
@@ -66,6 +79,8 @@ const config: ReturnType<typeof compose> = compose(
   // The JavaScript a library may carry is what its allowlist admits, its own flat ESLint config among
   // the defaults, so the file the conventions gate lets be JavaScript is linted as JavaScript here.
   javascriptBlock([allowlistedJavaScript(settings.javascriptAllowlist, projectDirectory)]),
+  // A file whose entry declares the CloudFront runtime is also held to what that engine supports.
+  cloudFrontBlock([isCloudFrontFile]),
   // A library's specs are held to the same integrity rules as an application's: the suite is a gate, so
   // a test that cannot fail is a gate that cannot fail.
   //

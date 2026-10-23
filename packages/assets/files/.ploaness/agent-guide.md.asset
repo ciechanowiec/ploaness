@@ -159,7 +159,7 @@ Extended verification adds 10 gates before the final tree check.
 | Gate | Scope | What it verifies |
 | --- | --- | --- |
 | `shell` | repository | ShellCheck over every tracked shell script, found by extension and by shebang. |
-| `infra` | repository | Forbidden patterns over `.tf` and `.tfvars`, plus curated Checkov checks for AWS, Azure, Google Cloud, DigitalOcean and Linode; a provider the harness has not classified fails. |
+| `infra` | repository | Forbidden patterns over `.tf` and `.tfvars`, plus curated Checkov checks for AWS, Azure, Google Cloud, DigitalOcean and Linode; a provider the harness has not classified fails. Each `aws_cloudfront_function` must deploy a tracked file allowlisted for its runtime. |
 | `require-full-history` | repository | The clone carries the whole history. |
 | `commit-history` | repository | Every commit message in the history. |
 | `linear-history` | repository | No merge commit anywhere in the history. |
@@ -183,6 +183,17 @@ Every port from the world is still refused by the analyzer, and a standalone
 by a pattern rule, which reads that one resource because its type names its direction. Two more
 pattern rules close what the analyzer leaves open on every cloud: an outright administrative grant
 (`roles/owner`, `roles/editor`, `Owner`) and an explicit plaintext-transport setting.
+
+Each `aws_cloudfront_function` must declare `runtime = "cloudfront-js-2.0"` and load its code with
+`file("${path.module}/<path>")`. That path must name a tracked file whose `javascriptAllowlist` entry
+declares the same runtime. Other `code` forms fail, because the gate cannot tell which file is
+deployed: `templatefile`, a variable, a heredoc, or a path relative to where OpenTofu runs. A build
+output the repository does not track fails too. The `cloudfront-js-2.0` lint rules follow AWS's
+documented feature list. They reject destructuring, object spread, and the globals the runtime lacks,
+such as `Set`, `Map` and `process`. Passing them lowers the risk without proving the function runs: only
+`aws cloudfront test-function` does, and it exits successfully even when the function fails, so read
+`FunctionErrorMessage` in its result. A function deployed by anything other than these `.tf` files is
+linted only for the runtime its entry declares.
 
 ## Release Dependency Inventory
 
@@ -304,7 +315,7 @@ exports, while ordinary mutations remain prohibited in every directory.
 | `sourceRoots` | `src`, `tests`, `scripts` | String array adding source directories, including coverage of `.ts`, `.mts`, and `.cts` logic. |
 | `unmanagedAssets` | empty | Entries with `path` and `reason` recording explicitly assigned project ownership. |
 | `typographyExclusions` | generated Payload files | File-role entries with regex patterns. |
-| `javascriptAllowlist` | ESLint/PostCSS configs and generated import map | Regex roles for necessary `.js`, `.jsx`, `.mjs`, or `.cjs` files; never TypeScript. Matching authored files are linted, formatted, and passed to knip as entry points. |
+| `javascriptAllowlist` | ESLint/PostCSS configs and generated import map | Entries with `pattern`, `reason`, and `runtime` for necessary `.js`, `.jsx`, `.mjs`, or `.cjs` files; never TypeScript. `runtime` is required and is `node` or `cloudfront-js-2.0`; an entry without a valid one is not honored. Matching authored files are linted for that runtime, formatted, and passed to knip as entry points. |
 | `coverageExclude` | framework glue, generated files, components | File-role entries with glob patterns; each must reach measured code. |
 | `frameworkGlue` | `src/app/(payload)/**`, `src/payload.config.ts` | File-role entries with globs for framework scaffolding; authored behavior is not scaffolding. |
 | `generatedArtefacts` | stock Payload types, import map, schema | File-role entries with globs for generator-owned files, added to the shipped set. |

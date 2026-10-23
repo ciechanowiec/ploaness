@@ -9,9 +9,11 @@ import {
   asRecord,
   asStringRecord,
   type DeclaredExclusion,
+  declaredRuntimeRoles,
   findGovernedMembers,
   findRepositoryRoot,
   hasRuntime,
+  isHonouredExclusion,
   isPayloadProject,
   memberKindOf,
   type ParsedJson,
@@ -423,16 +425,12 @@ const withMemberExclusions = (base: Settings, members: readonly Member[]): Setti
       (entry: DeclaredExclusion): DeclaredExclusion => rebaseExclusion(member.path, entry),
     ),
   )
+  const memberRole = (entry: DeclaredExclusion): RolePattern =>
+    entry.memberPath === undefined ? entry.pattern : { memberPath: entry.memberPath, pattern: entry.pattern }
   const patternsFor = (setting: string): readonly RolePattern[] =>
     rebased
-      .filter(
-        (entry: DeclaredExclusion): boolean =>
-          entry.setting === setting && entry.reason.length > 0 && entry.pattern.length > 0,
-      )
-      .map(
-        (entry: DeclaredExclusion): RolePattern =>
-          entry.memberPath === undefined ? entry.pattern : { memberPath: entry.memberPath, pattern: entry.pattern },
-      )
+      .filter((entry: DeclaredExclusion): boolean => entry.setting === setting && isHonouredExclusion(entry))
+      .map((entry: DeclaredExclusion): RolePattern => memberRole(entry))
   // Globs only, so the rebased pattern is the plain repository-relative string the line cap matches.
   const globsFor = (setting: string): readonly string[] =>
     rebased
@@ -445,6 +443,7 @@ const withMemberExclusions = (base: Settings, members: readonly Member[]): Setti
     ...base,
     typographyExclusions: [...base.typographyExclusions, ...patternsFor('typographyExclusions')],
     javascriptAllowlist: [...base.javascriptAllowlist, ...patternsFor('javascriptAllowlist')],
+    javascriptRuntimes: [...base.javascriptRuntimes, ...declaredRuntimeRoles(rebased, memberRole)],
     generatedArtefacts: [...base.generatedArtefacts, ...globsFor('generatedArtefacts')],
   }
 }

@@ -46,7 +46,8 @@
     "javascriptAllowlist": [
       {
         "pattern": "^eslint\\.config\\.mjs$",
-        "reason": "ESLint's own flat config, which its loader reads as JavaScript unless jiti is added"
+        "reason": "ESLint's own flat config, which its loader reads as JavaScript unless jiti is added",
+        "runtime": "node"
       }
     ],
     "vulnerabilityAllowlist": [

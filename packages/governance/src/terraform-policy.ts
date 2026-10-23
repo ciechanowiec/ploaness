@@ -14,6 +14,7 @@
 // this file's because the analyzer does not read its idiomatic spelling at all, and its own SSH and RDP
 // checks read a rule naming another security group as its source as open to the world.
 import { stripComments } from './source-text.js'
+import { type ResourceBlock, resourceBlocksIn } from './terraform-blocks.js'
 
 /** An infrastructure defect found in a project's own configuration. */
 export interface TerraformViolation {
@@ -216,11 +217,7 @@ const suppressionViolations = (source: string): readonly TerraformViolation[] =>
         ]
   })
 
-// The rule resource is read from its header to the next line that closes or opens a top-level block.
-// Formatted HCL closes a resource at column 0; unformatted HCL over-reads at worst the blank lines
-// before the next block, never the next block's attributes.
-const INGRESS_RULE_HEADER: RegExp = /^[ \t]*resource[ \t]+"aws_vpc_security_group_ingress_rule"/
-const BLOCK_BOUNDARY: RegExp = /^(?:\}|(?:resource|data|module|variable|output|locals|provider|terraform)\b)/
+const INGRESS_RULE_TYPE: string = 'aws_vpc_security_group_ingress_rule'
 const ANY_ADDRESS: RegExp = /^[ \t]*cidr_ipv[46][ \t]*=[ \t]*"(?:0\.0\.0\.0\/0|::\/0)"/
 const EVERY_PROTOCOL: RegExp = /^[ \t]*ip_protocol[ \t]*=[ \t]*"?-1"?/
 const PORT_EDGE: RegExp = /^[ \t]*(?<edge>from_port|to_port)[ \t]*=[ \t]*(?<port>\d+)/
@@ -229,25 +226,10 @@ const SSH_PORT: number = 22
 const RDP_PORT: number = 3389
 const LAST_PORT: number = 65_535
 
-interface IngressRule {
-  readonly line: number
-  readonly body: readonly string[]
-}
-
 interface PortRange {
   readonly from: number
   readonly to: number
 }
-
-const ingressRulesIn = (lines: readonly string[]): readonly IngressRule[] =>
-  lines.flatMap((line: string, index: number): readonly IngressRule[] => {
-    if (!INGRESS_RULE_HEADER.test(line)) {
-      return []
-    }
-    const rest: readonly string[] = lines.slice(index + 1)
-    const end: number = rest.findIndex((candidate: string): boolean => BLOCK_BOUNDARY.test(candidate))
-    return [{ line: index + FIRST_LINE, body: end === -1 ? rest : rest.slice(0, end) }]
-  })
 
 const portRangeOf = (body: readonly string[]): PortRange | undefined => {
   const edges: ReadonlyMap<string, number> = new Map(
@@ -287,20 +269,22 @@ const exposureOf = (body: readonly string[]): string | undefined => {
 }
 
 const openIngressViolations = (code: string): readonly TerraformViolation[] =>
-  ingressRulesIn(code.split('\n')).flatMap((rule: IngressRule): readonly TerraformViolation[] => {
-    const exposure: string | undefined = exposureOf(rule.body)
-    return exposure === undefined
-      ? []
-      : [
-          {
-            line: rule.line,
-            rule: 'no-open-ingress',
-            reason:
-              `an ingress rule admits ${exposure} from the whole internet - name the security ` +
-              'group or address range that needs it as the source',
-          },
-        ]
-  })
+  resourceBlocksIn(code.split('\n'), INGRESS_RULE_TYPE).flatMap(
+    (rule: ResourceBlock): readonly TerraformViolation[] => {
+      const exposure: string | undefined = exposureOf(rule.body)
+      return exposure === undefined
+        ? []
+        : [
+            {
+              line: rule.line,
+              rule: 'no-open-ingress',
+              reason:
+                `an ingress rule admits ${exposure} from the whole internet - name the security ` +
+                'group or address range that needs it as the source',
+            },
+          ]
+    },
+  )
 
 /**
  * Report every infrastructure defect a text reader can decide.

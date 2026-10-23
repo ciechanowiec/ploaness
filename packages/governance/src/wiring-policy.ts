@@ -2,7 +2,7 @@ import { JAVASCRIPT_EXTENSIONS, TYPESCRIPT_SOURCE_EXTENSIONS } from './file-role
 import { GENERATED_ARTEFACTS } from './generated-denial.js'
 import { findAuditSilencingViolations } from './install-policy.js'
 import { asRecord, asStringRecord, declaredDependencies, isArray, type ParsedJson, parseJsonc } from './json-shapes.js'
-import { type DeclaredExclusion, findConvenienceExclusions } from './settings.js'
+import { type DeclaredExclusion, findConvenienceExclusions, findUndeclaredRuntimes } from './settings.js'
 import { escapeForRegex } from './text-escapes.js'
 import {
   describeFound,
@@ -586,9 +586,10 @@ export const findRepositoryWiringViolations = (inputs: RepositoryWiringInputs): 
       declaredAcrossMembers: inputs.declaredAcrossMembers,
     } satisfies RepositoryVersionInputs),
     ...findAuditSilencingViolations(inputs.packageJson, inputs.workspaceFile),
-    ...findConvenienceExclusions(inputs.declaredExclusions).map(
-      (reason: string): WiringViolation => ({ location: 'package.json ploaness', reason }),
-    ),
+    ...[
+      ...findConvenienceExclusions(inputs.declaredExclusions),
+      ...findUndeclaredRuntimes(inputs.declaredExclusions),
+    ].map((reason: string): WiringViolation => ({ location: 'package.json ploaness', reason })),
     ...inputs.repositoryFindings,
   ]
 }
@@ -612,9 +613,10 @@ export const findPackageWiringViolations = (inputs: PackageWiringInputs): readon
       required: inputs.requiredTestLibraries,
       payloadVersion: inputs.payloadVersion,
     } satisfies PackageVersionInputs),
-    ...findConvenienceExclusions(inputs.declaredExclusions).map(
-      (reason: string): WiringViolation => ({ location: 'package.json ploaness', reason }),
-    ),
+    ...[
+      ...findConvenienceExclusions(inputs.declaredExclusions),
+      ...findUndeclaredRuntimes(inputs.declaredExclusions),
+    ].map((reason: string): WiringViolation => ({ location: 'package.json ploaness', reason })),
     ...checkReexport(inputs.eslintConfig, 'eslint.config.mjs', targets.eslintSpecifier),
     ...checkReexport(inputs.vitestConfig, VITEST_CONFIG_FILE, targets.vitestSpecifier),
     ...(targets.playwrightSpecifier === undefined

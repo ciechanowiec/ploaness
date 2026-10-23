@@ -18,6 +18,7 @@ import {
   checksFor,
   classifyProviders,
   failedCheckCount,
+  findCloudFrontRuntimeViolations,
   findTerraformViolations,
   type ProviderClassification,
   type ProviderDeclaration,
@@ -46,6 +47,13 @@ interface FileDeclaration extends ProviderDeclaration {
   readonly file: string
 }
 
+/** What the gate read from the tree, before it decides whether the analyzer runs. */
+interface Reading {
+  readonly sources: readonly SourceFile[]
+  readonly declarations: readonly FileDeclaration[]
+  readonly patterns: readonly string[]
+}
+
 // Each source is read once and handed to both readers.
 const readSources = (context: Context, files: readonly string[]): readonly SourceFile[] =>
   files.map(
@@ -55,13 +63,26 @@ const readSources = (context: Context, files: readonly string[]): readonly Sourc
     }),
   )
 
-const patternFindingsIn = (sources: readonly SourceFile[]): readonly string[] =>
-  sources.flatMap((source: SourceFile): readonly string[] =>
-    findTerraformViolations(source.text).map(
-      (violation: TerraformViolation): string =>
-        `${source.file}:${String(violation.line)} [${violation.rule}] ${violation.reason}`,
-    ),
+// The CloudFront linkage is decided from the same text, so it reports beside the pattern rules and
+// reaches every verdict they do, whichever providers the tree declares.
+const patternFindingsIn = (
+  context: Context,
+  sources: readonly SourceFile[],
+  tracked: readonly string[],
+): readonly string[] => {
+  const trackedFiles: ReadonlySet<string> = new Set<string>(tracked)
+  return sources.flatMap((source: SourceFile): readonly string[] =>
+    [
+      ...findTerraformViolations(source.text),
+      ...findCloudFrontRuntimeViolations(source.file, source.text, trackedFiles, context.settings.javascriptRuntimes),
+    ]
+      .toSorted((left: TerraformViolation, right: TerraformViolation): number => left.line - right.line)
+      .map(
+        (violation: TerraformViolation): string =>
+          `${source.file}:${String(violation.line)} [${violation.rule}] ${violation.reason}`,
+      ),
   )
+}
 
 const declarationsIn = (sources: readonly SourceFile[]): readonly FileDeclaration[] =>
   sources.flatMap((source: SourceFile): readonly FileDeclaration[] =>
@@ -216,13 +237,8 @@ const analyzerVerdict = (result: RunResult, patterns: readonly string[], passSum
 // What the tree declares decides whether the analyzer runs at all. A tree of variables and modules
 // declares nothing it could judge; a tree on a cloud it has no check for would pass without looking.
 // Neither pulls an image, and neither claims a check it did not run.
-const judge = (
-  context: Context,
-  sources: readonly SourceFile[],
-  declarations: readonly FileDeclaration[],
-  standing: ProviderClassification,
-): GateResult => {
-  const patterns: readonly string[] = patternFindingsIn(sources)
+const judge = (context: Context, reading: Reading, standing: ProviderClassification): GateResult => {
+  const { sources, declarations, patterns }: Reading = reading
   if (standing.unclassified.length > 0) {
     return unclassifiedFailure(standing, declarations, patterns)
   }
@@ -260,5 +276,6 @@ export const infrastructure = (context: Context): GateResult => {
   }
   const sources: readonly SourceFile[] = readSources(context, files)
   const declarations: readonly FileDeclaration[] = declarationsIn(sources)
-  return judge(context, sources, declarations, classifyProviders(providersOf(declarations)))
+  const patterns: readonly string[] = patternFindingsIn(context, sources, tracked)
+  return judge(context, { sources, declarations, patterns }, classifyProviders(providersOf(declarations)))
 }
