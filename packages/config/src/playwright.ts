@@ -35,6 +35,13 @@ import { projectSettings } from './project-settings.js'
 // variables; the specs and the application do. A `globalSetup` hook would not serve, because it runs
 // in a process of its own and its environment never reaches a worker.
 const isVerification: boolean = process.env[VERIFICATION_ENVIRONMENT_VARIABLE] !== undefined
+
+// The verification clock reaches the runner and every server through `NODE_OPTIONS`, but Playwright
+// starts its test workers without it, so a spec computing "today" would disagree with the application
+// it drives. The config is evaluated in every worker, which makes it the place to load the clock.
+if (process.env[CLOCK_ENVIRONMENT_VARIABLE] !== undefined) {
+  await import('./clock-preload.js')
+}
 if (isVerification) {
   loadProductionEnvironment(process.cwd())
 } else {

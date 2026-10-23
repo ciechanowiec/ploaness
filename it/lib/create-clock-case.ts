@@ -86,6 +86,8 @@ const SPEC: string = `import { expect, test } from '@playwright/test'
 
 test('the application runs at the verification clock', async ({ page }) => {
   const year: string = process.env['EXPECTED_YEAR'] ?? ''
+  // The worker running this spec reads the same clock as the application it drives.
+  expect(String(new Date().getUTCFullYear())).toBe(year)
   await page.goto('/clock/static')
   await expect(page.getByTestId('year')).toHaveText(year)
   await page.goto('/clock/dynamic')

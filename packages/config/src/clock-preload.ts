@@ -14,10 +14,16 @@
 /** The variable naming the instant, `CLOCK_ENVIRONMENT_VARIABLE` in `@ploaness/governance`. */
 const CLOCK_VARIABLE: string = 'PLOANESS_CLOCK'
 
+// Set once the clock is shifted. A process can reach this module twice - through `NODE_OPTIONS` and
+// through the Playwright config, which loads it for the test workers `NODE_OPTIONS` does not reach -
+// and the second load must not restart the clock at the instant.
+const SHIFTED: symbol = Symbol.for('ploaness.clock.shifted')
+
 const declared: string | undefined = process.env[CLOCK_VARIABLE]
 const instant: number = declared === undefined ? Number.NaN : Date.parse(declared)
 
-if (!Number.isNaN(instant)) {
+if (!(Number.isNaN(instant) || Object.hasOwn(globalThis, SHIFTED))) {
+  Object.defineProperty(globalThis, SHIFTED, { value: true })
   const RealDate: DateConstructor = Date
   const startedAt: number = RealDate.now()
   const now = (): number => instant + (RealDate.now() - startedAt)
