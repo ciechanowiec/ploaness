@@ -137,6 +137,8 @@ export interface PassReport {
   readonly places: number
   readonly locations: readonly string[]
   readonly notes: readonly string[]
+  /** How long the pass took, which is what its budget allowance is calibrated against. */
+  readonly elapsedMs: number
 }
 
 /** What visiting one item of a pass yields. */
@@ -394,6 +396,7 @@ export const screenshotOf = async (page: Page, scan: PlaceScan, place: FindingPl
 /** The time a pass may spend. */
 export interface Budget {
   readonly pass: SweepPass
+  readonly startedAt: number
   readonly deadline: number
 }
 
@@ -406,7 +409,8 @@ export interface Budget {
 export const armBudget = (pass: SweepPass, units: number): Budget => {
   const budgetMs: number = passBudgetMs(pass, units)
   test.info().setTimeout(budgetMs + TIMEOUT_GRACE_MS)
-  return { pass, deadline: performance.now() + budgetMs }
+  const startedAt: number = performance.now()
+  return { pass, startedAt, deadline: startedAt + budgetMs }
 }
 
 /** How a pass visits its items. */
@@ -454,6 +458,7 @@ export const visitAll = async <Item>(
 
 /** What a finished pass hands to its report. */
 interface FinishedPass {
+  readonly budget: Budget
   readonly pass: SweepPass
   readonly visits: readonly Visit[]
   readonly judgedRules: readonly string[]
@@ -466,7 +471,7 @@ interface FinishedPass {
  * @param finished the pass, its visits, the rules it judged and the locations it covered.
  */
 export const finishPass = (page: Page, finished: FinishedPass): void => {
-  const { pass, visits, judgedRules, locations }: FinishedPass = finished
+  const { budget, pass, visits, judgedRules, locations }: FinishedPass = finished
   const all: Visit = merged(visits)
   const findings: readonly BrowserFinding[] = distinctFindings(all.findings)
   const report: PassReport = {
@@ -479,6 +484,7 @@ export const finishPass = (page: Page, finished: FinishedPass): void => {
     places: visits.length,
     locations,
     notes: [...new Set<string>(all.notes)],
+    elapsedMs: Math.round(performance.now() - budget.startedAt),
   }
   writeJson(reportFile(test.info(), pass), report)
   expect(

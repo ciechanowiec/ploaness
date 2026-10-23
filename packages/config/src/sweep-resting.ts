@@ -68,6 +68,7 @@ export const expectRestingRules = async (page: Page): Promise<void> => {
     visit: async (item: PlaceItem, index: number): Promise<Visit> => await restingVisit(page, item, index),
   })
   finishPass(page, {
+    budget,
     pass: 'resting',
     visits,
     judgedRules: RESTING_JUDGED,
@@ -92,6 +93,7 @@ export const expectEngineRules = async (page: Page): Promise<void> => {
     visit: async (item: PlaceItem, index: number): Promise<Visit> => await restingVisit(page, item, index),
   })
   finishPass(page, {
+    budget,
     pass: 'engine',
     visits,
     judgedRules: RESTING_JUDGED,
@@ -139,6 +141,7 @@ export const expectDarkScheme = async (page: Page): Promise<void> => {
   })
   await page.emulateMedia({ colorScheme: null })
   finishPass(page, {
+    budget,
     pass: 'dark-scheme',
     visits,
     judgedRules: RESTING_JUDGED,

@@ -340,6 +340,7 @@ export const expectInteractionStates = async (page: Page): Promise<void> => {
       await interactionVisit(page, item, index < STRESS_VIEWPORTS.length),
   })
   finishPass(page, {
+    budget,
     pass: 'interaction',
     visits,
     judgedRules: INTERACTION_RULES,

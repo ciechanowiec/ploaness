@@ -26,6 +26,7 @@ import { engineOf } from './scanner.js'
 import { settleForScan } from './settle.js'
 import {
   armBudget,
+  type Budget,
   CONTROLS,
   type CssRule,
   DESKTOP,
@@ -341,7 +342,7 @@ const crawlStart = (fromSitemap: readonly string[]): CrawlState =>
  * @param page the test's page.
  */
 export const expectDiscoveredSite = async (page: Page): Promise<void> => {
-  armBudget('discovery', MAX_SWEEP_ROUTES)
+  const budget: Budget = armBudget('discovery', MAX_SWEEP_ROUTES)
   await preparePage(page)
   const fromSitemap: readonly string[] = await sitemapPages(page, [`${origin}/sitemap.xml`])
   const crawled: CrawlState = await crawl(page, crawlStart(fromSitemap))
@@ -362,6 +363,7 @@ export const expectDiscoveredSite = async (page: Page): Promise<void> => {
     declared: [],
     judgedRules: [],
     places: crawled.answered.size + stories.length,
+    elapsedMs: Math.round(performance.now() - budget.startedAt),
     locations: discovery.locations.map((location: SweepLocation): string => location.location),
     notes: [],
   } satisfies PassReport)

@@ -224,6 +224,7 @@ export const expectDisclosureStates = async (page: Page): Promise<void> => {
     visit: async (item: PlaceItem): Promise<Visit> => await disclosureVisit(page, item),
   })
   finishPass(page, {
+    budget,
     pass: 'disclosures',
     visits,
     judgedRules: DISCLOSURE_RULES,

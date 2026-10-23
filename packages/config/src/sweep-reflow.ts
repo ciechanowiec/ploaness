@@ -175,6 +175,7 @@ export const expectTextStress = async (page: Page): Promise<void> => {
       ]),
   })
   finishPass(page, {
+    budget,
     pass: 'text-stress',
     visits,
     judgedRules: ['text-spacing', 'text-resize'],
@@ -334,6 +335,7 @@ export const expectWidthSweep = async (page: Page): Promise<void> => {
     visit: async (location: SweepLocation): Promise<Visit> => await sweepLocation(page, location),
   })
   finishPass(page, {
+    budget,
     pass: 'width-sweep',
     visits,
     judgedRules: REFLOW_RULES,

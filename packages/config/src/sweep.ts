@@ -57,6 +57,8 @@ const discoveryText = (discovery: Discovery | undefined): string =>
   `discovered ${String(discovery?.routes.length ?? 0)} routes, ${String(discovery?.stories.length ?? 0)} stories, ` +
   `${String(discovery?.samples.length ?? 0)} templates`
 
+const MS_PER_SECOND: number = 1000
+
 const coverageText = (
   discovery: Discovery | undefined,
   reports: readonly PassReport[],
@@ -71,7 +73,7 @@ const coverageText = (
     ...reports.map(
       (report: PassReport): string =>
         `${report.pass} (${report.engine}): ${String(report.places)} places over ${String(report.locations.length)} ` +
-        `locations, ${String(report.findings.length)} findings`,
+        `locations, ${String(report.findings.length)} findings, ${String(Math.round(report.elapsedMs / MS_PER_SECOND))}s`,
     ),
     ...reports.flatMap((report: PassReport): readonly string[] =>
       report.notes.map((note: string): string => `  note: ${note}`),
