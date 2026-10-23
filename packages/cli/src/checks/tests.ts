@@ -4,6 +4,7 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import {
+  BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE,
   CODE_EXTENSIONS,
   carriesSourceCode,
   coverageBoundaries,
@@ -16,6 +17,7 @@ import {
 import { browserServerProblems } from '../browser-servers.js'
 import { type Context, hasOwnRuntime, type Member, resolveProjectTool, workingTreeFiles } from '../context.js'
 import { failed, fromRun, type GateResult, passed, type RunResult, run } from '../exec.js'
+import { clockedEnvironment, isStartFailure, type PinnedBrowsers, startPinnedBrowsers } from '../pinned-browsers.js'
 import { type Invocation, withPretest, wrapped } from '../test-invocation.js'
 
 // Resolution failure is an answer, not an exception to catch three times over.
@@ -112,19 +114,28 @@ export const endToEnd = async (context: Context): Promise<GateResult> => {
         'the project must declare @playwright/test itself, because its specs import it directly',
       ])
     }
+    const browsers: PinnedBrowsers | GateResult = await startPinnedBrowsers(context)
+    if (isStartFailure(browsers)) {
+      return browsers
+    }
     const invocation: Invocation = wrapped(context, [playwright, 'test', '--config=playwright.config.ts'])
-    return fromRun(
-      run(invocation.command, invocation.commandArguments, {
-        cwd: context.root,
-        env: {
-          NODE_OPTIONS: '--no-deprecation --import=tsx/esm',
-          NODE_ENV: 'production',
-          [VERIFICATION_ENVIRONMENT_VARIABLE]: '1',
-        },
-      }),
-      'the end-to-end suite passes',
-      'the end-to-end suite failed',
-    )
+    try {
+      return fromRun(
+        run(invocation.command, invocation.commandArguments, {
+          cwd: context.root,
+          env: {
+            ...clockedEnvironment(context, '--no-deprecation --import=tsx/esm'),
+            NODE_ENV: 'production',
+            [VERIFICATION_ENVIRONMENT_VARIABLE]: '1',
+            [BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE]: browsers.endpoint,
+          },
+        }),
+        'the end-to-end suite passes',
+        'the end-to-end suite failed',
+      )
+    } finally {
+      browsers.stop()
+    }
   })
 }
 
@@ -146,7 +157,7 @@ export const build = (context: Context): GateResult => {
       env: {
         NEXT_TELEMETRY_DISABLED: '1',
         NODE_ENV: 'production',
-        NODE_OPTIONS: '--no-deprecation --max-old-space-size=8000',
+        ...clockedEnvironment(context, '--no-deprecation --max-old-space-size=8000'),
       },
     })
     const outcome: GateResult = fromRun(result, 'the production build succeeds', 'the production build failed')

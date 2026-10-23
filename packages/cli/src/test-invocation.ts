@@ -1,12 +1,15 @@
 // Preparation and wrapper invocation shared by tests, builds, and production-output inspection.
 import type { Context } from './context.js'
 import { asFindings, failed, type GateResult, type RunResult, run } from './exec.js'
+import { clockedEnvironment } from './pinned-browsers.js'
 
 // A Payload suite needs a database before it can boot, and how the project obtains one is a fact ploaness
 // cannot know. The project declares it; the thresholds and the gate itself stay ploaness's.
 const runPretest = (context: Context): RunResult | undefined => {
   const [command, ...rest] = context.settings.pretest
-  return command === undefined ? undefined : run(command, rest, { cwd: context.root })
+  return command === undefined
+    ? undefined
+    : run(command, rest, { cwd: context.root, env: clockedEnvironment(context, '--no-deprecation') })
 }
 
 /** The executable command after applying the project wrapper. */

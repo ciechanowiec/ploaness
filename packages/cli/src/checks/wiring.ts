@@ -180,13 +180,10 @@ const HARNESS_RUNTIME: string = '@ploaness/runtime'
 
 // A member's own required set. Only a member that serves an application needs the browser packages: a
 // library has no page to sweep, and requiring them would manufacture dependencies the dead-code gate
-// then rightly reports as unused.
-const BROWSER_LIBRARIES: ReadonlySet<string> = new Set<string>([
-  '@playwright/test',
-  '@axe-core/playwright',
-  'tsx',
-  HARNESS_RUNTIME,
-])
+// then rightly reports as unused. axe is not among them: the managed sweep reaches it through
+// `ploaness/sweep`, so a project declares it only when its own specs import it, and its version is then
+// pinned like any other test library's.
+const BROWSER_LIBRARIES: ReadonlySet<string> = new Set<string>(['@playwright/test', 'tsx', HARNESS_RUNTIME])
 
 // The specs of every governed package import these, so pnpm's strict layout means every package must
 // declare them. The browser three are added only where there is an application to drive.
