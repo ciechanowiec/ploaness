@@ -57,7 +57,8 @@ describe('a neighbour that draws nothing toward the other box', () => {
     expect([defectsOf(headingAboveChip(40)), defectsOf(headingAboveChip(50))]).toEqual([
       [],
       [
-        '[attached] /en/account/verify @390x844 (chromium, resting): touching boxes (gap 2px): h2 "Partners"  <->  li.chip',
+        '[attached] /en/account/verify @390x844 (chromium, resting): ' +
+          'touching boxes (gap 2px): h2 "Partners"  <->  li.chip',
       ],
     ])
   })

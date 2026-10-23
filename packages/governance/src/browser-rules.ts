@@ -97,7 +97,9 @@ export const findUnloadedImages = (snapshot: LayoutSnapshot): readonly Candidate
       ({ node, media }: MediaNode): CandidateFinding => ({
         rule: 'image-load',
         subjects: [node],
-        message: `image did not load (complete ${String(media.isComplete)}, natural width ${String(media.naturalWidth)}): ${node.label}`,
+        message:
+          `image did not load (complete ${String(media.isComplete)}, ` +
+          `natural width ${String(media.naturalWidth)}): ${node.label}`,
       }),
     )
 
@@ -168,7 +170,8 @@ export const findUpscaledImages = (snapshot: LayoutSnapshot): readonly Candidate
             subjects: [node],
             message:
               `image source ${String(media.naturalWidth)}x${String(media.naturalHeight)}px displayed at ` +
-              `${String(Math.round(scale * PERCENT))}% in a ${String(media.contentWidth)}x${String(media.contentHeight)}px ` +
+              `${String(Math.round(scale * PERCENT))}% in a ` +
+              `${String(media.contentWidth)}x${String(media.contentHeight)}px ` +
               `box; serve a larger source: ${node.label}`,
           },
         ]

@@ -47,7 +47,8 @@ main { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
 <h1>Fixtures and results this weekend</h1>
 <p>Saturday brings three matches across two venues, and the late kick-off moves to Sunday afternoon
 because the floodlights at the northern ground are being replaced before the cup tie next month.</p>
-<div class="row"><span>Home</span><span>Teams</span><span>Fixtures</span><span>Standings</span><span>Contact</span></div>
+<div class="row"><span>Home</span><span>Teams</span><span>Fixtures</span>
+<span>Standings</span><span>Contact</span></div>
 <div class="grid"><p>Played 12</p><p>Won 8</p><p>Drawn 3</p><p>Lost 1</p><p>Goals 27</p><p>Points 27</p></div>
 </main></body></html>`
 

@@ -241,7 +241,8 @@ const MENU: string = [
   '        }',
   '      }}',
   '    >',
-  '      <button ref={button} type="button" aria-haspopup="menu" aria-expanded={isOpen} onClick={(): void => setOpen(!isOpen)}>',
+  '      <button ref={button} type="button" aria-haspopup="menu" aria-expanded={isOpen}',
+  '        onClick={(): void => setOpen(!isOpen)}>',
   '        Options',
   '      </button>',
   '      {isOpen ? (',
@@ -268,8 +269,14 @@ const storyServer = (port: number, mode: Mode): string => {
   const text: string = mode === 'defects' ? '<p style="font-size:10px">Tiny story text</p>' : '<p>Story text</p>'
   return `import { createServer } from 'node:http'
 
-const index = { v: 5, entries: { 'fixture-story--default': { type: 'story', id: 'fixture-story--default', title: 'Fixture/Story', name: 'Default' } } }
-const preview = '<!doctype html><html lang="en"><head><title>Story</title></head><body><main><h1>Story</h1>${text}</main>' +
+const index = {
+  v: 5,
+  entries: {
+    'fixture-story--default': { type: 'story', id: 'fixture-story--default', title: 'Fixture/Story', name: 'Default' },
+  },
+}
+const preview = '<!doctype html><html lang="en"><head><title>Story</title></head>' +
+  '<body><main><h1>Story</h1>${text}</main>' +
   '<script>window.__STORYBOOK_PREVIEW__ = { currentRender: { phase: "finished" } }</script></body></html>'
 createServer((request, response) => {
   const url = new URL(request.url ?? '/', 'http://127.0.0.1')
@@ -313,7 +320,8 @@ const pinnedModule = (mode: Mode): string =>
     'export default function Page(): React.JSX.Element {',
     '  return <>',
     '    <header className="pinned">Pinned bar</header>',
-    `    <main className="${mode === 'defects' ? 'under' : 'clear'}"><a href="/">Hidden link</a><h1>Focus obscured</h1></main>`,
+    `    <main className="${mode === 'defects' ? 'under' : 'clear'}">`,
+    '      <a href="/">Hidden link</a><h1>Focus obscured</h1></main>',
     '  </>',
     '}',
     '',

@@ -22,7 +22,8 @@ const config: string = path.join(directory, 'next.config.ts')
 const policy: string =
   "    { key: \"Content-Security-Policy\", value: \"default-src 'self'; script-src 'self' 'unsafe-eval'; " +
   "style-src 'self' 'unsafe-inline'; frame-ancestors 'none'\" },\n"
-const extra: string = `${policy}  ] }, { source: "/unprotected", headers: [{ key: "X-Content-Type-Options", value: "invalid" }] }] } }`
+const extra: string =
+  `${policy}  ] }, { source: "/unprotected", ` + 'headers: [{ key: "X-Content-Type-Options", value: "invalid" }] }] } }'
 writeFileSync(
   config,
   readFileSync(config, 'utf8').replace('  ] }] } }', (): string => extra),

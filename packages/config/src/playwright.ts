@@ -81,7 +81,8 @@ const declaredPort: string | undefined = portOf(projectSettings.serverUrl)
 // same tree measures the same pixels on every machine. The application stays on the host: the remote
 // browser reaches its loopback origins through the client, so cookies, headers and the production
 // server are exactly what they are without the container. The remote browser reaches those origins
-// directly where the container shares the host's network, and through the client's tunnel otherwise. Outside verification the host's Chromium runs.
+// directly where the container shares the host's network, and through the client's tunnel otherwise.
+// Outside verification the host's Chromium runs.
 const browserEndpoint: string | undefined = process.env[BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE]
 
 const remote: Readonly<Record<string, unknown>> =

@@ -51,7 +51,8 @@ export function GET(): Response {
     status: 303,
     headers: {
       location: '/session/account',
-      'set-cookie': 'session=' + session.value + '; Path=/; HttpOnly; SameSite=Lax; Expires=' + session.expires.toUTCString(),
+      'set-cookie':
+        'session=' + session.value + '; Path=/; HttpOnly; SameSite=Lax; Expires=' + session.expires.toUTCString(),
     },
   })
 }

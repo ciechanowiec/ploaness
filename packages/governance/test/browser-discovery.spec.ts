@@ -19,7 +19,8 @@ describe('sitemap discovery', () => {
   it('reads the pages of a url set, decoding entities and repeating none', () => {
     expect(
       sitemapEntries(
-        '<urlset><url><loc> http://localhost:3100/en </loc></url><url><loc>http://localhost:3100/en?a=1&amp;b=2</loc></url>' +
+        '<urlset><url><loc> http://localhost:3100/en </loc></url>' +
+          '<url><loc>http://localhost:3100/en?a=1&amp;b=2</loc></url>' +
           '<url><loc>http://localhost:3100/en</loc></url></urlset>',
       ),
     ).toEqual({ pages: ['http://localhost:3100/en', 'http://localhost:3100/en?a=1&b=2'], sitemaps: [] })

@@ -78,7 +78,8 @@ const verifyPage = (actionsTop: number): readonly LayoutNode[] => [
 describe('the email confirmation page that escaped every other gate', () => {
   it('fails while the notice and the button touch', () => {
     expect(defectsOf(verifyPage(100))).toEqual([
-      '[attached] /en/account/verify @390x844 (chromium, resting): touching boxes (gap 0px): div.notice.notice-success  <->  a.button "Sign in"',
+      '[attached] /en/account/verify @390x844 (chromium, resting): ' +
+        'touching boxes (gap 0px): div.notice.notice-success  <->  a.button "Sign in"',
     ])
   })
 
@@ -381,7 +382,8 @@ describe('an edge shared on purpose', () => {
   it('fails a value the harness does not know, and does not excuse the pair', () => {
     expect(defectsOf(attachedTab({ exemption: 'joined', exemptionReason: 'tab' }))).toEqual([
       '[attached] /en/account/verify @390x844 (chromium, resting): touching boxes (gap 0px): div.tab  <->  div.panel',
-      `[exemption] /en/account/verify @390x844 (chromium, resting): unknown rule "joined" in data-ploaness-layout on div.tab; ` +
+      `[exemption] /en/account/verify @390x844 (chromium, resting): ` +
+        `unknown rule "joined" in data-ploaness-layout on div.tab; ` +
         `the exemptible rules are ${EXEMPTIBLE_RULES.join(', ')}`,
     ])
   })

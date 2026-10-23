@@ -66,7 +66,8 @@ describe('malformed exemptions', () => {
 
   it('fails an unknown rule, an empty list and a missing reason', () => {
     expect([...malformedMessages(figure('stretched', '')), ...malformedMessages(figure(' '))]).toEqual([
-      `unknown rule "stretched" in data-ploaness-layout on figure.poster; the exemptible rules are ${EXEMPTIBLE_RULES.join(', ')}`,
+      'unknown rule "stretched" in data-ploaness-layout on figure.poster; ' +
+        `the exemptible rules are ${EXEMPTIBLE_RULES.join(', ')}`,
       'layout exemption without a reason on figure.poster; state it in data-ploaness-layout-reason',
       'data-ploaness-layout names no rule on figure.poster',
     ])

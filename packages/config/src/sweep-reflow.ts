@@ -148,7 +148,8 @@ const stressVisit = async (page: Page, item: PlaceItem, mode: StressMode): Promi
           findingAt(
             place,
             mode,
-            `text did not grow from ${String(outcome.from)}px (it rendered at ${String(outcome.to)}px): ${outcome.label}`,
+            `text did not grow from ${String(outcome.from)}px ` +
+              `(it rendered at ${String(outcome.to)}px): ${outcome.label}`,
           ),
       ),
     ],
