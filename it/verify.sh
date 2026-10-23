@@ -293,6 +293,87 @@ expect_no_layout_line() {
     echo "ok $1: accepts $2"
 }
 
+# Each browser rule against real Next pages in the pinned browser: one page per rule holding its defect,
+# then the same pages repaired, which must pass every pass of the sweep. The defect case also proves
+# discovery reaches a page only the sitemap lists, a page only an `hreflang` alternate names, and a story
+# an auxiliary server answers the Storybook contract for.
+visual_contracts() {
+    new_case fail-visual
+    node "$lib/create-a11y-page.ts" "$scratch/fail-visual" valid
+    node "$lib/create-visual-pages.ts" "$scratch/fail-visual" defects
+    commit_case fail-visual 'test(fixture): render one browser-rule defect per page' "$CONFORMING_BODY"
+    expect fail-visual build PASS
+    expect_command fail-visual FAIL 'findings' \
+        pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+    for line in \
+        '[broken-link] / (chromium, discovery): link to /nowhere answered 404' \
+        '[small-text] /small-text @390x844 (chromium, resting): text rendered at 10px, below 12px: p.tiny' \
+        '[small-text] /from-sitemap @390x844 (chromium, resting): text rendered at 10px' \
+        '[small-text] /pl-locale @390x844 (chromium, resting): text rendered at 10px' \
+        '[small-text] story:fixture-story--default @390x844 (chromium, resting): text rendered at 10px' \
+        '[image-load] /image-load @390x844 (chromium, resting): image did not load' \
+        '[failed-request] /image-load (chromium, resting): GET http' \
+        '[image-distorted] /image-distorted @390x844 (chromium, resting): image rendered at 160x60px from a 160x120px source' \
+        '[image-upscaled] /image-upscaled @390x844 (chromium, resting): image source 160x120px displayed at 150%' \
+        '[media-space] /media-space @390x844 (chromium, resting): img reserves 160x0px before loading' \
+        '[font-load] /font-load @390x844 (chromium, resting): @font-face \"Broken\"' \
+        '[page-error] /page-error (chromium, resting): console.error: fixture page error' \
+        '[page-not-stable] /unstable @390x844 (chromium, resting): ' \
+        '[obscured] /obscured @1280x800 (chromium, resting): a \"Covered link\" cannot be reached by a pointer' \
+        '[focus-visible] /focus-visible @390x844 (chromium, focus): button.no-ring \"Silent focus\" shows no visible change' \
+        '[focus-obscured] /focus-obscured @390x844 (chromium, focus): a \"Hidden link\" is focused and entirely hidden' \
+        '[disclosure-keyboard] /disclosure-keyboard @390x844 (chromium, disclosure button \"Options\"): button \"Options\": Escape does not close it' \
+        '[text-spacing] /text-spacing @390x844 (chromium, text-spacing): clipped text' \
+        '[text-resize] /text-resize @1280x800 (chromium, text-resize): clipped text' \
+        '[overflow] /sweep (chromium, width-sweep): from 481 to ' \
+        '[axe:color-contrast] /night @390x844 (chromium, dark): ' \
+        '[exemption] /stale-exemption (chromium, every): stale layout exemption \"small-text\" on p'; do
+        expect_layout_line fail-visual "$line"
+    done
+    expect_no_layout_line fail-visual '[overflow] /sweep (chromium, width-sweep): from 432'
+    expect_no_layout_line fail-visual '/clean'
+
+    new_case pass-visual
+    node "$lib/create-a11y-page.ts" "$scratch/pass-visual" valid
+    node "$lib/create-visual-pages.ts" "$scratch/pass-visual" valid
+    commit_case pass-visual 'test(fixture): render every browser-rule page repaired' "$CONFORMING_BODY"
+    expect pass-visual build PASS
+    expect_command pass-visual PASS '8 passed' \
+        pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+}
+
+# The verification clock through the real gates: the build prerenders a page and the production server
+# renders one per request, both at the shifted year, and a signed session with an absolute cookie expiry
+# survives the shift. A project that declares the real clock gets today's year. The suite runs in the
+# pinned browsers, so the Playwright image must already be present.
+require_browser_image() {
+    image="mcr.microsoft.com/playwright:v$(node -p "require('$template/node_modules/@playwright/test/package.json').version")-noble"
+    if ! docker image inspect "$image" >/dev/null 2>&1; then
+        echo "FAILED: the pinned browser image is missing; run docker pull $image" >&2
+        exit 1
+    fi
+}
+
+clock_contracts() {
+    require_browser_image
+    new_case clock-shifted
+    node "$lib/create-a11y-page.ts" "$scratch/clock-shifted" valid
+    node "$lib/create-clock-case.ts" "$scratch/clock-shifted"
+    commit_case clock-shifted 'test(fixture): read the clock from prerendered and rendered pages' "$CONFORMING_BODY"
+    expect clock-shifted build PASS
+    expect_command clock-shifted PASS '\[PASS\] e2e' \
+        env EXPECTED_YEAR=2100 "$scratch/clock-shifted/node_modules/.bin/ploaness" gate e2e
+
+    new_case clock-real
+    node "$lib/create-a11y-page.ts" "$scratch/clock-real" valid
+    node "$lib/create-clock-case.ts" "$scratch/clock-real"
+    edit_json "$scratch/clock-real/package.json" ploaness.clock '"real"'
+    commit_case clock-real 'test(fixture): keep the real clock when the project declares it' "$CONFORMING_BODY"
+    expect clock-real build PASS
+    expect_command clock-real PASS '\[PASS\] e2e' \
+        env EXPECTED_YEAR="$(date -u +%Y)" "$scratch/clock-real/node_modules/.bin/ploaness" gate e2e
+}
+
 # The layout scan in the pinned browser against a real Next server. One case renders a page per rule,
 # so a single run proves each rule reports its own defect and the clean and exempted pages beside them
 # stay silent; the overflow page is wide enough to fail at the phone width and narrow enough to pass at
@@ -305,28 +386,31 @@ layout_contracts() {
     node "$lib/create-layout-pages.ts" "$scratch/fail-layout" defects
     commit_case fail-layout 'test(fixture): render one layout defect per page' "$CONFORMING_BODY"
     expect fail-layout build PASS
-    expect_command fail-layout FAIL 'layout defects on the swept routes' \
+    expect_command fail-layout FAIL 'resting pass findings' \
         pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
     expect_layout_line fail-layout \
-        '/verify @390px: touching boxes (gap 0px): div.notice.notice-success  <->  a.button \"Sign in\"'
+        '[attached] /verify @390x844 (chromium, resting): touching boxes (gap 0px): div.notice.notice-success  <->  a.button \"Sign in\"'
     expect_layout_line fail-layout \
-        '/text-overlap @390px: overlapping text: h2.overlap-title \"Results\"  <->  p.overlap-body'
-    expect_layout_line fail-layout '/overflow @390px: horizontal overflow (page '
+        '[text-overlap] /text-overlap @390x844 (chromium, resting): overlapping text: h2.overlap-title \"Results\"  <->  p.overlap-body'
+    expect_layout_line fail-layout '[overflow] /overflow @390x844 (chromium, resting): horizontal overflow (page '
     expect_layout_line fail-layout 'px viewport): div.wide'
-    expect_no_layout_line fail-layout '/overflow @1280px'
-    expect_layout_line fail-layout '/clipped @390px: clipped text (content '
+    expect_no_layout_line fail-layout '/overflow @1280x800'
+    expect_layout_line fail-layout '[clipped-text] /clipped @390x844 (chromium, resting): clipped text (content '
     expect_layout_line fail-layout \
-        '/truncated @390px: truncated text without its full text in title or aria-label: span.truncated'
-    expect_layout_line fail-layout '/unexplained @390px: layout exemption without a reason on div.tablist'
-    expect_layout_line fail-layout '/stale: stale layout exemption on div.tablist'
+        '[clipped-text] /truncated @390x844 (chromium, resting): truncated text without its full text in title or aria-label: span.truncated'
+    expect_layout_line fail-layout \
+        '[exemption] /unexplained @390x844 (chromium, resting): layout exemption without a reason on div.tablist'
+    expect_layout_line fail-layout \
+        '[exemption] /stale (chromium, every): stale layout exemption \"attached\" on div.tablist'
     expect_no_layout_line fail-layout '/attached @'
     expect_no_layout_line fail-layout '/clean @'
-    expect_no_layout_line fail-layout '/closed-disclosure @'
-    expect_no_layout_line fail-layout '/open-disclosure @'
-    for width in 390 1280; do
-        expect_layout_line fail-layout "/open-disclosure-overlap @${width}px: overlapping text:"
-        expect_layout_line fail-layout "/closed-summary-overlap @${width}px: overlapping text:"
-        expect_layout_line fail-layout "/closed-disclosure-box @${width}px: touching boxes"
+    # A closed body is not measured at rest; the disclosure pass opens it and judges what it reveals.
+    expect_no_layout_line fail-layout '/closed-disclosure @390x844 (chromium, resting)'
+    expect_no_layout_line fail-layout '/open-disclosure @390x844 (chromium, resting)'
+    for viewport in 390x844 1280x800; do
+        expect_layout_line fail-layout "/open-disclosure-overlap @${viewport} (chromium, resting): overlapping text:"
+        expect_layout_line fail-layout "/closed-summary-overlap @${viewport} (chromium, resting): overlapping text:"
+        expect_layout_line fail-layout "/closed-disclosure-box @${viewport} (chromium, resting): touching boxes"
     done
 
     new_case pass-layout
@@ -334,7 +418,7 @@ layout_contracts() {
     node "$lib/create-layout-pages.ts" "$scratch/pass-layout" repaired
     commit_case pass-layout 'test(fixture): lay every page out with room between its boxes' "$CONFORMING_BODY"
     expect pass-layout build PASS
-    expect_command pass-layout PASS '2 passed' \
+    expect_command pass-layout PASS '9 passed' \
         pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts tests/e2e/items.e2e.spec.ts --reporter=line
     # The exemption the repaired tab list carries is a suppression, and is counted as one.
     edit_json "$scratch/pass-layout/package.json" ploaness.maxSuppressions 0
@@ -359,7 +443,7 @@ browser_environment_contracts() {
     expect_command browser-environment PASS '\[PASS\] build' \
         env ENV_PRIORITY=from-process "$scratch/browser-environment/node_modules/.bin/ploaness" gate build
     # This minimal Next fixture exercises browser configuration; it serves no Payload access endpoint.
-    expect_command browser-environment PASS '2 passed' \
+    expect_command browser-environment PASS '9 passed' \
         env PLOANESS_VERIFICATION=1 NODE_ENV=production ENV_PRIORITY=from-process \
         pnpm exec playwright test tests/e2e/environment.e2e.spec.ts tests/e2e/a11y.e2e.spec.ts --reporter=line
     expect_command browser-environment PASS '1 passed' \
@@ -671,7 +755,7 @@ bundle_directory_contracts() {
         expect "$name" build PASS
         expect_command "$name" PASS '\[PASS\] bundle' \
             env NODE_ENV=development "$scratch/$name/node_modules/.bin/ploaness" gate bundle
-        expect_command "$name" PASS '1 passed' \
+        expect_command "$name" PASS '8 passed' \
             env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
         mkdir -p "$scratch/$name/.next/static"
         printf 'console.log(1)\n' > "$scratch/$name/.next/static/stale.js"
@@ -709,7 +793,7 @@ test('scans a dynamic post', async ({ page }) => {
   await expectSweptPage(page)
 })
 EOF
-    expect_command route-overlap PASS '2 passed' \
+    expect_command route-overlap PASS '9 passed' \
         env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts \
         tests/e2e/dynamic.e2e.spec.ts --reporter=line
 }
@@ -724,7 +808,7 @@ route_boundary_contracts() {
         env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
     edit_json "$scratch/route-boundary/package.json" ploaness.accessibilitySkipRoutes \
         '[{"pattern":"/api","reason":"API-prefixed preview pages require a session"}]'
-    expect_command route-boundary PASS '1 passed' \
+    expect_command route-boundary PASS '8 passed' \
         env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 }
 
@@ -874,8 +958,8 @@ file_scope_contracts() {
 
 # Declared focused subsets; the default run remains complete.
 case "${1-}" in
-    ''|--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only) ;;
-    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only]' >&2; exit 1 ;;
+    ''|--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only) ;;
+    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only]' >&2; exit 1 ;;
 esac
 
 if [ -z "${1-}" ] || [ "${1-}" = --file-scopes-only ]; then
@@ -984,6 +1068,27 @@ node "$lib/delete-dependency.ts" "$scratch/fail-non-payload-admin-scaffold/packa
 commit_case fail-non-payload-admin-scaffold 'test(fixture): keep scaffold ownership with payload members' \
     "$CONFORMING_BODY"
 expect fail-non-payload-admin-scaffold oxlint FAIL 'react(jsx-filename-extension)'
+
+if [ "${1-}" = --visual-only ]; then
+    (cd "$template" && pnpm exec playwright install chromium >/dev/null)
+    visual_contracts
+    if [ "$failures" -ne 0 ]; then
+        echo "$failures visual fixture assertion(s) failed" >&2
+        exit 1
+    fi
+    echo 'visual fixture contracts passed; run pnpm run verify for the complete verdict'
+    exit 0
+fi
+
+if [ "${1-}" = --clock-only ]; then
+    clock_contracts
+    if [ "$failures" -ne 0 ]; then
+        echo "$failures clock fixture assertion(s) failed" >&2
+        exit 1
+    fi
+    echo 'clock fixture contracts passed; run pnpm run verify for the complete verdict'
+    exit 0
+fi
 
 if [ "${1-}" = --layout-only ]; then
     (cd "$template" && pnpm exec playwright install chromium >/dev/null)
@@ -1142,14 +1247,14 @@ new_case pass-browser-names
 node "$lib/create-a11y-page.ts" "$scratch/pass-browser-names" valid
 commit_case pass-browser-names 'test(fixture): render accessible controls in Next' "$CONFORMING_BODY"
 expect pass-browser-names build PASS
-expect_command pass-browser-names PASS '1 passed' \
+expect_command pass-browser-names PASS '8 passed' \
     pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 new_case fail-browser-headers
 node "$lib/create-a11y-page.ts" "$scratch/fail-browser-headers" valid
 node "$lib/create-header-page.ts" "$scratch/fail-browser-headers"
 commit_case fail-browser-headers 'test(fixture): reject missing headers beyond the home page' "$CONFORMING_BODY"
 expect fail-browser-headers build PASS
-expect_command fail-browser-headers FAIL 'security headers on .*unprotected' \
+expect_command fail-browser-headers FAIL 'security-headers\] /unprotected' \
     pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 new_case fail-browser-names
 node "$lib/create-a11y-page.ts" "$scratch/fail-browser-names" invalid
@@ -1157,7 +1262,7 @@ commit_case fail-browser-names 'test(fixture): render controls without accessibl
 expect fail-browser-names build PASS
 expect_command fail-browser-names FAIL 'button-name' \
     pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
-if ! grep -q '"id": "label"' "$scratch/fail-browser-names/command-output.log"; then
+if ! grep -q '\[axe:label\]' "$scratch/fail-browser-names/command-output.log"; then
     echo 'FAILED fail-browser-names: the sweep did not report the unlabeled input' >&2
     failures=$((failures + 1))
 fi
@@ -1172,6 +1277,8 @@ if [ "${1-}" = --jsx-only ]; then
 fi
 
 layout_contracts
+visual_contracts
+clock_contracts
 browser_server_contracts
 
 # `install-scripts` is here because its only other fixture is a failure case, and this file's own
@@ -1510,7 +1617,7 @@ new_case fail-infra-force-destroy
 mkdir -p "$scratch/fail-infra-force-destroy/infra"
 cat > "$scratch/fail-infra-force-destroy/infra/media.tf" <<'FIXTURE'
 resource "aws_s3_bucket" "media" {
-  bucket        = "eoc-media"
+  bucket        = "site-media"
   force_destroy = true
 }
 FIXTURE

@@ -1,6 +1,6 @@
 // A real Next page for the shipped browser sweep's positive and negative contracts. No API,
 // accessibility scanner, or browser is replaced; the only difference is the page's accessible names.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:net'
 import path from 'node:path'
 import { asRecord } from '@ploaness/governance'
@@ -68,12 +68,17 @@ writeFileSync(
 const appRoot: string = path.join(directory, 'src', 'app')
 mkdirSync(appRoot, { recursive: true })
 writeFileSync(path.join(appRoot, 'page.tsx'), pageSource(mode === 'valid'))
+// The seeded proxy's policy admits scripts by a per-request nonce, which Next stamps only on a page it
+// renders per request. Reading the request headers in the root layout is what makes it do so; a page
+// that opts into prerendering with `force-static` still prerenders.
 writeFileSync(
   path.join(appRoot, 'layout.tsx'),
   [
     "import './globals.css'",
+    "import { headers } from 'next/headers'",
     "export const metadata = { title: 'Accessibility contract' }",
-    'export default function Layout({ children }: { children: React.ReactNode }): React.JSX.Element {',
+    'export default async function Layout({ children }: { children: React.ReactNode }): Promise<React.JSX.Element> {',
+    '  await headers()',
     '  return <html lang="en"><body>{children}</body></html>',
     '}',
     '',
@@ -90,6 +95,8 @@ writeFileSync(
 )
 
 // Fixture cases share their installed packages with a sibling template. Turbopack must see both.
+// The seeded proxy sends a per-request nonce policy. A second, static policy beside it would forbid the
+// nonce-loaded chunks and leave every page unhydrated, so the static one applies only without a proxy.
 const SECURITY_POLICY: string = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-eval'",
@@ -100,10 +107,15 @@ writeFileSync(
   path.join(directory, 'next.config.ts'),
   [
     `export default { turbopack: { root: ${JSON.stringify(path.dirname(directory))} },`,
+    // The development server refuses its hot-reload socket to an origin it does not know, and without it
+    // no client component hydrates. The fixture serves on 127.0.0.1.
+    "  allowedDevOrigins: ['127.0.0.1'],",
     '  async headers() { return [{ source: "/:path*", headers: [',
     '    { key: "X-Content-Type-Options", value: "nosniff" },',
     '    { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },',
-    `    { key: "Content-Security-Policy", value: ${JSON.stringify(SECURITY_POLICY)} },`,
+    ...(existsSync(path.join(directory, 'src', 'proxy.ts'))
+      ? []
+      : [`    { key: "Content-Security-Policy", value: ${JSON.stringify(SECURITY_POLICY)} },`]),
     '  ] }] } }',
     '',
   ].join('\n'),

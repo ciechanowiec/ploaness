@@ -75,13 +75,24 @@ const DEFECT_PAGES: Readonly<Record<string, string>> = {
 <a className="button" href="/">Continue</a></div>`,
 }
 
+// The same disclosures with bodies that hold no defect once opened, as the disclosure pass opens them.
+const CLEAN_CLOSED_DISCLOSURE: string = `
+<div><details><summary><span>Show details</span></summary>
+<p>Body text</p>
+<details open><summary>Inner disclosure</summary><p>Inner text</p></details>
+</details><p>Visible following text</p></div>`
+
+const CLEAN_OPEN_DISCLOSURE: string = `
+<details open><summary>Show details</summary><p>Visible body text</p>
+<details><summary>Inner disclosure</summary><p>Inner body</p></details></details>`
+
 const REPAIRED_PAGES: Readonly<Record<string, string>> = {
   verify: verifyPage('page page-narrow spaced'),
   truncated: '<p><span className="truncated" title="Borussia Mönchengladbach">Borussia Mönchengladbach</span></p>',
   attached: tabs('tabs', ATTACHED),
   clean: CLEAN,
-  'closed-disclosure': CLOSED_DISCLOSURE,
-  'open-disclosure': OPEN_DISCLOSURE,
+  'closed-disclosure': CLEAN_CLOSED_DISCLOSURE,
+  'open-disclosure': CLEAN_OPEN_DISCLOSURE,
 }
 
 const STYLES: string = `
