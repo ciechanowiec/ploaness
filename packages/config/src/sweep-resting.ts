@@ -59,8 +59,11 @@ const placeItems = (
     viewportsOf(location).map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
   )
 
+// A breakpoint edge is where a page's layout changes. A story renders one component alone in a frame,
+// so it is loaded at the baseline and declared viewports only: its own media queries are still met at
+// ten widths, and edges on every story would multiply a large Storybook's loads for layouts it lacks.
 const edgeViewports = (location: SweepLocation): readonly FindingViewport[] =>
-  pageViewports(location.edges, projectSettings.layoutViewports)
+  pageViewports(location.isStory ? [] : location.edges, projectSettings.layoutViewports)
 
 /** How a resting-rule pass differs from the others: what it is, what it visits, and how. */
 interface RestingPass {
