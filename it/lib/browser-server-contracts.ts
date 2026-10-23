@@ -94,7 +94,7 @@ const configContracts = async (): Promise<void> => {
     [VERIFICATION_ENVIRONMENT_VARIABLE]: '1',
   })
   requireResult(verification, 0, 'all browser servers use fresh mode')
-  const continuous: CommandResult = await invoke(process.execPath, [inspector, 'fresh', '2'], {
+  const continuous: CommandResult = await invoke(process.execPath, [inspector, 'fresh', '0'], {
     CI: 'true',
     [VERIFICATION_ENVIRONMENT_VARIABLE]: undefined,
   })

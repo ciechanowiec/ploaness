@@ -44,7 +44,7 @@ const inspect = async (mode: string | undefined): Promise<void> => {
   const settings: Record<string, unknown> = asRecord(manifest['ploaness'])
   requireServers(config, settings, shouldReuse)
   if (config['retries'] !== Number(process.argv[RetriesArgument])) {
-    throw new Error('The verification marker changed CI retry behavior')
+    throw new Error('The config retries a failing test, which hides a verdict that is not reproducible')
   }
   console.info(`all browser servers use ${mode} mode`)
 }
