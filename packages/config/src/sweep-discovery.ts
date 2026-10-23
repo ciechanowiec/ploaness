@@ -10,6 +10,7 @@ import {
   distinctFindings,
   findingAt,
   findingLine,
+  localAddress,
   onOrigin,
   type SitemapEntries,
   securityHeaderProblems,
@@ -63,7 +64,10 @@ const toRoute = (href: string): string | undefined => {
 }
 
 interface PageFacts {
+  /** The width conditions of the media rules that style an element of this page. */
   readonly mediaTexts: readonly string[]
+  /** The page's `<link rel="canonical">` href, or empty. */
+  readonly canonical: string
   readonly hasDarkMedia: boolean
   readonly hasDarkClass: boolean
   readonly controls: number
@@ -85,12 +89,30 @@ const pageFactsInPage = (controls: string): PageFacts => {
   const rules: readonly CssRule[] = Array.from(page.document.styleSheets).flatMap(
     (sheet: { readonly cssRules?: ArrayLike<CssRule> }): readonly CssRule[] => rulesOf(sheet),
   )
-  const mediaTexts: readonly string[] = rules.flatMap((rule: CssRule): readonly string[] =>
-    rule.media === undefined ? [] : [rule.media.mediaText],
-  )
+  // A media rule moves this page only when a rule inside it styles an element here. A stylesheet
+  // shipping every breakpoint of a utility framework would otherwise add edges no element responds
+  // to. State and pseudo-element parts are removed before matching, which can only widen the match.
+  const isStyling = (rule: CssRule): boolean => {
+    const selector: string = (rule.selectorText ?? '').replaceAll(/(?<!\\)::?[a-z-]+(?:\([^)]*\))?/giu, '').trim()
+    if (rule.selectorText === undefined) {
+      return false
+    }
+    try {
+      return page.document.querySelector(selector === '' ? '*' : selector) !== null
+    } catch {
+      return true
+    }
+  }
+  const mediaRules: readonly CssRule[] = rules.filter((rule: CssRule): boolean => rule.media !== undefined)
+  const mediaTexts: readonly string[] = mediaRules
+    .filter((rule: CssRule): boolean => rulesOf(rule).some((inner: CssRule): boolean => isStyling(inner)))
+    .flatMap((rule: CssRule): readonly string[] => [rule.media?.mediaText ?? ''])
   return {
     mediaTexts: [...new Set<string>(mediaTexts)],
-    hasDarkMedia: mediaTexts.some((text: string): boolean => text.includes('prefers-color-scheme')),
+    canonical: page.document.querySelector('link[rel="canonical"]')?.getAttribute('href') ?? '',
+    hasDarkMedia: mediaRules.some((rule: CssRule): boolean =>
+      (rule.media?.mediaText ?? '').includes('prefers-color-scheme'),
+    ),
     hasDarkClass: rules.some((rule: CssRule): boolean =>
       /(?:^|[\s,>+~(])\.dark(?![\w-])/u.test(rule.selectorText ?? ''),
     ),
@@ -203,7 +225,10 @@ const crawl = async (page: Page, state: CrawlState): Promise<CrawlState> => {
         reachable: [...answered.reachable, location],
         findings: [...answered.findings, ...htmlHeaderFindings(response, queued.route, page)],
       },
-      [...facts.hrefs, ...alternateHrefs(facts.alternates)],
+      [...facts.hrefs, ...alternateHrefs(facts.alternates)].flatMap((href: string): readonly string[] => {
+        const address: string | undefined = localAddress(href, page.url(), facts.canonical, origin)
+        return address === undefined ? [] : [address]
+      }),
       queued.route,
     ),
   )

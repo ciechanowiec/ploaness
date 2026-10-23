@@ -160,3 +160,34 @@ export const onOrigin = (location: string, origin: string): string | undefined =
     return undefined
   }
 }
+
+/**
+ * The address a page's link names on the application under test, or undefined for another site.
+ *
+ * A same-origin link is the application's. So is a link under the page's own canonical host: a site
+ * that builds absolute links from its public URL names its own pages that way, and a verification run
+ * does not serve that host. Any other origin is a different site.
+ * @param href the link, as written.
+ * @param pageUrl the URL of the page carrying it.
+ * @param canonicalUrl the page's `<link rel="canonical">` href, or empty when it has none.
+ * @param origin the origin the application answers at.
+ * @returns the address on that origin, or undefined.
+ */
+export const localAddress = (
+  href: string,
+  pageUrl: string,
+  canonicalUrl: string,
+  origin: string,
+): string | undefined => {
+  try {
+    const url: URL = new URL(href, pageUrl)
+    if (url.origin === origin) {
+      return url.href
+    }
+    return canonicalUrl !== '' && url.origin === new URL(canonicalUrl, pageUrl).origin
+      ? onOrigin(url.href, origin)
+      : undefined
+  } catch {
+    return undefined
+  }
+}

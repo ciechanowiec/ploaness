@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   alternateHrefs,
+  localAddress,
   onOrigin,
   sitemapEntries,
   storiesOfIndex,
@@ -96,5 +97,25 @@ describe('sitemap locations on the run origin', () => {
       onOrigin('/sitemaps/1', 'http://127.0.0.1:3100'),
       onOrigin('https://[', 'http://127.0.0.1:3100'),
     ]).toEqual(['http://127.0.0.1:3100/en/teams?page=2', 'http://127.0.0.1:3100/sitemaps/1', undefined])
+  })
+})
+
+describe('links on the application under test', () => {
+  const origin: string = 'http://localhost:3100'
+  const page: string = 'http://localhost:3100/en'
+
+  it('keeps a same-origin link, and reads one under the canonical host on the run origin', () => {
+    expect([
+      localAddress('/en/news', page, 'https://www.example.com/en', origin),
+      localAddress('https://www.example.com/tr/haberler', page, 'https://www.example.com/en', origin),
+    ]).toEqual(['http://localhost:3100/en/news', 'http://localhost:3100/tr/haberler'])
+  })
+
+  it('leaves out another site, any absolute link without a canonical, and a malformed href', () => {
+    expect([
+      localAddress('https://partner.example.org/', page, 'https://www.example.com/en', origin),
+      localAddress('https://www.example.com/en', page, '', origin),
+      localAddress('https://[', page, '', origin),
+    ]).toEqual([undefined, undefined, undefined])
   })
 })
