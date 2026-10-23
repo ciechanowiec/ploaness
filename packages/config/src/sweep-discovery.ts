@@ -30,8 +30,8 @@ import {
   DESKTOP,
   type Discovery,
   type DiscoveryReport,
+  type DomDocument,
   type DomElement,
-  type DomWindow,
   discoveryFile,
   discoveryReportFile,
   loadLocation,
@@ -42,6 +42,9 @@ import {
   WHOLE_PASS,
   writeJson,
 } from './sweep-shared.js'
+
+// The browser surface the page functions below touch, declared for the reason `settle.ts` records.
+declare const document: DomDocument
 
 const SEED_ROUTE: string = '/'
 
@@ -78,7 +81,6 @@ interface PageFacts {
 // Read through the CSSOM, so a breakpoint in any stylesheet the page loaded counts, nested at-rules
 // included. A stylesheet from another origin cannot be read and has already been blocked anyway.
 const pageFactsInPage = (controls: string): PageFacts => {
-  const page: DomWindow = globalThis as unknown as DomWindow
   const rulesOf = (sheet: { readonly cssRules?: ArrayLike<CssRule> }): readonly CssRule[] => {
     try {
       return Array.from(sheet.cssRules ?? []).flatMap((rule: CssRule): readonly CssRule[] => [rule, ...rulesOf(rule)])
@@ -86,7 +88,7 @@ const pageFactsInPage = (controls: string): PageFacts => {
       return []
     }
   }
-  const rules: readonly CssRule[] = Array.from(page.document.styleSheets).flatMap(
+  const rules: readonly CssRule[] = Array.from(document.styleSheets).flatMap(
     (sheet: { readonly cssRules?: ArrayLike<CssRule> }): readonly CssRule[] => rulesOf(sheet),
   )
   // A media rule moves this page only when a rule inside it styles an element here. A stylesheet
@@ -98,7 +100,7 @@ const pageFactsInPage = (controls: string): PageFacts => {
       return false
     }
     try {
-      return page.document.querySelector(selector === '' ? '*' : selector) !== null
+      return document.querySelector(selector === '' ? '*' : selector) !== null
     } catch {
       return true
     }
@@ -109,20 +111,20 @@ const pageFactsInPage = (controls: string): PageFacts => {
     .flatMap((rule: CssRule): readonly string[] => [rule.media?.mediaText ?? ''])
   return {
     mediaTexts: [...new Set<string>(mediaTexts)],
-    canonical: page.document.querySelector('link[rel="canonical"]')?.getAttribute('href') ?? '',
+    canonical: document.querySelector('link[rel="canonical"]')?.getAttribute('href') ?? '',
     hasDarkMedia: mediaRules.some((rule: CssRule): boolean =>
       (rule.media?.mediaText ?? '').includes('prefers-color-scheme'),
     ),
     hasDarkClass: rules.some((rule: CssRule): boolean =>
       /(?:^|[\s,>+~(])\.dark(?![\w-])/u.test(rule.selectorText ?? ''),
     ),
-    controls: page.document.querySelectorAll(controls).length,
+    controls: document.querySelectorAll(controls).length,
     hrefs: Array.from(
-      page.document.querySelectorAll('a[href]'),
+      document.querySelectorAll('a[href]'),
       (anchor: DomElement): string => anchor.getAttribute('href') ?? '',
     ),
     alternates: Array.from(
-      page.document.querySelectorAll('link[rel="alternate"][hreflang]'),
+      document.querySelectorAll('link[rel="alternate"][hreflang]'),
       (link: DomElement): AlternateLink => ({
         hreflang: link.getAttribute('hreflang') ?? '',
         href: link.getAttribute('href') ?? '',
@@ -236,7 +238,7 @@ const crawl = async (page: Page, state: CrawlState): Promise<CrawlState> => {
 
 const MAX_SITEMAPS: number = 50
 
-const fetched = async (page: Page, url: string): Promise<APIResponse | undefined> => {
+const fetched = async (page: Page, url: string): Promise<APIResponse<unknown> | undefined> => {
   try {
     return await page.request.get(url)
   } catch {
@@ -250,7 +252,7 @@ const sitemapAt = async (page: Page, url: string, read: number): Promise<Sitemap
   if (read >= MAX_SITEMAPS || parseUrl(url)?.origin !== origin) {
     return NO_ENTRIES
   }
-  const response: APIResponse | undefined = await fetched(page, url)
+  const response: APIResponse<unknown> | undefined = await fetched(page, url)
   return response?.ok() === true ? sitemapEntries(await response.text()) : NO_ENTRIES
 }
 
@@ -272,7 +274,7 @@ const storiesOf = async (page: Page): Promise<readonly DiscoveredStory[]> => {
   const lists: readonly (readonly DiscoveredStory[])[] = await Promise.all(
     projectSettings.auxiliaryServers.map(async (server): Promise<readonly DiscoveredStory[]> => {
       const serverOrigin: string = new URL(server.url).origin
-      const response: APIResponse | undefined = await fetched(page, `${serverOrigin}/index.json`)
+      const response: APIResponse<unknown> | undefined = await fetched(page, `${serverOrigin}/index.json`)
       if (response?.ok() !== true) {
         return []
       }

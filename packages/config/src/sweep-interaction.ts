@@ -26,12 +26,13 @@ import {
   type Budget,
   CHROME,
   CONTROLS,
+  type ComputedStyleOf,
   DESKTOP,
   type Discovery,
+  type DomDocument,
   type DomElement,
   type DomRect,
   type DomStyle,
-  type DomWindow,
   EMPTY_VISIT,
   finishPass,
   healthOf,
@@ -54,6 +55,10 @@ import {
   visitAll,
 } from './sweep-shared.js'
 
+// The browser surface the page functions below touch, declared for the reason `settle.ts` records.
+declare const document: DomDocument
+declare const getComputedStyle: ComputedStyleOf
+
 const PROBE_SELECTOR: string = `[${PROBE_ATTRIBUTE}]`
 
 // What the browser has to say before a control can be classified. Scrolled and hit-tested in one
@@ -63,7 +68,7 @@ const probeHitTarget = async (control: Locator): Promise<HitTargetProbe> =>
     const halves: number = 2
     element.scrollIntoView({ block: 'center', inline: 'center' })
     const box: DomRect = element.getBoundingClientRect()
-    const style: DomStyle = (globalThis as unknown as DomWindow).getComputedStyle(element)
+    const style: DomStyle = getComputedStyle(element)
     const atCentre: DomElement | null = element.ownerDocument.elementFromPoint(
       box.left + box.width / halves,
       box.top + box.height / halves,
@@ -167,14 +172,13 @@ interface FocusState {
 
 // Where the focused element is, and whether fixed or sticky content covers it at five points.
 const focusStateInPage = (ring: number): Omit<FocusState, 'facts'> => {
-  const page: DomWindow = globalThis as unknown as DomWindow
-  const active: DomElement | null = page.document.activeElement
-  if (active === null || active === page.document.body) {
+  const active: DomElement | null = document.activeElement
+  if (active === null || active === document.body) {
     return { samples: [], clip: undefined }
   }
   const box: DomRect = active.getBoundingClientRect()
-  const width: number = page.document.documentElement.clientWidth
-  const height: number = page.document.documentElement.clientHeight
+  const width: number = document.documentElement.clientWidth
+  const height: number = document.documentElement.clientHeight
   const left: number = Math.max(0, box.left)
   const top: number = Math.max(0, box.top)
   const right: number = Math.min(width, box.right)
@@ -194,13 +198,13 @@ const focusStateInPage = (ring: number): Omit<FocusState, 'facts'> => {
     [right - inset, bottom - inset],
   ]
   const pinned = (element: DomElement | null): DomElement | null =>
-    element === null || ['fixed', 'sticky'].includes(page.getComputedStyle(element).position)
+    element === null || ['fixed', 'sticky'].includes(getComputedStyle(element).position)
       ? element
       : pinned(element.parentElement)
   const describe = (element: DomElement): string =>
     [element.tagName.toLowerCase(), ...(element.id.length > 0 ? [element.id] : [])].join('#')
   const samples: readonly FocusSample[] = points.map(([pointX, pointY]: readonly [number, number]): FocusSample => {
-    const hit: DomElement | null = page.document.elementFromPoint(pointX, pointY)
+    const hit: DomElement | null = document.elementFromPoint(pointX, pointY)
     const cover: DomElement | null = hit === null || active.contains(hit) || hit.contains(active) ? null : pinned(hit)
     return { isCovered: cover !== null && !cover.contains(active), coveredBy: cover === null ? '' : describe(cover) }
   })
@@ -218,7 +222,15 @@ const focusStateInPage = (ring: number): Omit<FocusState, 'facts'> => {
 }
 
 const blurInPage = (): void => {
-  ;(globalThis as unknown as DomWindow).document.activeElement?.blur?.()
+  document.activeElement?.blur?.()
+}
+
+const markFocusedInPage = (name: string): void => {
+  document.activeElement?.setAttribute(name, '')
+}
+
+const unmarkInPage = ([selector, name]: readonly [string, string]): void => {
+  document.querySelector(selector)?.removeAttribute(name)
 }
 
 interface FocusStop {
@@ -241,18 +253,11 @@ const focusStop = async (page: Page, place: FindingPlace): Promise<FocusStop> =>
           findingAt(focusPlace, 'focus-obscured', `${facts.label} is focused and entirely hidden by ${covering}`),
           facts,
         )
-  await page.evaluate((name: string): void => {
-    ;(globalThis as unknown as DomWindow).document.activeElement?.setAttribute(name, '')
-  }, PROBE_ATTRIBUTE)
+  await page.evaluate(markFocusedInPage, PROBE_ATTRIBUTE)
   const contrast: readonly BrowserFinding[] = await axeFindings(page, focusPlace, (builder) =>
     builder.include(PROBE_SELECTOR).withRules(['color-contrast']),
   )
-  await page.evaluate(
-    ([selector, name]: readonly [string, string]): void => {
-      ;(globalThis as unknown as DomWindow).document.querySelector(selector)?.removeAttribute(name)
-    },
-    [PROBE_SELECTOR, PROBE_ATTRIBUTE] as const,
-  )
+  await page.evaluate(unmarkInPage, [PROBE_SELECTOR, PROBE_ATTRIBUTE] as const)
   const clip: ScreenClip | undefined = state.clip
   if (clip === undefined) {
     return { visit: merged([obscured, { ...EMPTY_VISIT, findings: contrast }]), key: facts.key }

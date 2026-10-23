@@ -20,8 +20,8 @@ import {
   type Budget,
   DISCLOSURE_ATTRIBUTE,
   type Discovery,
+  type DomDocument,
   type DomElement,
-  type DomWindow,
   EMPTY_VISIT,
   finishPass,
   healthOf,
@@ -42,14 +42,18 @@ import {
   visitAll,
 } from './sweep-shared.js'
 
+// The browser surface the page functions below touch, declared for the reason `settle.ts` records.
+declare const document: DomDocument
+declare const location: { readonly href: string }
+declare const history: { readonly length: number }
+
 const DISCLOSURES: string =
   '[aria-expanded="false"], [aria-haspopup]:not([aria-haspopup="false"]), details:not([open]) > summary'
 
 // Mark the disclosures it is safe to open: visible, outside forms unless declared `type="button"`, and
 // never a link that navigates. Answers how many were marked.
 const markDisclosuresInPage = ([selector, attribute]: readonly [string, string]): number => {
-  const page: DomWindow = globalThis as unknown as DomWindow
-  const safe: readonly DomElement[] = Array.from(page.document.querySelectorAll(selector)).filter(
+  const safe: readonly DomElement[] = Array.from(document.querySelectorAll(selector)).filter(
     (element: DomElement): boolean => {
       const tag: string = element.tagName.toLowerCase()
       const href: string | null = element.getAttribute('href')
@@ -76,19 +80,18 @@ interface DisclosureFacts {
 }
 
 const disclosureFactsInPage = (selector: string): DisclosureFacts => {
-  const page: DomWindow = globalThis as unknown as DomWindow
-  const control: DomElement | null = page.document.querySelector(selector)
-  const modal: DomElement | null = page.document.querySelector(
+  const control: DomElement | null = document.querySelector(selector)
+  const modal: DomElement | null = document.querySelector(
     'dialog:modal, [role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]',
   )
   const isModalOpen: boolean = modal?.checkVisibility() === true
-  const active: DomElement | null = page.document.activeElement
+  const active: DomElement | null = document.activeElement
   const attributeOf = (name: string): string | null => control?.getAttribute(name) ?? null
   const containsFocus = (container: DomElement | null): boolean =>
     container !== null && active !== null && (container === active || container.contains(active))
   return {
-    url: page.location.href,
-    history: page.history.length,
+    url: location.href,
+    history: history.length,
     expanded: attributeOf('aria-expanded'),
     isPopup: (attributeOf('aria-haspopup') ?? 'false') !== 'false',
     isModalOpen,

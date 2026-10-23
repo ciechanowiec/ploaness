@@ -1,6 +1,7 @@
 // What the sweep reads from the running application to decide what to scan: the routes a sitemap
 // lists, the locales a page links as alternates, the stories a Storybook serves, and the template each
 // route renders. Nothing here is declared by the project; each value is derived from what it serves.
+import { isArray, isRecord } from './json-shapes.js'
 import { type DeclaredRoute, resolvedRouteOf } from './route-map.js'
 
 const LOC: RegExp = /<loc>([^<]+)<\/loc>/giu
@@ -67,9 +68,7 @@ export interface DiscoveredStory {
 }
 
 const asRecord = (value: unknown): Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : {}
+  isRecord(value) && !isArray(value) ? value : {}
 
 const asText = (value: unknown): string => (typeof value === 'string' ? value : '')
 

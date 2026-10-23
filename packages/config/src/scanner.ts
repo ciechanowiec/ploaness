@@ -23,6 +23,7 @@ import {
   findUnloadedFonts,
   instability,
   isAllowedRequest,
+  isArray,
   isFailedStatus,
   type JudgedPage,
   judgeLayout,
@@ -40,6 +41,9 @@ import {
 import { LAYOUT_SCAN_VIEWPORTS, measurePage } from './layout.js'
 import { projectSettings } from './project-settings.js'
 import { type SettleOutcome, settleForScan } from './settle.js'
+
+// The browser name a page function below calls, declared for the reason `settle.ts` records.
+declare const requestAnimationFrame: (callback: () => void) => number
 
 /** Every rule the resting scan applies to elements, for judging which exemptions are stale. */
 export const RESTING_RULES: readonly string[] = [...LAYOUT_RULES, ...RESTING_ELEMENT_RULES]
@@ -78,9 +82,7 @@ export const settleFindings = async (page: Page, place: FindingPlace): Promise<r
 const nextFramesInPage = async (): Promise<void> => {
   const frame = async (): Promise<void> => {
     await new Promise<void>((resolve: () => void): void => {
-      ;(
-        globalThis as unknown as { readonly requestAnimationFrame: (callback: () => void) => number }
-      ).requestAnimationFrame(resolve)
+      requestAnimationFrame(resolve)
     })
   }
   await frame()
@@ -123,7 +125,7 @@ export const judgeRestingPlace = async (page: Page, place: FindingPlace): Promis
   }
 }
 
-const axeTarget = (target: unknown): string => (Array.isArray(target) ? target.map(String).join(' ') : String(target))
+const axeTarget = (target: unknown): string => (isArray(target) ? target.map(String).join(' ') : String(target))
 
 /**
  * The axe scan of a page as findings, one per violating element.

@@ -30,8 +30,8 @@ if (!(Number.isNaN(instant) || Object.hasOwn(globalThis, SHIFTED))) {
   // A proxy rather than a subclass, so `Date()` called as a function still answers a string and
   // `instanceof Date` still holds for every date created before or after the shift.
   const shifted: DateConstructor = new Proxy(RealDate, {
-    construct: (target: DateConstructor, parameters: readonly unknown[], newTarget: unknown): object =>
-      Reflect.construct(target, parameters.length === 0 ? [now()] : parameters, newTarget as NewableFunction) as object,
+    construct: (target: DateConstructor, parameters: readonly unknown[], newTarget: NewableFunction): object =>
+      Reflect.construct(target, parameters.length === 0 ? [now()] : parameters, newTarget) as object,
     apply: (): string => new RealDate(now()).toString(),
     get: (target: DateConstructor, property: string | symbol, receiver: unknown): unknown =>
       property === 'now' ? now : Reflect.get(target, property, receiver),

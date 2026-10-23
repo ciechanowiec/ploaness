@@ -16,6 +16,8 @@ import {
   findingAt,
   findingLine,
   isAllowedRequest,
+  isArray,
+  isRecord,
   type JudgedPage,
   LAYOUT_RULES,
   PAGE_ERROR_RULE,
@@ -83,7 +85,7 @@ export interface DomElement {
   readonly blur?: () => void
 }
 
-interface DomDocument {
+export interface DomDocument {
   readonly body: DomElement
   readonly activeElement: DomElement | null
   readonly documentElement: DomElement & { readonly clientWidth: number; readonly clientHeight: number }
@@ -99,17 +101,10 @@ export interface CssRule {
   readonly cssRules?: ArrayLike<CssRule>
 }
 
-export interface DomWindow {
-  readonly document: DomDocument
-  readonly location: { readonly href: string }
-  readonly history: { readonly length: number }
-  readonly getComputedStyle: (element: DomElement) => DomStyle
-}
+/** The window's `getComputedStyle`, which each module declares where its page functions call it. */
+export type ComputedStyleOf = (element: DomElement) => DomStyle
 
-/** What Storybook exposes as `__STORYBOOK_PREVIEW__` on the preview window. */
-interface StorybookPreview {
-  readonly currentRender?: { readonly phase?: string }
-}
+declare const document: DomDocument
 
 /** One page the passes scan: a crawled route or a Storybook story, with what discovery read from it. */
 export interface SweepLocation {
@@ -244,18 +239,61 @@ export const writeJson = (file: string, value: unknown): void => {
   writeFileSync(file, `${JSON.stringify(value, null, JSON_INDENT)}\n`)
 }
 
-/**
- * Read a JSON file another pass wrote.
- * @param file the file to read.
- * @returns its parsed value, or undefined when it is absent or unreadable.
- */
-export const readJson = (file: string): unknown => {
+const parsedJson = (file: string): unknown => {
   try {
     return JSON.parse(readFileSync(file, 'utf8'))
   } catch {
     return undefined
   }
 }
+
+/**
+ * Read a JSON file another pass wrote, as the shape that pass writes.
+ * @param file the file to read.
+ * @param isShape whether a parsed value has the shape.
+ * @returns the parsed value, or undefined when it is absent, unreadable or of another shape.
+ */
+export const readJson = <Shape>(file: string, isShape: (value: unknown) => value is Shape): Shape | undefined => {
+  const value: unknown = parsedJson(file)
+  return isShape(value) ? value : undefined
+}
+
+const hasArrays = (value: Readonly<Record<string, unknown>>, keys: readonly string[]): boolean =>
+  keys.every((key: string): boolean => isArray(value[key]))
+
+const hasNumbers = (value: Readonly<Record<string, unknown>>, keys: readonly string[]): boolean =>
+  keys.every((key: string): boolean => typeof value[key] === 'number')
+
+/**
+ * Whether a parsed value is what discovery writes for the later passes.
+ * @param value the parsed value.
+ * @returns whether it carries every list a discovery has.
+ */
+export const isDiscovery = (value: unknown): value is Discovery =>
+  isRecord(value) && hasArrays(value, ['routes', 'stories', 'locations', 'samples'])
+
+/**
+ * Whether a parsed value is what discovery writes for the summary.
+ * @param value the parsed value.
+ * @returns whether it carries every field a discovery report has.
+ */
+export const isDiscoveryReport = (value: unknown): value is DiscoveryReport =>
+  isRecord(value) &&
+  hasArrays(value, ['findings', 'problems', 'locations']) &&
+  hasNumbers(value, ['places', 'elapsedMs'])
+
+/**
+ * Whether a parsed value is what a shard of a pass writes for the summary.
+ * @param value the parsed value.
+ * @returns whether it carries every field a pass report has.
+ */
+export const isPassReport = (value: unknown): value is PassReport =>
+  isRecord(value) &&
+  typeof value['pass'] === 'string' &&
+  typeof value['engine'] === 'string' &&
+  isRecord(value['shard']) &&
+  hasArrays(value, ['findings', 'used', 'declared', 'judgedRules', 'locations', 'notes']) &&
+  hasNumbers(value, ['places', 'elapsedMs'])
 
 /**
  * The file discovery writes for every later pass, in every engine.
@@ -297,7 +335,7 @@ export const reportFile = (info: TestInfo, engine: string, pass: SweepPass, shar
  * @returns the discovery.
  */
 export const readDiscovery = (info: TestInfo): Discovery => {
-  const discovery: Discovery | undefined = readJson(discoveryFile(info)) as Discovery | undefined
+  const discovery: Discovery | undefined = readJson(discoveryFile(info), isDiscovery)
   expect(discovery, 'discovery did not record what to scan; its own test names the reason').toBeDefined()
   return discovery ?? { routes: [], stories: [], locations: [], samples: [] }
 }
@@ -325,15 +363,17 @@ export const preparePage = async (page: Page): Promise<void> => {
   }
 }
 
+// Storybook defines `__STORYBOOK_PREVIEW__` on the preview window only once its preview has started,
+// so it is read as a property of the global rather than declared as a name that may not exist yet.
 const isStoryInPhaseInPage = (phases: readonly string[]): boolean => {
-  const preview: StorybookPreview | undefined = (
-    globalThis as unknown as Readonly<Record<string, StorybookPreview | undefined>>
-  )['__STORYBOOK_PREVIEW__']
-  return phases.includes(preview?.currentRender?.phase ?? '')
+  const preview: unknown = Reflect.get(globalThis, '__STORYBOOK_PREVIEW__')
+  const render: unknown =
+    typeof preview === 'object' && preview !== null ? Reflect.get(preview, 'currentRender') : undefined
+  const phase: unknown = typeof render === 'object' && render !== null ? Reflect.get(render, 'phase') : undefined
+  return phases.includes(typeof phase === 'string' ? phase : '')
 }
 
-const hasStoryFailedInPage = (): boolean =>
-  (globalThis as unknown as DomWindow).document.querySelector('body.sb-show-errordisplay') !== null
+const hasStoryFailedInPage = (): boolean => document.querySelector('body.sb-show-errordisplay') !== null
 
 /**
  * Load a location fresh at a viewport, still, with a story rendered and played.

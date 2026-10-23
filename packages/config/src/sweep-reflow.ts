@@ -27,12 +27,13 @@ import { settleForScan } from './settle.js'
 import {
   armBudget,
   type Budget,
+  type ComputedStyleOf,
   DESKTOP,
   type Discovery,
+  type DomDocument,
   type DomElement,
   type DomNode,
   type DomStyle,
-  type DomWindow,
   finishPass,
   healthOf,
   isChromium,
@@ -51,6 +52,10 @@ import {
   type Visit,
   visitAll,
 } from './sweep-shared.js'
+
+// The browser surface the page functions below touch, declared for the reason `settle.ts` records.
+declare const document: DomDocument
+declare const getComputedStyle: ComputedStyleOf
 
 // ---------------------------------------------------------------------------------------------------
 // Text stress: WCAG 1.4.12 spacing and 1.4.4 resize
@@ -71,11 +76,10 @@ const doubleTextInPage = (): readonly ResizeOutcome[] => {
   const factor: number = 2
   const tolerance: number = 0.5
   const textNode: number = 3
-  const page: DomWindow = globalThis as unknown as DomWindow
-  const elements: readonly DomElement[] = [page.document.body, ...Array.from(page.document.body.querySelectorAll('*'))]
+  const elements: readonly DomElement[] = [document.body, ...Array.from(document.body.querySelectorAll('*'))]
   const before: readonly (readonly [number, string])[] = elements.map(
     (element: DomElement): readonly [number, string] => {
-      const style: DomStyle = page.getComputedStyle(element)
+      const style: DomStyle = getComputedStyle(element)
       return [Number(style.fontSize.replace('px', '')), style.lineHeight]
     },
   )
@@ -93,7 +97,7 @@ const doubleTextInPage = (): readonly ResizeOutcome[] => {
     const hasText: boolean = Array.from(element.childNodes).some(
       (node: DomNode): boolean => node.nodeType === textNode && (node.textContent ?? '').trim().length > 0,
     )
-    const after: number = Number(page.getComputedStyle(element).fontSize.replace('px', ''))
+    const after: number = Number(getComputedStyle(element).fontSize.replace('px', ''))
     return hasText && element.checkVisibility() && after < size * factor - tolerance
       ? [
           {

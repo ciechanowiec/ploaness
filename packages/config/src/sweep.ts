@@ -35,6 +35,9 @@ import {
   type DiscoveryReport,
   discoveryFile,
   discoveryReportFile,
+  isDiscovery,
+  isDiscoveryReport,
+  isPassReport,
   type PassReport,
   readJson,
   reportFile,
@@ -183,13 +186,12 @@ const staleIn = (engine: string, reports: readonly PassReport[]): readonly Brows
 const readRecord = (info: TestInfo): SweepRecord => {
   const engines: readonly string[] = expectedEngines(info)
   const expected: readonly ExpectedReport[] = expectedReports(engines)
-  const read: readonly (PassReport | undefined)[] = expected.map(
-    (part: ExpectedReport): PassReport | undefined =>
-      readJson(reportFile(info, part.engine, part.pass, part.shard)) as PassReport | undefined,
+  const read: readonly (PassReport | undefined)[] = expected.map((part: ExpectedReport): PassReport | undefined =>
+    readJson(reportFile(info, part.engine, part.pass, part.shard), isPassReport),
   )
   return {
-    discovery: readJson(discoveryFile(info)) as Discovery | undefined,
-    discoveryReport: readJson(discoveryReportFile(info)) as DiscoveryReport | undefined,
+    discovery: readJson(discoveryFile(info), isDiscovery),
+    discoveryReport: readJson(discoveryReportFile(info), isDiscoveryReport),
     engines,
     reports: read.flatMap((report: PassReport | undefined): readonly PassReport[] =>
       report === undefined ? [] : [report],

@@ -18,6 +18,13 @@ type Page = Parameters<typeof MeasurePage>[0]
 type Browser = NonNullable<ReturnType<ReturnType<Page['context']>['browser']>>
 type BrowserType = ReturnType<Browser['browserType']>
 
+// The one browser name the page function below reads; the lint project compiles without the DOM lib.
+declare const document: { readonly fonts: { readonly ready: Promise<unknown> } }
+
+const fontsReadyInPage = async (): Promise<void> => {
+  await document.fonts.ready
+}
+
 const ARGUMENT_OFFSET: number = 2
 const [output]: readonly (string | undefined)[] = process.argv.slice(ARGUMENT_OFFSET)
 if (output === undefined) {
@@ -90,10 +97,7 @@ try {
   const browser: Browser = await connect(1)
   const page: Page = await browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: 1 })
   await page.setContent(PAGE)
-  await page.evaluate(async (): Promise<void> => {
-    await (globalThis as unknown as { readonly document: { readonly fonts: { readonly ready: Promise<unknown> } } })
-      .document.fonts.ready
-  })
+  await page.evaluate(fontsReadyInPage)
   writeFileSync(output, `${JSON.stringify(await measurePage(page, '/geometry'), null, JSON_INDENT)}\n`)
   await browser.close()
 } finally {

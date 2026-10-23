@@ -18,7 +18,7 @@
 // judges discovery's problems and the exemptions no pass used, reports a shard that did not finish,
 // and prints what was covered. Under `ploaness verify` the sweep also runs in Firefox and WebKit, where
 // the engine pass covers one route per template and one story per component.
-import { type Page, test } from '@playwright/test'
+import { test } from '@playwright/test'
 import {
   expectDarkScheme,
   expectDisclosureStates,
@@ -33,35 +33,8 @@ import {
   SWEEP_SHARDS,
 } from 'ploaness/sweep'
 
-type ShardedPass = (page: Page, shard: Shard) => Promise<void>
-
-interface PassTest {
-  readonly title: string
-  readonly tag: string
-  readonly run: ShardedPass
-}
-
-const PASSES: readonly PassTest[] = [
-  {
-    title: 'every page passes the resting rules at every viewport',
-    tag: '@ploaness-chromium',
-    run: expectRestingRules,
-  },
-  {
-    title: 'every control passes in hover and keyboard focus',
-    tag: '@ploaness-chromium',
-    run: expectInteractionStates,
-  },
-  {
-    title: 'every disclosure passes open and answers the keyboard',
-    tag: '@ploaness-chromium',
-    run: expectDisclosureStates,
-  },
-  { title: 'text survives WCAG spacing and doubled size', tag: '@ploaness-chromium', run: expectTextStress },
-  { title: 'layout holds across the whole width range', tag: '@ploaness-chromium', run: expectWidthSweep },
-  { title: 'every page passes in its dark scheme', tag: '@ploaness-chromium', run: expectDarkScheme },
-  { title: 'every sampled page passes in this engine', tag: '@ploaness-engine', run: expectEngineRules },
-]
+const CHROMIUM: string = '@ploaness-chromium'
+const ENGINE: string = '@ploaness-engine'
 
 const SHARDS: readonly Shard[] = Array.from(
   { length: SWEEP_SHARDS },
@@ -72,21 +45,64 @@ const SHARDS: readonly Shard[] = Array.from(
 )
 
 const DISCOVERY_TITLE: string = 'discovers every route, story, breakpoint and colour scheme'
+const RESTING_TITLE: string = 'every page passes the resting rules at every viewport'
+const INTERACTION_TITLE: string = 'every control passes in hover and keyboard focus'
+const DISCLOSURE_TITLE: string = 'every disclosure passes open and answers the keyboard'
+const TEXT_STRESS_TITLE: string = 'text survives WCAG spacing and doubled size'
+const WIDTH_TITLE: string = 'layout holds across the whole width range'
+const DARK_TITLE: string = 'every page passes in its dark scheme'
+const ENGINE_TITLE: string = 'every sampled page passes in this engine'
 
-const partTitle = (pass: PassTest, shard: Shard): string =>
-  `${pass.title} (part ${String(shard.index + 1)} of ${String(shard.count)})`
+const partTitle = (title: string, shard: Shard): string =>
+  `${title} (part ${String(shard.index + 1)} of ${String(shard.count)})`
 
+// Each pass calls its helper directly in the test body rather than through a table, so the lint rule
+// requiring an assertion in every test can see one: the `expect` helpers are what it counts.
 test.describe('Ploaness browser sweep', () => {
   test(DISCOVERY_TITLE, { tag: '@ploaness-discovery' }, async ({ page }) => {
     await expectDiscoveredSite(page)
   })
 
-  for (const pass of PASSES) {
-    for (const shard of SHARDS) {
-      test(partTitle(pass, shard), { tag: pass.tag }, async ({ page }) => {
-        await pass.run(page, shard)
-      })
-    }
+  for (const shard of SHARDS) {
+    test(partTitle(RESTING_TITLE, shard), { tag: CHROMIUM }, async ({ page }) => {
+      await expectRestingRules(page, shard)
+    })
+  }
+
+  for (const shard of SHARDS) {
+    test(partTitle(INTERACTION_TITLE, shard), { tag: CHROMIUM }, async ({ page }) => {
+      await expectInteractionStates(page, shard)
+    })
+  }
+
+  for (const shard of SHARDS) {
+    test(partTitle(DISCLOSURE_TITLE, shard), { tag: CHROMIUM }, async ({ page }) => {
+      await expectDisclosureStates(page, shard)
+    })
+  }
+
+  for (const shard of SHARDS) {
+    test(partTitle(TEXT_STRESS_TITLE, shard), { tag: CHROMIUM }, async ({ page }) => {
+      await expectTextStress(page, shard)
+    })
+  }
+
+  for (const shard of SHARDS) {
+    test(partTitle(WIDTH_TITLE, shard), { tag: CHROMIUM }, async ({ page }) => {
+      await expectWidthSweep(page, shard)
+    })
+  }
+
+  for (const shard of SHARDS) {
+    test(partTitle(DARK_TITLE, shard), { tag: CHROMIUM }, async ({ page }) => {
+      await expectDarkScheme(page, shard)
+    })
+  }
+
+  for (const shard of SHARDS) {
+    test(partTitle(ENGINE_TITLE, shard), { tag: ENGINE }, async ({ page }) => {
+      await expectEngineRules(page, shard)
+    })
   }
 
   test('every exemption excuses something, and every pass finished', { tag: '@ploaness-summary' }, async () => {

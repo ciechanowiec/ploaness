@@ -17,8 +17,8 @@ import {
   armBudget,
   type Budget,
   type Discovery,
+  type DomDocument,
   type DomElement,
-  type DomWindow,
   finishPass,
   healthOf,
   isChromium,
@@ -39,6 +39,9 @@ import {
   type Visit,
   visitAll,
 } from './sweep-shared.js'
+
+// The browser surface the page functions below touch, declared for the reason `settle.ts` records.
+declare const document: DomDocument
 
 const restingVisit = async (page: Page, item: PlaceItem, index: number): Promise<Visit> => {
   const place: FindingPlace = placeAt(page, item.location, item.viewport, 'resting')
@@ -123,15 +126,17 @@ export const expectEngineRules = async (page: Page, shard: Shard): Promise<void>
 
 const DARK_CLASS: string = 'dark'
 
+const addRootClassInPage = (name: string): void => {
+  const root: DomElement = document.documentElement
+  root.setAttribute('class', `${root.getAttribute('class') ?? ''} ${name}`.trim())
+}
+
 const darkVisit = async (page: Page, item: PlaceItem, index: number): Promise<Visit> => {
   await page.emulateMedia({ colorScheme: item.location.hasDarkMedia ? 'dark' : 'light' })
   const place: FindingPlace = placeAt(page, item.location, item.viewport, 'dark')
   const loaded: readonly BrowserFinding[] = await loadLocation(page, item.location, item.viewport, place)
   if (item.location.hasDarkClass) {
-    await page.evaluate((name: string): void => {
-      const root: DomElement = (globalThis as unknown as DomWindow).document.documentElement
-      root.setAttribute('class', `${root.getAttribute('class') ?? ''} ${name}`.trim())
-    }, DARK_CLASS)
+    await page.evaluate(addRootClassInPage, DARK_CLASS)
   }
   const unsettled: readonly BrowserFinding[] = await settleFindings(page, place)
   const judged: PlaceScan = await judgeRestingPlace(page, place)
