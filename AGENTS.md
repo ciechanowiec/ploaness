@@ -88,6 +88,8 @@ Use Node 26 or later and the exact pnpm version in `packageManager`.
 | `sh it/verify.sh --native-only` | Diagnostic native-rule and suppression subset. |
 | `sh it/verify.sh --jsx-only` | Diagnostic JSX and browser-name subset. |
 | `sh it/verify.sh --layout-only` | Diagnostic layout-scan subset against real Next pages. |
+| `sh it/verify.sh --visual-only` | Diagnostic browser-rule, discovery and story subset against real Next pages. |
+| `sh it/verify.sh --clock-only` | Diagnostic verification-clock subset through the real gates; needs the Playwright image. |
 | `sh it/verify.sh --browser-servers-only` | Diagnostic browser-server ownership and production environment subset. |
 | `sh it/verify.sh --file-scopes-only` | Diagnostic file selection, generated-role, CommonJS, and SCSS subset. |
 | `sh it/verify.sh --security-only` | Diagnostic resolved-authentication and release-inventory subset. |

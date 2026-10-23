@@ -20,7 +20,8 @@ Ploaness owns analyzer versions, configurations, gate selection, thresholds, and
 Consumer settings describe the project or tighten an allowed threshold. Do not replace the harness,
 copy its rules locally, or suppress a finding where a structural repair is available.
 
-Container analyzers require Docker. Dependency and vulnerability checks require their registries.
+Container analyzers and the browser suite require Docker; the browser suite also requires the Playwright
+image pulled beforehand. Dependency and vulnerability checks require their registries.
 Unavailable infrastructure and tool failures fail verification. Set up the required infrastructure and
 rerun; an incomplete run establishes no full verdict.
 
@@ -165,7 +166,7 @@ Extended verification adds 10 gates before the final tree check.
 | `linear-history` | repository | No merge commit anywhere in the history. |
 | `build` | package | The production build. |
 | `bundle` | package | The gzipped client JavaScript in Next's configured production output stays under the bundle budget. |
-| `e2e` | package | The end-to-end suite, including the three sweeps ploaness ships into it and the layout scan the accessibility sweep runs. |
+| `e2e` | package | The end-to-end suite in the pinned browsers, including the three sweeps ploaness ships into it; the browser sweep runs every pass in Chromium and its engine pass in Firefox and WebKit. |
 | `sbom` | repository | Generates and validates the resolved workspace dependency inventory and its source metadata. |
 | `compliance-report` | repository | Writes the shareable compliance report from the inventory `sbom` wrote for the current tree. |
 
@@ -330,7 +331,8 @@ exports, while ordinary mutations remain prohibited in every directory.
 | `accessibilitySkipRoutes` | `/admin`, `/api` | Built-ins match exact paths and child paths. File-role-shaped entries add URL prefixes; explain why each is outside the sweep. |
 | `accessibilityRouteBudget` | `250` | Positive integer; a smaller ceiling is honored. Reaching the ceiling fails rather than truncating coverage. |
 | `layoutMinimumGap` | `4` | Positive integer in CSS pixels; only a larger gap is honored. |
-| `layoutViewports` | empty | Entries with positive integer `width` and `height`, measured after the required 390x844 and 1280x800 viewports. |
+| `layoutViewports` | empty | Entries with positive integer `width` and `height`, measured beside the baseline viewports; none can be removed. |
+| `clock` | `2100-01-01T12:00:00Z` | ISO instant the application and browser clocks start at during verification, or `"real"`. Any other value is the default. |
 | `analysisEnv` | placeholders for `PAYLOAD_SECRET`, `DATABASE_URL` | String-valued map used by analysis gates that import the application. |
 | `pretest` | empty | Argument array for preparation before tests, builds, bundle inspection, and end-to-end tests. |
 | `testWrapper` | empty | Argument array wrapping those processes, including the bundle configuration probe, for example to supply a disposable database. |
@@ -400,6 +402,16 @@ its health endpoint is failing. Ploaness reports the address to release and leav
 running. Direct local `pnpm exec playwright test` runs use development mode and may reuse existing servers; they do not establish
 a verification verdict.
 
+The `e2e` gate measures in the browsers of the Playwright image matching the project's resolved
+Playwright, `mcr.microsoft.com/playwright:v<version>-noble`, started in Docker for the run and removed
+after it. The image is never pulled during verification; pull it beforehand with the command the gate
+prints. The application stays on the host. Under verification the build, the pretest command, the suite
+runner and every application server start their clock at `ploaness.clock`, which then advances normally,
+and the browser pages of the sweep read the same fixed instant. Declare `"clock": "real"` only when
+sign-in depends on an external service validating real time, and cover date-dependent content with
+stories or project tests instead. The suite never retries: a verdict that passes only on a retry is not
+reproducible.
+
 Playwright collects end-to-end specs under `tests/e2e`. Place tests in the collected paths. Test code
 receives strict typing and linting; type assertions are excluded from the production type-coverage
 measurement and expected numeric values need no named constants. Coverage floors still apply to each
@@ -429,35 +441,43 @@ outcome, so an anonymous response cannot accidentally satisfy the test.
 
 Ploaness pins three executable sweeps into applications where they apply:
 
-- Accessibility crawls public routes reachable from home, scans each default state with axe, and checks
-  hover/focus contrast. The crawl excludes `/admin`, `/api`, and their child paths; project-owned custom admin views need
-  their own authenticated scans, scoped to the authored view.
-- Layout measures every route the same crawl reaches, at 390x844 and at 1280x800, before the axe pass.
-  It reports every layout defect in the run rather than stopping at the first route.
+- The browser sweep discovers every public route reachable from home, every same-origin `hreflang`
+  alternate, every page `sitemap.xml` lists, and every story an auxiliary server's `/index.json` lists,
+  and judges each by the browser rules below. It excludes `/admin`, `/api`, and their child paths;
+  project-owned custom admin views need their own authenticated scans, scoped to the authored view.
 - Security headers checks the home response and HTML pages reached by the public crawl for content-type protection, referrer policy, a framing
   decision, and a script-constraining CSP. The seeded `src/proxy.ts` supplies a starting policy with a
-  per-request nonce. Preserve Payload file handlers' own SVG policy on `/api/<collection>/file/*`.
+  per-request nonce. Next stamps that nonce only on a page it renders per request: a page prerendered
+  at build time loads no script under the policy, never hydrates, and the browser sweep reports its
+  blocked scripts. Read `headers()` in the root layout so pages render per request. Preserve Payload
+  file handlers' own SVG policy on `/api/<collection>/file/*`.
 - Access boundary asks Payload's `/api/access` what an anonymous caller may do and compares the result
   with the project's `publicAccess` declarations, including field-level grants.
 
-The accessibility sweep compares discovered route files with visited URLs and project test evidence.
-Unlinked, authenticated, and dynamic routes need reachable links or explicit project scans of both
-kinds. A dynamic family requires a concrete member URL; its parent route is not a substitute.
+The browser sweep compares discovered route files with visited URLs and project test evidence.
+Unlinked, authenticated, and dynamic routes need reachable links, a sitemap entry, or explicit project
+scans of both kinds. A dynamic family requires a concrete member URL; its parent route is not a substitute.
 Intentional exclusions require a reason. Do not narrow coverage merely to fit the route budget.
 
-Cover such a page with `expectSweptPage(page)` from `ploaness/a11y`. It settles the page, runs the axe
-scan, and runs the layout scan at every viewport, so one call is evidence of both:
+Some states no crawl reaches: signed-in and permission-restricted views, empty lists, error states, and
+date-dependent variants. They are the project's responsibility. Cover a presentation component's state
+with a Storybook story, and a real state with a project test that reaches it with seeded data and a real
+session, never a mock, then calls `expectSweptPage(page)` from `ploaness/a11y`. It runs axe at 390 and
+1280 and the layout, text and media rules at every baseline and declared viewport, in place, so one call
+is evidence of both:
 
 ```ts
 await page.goto(`/en/teams/${team.slug}`)
 await expectSweptPage(page)
 ```
 
-`expectNoLayoutDefects(page)` runs the layout scan alone, beside a project's own axe scan. Both scans
-judge the page in the state the spec left it, so drive it into the state worth judging first.
+`expectNoLayoutDefects(page)` runs the layout, text and media rules alone, beside a project's own axe
+scan. Both judge the page in the state the spec left it, resized rather than reloaded, so drive it into
+the state worth judging first. They do not fix the browser clock or block third-party requests; the
+sweep does.
 
-Every Playwright test asserts. `expect`, the three `ploaness/a11y` helpers, and a project helper named
-`expect` followed by a capital letter count as assertions; name an asserting helper that way.
+Every Playwright test asserts. `expect`, the `ploaness/a11y` and `ploaness/sweep` helpers, and a project
+helper named `expect` followed by a capital letter count as assertions; name an asserting helper that way.
 
 Static route/test matching recognizes route literals, regular expressions, dynamic URL templates, and
 axe and layout evidence through one relative helper import. It does not prove the spec executes those
@@ -475,36 +495,82 @@ Pass CMS-supplied link values through `safeHref` from `@ploaness/runtime` before
 Text escaping does not make an arbitrary URL scheme safe. Application code owns this call-site decision;
 tests may also import the re-export from `ploaness/runtime`.
 
-### Layout Scan
+### Browser Sweep
 
-Closed `<details>` bodies are excluded from measurement, including nested content and direct text.
-The disclosure box and its first summary remain measured; opening the disclosure measures its body.
+The sweep is one test per pass, run in order, each with a budget derived from the work discovery found.
+A pass reports every defect it finds; one failing pass hides nothing another reports. The final test
+judges stale exemptions and fails when a pass did not finish. Each finding is one line:
 
-The layout scan judges geometry from computed boxes and styles in the pinned browser. It does not
-compare screenshots and does not judge taste. It fails on:
+```text
+[rule] /route @390x844 (chromium, resting): what is wrong: element "its text"
+```
 
-- touching or overlapping boxed siblings: a boxed element has a background unlike the one beneath it,
-  a shadow, or a border on the side facing its neighbor. Siblings closer than the minimum gap, 4 CSS
-  pixels by default, fail. A neighbor that draws nothing toward the box is measured by its content - its
-  own text and what its children draw - so its padding is space rather than contact. Wrappers that paint
-  nothing and hold no text of their own are looked through, so `<p><a class="button">` beside a notice
-  compares the button with the notice. Two sections that each span the full width of the page and are
-  stacked, such as a header above a hero, are not compared. Zero-size, hidden, `aria-hidden`, absolutely
-  or fixed positioned elements, and two inline elements in one run of text are not compared;
-- overlapping text: two elements whose own text shares more than one pixel row, unless one contains the
-  other;
-- horizontal overflow: a document wider than the viewport, naming the outermost element past its edge;
-- clipped text: an element with `overflow: hidden` or `clip` whose content exceeds its box. Truncation
-  with `text-overflow: ellipsis` or a line clamp passes when `title` or `aria-label` holds the full
-  text.
+`story:<id>` names a story. The same findings, a coverage summary and outlined failure screenshots are
+written under `test-results/ploaness-sweep/<engine>/`; screenshots show where a finding is and are never
+compared or committed.
 
-Repair a finding in the layout, usually with a gap on the parent. An edge shared on purpose, such as a
-tab joined to its panel, takes an exemption on the element whose edge is shared:
+| Pass | Engines | Viewports | Pages |
+| --- | --- | --- | --- |
+| Discovery | every engine | desktop | every route and story |
+| Resting rules | Chromium | baseline, both sides of every stylesheet breakpoint, declared | every route and story |
+| Interaction states | Chromium | 390x844 and 1280x800; hover at 1280 | every route and story |
+| Disclosures | Chromium | 390x844 and 1280x800 | every route and story |
+| Text stress | Chromium | spacing at 390x844 and 1280x800; resize at 1280x800 | one route per template, every story |
+| Width sweep | Chromium | 320 to 1920 px in 16 px steps, bisected | one route per template, every story |
+| Dark scheme | Chromium | baseline | pages whose stylesheets declare a dark scheme |
+| Engine | Firefox, WebKit | baseline | one route per template, every story |
+
+The baseline is 320x568, 360x800, 390x844, 430x932, 844x390, 768x1024, 1024x768, 1280x800, 1440x900
+and 1920x1080. Each viewport is a fresh load. Breakpoints are read from every `@media` width condition in
+the page's stylesheets, `px`, `rem` and `em`, legacy and range syntax. A template is the route file a URL
+resolves to; sampling one route does not prove its siblings equivalent, and the resting pass still
+covers every route.
+
+Every page is loaded still: reduced motion, animations and transitions at zero duration, a hidden caret,
+locale `en-US`, timezone UTC, pixel ratio 1, the browser clock fixed at `ploaness.clock`, and every
+request outside the application and auxiliary origins blocked. Each page is settled - fonts, every
+image decoded, a quiet element tree, finished animations, cleared `aria-busy` regions - and measured
+twice.
+
+| Rule | Fails when |
+| --- | --- |
+| `page-error` | an uncaught error, `console.error`, or hydration warning occurs during load or interaction |
+| `failed-request` | a subresource answers 4xx or 5xx, fails, or is blocked as a third-party request |
+| `broken-link` | a crawled internal link, or a sitemap entry, does not answer |
+| `page-not-stable` | the page does not settle within 10 s, a visible busy region never clears, or geometry moves more than 1 px between two measurements |
+| `overflow` | the document is wider than the viewport; names the outermost element past its edge |
+| `text-overlap` | two elements' own text shares more than one pixel row, unless one contains the other |
+| `clipped-text` | `overflow: hidden` or `clip` cuts content; ellipsis or line clamp passes when `title` or `aria-label` holds the full text |
+| `attached` | boxed siblings are closer than the minimum gap, 4 CSS pixels by default |
+| `obscured` | something other than a control or its descendant sits at the control's centre |
+| `focus-obscured` | a keyboard-focused element is entirely hidden by fixed or sticky content |
+| `focus-visible` | the pixels of a keyboard-focused element and a 4 px ring do not change when it takes focus |
+| `disclosure-keyboard` | `Escape` does not close a popup or modal dialog, focus does not return to its control, or focus leaves an open modal dialog |
+| `text-spacing` | the WCAG 1.4.12 overrides cause a new overflow, overlap, or clip |
+| `text-resize` | doubling every text size causes a new overflow, overlap, or clip, or text does not grow |
+| `small-text` | rendered text is below 12 px |
+| `font-load` | a `@font-face` family the page's text uses has no loaded face, or a face errored |
+| `image-load` | a visible image is incomplete or has no natural width |
+| `image-distorted` | an `object-fit: fill` image is rendered out of its natural proportion |
+| `image-upscaled` | an image is displayed more than 10% larger than its source resolution |
+| `media-space` | an in-flow image, video, frame or embed takes a different box once loaded than before |
+| `axe:<id>` | axe reports a violation, at 390 and 1280, in the resting, dark, disclosure, hover and focus states |
+| `pass-budget` | a pass runs out of its budget; the finding names the item it reached |
+
+The geometry rules judge computed boxes and styles. Touching boxes compare boxed siblings: a background
+unlike the one beneath, a shadow, or a border facing the neighbor. Wrappers that paint nothing and hold
+no text are looked through. Stacked full-width sections, zero-size, hidden, `aria-hidden`, out-of-flow
+elements, and two inline elements in one run of text are not compared. Closed `<details>` bodies are not
+measured; opening the disclosure measures its body.
+
+Repair a finding where its cause is. A design that breaks a rule on purpose takes an exemption naming
+the rules it excuses, on the element or, except for `attached`, an ancestor:
 
 ```tsx
 <div role="tablist" data-ploaness-layout="attached" data-ploaness-layout-reason="tabs join their panel">
 ```
 
-The exemption excuses only touching or overlapping boxes of that element. Each one counts toward the
-suppression ceiling. A missing reason, a value other than `attached`, and an exemption that excuses
-nothing at every measured viewport each fail the scan.
+Each exemption counts toward the suppression ceiling. A missing reason, an unknown rule name, and a rule
+the exemption excused in no pass, viewport, engine or state fail the sweep. Page-level rules -
+`page-error`, `failed-request`, `broken-link`, `page-not-stable`, `font-load` - and axe take no element
+exemption. A false positive is a defect of the rule; report it upstream rather than exempting it.

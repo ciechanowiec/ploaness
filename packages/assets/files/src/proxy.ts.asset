@@ -7,6 +7,10 @@
 // adding the origins the site actually loads from, and changing the framing rule for a page meant to be
 // embedded are all the project's to make.
 //
+// Next stamps the nonce only on a page it renders per request. A page prerendered at build time carries
+// none, so under this policy its scripts are refused and it never hydrates; reading `headers()` in the
+// root layout renders every page per request.
+//
 // One line should not be relaxed: `script-src` without `'unsafe-inline'`. That directive is what makes
 // the rest mean anything - a policy readmitting inline script readmits the injection a policy exists to
 // stop - and it is the one thing the sweep refuses.

@@ -54,6 +54,7 @@ endif::[]
 === Gates
 
 . A [[gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding]]_finding_ is one problem a gate reports. Default verification runs 38 gates. Extended verification adds ten more, covering the shell scripts, the infrastructure definitions, the history, the production build, the client bundle, the browser suite, the dependency inventory, and the compliance report on open source dependencies.
+. The browser suite discovers the application's pages, stories, breakpoints, locales and colour schemes from the running application. The suite judges each one for runtime errors, broken requests and links, layout, text, media, focus and keyboard defects, and accessibility. The suite measures with pinned browsers and fixed clocks, so the same tree receives the same verdict on every machine. The suite reports each defect as a line of text naming the rule, the page, the state, the engine and the viewport.
 . A run stops at the first failing gate and names how many gates the run didn't reach. Stopping there is deliberate: a gate is free to leave the tree in a shape the next gate misreads, and a column of passes beneath a failure would describe a state nobody established.
 
 [[managed-files]]
@@ -69,6 +70,7 @@ _ploaness_ owns the text of certain files in the project, among them the editor 
 . Use the dependency versions pinned by _ploaness_.
 . Declare `@ploaness/runtime` in each application's `dependencies`, matching its `ploaness` version.
 . Provide a reachable Docker daemon and network access to the package and advisory registries.
+. Before extended verification, pull the Playwright image the browser suite measures in, `mcr.microsoft.com/playwright:v<version>-noble` for the project's Playwright version. The suite runs offline against that image and never pulls the image itself; when the image is missing, the `e2e` gate prints the command that fetches the image.
 
 [[adding-ploaness-to-a-project]]
 == Adding _ploaness_ to a Project
