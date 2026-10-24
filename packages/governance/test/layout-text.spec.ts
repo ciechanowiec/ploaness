@@ -208,7 +208,8 @@ describe('text cut off by an ancestor that clips it', () => {
 
   it('still reports the overlap when the area lets its content overflow', () => {
     expect(defectsOf(scrolledBlurb({ overflowY: 'visible' }))).toEqual([
-      '[text-overlap] /news @390x844 (chromium, resting): overlapping text: p "Saturday fixtures"  <->  p.legend "Legend"',
+      '[text-overlap] /news @390x844 (chromium, resting): overlapping text: ' +
+        'p "Saturday fixtures"  <->  p.legend "Legend"',
     ])
   })
 

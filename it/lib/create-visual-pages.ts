@@ -152,7 +152,9 @@ const PAGES: Readonly<Record<string, Variant>> = {
   },
   // Text a scroll area keeps out of sight until it is scrolled, above a boxed legend.
   'scrolled-blurb': {
-    defect: `<div className="blurb-card"><div className="blurb-area spilling"><p>${BLURB}</p></div><p className="legend">Legend</p></div>`,
+    defect:
+      `<div className="blurb-card"><div className="blurb-area spilling"><p>${BLURB}</p></div>` +
+      '<p className="legend">Legend</p></div>',
     valid:
       '<div className="blurb-card"><div className="blurb-area" tabIndex={0} role="region" aria-label="Blurb">' +
       `<p>${BLURB}</p></div><p className="legend">Legend</p></div>`,
@@ -160,7 +162,8 @@ const PAGES: Readonly<Record<string, Variant>> = {
   // An open panel laid over the page: the text beneath it is covered, not overlapped.
   'covered-text': {
     defect:
-      '<div className="layered"><h2>Results this week</h2><div className="sheet clear-sheet"><a href="/">Tickets</a></div></div>',
+      '<div className="layered"><h2>Results this week</h2>' +
+      '<div className="sheet clear-sheet"><a href="/">Tickets</a></div></div>',
     valid:
       '<div className="layered"><h2>Results this week</h2><div className="sheet"><a href="/">Tickets</a></div></div>' +
       '<div className="layered"><h2>Fixtures this week</h2>' +
