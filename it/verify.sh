@@ -316,6 +316,11 @@ visual_contracts() {
         '[image-distorted] /image-distorted @390x844 (chromium, resting): image rendered at 160x60px from a 160x120px source' \
         '[image-upscaled] /image-upscaled @390x844 (chromium, resting): image source 160x120px displayed at 150%' \
         '[media-space] /media-space @390x844 (chromium, resting): img reserves 160x0px before loading' \
+        '[image-upscaled] /srcset-image @390x844 (chromium, resting): image source 160x120px displayed at 150%' \
+        '[media-space] /flex-media @390x844 (chromium, resting): img reserves ' \
+        '[text-overlap] /turned-card @390x844 (chromium, resting): overlapping text: h2.pulled' \
+        '[text-overlap] /scrolled-blurb @390x844 (chromium, resting): overlapping text: p' \
+        '[text-overlap] /covered-text @390x844 (chromium, resting): overlapping text: h2' \
         '[font-load] /font-load @390x844 (chromium, resting): @font-face \"Broken\"' \
         '[page-error] /page-error (chromium, resting): console.error: fixture page error' \
         '[page-not-stable] /unstable @390x844 (chromium, resting): ' \

@@ -105,6 +105,9 @@ interface Variant {
   readonly valid: string
 }
 
+const BLURB_SENTENCES: number = 12
+const BLURB: string = 'A long blurb. '.repeat(BLURB_SENTENCES)
+
 // Each page's body in both modes. The valid body is the same markup repaired, never a different page.
 const PAGES: Readonly<Record<string, Variant>> = {
   'small-text': { defect: '<p className="tiny">Fine print</p>', valid: '<p className="legible">Fine print</p>' },
@@ -126,6 +129,46 @@ const PAGES: Readonly<Record<string, Variant>> = {
     defect: '<img src="/photo.png" alt="Unsized photo" className="fluid" />',
     valid: '<img src="/photo.png" alt="Sized photo" className="fluid" width={160} height={120} />',
   },
+  // A source chosen from a srcset whose declared width is larger than the file, as an image server that
+  // will not enlarge a small original answers: the file's own pixels decide, not the declared width.
+  'srcset-image': {
+    defect:
+      '<img src="/photo.png" srcSet="/photo.png 160w" sizes="240px" alt="Enlarged photo" width={240} height={180} />',
+    valid: '<img src="/photo.png" srcSet="/photo.png 320w" sizes="160px" alt="Photo" width={160} height={120} />',
+  },
+  // An image sized as a share of a flex row reserves that share, whatever else the row holds.
+  'flex-media': {
+    defect: '<div className="media-row"><img src="/photo.png" alt="Unsized" className="half" /><p>Beside it</p></div>',
+    valid:
+      '<div className="media-row"><img src="/photo.png" alt="Sized" className="half" width={160} height={120} />' +
+      '<p>Beside it</p></div>',
+  },
+  // A card dealt at an angle: its upright bounding boxes meet where the turned text and chips do not.
+  'turned-card': {
+    defect: '<div className="deal"><h2 className="pulled">Featured sport of the week</h2><p>12 events</p></div>',
+    valid:
+      '<div className="deal turned"><h2>Featured sport of the week</h2><p>12 events</p>' +
+      '<div className="chips"><span className="chip">Live</span><span className="chip">New</span></div></div>',
+  },
+  // Text a scroll area keeps out of sight until it is scrolled.
+  'scrolled-blurb': {
+    defect: `<div className="blurb-card"><div className="blurb-area spilling"><p>${BLURB}</p></div><p>Legend</p></div>`,
+    valid:
+      '<div className="blurb-card"><div className="blurb-area" tabIndex={0} role="region" aria-label="Blurb">' +
+      `<p>${BLURB}</p></div><p>Legend</p></div>`,
+  },
+  // An open panel laid over the page: the text beneath it is covered, not overlapped.
+  'covered-text': {
+    defect:
+      '<div className="layered"><h2>Results this week</h2><div className="sheet clear-sheet"><a href="/">Tickets</a></div></div>',
+    valid:
+      '<div className="layered"><h2>Results this week</h2><div className="sheet"><a href="/">Tickets</a></div></div>',
+  },
+  // A page that checks itself with its own axe, as a Storybook accessibility addon does.
+  'axe-busy': {
+    defect: '<AxeEcho /><button type="button">First</button><button type="button">Second</button>',
+    valid: '<AxeEcho /><button type="button">First</button><button type="button">Second</button>',
+  },
   'font-load': { defect: '<p className="broken-font">Display text</p>', valid: '<p>Display text</p>' },
   'page-error': { defect: '<Complaint />', valid: '<p>Nothing to complain about.</p>' },
   'focus-visible': {
@@ -136,7 +179,12 @@ const PAGES: Readonly<Record<string, Variant>> = {
     defect: '<div className="covered"><a href="/">Covered link</a><div className="overlay"></div></div>',
     valid: '<div className="covered"><a href="/">Reachable link</a></div>',
   },
-  'disclosure-keyboard': { defect: '<Menu closesOnEscape={false} />', valid: '<Menu closesOnEscape={true} />' },
+  // The menu focuses its first item when it opens. The valid one hands focus back a moment after it
+  // closes, as Radix does once its exit has rendered.
+  'disclosure-keyboard': {
+    defect: '<Menu closesOnEscape={false} focusDelayMs={0} />',
+    valid: '<Menu closesOnEscape={true} focusDelayMs={120} />',
+  },
   'text-spacing': {
     defect: '<p className="fixed-line">Fixture line</p>',
     valid: '<p className="growing-line">Fixture line</p>',
@@ -196,6 +244,20 @@ h1, p { margin: 0; }
 .growth { overflow: hidden; width: 300px; }
 .growth div { height: 20px; background: #dbeafe; }
 .menu { display: flex; flex-direction: column; gap: 8px; }
+.media-row { display: flex; gap: 8px; }
+.half { width: 50%; max-width: 160px; height: auto; }
+.deal { width: min(240px, 100%); display: flex; flex-direction: column; gap: 4px; }
+.turned { rotate: 12deg; margin: 48px 0; }
+.pulled { margin-bottom: -20px; }
+.chips { display: flex; gap: 6px; }
+.chip { background: #dbeafe; padding: 8px 6px; }
+.blurb-card { display: flex; flex-direction: column; gap: 4px; }
+.blurb-area { height: 48px; overflow-y: auto; }
+.blurb-area.spilling { overflow-y: visible; }
+.layered { position: relative; }
+.layered h2 { margin: 0; }
+.sheet { position: absolute; inset: 0; background: #ffffff; padding-left: 8px; }
+.sheet.clear-sheet { background: transparent; }
 `
 
 const COMPLAINT: string = `'use client'
@@ -226,18 +288,25 @@ export function Grow(): React.JSX.Element {
 
 const MENU: string = [
   "'use client'",
-  "import { useRef, useState } from 'react'",
+  "import { useEffect, useRef, useState } from 'react'",
   '',
-  'export function Menu({ closesOnEscape }: { closesOnEscape: boolean }): React.JSX.Element {',
+  'export function Menu({ closesOnEscape, focusDelayMs }: { closesOnEscape: boolean; focusDelayMs: number }):',
+  '  React.JSX.Element {',
   '  const [isOpen, setOpen] = useState(false)',
   '  const button = useRef<HTMLButtonElement>(null)',
+  '  const item = useRef<HTMLLIElement>(null)',
+  '  useEffect((): void => {',
+  '    if (isOpen) {',
+  '      item.current?.focus()',
+  '    }',
+  '  }, [isOpen])',
   '  return (',
   '    <div',
   '      className="menu"',
   '      onKeyDown={(event): void => {',
   "        if (closesOnEscape && event.key === 'Escape') {",
   '          setOpen(false)',
-  '          button.current?.focus()',
+  '          setTimeout((): void => button.current?.focus(), focusDelayMs)',
   '        }',
   '      }}',
   '    >',
@@ -247,7 +316,7 @@ const MENU: string = [
   '      </button>',
   '      {isOpen ? (',
   '        <ul role="menu" aria-label="Options">',
-  '          <li role="menuitem" tabIndex={-1}>Rename</li>',
+  '          <li ref={item} role="menuitem" tabIndex={-1}>Rename</li>',
   '        </ul>',
   '      ) : null}',
   '    </div>',
@@ -255,6 +324,37 @@ const MENU: string = [
   '}',
   '',
 ].join('\n')
+
+// The first copy of axe injected into the page starts a run of its own, so the scan that injected it
+// finds axe already running.
+const AXE_ECHO: string = `'use client'
+import { useEffect } from 'react'
+
+interface Axe {
+  readonly run?: () => Promise<unknown>
+}
+
+export function AxeEcho(): React.JSX.Element {
+  useEffect((): void => {
+    let current: Axe | undefined
+    let hasEchoed = false
+    Object.defineProperty(window, 'axe', {
+      configurable: true,
+      get: (): Axe | undefined => current,
+      set: (value: Axe): void => {
+        current = value
+        queueMicrotask((): void => {
+          if (!hasEchoed && typeof value.run === 'function') {
+            hasEchoed = true
+            value.run().catch((): undefined => undefined)
+          }
+        })
+      },
+    })
+  }, [])
+  return <p>This page checks itself.</p>
+}
+`
 
 const SITEMAP_ROUTE: string = `export function GET(request: Request): Response {
   const origin: string = new URL(request.url).origin
@@ -296,7 +396,7 @@ const writeModule = (file: string, source: string | Buffer): void => {
   writeFileSync(file, source)
 }
 
-const COMPONENTS: readonly string[] = ['Complaint', 'Grow', 'Menu']
+const COMPONENTS: readonly string[] = ['AxeEcho', 'Complaint', 'Grow', 'Menu']
 
 // Each page imports only the client components it renders, as the compiler requires.
 const importsOf = (body: string): readonly string[] =>
@@ -352,6 +452,7 @@ writeModule(path.join(appRoot, 'sitemap.xml', 'route.ts'), SITEMAP_ROUTE)
 writeModule(path.join(directory, 'src', 'complaint.tsx'), COMPLAINT)
 writeModule(path.join(directory, 'src', 'grow.tsx'), GROW)
 writeModule(path.join(directory, 'src', 'menu.tsx'), MENU)
+writeModule(path.join(directory, 'src', 'axeecho.tsx'), AXE_ECHO)
 writeModule(
   path.join(appRoot, 'globals.css'),
   `${readFileSync(path.join(appRoot, 'globals.css'), 'utf8')}${STYLES}${PINNED_STYLES}`,
