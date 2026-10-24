@@ -58,14 +58,30 @@ describe('story discovery', () => {
         {
           v: 5,
           entries: {
-            'ui-button--primary': { type: 'story', id: 'ui-button--primary', title: 'UI/Button', name: 'Primary' },
+            'ui-button--primary': {
+              type: 'story',
+              id: 'ui-button--primary',
+              title: 'UI/Button',
+              name: 'Primary',
+              importPath: './src/ui/Button.stories.tsx',
+            },
+            'ui-card--plain': { type: 'story', id: 'ui-card--plain', title: 'UI/Card', name: 'Plain' },
             'ui-button--docs': { type: 'docs', id: 'ui-button--docs', title: 'UI/Button', name: 'Docs' },
             broken: { type: 'story' },
           },
         },
         server,
       ),
-    ).toEqual([{ id: 'ui-button--primary', title: 'UI/Button', name: 'Primary', server }])
+    ).toEqual([
+      {
+        id: 'ui-button--primary',
+        title: 'UI/Button',
+        name: 'Primary',
+        server,
+        importPath: './src/ui/Button.stories.tsx',
+      },
+      { id: 'ui-card--plain', title: 'UI/Card', name: 'Plain', server, importPath: '' },
+    ])
   })
 
   it('answers undefined for a document that is not a Storybook index', () => {
@@ -130,6 +146,7 @@ const story = (id: string, title: string, server: string = 'http://localhost:610
   title,
   name: id,
   server,
+  importPath: '',
 })
 
 describe('story sampling', () => {

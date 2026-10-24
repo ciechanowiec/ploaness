@@ -65,6 +65,8 @@ export interface DiscoveredStory {
   readonly name: string
   /** The origin of the Storybook that serves it. */
   readonly server: string
+  /** The file declaring it, relative to that Storybook's directory, or empty when the index names none. */
+  readonly importPath: string
 }
 
 const asRecord = (value: unknown): Readonly<Record<string, unknown>> =>
@@ -94,6 +96,7 @@ export const storiesOfIndex = (index: unknown, server: string): readonly Discove
         title: asText(entry['title']),
         name: asText(entry['name']),
         server,
+        importPath: asText(entry['importPath']),
       }),
     )
 }

@@ -26,12 +26,19 @@ const ROOT_ROUTE: string = '/'
 
 const SEGMENT_SEPARATOR: string = '/'
 
-// Whether a path is the ROOT layout of a candidate app directory. Next.js requires one, and allows it
-// to sit inside route groups rather than at the top: a Payload application has no `src/app/layout.tsx`
-// at all, because `(frontend)` and `(payload)` each carry their own. Requiring the top-level file
-// found no app directory in the commonest project this harness governs, and the check then passed by
-// doing nothing - which is the one way a rule like this fails that nobody notices.
-const isRootLayout = (path: string, root: string): boolean => {
+/**
+ * Whether a file is the root layout of an app directory: the layout every route below it renders in.
+ *
+ * Next.js requires one, and allows it to sit inside route groups rather than at the top: a Payload
+ * application has no `src/app/layout.tsx` at all, because `(frontend)` and `(payload)` each carry their
+ * own. Requiring the top-level file found no app directory in the commonest project this harness
+ * governs, and the check then passed by doing nothing - which is the one way a rule like this fails that
+ * nobody notices.
+ * @param path the file, relative to the member root.
+ * @param root the candidate app directory.
+ * @returns true for the layout at the top of the app directory once route groups are ignored.
+ */
+export const isRootLayout = (path: string, root: string): boolean => {
   const prefix: string = `${root}${SEGMENT_SEPARATOR}`
   if (!path.startsWith(prefix)) {
     return false
