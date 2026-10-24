@@ -36,6 +36,8 @@ describe('one owner for application JSX accessibility', () => {
       'node_modules/pkg/View.tsx',
       'coverage/View.tsx',
       'pgadmin/View.tsx',
+      'playwright-report/trace/View.jsx',
+      'test-results/ploaness-sweep/View.tsx',
       '.storybook/Preview.tsx',
       'src/generated/View.tsx',
       'cms/src/Card.tsx',

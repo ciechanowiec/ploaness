@@ -11,6 +11,9 @@ export const APPLICATION_JSX_IGNORES: readonly string[] = [
   'coverage/**',
   'pgadmin/**',
   '.*/**',
+  // What the browser gates write: the HTML report bundles its trace viewer as JavaScript.
+  'playwright-report/**',
+  'test-results/**',
 ]
 
 /** Biome overrides apply only where the application's native JSX analyzer takes responsibility. */
