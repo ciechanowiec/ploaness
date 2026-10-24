@@ -543,10 +543,10 @@ resolves to, and a story's template is its component; sampling one route does no
 covers every route.
 
 Every page is loaded still: reduced motion, animations and transitions at zero duration, a hidden caret,
-locale `en-US`, timezone UTC, pixel ratio 1, the browser clock fixed at `ploaness.clock`, and every
-request outside the application and auxiliary origins blocked. Each page is settled - fonts, every
-image decoded, a quiet element tree, finished animations, cleared `aria-busy` regions - and measured
-twice.
+locale `en-US`, timezone UTC, pixel ratio 1, the browser's `Date` fixed at `ploaness.clock` while its
+timers and animations keep running, and every request outside the application and auxiliary origins
+blocked. Each page is settled - fonts, every image decoded, a quiet element tree, finished animations,
+cleared `aria-busy` regions - and measured twice.
 
 | Rule | Fails when |
 | --- | --- |
@@ -555,10 +555,10 @@ twice.
 | `broken-link` | a crawled internal link, or a sitemap entry, does not answer |
 | `page-not-stable` | the page does not settle within 10 s, a visible busy region never clears, or geometry moves more than 1 px between two measurements |
 | `overflow` | the document is wider than the viewport; names the outermost element past its edge |
-| `text-overlap` | two elements' own visible text shares more than one pixel row, unless one contains the other; text a clipping or scrolling ancestor hides, or an opaque positioned layer covers, is not visible; text in a rotated or skewed subtree is not compared |
+| `text-overlap` | two elements' own visible text shares more than one pixel row, unless one contains the other; text a clipping or scrolling ancestor hides, or a positioned layer of an opaque colour or opaque-stop gradient covers, is not visible; text in a rotated or skewed subtree is not compared |
 | `clipped-text` | `overflow: hidden` or `clip` cuts content; ellipsis or line clamp passes when `title` or `aria-label` holds the full text |
-| `attached` | boxed siblings are closer than the minimum gap, 4 CSS pixels by default; boxes in a rotated or skewed subtree are not compared |
-| `obscured` | something other than a control or its descendant sits at the control's centre |
+| `attached` | boxed siblings are closer than the minimum gap, 4 CSS pixels by default, measured on what their clipping and scrolling ancestors leave visible; boxes in a rotated or skewed subtree are not compared |
+| `obscured` | something other than a control or its descendant sits at the control's centre; a hidden or inert control, or one with `pointer-events: none`, is offered to no pointer and is not judged |
 | `focus-obscured` | a keyboard-focused element is entirely hidden by fixed or sticky content |
 | `focus-visible` | the pixels of a keyboard-focused element and a 4 px ring do not change when it takes focus |
 | `disclosure-keyboard` | `Escape` does not close a popup or modal dialog, focus does not return to its control within a second, or focus leaves an open modal dialog |

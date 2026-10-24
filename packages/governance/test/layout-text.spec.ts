@@ -260,6 +260,12 @@ const openMenu = (panel: Partial<LayoutNode>, page: Partial<LayoutNode> = {}): r
 const COVERED_OVERLAP: string =
   '[text-overlap] /news @390x844 (chromium, resting): overlapping text: h2 "Results"  <->  a "Tickets"'
 
+// A panel painted by its background image alone.
+const through = (backgroundImage: string): Partial<LayoutNode> => ({
+  backgroundColor: 'rgba(0, 0, 0, 0)',
+  backgroundImage,
+})
+
 describe('text beneath an opaque positioned layer', () => {
   it('ignores page text an opaque panel covers', () => {
     expect(defectsOf(openMenu({}))).toEqual([])
@@ -275,6 +281,28 @@ describe('text beneath an opaque positioned layer', () => {
     })
     const nested: LayoutNode = { ...(link as LayoutNode), parent: 4 }
     expect(defectsOf([body, heading, panel, nested, sheet] as readonly LayoutNode[])).toEqual([])
+  })
+
+  it('ignores page text under a panel painted with a gradient of opaque stops only', () => {
+    const opaque: Partial<LayoutNode> = {
+      backgroundColor: 'rgba(0, 0, 0, 0)',
+      backgroundImage: 'linear-gradient(180deg, rgb(19, 50, 115) 0%, oklch(0.3 0.1 260) 100%)',
+    }
+    expect(defectsOf(openMenu(opaque))).toEqual([])
+  })
+
+  it('reports text under a gradient a reader can see through', () => {
+    expect(defectsOf(openMenu(through('linear-gradient(rgb(19, 50, 115), rgba(19, 50, 115, 0.5))')))).toEqual([
+      COVERED_OVERLAP,
+    ])
+    expect(defectsOf(openMenu(through('linear-gradient(rgb(19, 50, 115), oklch(0.3 0.1 260 / 0.4))')))).toEqual([
+      COVERED_OVERLAP,
+    ])
+    expect(defectsOf(openMenu(through('linear-gradient(rgb(19, 50, 115), transparent)')))).toEqual([COVERED_OVERLAP])
+    expect(defectsOf(openMenu(through('url("/panel.png"), linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0))')))).toEqual([
+      COVERED_OVERLAP,
+    ])
+    expect(defectsOf(openMenu(through('url("/panel.png")')))).toEqual([COVERED_OVERLAP])
   })
 
   it('reports text the layer shows through', () => {

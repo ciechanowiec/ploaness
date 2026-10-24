@@ -79,6 +79,9 @@ const probeHitTarget = async (control: Locator): Promise<HitTargetProbe> =>
       clipPath: style.clipPath,
       clip: style.getPropertyValue('clip'),
       ownsCentrePoint: atCentre !== null && element.contains(atCentre),
+      pointerEvents: style.getPropertyValue('pointer-events'),
+      visibility: style.getPropertyValue('visibility'),
+      isInert: element.closest('[inert]') !== null,
     }
   })
 

@@ -6,6 +6,7 @@
 // notice is the button beside the notice, because the paragraph around it draws nothing a reader sees.
 
 import { exemptionRules } from './browser-exemptions.js'
+import { intersectionOf, visibleRectsOf } from './layout-clip.js'
 import {
   ATTACHED_EXEMPTION,
   hasArea,
@@ -177,13 +178,6 @@ const isFullWidth = (snapshot: LayoutSnapshot, node: LayoutNode): boolean => {
 const isStackedBandPair = (snapshot: LayoutSnapshot, pair: readonly [LayoutNode, LayoutNode]): boolean =>
   pair.every((node: LayoutNode): boolean => isFullWidth(snapshot, node))
 
-const intersectionOf = (rect: LayoutRect, bounds: LayoutRect): LayoutRect => ({
-  left: Math.max(rect.left, bounds.left),
-  top: Math.max(rect.top, bounds.top),
-  right: Math.min(rect.right, bounds.right),
-  bottom: Math.min(rect.bottom, bounds.bottom),
-})
-
 // The content, kept inside the element's own box. A line of text reports the full height of its line box,
 // which a tight `line-height` pushes past the element's edges into empty space above and below the glyphs,
 // so content is never measured as reaching farther than the box it sits in: the measure can only shrink
@@ -199,17 +193,19 @@ interface MeasuredPair {
 }
 
 // Each side is measured by what it shows the other: its box where it is drawn toward it, its content
-// where it is not, so a heading's padding is not read as the heading touching the chips below it.
+// where it is not, so a heading's padding is not read as the heading touching the chips below it. Either
+// measure is cut by the ancestors that clip it, so content scrolled out of sight touches nothing.
 const measurePair = (snapshot: LayoutSnapshot, first: LayoutNode, second: LayoutNode): MeasuredPair => {
-  const isBoxOverlap: boolean = separationsOf(first.rects, second.rects).some((separation: Separation): boolean =>
-    isOverlapping(separation),
-  )
+  const isBoxOverlap: boolean = separationsOf(
+    visibleRectsOf(snapshot, first, first.rects),
+    visibleRectsOf(snapshot, second, second.rects),
+  ).some((separation: Separation): boolean => isOverlapping(separation))
   const isFirstBoxed: boolean = isBoxedToward(snapshot, first, second, isBoxOverlap)
   const isSecondBoxed: boolean = isBoxedToward(snapshot, second, first, isBoxOverlap)
   return {
     separations: separationsOf(
-      isFirstBoxed ? first.rects : visibleContentRects(snapshot, first),
-      isSecondBoxed ? second.rects : visibleContentRects(snapshot, second),
+      visibleRectsOf(snapshot, first, isFirstBoxed ? first.rects : visibleContentRects(snapshot, first)),
+      visibleRectsOf(snapshot, second, isSecondBoxed ? second.rects : visibleContentRects(snapshot, second)),
     ),
     isBoxed: isFirstBoxed || isSecondBoxed,
   }

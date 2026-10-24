@@ -17,10 +17,16 @@ export interface HitTargetProbe {
    * a clipped element and an obscured one be told apart rather than both reported as a timeout.
    */
   readonly ownsCentrePoint: boolean
+  /** The computed `pointer-events`, verbatim. */
+  readonly pointerEvents: string
+  /** The computed `visibility`, verbatim. */
+  readonly visibility: string
+  /** Whether the control or an ancestor carries `inert`. */
+  readonly isInert: boolean
 }
 
 /** How a control can be reached, and therefore which passes of the sweep apply to it. */
-export type HitTargetVerdict = 'hoverable' | 'visually-hidden' | 'obscured'
+export type HitTargetVerdict = 'hoverable' | 'visually-hidden' | 'not-a-pointer-target' | 'obscured'
 
 /** The verdict together with the sentence a report prints for it. */
 export interface HitTargetClassification {
@@ -101,6 +107,12 @@ const hasNoPaintedArea = (probe: HitTargetProbe): boolean =>
   isEmptyClipPath(probe.clipPath) ||
   isEmptyClip(probe.clip)
 
+// A hit test passes through an element the page took out of pointer reach on purpose - a disabled
+// button styled `pointer-events: none`, the hidden face of a card, an inert slide - so what answers at
+// its centre is what lies beneath it, by design rather than by accident.
+const isOutOfPointerReach = (probe: HitTargetProbe): boolean =>
+  probe.pointerEvents === 'none' || probe.visibility !== 'visible' || probe.isInert
+
 /**
  * Decide how a control can be reached, so the sweep hovers what it can and explains what it cannot.
  *
@@ -112,6 +124,14 @@ const hasNoPaintedArea = (probe: HitTargetProbe): boolean =>
 export const classifyHitTarget = (probe: HitTargetProbe): HitTargetClassification => {
   if (probe.ownsCentrePoint) {
     return { verdict: 'hoverable', reason: 'the control is reachable at its own centre point' }
+  }
+  if (isOutOfPointerReach(probe)) {
+    return {
+      verdict: 'not-a-pointer-target',
+      reason:
+        'the control is hidden, inert or takes no pointer events, so the page offers a pointer ' +
+        'nothing to hover or click there',
+    }
   }
   if (hasNoPaintedArea(probe)) {
     return {

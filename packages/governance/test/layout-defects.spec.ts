@@ -219,6 +219,22 @@ describe('how close is too close', () => {
 
 const touchingRed = (second: Partial<LayoutNode>): readonly LayoutNode[] => stacked({ backgroundColor: RED }, second)
 
+// A card whose blurb scrolls inside an area that ends at 150, above a legend boxed from 160.
+const card = (overflowY: string): readonly LayoutNode[] => [
+  BODY,
+  nodeOf({ index: 1, parent: 0, rects: [rect(0, 0, 200, 200)], backgroundColor: TINT }),
+  nodeOf({ index: 2, parent: 1, rects: [rect(0, 10, 200, 150)], overflowY }),
+  nodeOf({
+    index: 3,
+    parent: 2,
+    tag: 'p',
+    label: 'p.blurb',
+    rects: [rect(10, 10, 190, 230)],
+    textRects: [rect(10, 10, 190, 230)],
+  }),
+  nodeOf({ index: 4, parent: 1, label: 'div.legend', rects: [rect(0, 160, 200, 190)], backgroundColor: RED }),
+]
+
 describe('what is not compared', () => {
   // Rows paint nothing, so without this every cell would be compared with the cell below it, and each
   // would fail on the rule the table draws between them.
@@ -304,6 +320,13 @@ describe('what is not compared', () => {
     expect(defectsOf(touchingRed({ rotate: '4deg' }))).toEqual([])
     expect(defectsOf(touchingRed({ transform: 'matrix(1, 0, 0.2, 1, 0, 0)' }))).toEqual([])
     expect(defectsOf(touchingRed({ transform: 'matrix(1, 0, 0, 1, 0, 8)' }))).toHaveLength(1)
+  })
+
+  it('measures what a scroll area shows, not the content scrolled out of sight', () => {
+    expect(defectsOf(card('auto'))).toEqual([])
+    expect(defectsOf(card('visible'))).toEqual([
+      '[attached] /en/account/verify @390x844 (chromium, resting): overlapping boxes: p.blurb  <->  div.legend',
+    ])
   })
 
   it('skips an invisible sibling', () => {

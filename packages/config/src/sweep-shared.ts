@@ -350,7 +350,31 @@ const ORIGINS: readonly string[] = allowedOrigins([
 
 export const origin: string = new URL(projectSettings.serverUrl).origin
 
-/** Block every request outside the application and its auxiliary servers, and fix the browser clock. */
+// Only `Date` is fixed. Playwright's clock fakes `performance.now()` too and keeps counting it across
+// navigations, while each new document's animation timeline starts again at zero, so a library that
+// starts its Web Animations at `performance.now()` would schedule them further ahead on every page the
+// sweep loads. Timers, frames and animations therefore stay on the browser's own clock.
+const fixDateInPage = (instant: number): void => {
+  const RealDate: DateConstructor = Date
+  const FixedDate: DateConstructor = new Proxy(RealDate, {
+    construct: (target: DateConstructor, values: readonly unknown[], newTarget: unknown): object => {
+      const made: unknown = Reflect.construct(
+        target,
+        values.length === 0 ? [instant] : values,
+        newTarget as DateConstructor,
+      )
+      return typeof made === 'object' && made !== null ? made : new RealDate(instant)
+    },
+    apply: (): string => new RealDate(instant).toString(),
+    get: (target: DateConstructor, key: string | symbol): unknown => {
+      const value: unknown = Reflect.get(target, key)
+      return key === 'now' ? (): number => instant : value
+    },
+  })
+  Reflect.set(globalThis, 'Date', FixedDate)
+}
+
+/** Block every request outside the application and its auxiliary servers, and fix the browser's `Date`. */
 export const preparePage = async (page: Page): Promise<void> => {
   await page.route(
     (url: URL): boolean => !isAllowedRequest(url.href, ORIGINS),
@@ -359,7 +383,7 @@ export const preparePage = async (page: Page): Promise<void> => {
     },
   )
   if (projectSettings.clock !== REAL_CLOCK) {
-    await page.clock.setFixedTime(new Date(projectSettings.clock))
+    await page.addInitScript(fixDateInPage, Date.parse(projectSettings.clock))
   }
 }
 

@@ -169,6 +169,30 @@ export const isVisibleColor = (color: string): boolean => {
   return alpha === undefined || Number(alpha.replace(PERCENT, '')) > 0
 }
 
+// A computed gradient spells each colour stop as a colour function. An image, a keyword left in the
+// value, or a stop of partial alpha may let what lies beneath show through, so only a gradient whose
+// every stop is an opaque colour function hides it.
+const COLOR_FUNCTION: RegExp = /(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^()]*\)/gu
+const UNKNOWN_PAINT: RegExp = /url\(|transparent|currentcolor/u
+
+const isOpaqueGradient = (image: string): boolean => {
+  const stops: readonly string[] = image.match(COLOR_FUNCTION) ?? []
+  return (
+    image.includes('gradient(') &&
+    !UNKNOWN_PAINT.test(image) &&
+    stops.length > 0 &&
+    stops.every((stop: string): boolean => isOpaqueColor(stop))
+  )
+}
+
+/**
+ * Whether an element's own background hides what lies beneath its box.
+ * @param node the element.
+ * @returns true for an opaque background colour, or a gradient of opaque stops only.
+ */
+export const isOpaqueBackground = (node: LayoutNode): boolean =>
+  isOpaqueColor(node.backgroundColor) || isOpaqueGradient(node.backgroundImage)
+
 /**
  * The background an element sits on: the nearest ancestor that paints one, or the page canvas.
  * @param snapshot the measured page.
