@@ -150,25 +150,29 @@ const PAGES: Readonly<Record<string, Variant>> = {
       '<div className="deal turned"><h2>Featured sport of the week</h2><p>12 events</p>' +
       '<div className="chips"><span className="chip">Live</span><span className="chip">New</span></div></div>',
   },
-  // Text a scroll area keeps out of sight until it is scrolled.
+  // Text a scroll area keeps out of sight until it is scrolled, above a boxed legend.
   'scrolled-blurb': {
-    defect: `<div className="blurb-card"><div className="blurb-area spilling"><p>${BLURB}</p></div><p>Legend</p></div>`,
+    defect: `<div className="blurb-card"><div className="blurb-area spilling"><p>${BLURB}</p></div><p className="legend">Legend</p></div>`,
     valid:
       '<div className="blurb-card"><div className="blurb-area" tabIndex={0} role="region" aria-label="Blurb">' +
-      `<p>${BLURB}</p></div><p>Legend</p></div>`,
+      `<p>${BLURB}</p></div><p className="legend">Legend</p></div>`,
   },
   // An open panel laid over the page: the text beneath it is covered, not overlapped.
   'covered-text': {
     defect:
       '<div className="layered"><h2>Results this week</h2><div className="sheet clear-sheet"><a href="/">Tickets</a></div></div>',
     valid:
-      '<div className="layered"><h2>Results this week</h2><div className="sheet"><a href="/">Tickets</a></div></div>',
+      '<div className="layered"><h2>Results this week</h2><div className="sheet"><a href="/">Tickets</a></div></div>' +
+      '<div className="layered"><h2>Fixtures this week</h2>' +
+      '<div className="sheet gradient-sheet"><a href="/">Seats</a></div></div>',
   },
   // A page that checks itself with its own axe, as a Storybook accessibility addon does.
   'axe-busy': {
     defect: '<AxeEcho /><button type="button">First</button><button type="button">Second</button>',
     valid: '<AxeEcho /><button type="button">First</button><button type="button">Second</button>',
   },
+  // An animation started at `performance.now()`, as Motion starts its Web Animations.
+  'timeline-start': { defect: '<Glide />', valid: '<Glide />' },
   'font-load': { defect: '<p className="broken-font">Display text</p>', valid: '<p>Display text</p>' },
   'page-error': { defect: '<Complaint />', valid: '<p>Nothing to complain about.</p>' },
   'focus-visible': {
@@ -177,7 +181,11 @@ const PAGES: Readonly<Record<string, Variant>> = {
   },
   obscured: {
     defect: '<div className="covered"><a href="/">Covered link</a><div className="overlay"></div></div>',
-    valid: '<div className="covered"><a href="/">Reachable link</a></div>',
+    valid:
+      '<div className="covered"><a href="/">Reachable link</a></div>' +
+      '<button type="button" className="unpointed" disabled>Unavailable</button>' +
+      '<div className="back-face"><a href="/">Back of the card</a></div>' +
+      '<div inert><a href="/">Next slide</a></div>',
   },
   // The menu focuses its first item when it opens. The valid one hands focus back a moment after it
   // closes, as Radix does once its exit has rendered.
@@ -258,6 +266,10 @@ h1, p { margin: 0; }
 .layered h2 { margin: 0; }
 .sheet { position: absolute; inset: 0; background: #ffffff; padding-left: 8px; }
 .sheet.clear-sheet { background: transparent; }
+.sheet.gradient-sheet { background: linear-gradient(180deg, #ffffff, #f3f4f6); }
+.legend { background: #dbeafe; padding: 4px; }
+.unpointed { pointer-events: none; }
+.back-face { visibility: hidden; }
 `
 
 const COMPLAINT: string = `'use client'
@@ -285,6 +297,26 @@ export function Grow(): React.JSX.Element {
   return <div className="growth"><div style={{ width }} /></div>
 }
 `
+
+const GLIDE: string = [
+  "'use client'",
+  "import { useEffect, useRef } from 'react'",
+  '',
+  'export function Glide(): React.JSX.Element {',
+  '  const panel = useRef<HTMLDivElement>(null)',
+  '  useEffect((): void => {',
+  '    const animation: Animation | undefined = panel.current?.animate(',
+  "      [{ transform: 'translateY(8px)' }, { transform: 'none' }],",
+  "      { duration: 200, fill: 'backwards' },",
+  '    )',
+  '    if (animation !== undefined) {',
+  '      animation.startTime = performance.now()',
+  '    }',
+  '  }, [])',
+  '  return <div ref={panel}><p>Glides into place.</p></div>',
+  '}',
+  '',
+].join('\n')
 
 const MENU: string = [
   "'use client'",
@@ -396,7 +428,7 @@ const writeModule = (file: string, source: string | Buffer): void => {
   writeFileSync(file, source)
 }
 
-const COMPONENTS: readonly string[] = ['AxeEcho', 'Complaint', 'Grow', 'Menu']
+const COMPONENTS: readonly string[] = ['AxeEcho', 'Complaint', 'Glide', 'Grow', 'Menu']
 
 // Each page imports only the client components it renders, as the compiler requires.
 const importsOf = (body: string): readonly string[] =>
@@ -450,6 +482,7 @@ for (const [route, variant] of everyPage) {
 writeModule(path.join(appRoot, 'focus-obscured', 'page.tsx'), pinnedModule(mode))
 writeModule(path.join(appRoot, 'sitemap.xml', 'route.ts'), SITEMAP_ROUTE)
 writeModule(path.join(directory, 'src', 'complaint.tsx'), COMPLAINT)
+writeModule(path.join(directory, 'src', 'glide.tsx'), GLIDE)
 writeModule(path.join(directory, 'src', 'grow.tsx'), GROW)
 writeModule(path.join(directory, 'src', 'menu.tsx'), MENU)
 writeModule(path.join(directory, 'src', 'axeecho.tsx'), AXE_ECHO)
