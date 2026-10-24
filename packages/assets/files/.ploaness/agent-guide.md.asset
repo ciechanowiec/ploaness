@@ -570,7 +570,7 @@ cleared `aria-busy` regions - and measured twice.
 | `image-distorted` | an `object-fit: fill` image is rendered out of its natural proportion |
 | `image-upscaled` | an image is displayed more than 10% larger than its source file's pixels, whatever width its `srcset` declares |
 | `media-space` | an in-flow image, video, frame or embed takes a different box once loaded than before |
-| `axe:<id>` | axe reports a violation, at 390 and 1280, in the resting, dark, disclosure, hover and focus states |
+| `axe:<id>` | axe reports a violation, at 390 and 1280, in the resting, dark, disclosure, hover and focus states; an `aria-hidden-focus` element is cleared when focusing it moves focus at once to a perceivable element outside it, as a dialog or menu library's focus guard does |
 | `pass-budget` | a pass runs out of its budget; the finding names the item it reached |
 
 The geometry rules judge computed boxes and styles. Touching boxes compare boxed siblings: a background

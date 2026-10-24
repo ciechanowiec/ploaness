@@ -16,7 +16,9 @@ import {
   FAILED_REQUEST_RULE,
   type FindingPlace,
   type FindingViewport,
+  FOCUS_GUARD_RULE,
   FONT_LOAD_RULE,
+  type FocusArrival,
   findDefiniteIncomplete,
   findingAt,
   findingLine,
@@ -25,6 +27,7 @@ import {
   isAllowedRequest,
   isArray,
   isFailedStatus,
+  isFocusGuard,
   type JudgedPage,
   judgeLayout,
   LAYOUT_RULES,
@@ -42,8 +45,23 @@ import { LAYOUT_SCAN_VIEWPORTS, measurePage } from './layout.js'
 import { projectSettings } from './project-settings.js'
 import { type SettleOutcome, settleForScan } from './settle.js'
 
-// The browser name a page function below calls, declared for the reason `settle.ts` records.
+// The browser names the page functions below call, declared for the reason `settle.ts` records.
 declare const requestAnimationFrame: (callback: () => void) => number
+
+interface GuardElement {
+  readonly tabIndex: number
+  readonly hasAttribute: (name: string) => boolean
+  readonly contains: (other: GuardElement) => boolean
+  readonly closest: (selector: string) => GuardElement | null
+  readonly querySelectorAll: (selector: string) => ArrayLike<GuardElement>
+  readonly focus: (options: { readonly preventScroll: boolean }) => void
+}
+
+declare const document: {
+  readonly activeElement: GuardElement | null
+  readonly body: GuardElement
+  readonly querySelector: (selector: string) => GuardElement | null
+}
 
 /** Every rule the resting scan applies to elements, for judging which exemptions are stale. */
 export const RESTING_RULES: readonly string[] = [...LAYOUT_RULES, ...RESTING_ELEMENT_RULES]
@@ -147,6 +165,51 @@ const analyzed = async (page: Page, builder: AxeBuilder, retries: number): Promi
 
 const axeTarget = (target: unknown): string => (isArray(target) ? target.map(String).join(' ') : String(target))
 
+// Focus each element of the reported subtree that Tab can reach, and read where focus rests once the
+// page's own focus handlers have run, which a focus guard does synchronously. The focus the page had
+// is given back after each one.
+const focusArrivalsInPage = (selector: string): readonly FocusArrival[] => {
+  const subtree: GuardElement | null = document.querySelector(selector)
+  if (subtree === null) {
+    return []
+  }
+  const previous: GuardElement | null = document.activeElement
+  return [subtree, ...Array.from(subtree.querySelectorAll('*'))]
+    .filter((element: GuardElement): boolean => element.tabIndex >= 0 && !element.hasAttribute('disabled'))
+    .map((element: GuardElement): FocusArrival => {
+      element.focus({ preventScroll: true })
+      const active: GuardElement | null = document.activeElement
+      const arrival: FocusArrival = {
+        staysInSubtree: active !== null && subtree.contains(active),
+        restsOnBody: active === null || active === document.body,
+        restsHidden: active?.closest('[aria-hidden="true"]') !== null,
+      }
+      previous?.focus({ preventScroll: true })
+      return arrival
+    })
+}
+
+// A subtree named by more than one selector lies inside a frame or a shadow root the probe cannot
+// address from the document, so it stays reported.
+const isFocusGuardAt = async (page: Page, target: unknown): Promise<boolean> =>
+  isArray(target) &&
+  target.length === 1 &&
+  typeof target[0] === 'string' &&
+  isFocusGuard(await page.evaluate(focusArrivalsInPage, target[0]))
+
+type AxeViolation = AxeRun['violations'][number]
+type AxeNode = AxeViolation['nodes'][number]
+
+const reportedNodes = async (page: Page, violation: AxeViolation): Promise<readonly AxeNode[]> => {
+  if (violation.id !== FOCUS_GUARD_RULE) {
+    return violation.nodes
+  }
+  const guards: readonly boolean[] = await Promise.all(
+    violation.nodes.map(async (node: AxeNode): Promise<boolean> => await isFocusGuardAt(page, node.target)),
+  )
+  return violation.nodes.filter((_node: AxeNode, index: number): boolean => guards[index] !== true)
+}
+
 /**
  * The axe scan of a page as findings, one per violating element.
  * @param page the settled page.
@@ -166,10 +229,15 @@ export const axeFindings = async (
     excluded.length === 0 ? builder : builder.disableRules([...excluded]),
     AXE_BUSY_RETRIES,
   )
+  const reported: readonly (readonly AxeNode[])[] = await Promise.all(
+    results.violations.map(
+      async (violation: AxeViolation): Promise<readonly AxeNode[]> => await reportedNodes(page, violation),
+    ),
+  )
   return [
-    ...results.violations.flatMap((violation): readonly BrowserFinding[] =>
-      violation.nodes.map(
-        (node): BrowserFinding =>
+    ...results.violations.flatMap((violation: AxeViolation, index: number): readonly BrowserFinding[] =>
+      (reported[index] ?? []).map(
+        (node: AxeNode): BrowserFinding =>
           findingAt(
             place,
             `axe:${violation.id}`,

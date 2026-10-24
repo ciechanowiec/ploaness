@@ -3,6 +3,7 @@
 // here. The split is what makes the rules cheap to test exhaustively: a pure function over strings
 // needs no fixture repository to exercise its edge cases.
 
+export * from './a11y-focus-guard.js'
 export * from './a11y-hit-target.js'
 export * from './a11y-incomplete.js'
 export * from './access-boundary.js'
