@@ -555,20 +555,20 @@ twice.
 | `broken-link` | a crawled internal link, or a sitemap entry, does not answer |
 | `page-not-stable` | the page does not settle within 10 s, a visible busy region never clears, or geometry moves more than 1 px between two measurements |
 | `overflow` | the document is wider than the viewport; names the outermost element past its edge |
-| `text-overlap` | two elements' own text shares more than one pixel row, unless one contains the other |
+| `text-overlap` | two elements' own visible text shares more than one pixel row, unless one contains the other; text a clipping or scrolling ancestor hides, or an opaque positioned layer covers, is not visible; text in a rotated or skewed subtree is not compared |
 | `clipped-text` | `overflow: hidden` or `clip` cuts content; ellipsis or line clamp passes when `title` or `aria-label` holds the full text |
-| `attached` | boxed siblings are closer than the minimum gap, 4 CSS pixels by default |
+| `attached` | boxed siblings are closer than the minimum gap, 4 CSS pixels by default; boxes in a rotated or skewed subtree are not compared |
 | `obscured` | something other than a control or its descendant sits at the control's centre |
 | `focus-obscured` | a keyboard-focused element is entirely hidden by fixed or sticky content |
 | `focus-visible` | the pixels of a keyboard-focused element and a 4 px ring do not change when it takes focus |
-| `disclosure-keyboard` | `Escape` does not close a popup or modal dialog, focus does not return to its control, or focus leaves an open modal dialog |
+| `disclosure-keyboard` | `Escape` does not close a popup or modal dialog, focus does not return to its control within a second, or focus leaves an open modal dialog |
 | `text-spacing` | the WCAG 1.4.12 overrides cause a new overflow, overlap, or clip |
 | `text-resize` | doubling every text size causes a new overflow, overlap, or clip, or text does not grow |
 | `small-text` | rendered text is below 12 px |
 | `font-load` | a `@font-face` family the page's text uses has no loaded face, or a face errored |
 | `image-load` | a visible image is incomplete or has no natural width |
 | `image-distorted` | an `object-fit: fill` image is rendered out of its natural proportion |
-| `image-upscaled` | an image is displayed more than 10% larger than its source resolution |
+| `image-upscaled` | an image is displayed more than 10% larger than its source file's pixels, whatever width its `srcset` declares |
 | `media-space` | an in-flow image, video, frame or embed takes a different box once loaded than before |
 | `axe:<id>` | axe reports a violation, at 390 and 1280, in the resting, dark, disclosure, hover and focus states |
 | `pass-budget` | a pass runs out of its budget; the finding names the item it reached |

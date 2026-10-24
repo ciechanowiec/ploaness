@@ -93,8 +93,24 @@ declare const document: {
   readonly querySelector: (selectors: string) => PageElement | null
 }
 declare const getComputedStyle: (element: PageElement) => PageStyle
+declare const Image: new () => {
+  readonly setAttribute: (name: string, value: string) => void
+  readonly naturalWidth: number
+  readonly naturalHeight: number
+  readonly decode: () => Promise<void>
+}
 declare const scrollX: number
 declare const scrollY: number
+
+/** The pixel size of each source file an image shows through a `srcset`, by its URL. */
+type SourceSizes = ReadonlyMap<string, PageBox>
+
+/** Where an element sits among the measured elements, and the source sizes its media are judged by. */
+interface NodeContext {
+  readonly index: number
+  readonly parent: number
+  readonly sources: SourceSizes
+}
 
 /** The steps of the page code, each handed the others. */
 interface LayoutTools {
@@ -106,8 +122,21 @@ interface LayoutTools {
   readonly bordersOf: (style: PageStyle) => LayoutBorders
   readonly lineHeightOf: (style: PageStyle) => number
   readonly labelOf: (element: PageElement, tools: LayoutTools) => string
-  readonly describe: (element: PageElement, index: number, parent: number, tools: LayoutTools) => LayoutNode
-  readonly mediaOf: (element: PageElement, style: PageStyle) => MediaFacts | undefined
+  readonly paintOrderOf: (style: PageStyle) => Pick<LayoutNode, 'rotate' | 'transform' | 'zIndex'>
+  readonly describe: (element: PageElement, context: NodeContext, tools: LayoutTools) => LayoutNode
+  readonly reservedBoxOf: (element: PageElement) => PageBox
+  readonly contentSizeOf: (box: PageBox, style: PageStyle) => Pick<MediaFacts, 'contentHeight' | 'contentWidth'>
+  readonly loadedSourceOf: (
+    element: PageElement,
+    sources: SourceSizes,
+  ) => Pick<MediaFacts, 'isVector' | 'naturalHeight' | 'naturalWidth'>
+  readonly mediaOf: (
+    element: PageElement,
+    style: PageStyle,
+    sources: SourceSizes,
+    tools: LayoutTools,
+  ) => MediaFacts | undefined
+  readonly sourceSizesOf: () => Promise<SourceSizes>
   readonly measuredElements: (tools: LayoutTools) => readonly PageElement[]
   readonly fontFacesOf: () => readonly FontFaceFacts[]
   readonly keyOfElement: (element: PageElement, tools: LayoutTools) => string
@@ -209,7 +238,14 @@ const labelOf = (element: PageElement, tools: LayoutTools): string => {
   return text.length === 0 ? `${tag}${name}` : `${tag}${name} "${text.slice(0, maxText)}"`
 }
 
-const describe = (element: PageElement, index: number, parent: number, tools: LayoutTools): LayoutNode => {
+// What decides how an element is painted against the others: its stacking order and any turn.
+const paintOrderOf = (style: PageStyle): Pick<LayoutNode, 'rotate' | 'transform' | 'zIndex'> => ({
+  zIndex: style.getPropertyValue('z-index'),
+  transform: style.getPropertyValue('transform'),
+  rotate: style.getPropertyValue('rotate'),
+})
+
+const describe = (element: PageElement, context: NodeContext, tools: LayoutTools): LayoutNode => {
   const style: PageStyle = getComputedStyle(element)
   const read = (property: string): string => style.getPropertyValue(property)
   const attribute = (name: string): string => element.getAttribute(name) ?? ''
@@ -217,8 +253,8 @@ const describe = (element: PageElement, index: number, parent: number, tools: La
     [read('overflow-x'), read('overflow-y')].includes(value),
   )
   return {
-    index,
-    parent,
+    index: context.index,
+    parent: context.parent,
     label: tools.labelOf(element, tools),
     tag: element.tagName.toLowerCase(),
     rects: tools.roundRects(element.getClientRects()),
@@ -228,6 +264,7 @@ const describe = (element: PageElement, index: number, parent: number, tools: La
     display: read('display'),
     visibility: read('visibility'),
     position: read('position'),
+    ...tools.paintOrderOf(style),
     backgroundColor: read('background-color'),
     backgroundImage: read('background-image'),
     boxShadow: read('box-shadow'),
@@ -248,63 +285,127 @@ const describe = (element: PageElement, index: number, parent: number, tools: La
     exemptionReason: attribute('data-ploaness-layout-reason').trim(),
     fontSize: Number(read('font-size').replace('px', '')) || 0,
     fontFamily: read('font-family'),
-    media: tools.mediaOf(element, style),
+    media: tools.mediaOf(element, style, context.sources, tools),
   }
 }
 
 // The space a replaced element reserves before its source arrives is the box the same element takes
-// with no source at all. A shallow copy with every source removed is laid out beside it, read, and
-// removed again in the same task, so nothing is painted and the page's own element is never touched.
-const mediaOf = (element: PageElement, style: PageStyle): MediaFacts | undefined => {
+// with no source at all. A shallow copy with every source removed takes the element's own slot while the
+// element is out of layout, and is read and removed again in the same task, so nothing is painted. Laid
+// out beside the element instead, a flex or grid row would share its space between the two.
+const reservedBoxOf = (element: PageElement): PageBox => {
+  const placeholder: PageElement = element.cloneNode(false)
+  for (const source of ['src', 'srcset', 'poster', 'srcdoc', 'data']) {
+    placeholder.removeAttribute(source)
+  }
+  placeholder.removeAttribute('id')
+  placeholder.setAttribute('alt', '')
+  placeholder.setAttribute('aria-hidden', 'true')
+  const ownStyle: string | null = element.getAttribute('style')
+  placeholder.setAttribute('style', `${ownStyle ?? ''};visibility:hidden`)
+  element.setAttribute('style', `${ownStyle ?? ''};display:none`)
+  element.before(placeholder)
+  const measured: PageBox = placeholder.getBoundingClientRect()
+  placeholder.remove()
+  if (ownStyle === null) {
+    element.removeAttribute('style')
+  } else {
+    element.setAttribute('style', ownStyle)
+  }
+  return measured
+}
+
+const contentSizeOf = (box: PageBox, style: PageStyle): Pick<MediaFacts, 'contentHeight' | 'contentWidth'> => {
+  const pixels = (property: string): number => Number(style.getPropertyValue(property).replace('px', '')) || 0
+  const inset = (first: string, second: string): number =>
+    pixels(`padding-${first}`) +
+    pixels(`padding-${second}`) +
+    pixels(`border-${first}-width`) +
+    pixels(`border-${second}-width`)
+  return {
+    contentWidth: Math.round(box.width - inset('left', 'right')),
+    contentHeight: Math.round(box.height - inset('top', 'bottom')),
+  }
+}
+
+// The source an element shows, and its pixel size: the file's own where it was decoded alone.
+const loadedSourceOf = (
+  element: PageElement,
+  sources: SourceSizes,
+): Pick<MediaFacts, 'isVector' | 'naturalHeight' | 'naturalWidth'> => {
+  const source: string = element.currentSrc ?? element.getAttribute('src') ?? ''
+  const file: PageBox = sources.get(source) ?? {
+    width: element.naturalWidth ?? 0,
+    height: element.naturalHeight ?? 0,
+  }
+  return {
+    isVector: /\.svg(?:[?#]|$)|^data:image\/svg/iu.test(source),
+    naturalWidth: file.width,
+    naturalHeight: file.height,
+  }
+}
+
+const mediaOf = (
+  element: PageElement,
+  style: PageStyle,
+  sources: SourceSizes,
+  tools: LayoutTools,
+): MediaFacts | undefined => {
   const tag: string = element.tagName.toLowerCase()
   if (!['img', 'video', 'iframe', 'embed', 'object'].includes(tag)) {
     return undefined
   }
-  const pixels = (property: string): number => Number(style.getPropertyValue(property).replace('px', '')) || 0
   const box: PageBox = element.getBoundingClientRect()
-  const reservedBox = (): PageBox => {
-    const placeholder: PageElement = element.cloneNode(false)
-    for (const source of ['src', 'srcset', 'poster', 'srcdoc', 'data']) {
-      placeholder.removeAttribute(source)
-    }
-    placeholder.removeAttribute('id')
-    placeholder.setAttribute('alt', '')
-    placeholder.setAttribute('aria-hidden', 'true')
-    placeholder.setAttribute('style', `${element.getAttribute('style') ?? ''};visibility:hidden`)
-    element.before(placeholder)
-    const measured: PageBox = placeholder.getBoundingClientRect()
-    placeholder.remove()
-    return measured
-  }
-  const reserved: PageBox = reservedBox()
-  const source: string = element.currentSrc ?? element.getAttribute('src') ?? ''
+  const reserved: PageBox = tools.reservedBoxOf(element)
   return {
     isComplete: tag !== 'img' || element.complete === true,
-    isVector: /\.svg(?:[?#]|$)|^data:image\/svg/iu.test(source),
-    naturalWidth: element.naturalWidth ?? 0,
-    naturalHeight: element.naturalHeight ?? 0,
-    contentWidth: Math.round(
-      box.width -
-        pixels('padding-left') -
-        pixels('padding-right') -
-        pixels('border-left-width') -
-        pixels('border-right-width'),
-    ),
-    contentHeight: Math.round(
-      box.height -
-        pixels('padding-top') -
-        pixels('padding-bottom') -
-        pixels('border-top-width') -
-        pixels('border-bottom-width'),
-    ),
+    ...tools.loadedSourceOf(element, sources),
+    ...tools.contentSizeOf(box, style),
     objectFit: style.getPropertyValue('object-fit'),
     reservedWidth: Math.round(reserved.width),
     reservedHeight: Math.round(reserved.height),
   }
 }
 
+// An image chosen from a `srcset` reports its natural size divided by the density the browser assigned
+// the candidate, which is the candidate's declared width over the slot `sizes` gives it. A server that
+// will not enlarge a small original sends fewer pixels than the declared width, so that size understates
+// the file. The same URL decoded by an image of its own, with no `srcset`, reports the file's pixels.
+const sourceSizesOf = async (): Promise<SourceSizes> => {
+  const sources: readonly string[] = [
+    ...new Set(
+      Array.from(document.body.querySelectorAll('img'))
+        .filter(
+          (image: PageElement): boolean =>
+            image.getAttribute('srcset') !== null || image.parentElement?.tagName.toLowerCase() === 'picture',
+        )
+        .map((image: PageElement): string => image.currentSrc ?? '')
+        .filter((source: string): boolean => source.length > 0),
+    ),
+  ]
+  const sized: readonly (readonly [string, PageBox] | undefined)[] = await Promise.all(
+    sources.map(async (source: string): Promise<readonly [string, PageBox] | undefined> => {
+      const probe: InstanceType<typeof Image> = new Image()
+      probe.setAttribute('src', source)
+      try {
+        await probe.decode()
+        return [source, { width: probe.naturalWidth, height: probe.naturalHeight }]
+      } catch {
+        return undefined
+      }
+    }),
+  )
+  return new Map(
+    sized.filter(
+      (entry: readonly [string, PageBox] | undefined): entry is readonly [string, PageBox] => entry !== undefined,
+    ),
+  )
+}
+
 // The width sweep measures only geometry, so it skips the media placeholders and the font set.
 const noMedia = (): undefined => undefined
+
+const noSourceSizes = (): Promise<SourceSizes> => Promise.resolve(new Map())
 
 const noFontFaces = (): readonly FontFaceFacts[] => []
 
@@ -334,7 +435,9 @@ const measuredElements = (tools: LayoutTools): readonly PageElement[] => {
 /** What the page code answers: a snapshot still waiting for the route it was taken on. */
 type MeasuredPage = Omit<LayoutSnapshot, 'route'>
 
-const measureDocument = (tools: LayoutTools): MeasuredPage => {
+const measureDocument = async (tools: LayoutTools): Promise<MeasuredPage> => {
+  // Decoded first, so the measurement below runs in one task with nothing awaited inside it.
+  const sources: SourceSizes = await tools.sourceSizesOf()
   const elements: readonly PageElement[] = tools.measuredElements(tools)
   const positions: ReadonlyMap<PageElement, number> = new Map(
     elements.map((element: PageElement, index: number): readonly [PageElement, number] => [element, index]),
@@ -348,7 +451,7 @@ const measureDocument = (tools: LayoutTools): MeasuredPage => {
     nodes: elements.map((element: PageElement, index: number): LayoutNode => {
       const parent: PageElement | null = element.parentElement
       const parentIndex: number = parent === null ? -1 : (positions.get(parent) ?? -1)
-      return tools.describe(element, index, index === 0 ? -1 : parentIndex, tools)
+      return tools.describe(element, { index, parent: index === 0 ? -1 : parentIndex, sources }, tools)
     }),
     fontFaces: tools.fontFacesOf(),
   }
@@ -421,8 +524,13 @@ const STEPS: Readonly<Record<keyof LayoutTools, Step>> = {
   bordersOf,
   lineHeightOf,
   labelOf,
+  paintOrderOf,
   describe,
+  reservedBoxOf,
+  contentSizeOf,
+  loadedSourceOf,
   mediaOf,
+  sourceSizesOf,
   measuredElements,
   fontFacesOf,
   keyOfElement,
@@ -438,6 +546,7 @@ const IN_PAGE_SOURCE: string = `(${String(measureDocument)})(${toolsSource(STEPS
 const MINIMAL_SOURCE: string = `(${String(measureDocument)})(${toolsSource({
   ...STEPS,
   mediaOf: noMedia,
+  sourceSizesOf: noSourceSizes,
   fontFacesOf: noFontFaces,
 })})`
 

@@ -4,6 +4,8 @@ import {
   isAncestorOf,
   isInAriaHidden,
   isInClip,
+  isInTurn,
+  isOpaqueColor,
   type LayoutNode,
   type LayoutRect,
   type LayoutSnapshot,
@@ -53,13 +55,154 @@ const lineBoxOf = (rect: LayoutRect, lineHeight: number): LayoutRect => {
 const lineBoxesOf = (node: LayoutNode): readonly LayoutRect[] =>
   node.textRects.map((rect: LayoutRect): LayoutRect => lineBoxOf(rect, node.lineHeight))
 
-const isIntersecting = (first: LayoutRect, second: LayoutRect): boolean =>
-  Math.min(first.right, second.right) - Math.max(first.left, second.left) > TEXT_OVERLAP_TOLERANCE &&
-  Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > TEXT_OVERLAP_TOLERANCE
+const intersectionOf = (first: LayoutRect, second: LayoutRect): LayoutRect => ({
+  left: Math.max(first.left, second.left),
+  top: Math.max(first.top, second.top),
+  right: Math.min(first.right, second.right),
+  bottom: Math.min(first.bottom, second.bottom),
+})
 
-const hasCollidingText = (first: LayoutNode, second: LayoutNode): boolean =>
-  lineBoxesOf(first).some((left: LayoutRect): boolean =>
-    lineBoxesOf(second).some((right: LayoutRect): boolean => isIntersecting(left, right)),
+const isIntersecting = (first: LayoutRect, second: LayoutRect): boolean => {
+  const shared: LayoutRect = intersectionOf(first, second)
+  return shared.right - shared.left > TEXT_OVERLAP_TOLERANCE && shared.bottom - shared.top > TEXT_OVERLAP_TOLERANCE
+}
+
+const STATIC: string = 'static'
+
+const outerBoxOf = (node: LayoutNode): LayoutRect | undefined => {
+  const rects: readonly LayoutRect[] = node.rects.filter((rect: LayoutRect): boolean => hasArea(rect))
+  return rects.length === 0
+    ? undefined
+    : {
+        left: Math.min(...rects.map((rect: LayoutRect): number => rect.left)),
+        top: Math.min(...rects.map((rect: LayoutRect): number => rect.top)),
+        right: Math.max(...rects.map((rect: LayoutRect): number => rect.right)),
+        bottom: Math.max(...rects.map((rect: LayoutRect): number => rect.bottom)),
+      }
+}
+
+// An ancestor whose overflow is not visible clips along that axis, inside its borders. Unbounded sides
+// stay unbounded, so a clip on one axis leaves the other alone.
+const clipOf = (node: LayoutNode): LayoutRect | undefined => {
+  const box: LayoutRect | undefined = outerBoxOf(node)
+  const isClippingX: boolean = node.overflowX !== 'visible'
+  const isClippingY: boolean = node.overflowY !== 'visible'
+  if (box === undefined || !(isClippingX || isClippingY)) {
+    return undefined
+  }
+  return {
+    left: isClippingX ? box.left + node.borders.left.width : Number.NEGATIVE_INFINITY,
+    right: isClippingX ? box.right - node.borders.right.width : Number.POSITIVE_INFINITY,
+    top: isClippingY ? box.top + node.borders.top.width : Number.NEGATIVE_INFINITY,
+    bottom: isClippingY ? box.bottom - node.borders.bottom.width : Number.POSITIVE_INFINITY,
+  }
+}
+
+// Which ancestors may clip an element: all of them for an element in flow, only those from its
+// containing block up for an absolute one, none for a fixed one.
+type ClipReach = 'all' | 'none' | 'positioned'
+
+const reachPast = (ancestor: LayoutNode, reach: ClipReach): ClipReach => {
+  if (ancestor.position === 'fixed') {
+    return 'none'
+  }
+  if (ancestor.position === 'absolute') {
+    return 'positioned'
+  }
+  if (reach === 'positioned') {
+    return ancestor.position === STATIC ? 'positioned' : 'all'
+  }
+  return reach
+}
+
+const clipsAbove = (snapshot: LayoutSnapshot, node: LayoutNode, reach: ClipReach): readonly LayoutRect[] => {
+  const parent: LayoutNode | undefined = snapshot.nodes[node.parent]
+  if (parent === undefined || reach === 'none') {
+    return []
+  }
+  const clip: LayoutRect | undefined = reach === 'all' || parent.position !== STATIC ? clipOf(parent) : undefined
+  return [...(clip === undefined ? [] : [clip]), ...clipsAbove(snapshot, parent, reachPast(parent, reach))]
+}
+
+// What of an element's text a reader can see: each line box, cut by every ancestor that clips it. A
+// scroll container's overflow is out of sight until it is scrolled, so it collides with nothing.
+const visibleLineBoxesOf = (snapshot: LayoutSnapshot, node: LayoutNode): readonly LayoutRect[] => {
+  const clips: readonly LayoutRect[] = clipsAbove(snapshot, node, reachPast(node, 'all'))
+  return lineBoxesOf(node)
+    .map(
+      (box: LayoutRect): LayoutRect =>
+        clips.reduce((clipped: LayoutRect, clip: LayoutRect): LayoutRect => intersectionOf(clipped, clip), box),
+    )
+    .filter((box: LayoutRect): boolean => hasArea(box))
+}
+
+const ancestorsOf = (snapshot: LayoutSnapshot, node: LayoutNode): readonly LayoutNode[] => {
+  const parent: LayoutNode | undefined = snapshot.nodes[node.parent]
+  return parent === undefined ? [] : [parent, ...ancestorsOf(snapshot, parent)]
+}
+
+const isSelfOrAncestorOf = (snapshot: LayoutSnapshot, candidate: LayoutNode, node: LayoutNode): boolean =>
+  candidate === node || isAncestorOf(snapshot, candidate, node)
+
+const stackLevelOf = (node: LayoutNode): number => (node.zIndex === 'auto' ? 0 : Number(node.zIndex) || 0)
+
+const nearestPositioned = (snapshot: LayoutSnapshot, node: LayoutNode, other: LayoutNode): LayoutNode | undefined =>
+  [node, ...ancestorsOf(snapshot, node)].find(
+    (candidate: LayoutNode): boolean =>
+      candidate.position !== STATIC && !isSelfOrAncestorOf(snapshot, candidate, other),
+  )
+
+const coversRegion = (outer: LayoutRect, inner: LayoutRect): boolean =>
+  outer.left <= inner.left && outer.top <= inner.top && outer.right >= inner.right && outer.bottom >= inner.bottom
+
+// Whether `under`'s text at `region` is painted beneath an opaque background of `over` or of one of its
+// ancestors, such as an open menu panel laid over the page. In one stacking context every in-flow
+// background is painted before any text, so only a positioned layer covers text: it is painted after
+// the in-flow content beside it, and after another positioned layer of no higher `z-index` before it in
+// the document.
+// Whether `cover` paints an opaque background over all of `region` without containing `under`.
+const isOpaqueOver = (snapshot: LayoutSnapshot, cover: LayoutNode, under: LayoutNode, region: LayoutRect): boolean => {
+  const box: LayoutRect | undefined = outerBoxOf(cover)
+  return (
+    box !== undefined &&
+    isOpaqueColor(cover.backgroundColor) &&
+    coversRegion(box, region) &&
+    !isSelfOrAncestorOf(snapshot, cover, under)
+  )
+}
+
+// Whether the positioned layer `cover` is painted in is painted after `under`'s text.
+const isPaintedAfter = (snapshot: LayoutSnapshot, cover: LayoutNode, under: LayoutNode): boolean => {
+  const layer: LayoutNode | undefined = nearestPositioned(snapshot, cover, under)
+  if (layer === undefined) {
+    return false
+  }
+  const beneath: LayoutNode | undefined = nearestPositioned(snapshot, under, cover)
+  if (beneath === undefined) {
+    return stackLevelOf(layer) >= 0
+  }
+  return (
+    stackLevelOf(layer) > stackLevelOf(beneath) ||
+    (stackLevelOf(layer) === stackLevelOf(beneath) && layer.index > beneath.index)
+  )
+}
+
+const isCoveredBy = (snapshot: LayoutSnapshot, under: LayoutNode, over: LayoutNode, region: LayoutRect): boolean =>
+  [over, ...ancestorsOf(snapshot, over)].some(
+    (cover: LayoutNode): boolean =>
+      isOpaqueOver(snapshot, cover, under, region) && isPaintedAfter(snapshot, cover, under),
+  )
+
+const hasCollidingText = (snapshot: LayoutSnapshot, first: LayoutNode, second: LayoutNode): boolean =>
+  visibleLineBoxesOf(snapshot, first).some((left: LayoutRect): boolean =>
+    visibleLineBoxesOf(snapshot, second).some((right: LayoutRect): boolean => {
+      const region: LayoutRect = intersectionOf(left, right)
+      return (
+        isIntersecting(left, right) &&
+        !isCoveredBy(snapshot, first, second, region) &&
+        !isCoveredBy(snapshot, second, first, region)
+      )
+    }),
   )
 
 /** Two elements whose own text overlaps. */
@@ -69,13 +212,16 @@ export interface TextFinding {
 }
 
 /**
- * Every pair of unrelated elements whose own text overlaps.
+ * Every pair of unrelated elements whose visible text overlaps.
+ *
+ * Text inside a rotated or skewed subtree is not compared: its rects are the upright boxes around the
+ * turned lines, which meet where the glyphs do not.
  * @param snapshot the measured page.
  * @returns one finding per pair, in document order.
  */
 export const findOverlappingText = (snapshot: LayoutSnapshot): readonly TextFinding[] => {
-  const readable: readonly LayoutNode[] = snapshot.nodes.filter((node: LayoutNode): boolean =>
-    isReadableText(snapshot, node),
+  const readable: readonly LayoutNode[] = snapshot.nodes.filter(
+    (node: LayoutNode): boolean => isReadableText(snapshot, node) && !isInTurn(snapshot, node),
   )
   return readable.flatMap((first: LayoutNode, index: number): readonly TextFinding[] =>
     readable
@@ -83,7 +229,7 @@ export const findOverlappingText = (snapshot: LayoutSnapshot): readonly TextFind
       .filter(
         (second: LayoutNode): boolean =>
           !(isAncestorOf(snapshot, first, second) || isAncestorOf(snapshot, second, first)) &&
-          hasCollidingText(first, second),
+          hasCollidingText(snapshot, first, second),
       )
       .map((second: LayoutNode): TextFinding => ({ first, second })),
   )

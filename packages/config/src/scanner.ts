@@ -125,6 +125,26 @@ export const judgeRestingPlace = async (page: Page, place: FindingPlace): Promis
   }
 }
 
+type AxeRun = Awaited<ReturnType<AxeBuilder['analyze']>>
+
+// A second copy of axe in the page - a Storybook accessibility addon checking what it rendered - shares
+// axe's one-run-at-a-time lock, so a scan started while that copy runs is refused rather than queued.
+const AXE_BUSY: string = 'Axe is already running'
+const AXE_BUSY_RETRIES: number = 20
+const AXE_BUSY_WAIT_MS: number = 250
+
+const analyzed = async (page: Page, builder: AxeBuilder, retries: number): Promise<AxeRun> => {
+  try {
+    return await builder.analyze()
+  } catch (error: unknown) {
+    if (retries <= 0 || !(error instanceof Error && error.message.includes(AXE_BUSY))) {
+      throw error
+    }
+    await page.waitForTimeout(AXE_BUSY_WAIT_MS)
+    return await analyzed(page, builder, retries - 1)
+  }
+}
+
 const axeTarget = (target: unknown): string => (isArray(target) ? target.map(String).join(' ') : String(target))
 
 /**
@@ -141,10 +161,11 @@ export const axeFindings = async (
 ): Promise<readonly BrowserFinding[]> => {
   const excluded: readonly string[] = axeRulesExcludedAt(place.location)
   const builder: AxeBuilder = build(new AxeBuilder({ page }))
-  const results: Awaited<ReturnType<AxeBuilder['analyze']>> = await (excluded.length === 0
-    ? builder
-    : builder.disableRules([...excluded])
-  ).analyze()
+  const results: AxeRun = await analyzed(
+    page,
+    excluded.length === 0 ? builder : builder.disableRules([...excluded]),
+    AXE_BUSY_RETRIES,
+  )
   return [
     ...results.violations.flatMap((violation): readonly BrowserFinding[] =>
       violation.nodes.map(

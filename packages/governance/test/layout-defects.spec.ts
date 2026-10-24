@@ -300,6 +300,12 @@ describe('what is not compared', () => {
     expect(defectsOf(touchingRed({ position: 'fixed' }))).toEqual([])
   })
 
+  it('skips a rotated sibling, whose upright bounding box is larger than the card it paints', () => {
+    expect(defectsOf(touchingRed({ rotate: '4deg' }))).toEqual([])
+    expect(defectsOf(touchingRed({ transform: 'matrix(1, 0, 0.2, 1, 0, 0)' }))).toEqual([])
+    expect(defectsOf(touchingRed({ transform: 'matrix(1, 0, 0, 1, 0, 8)' }))).toHaveLength(1)
+  })
+
   it('skips an invisible sibling', () => {
     expect(defectsOf(touchingRed({ visibility: 'hidden' }))).toEqual([])
   })

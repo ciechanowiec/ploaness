@@ -51,6 +51,12 @@ export interface LayoutNode {
   readonly display: string
   readonly visibility: string
   readonly position: string
+  /** The computed `z-index`: `auto` or an integer. */
+  readonly zIndex: string
+  /** The computed `transform`: `none` or a `matrix()` or `matrix3d()`. */
+  readonly transform: string
+  /** The computed `rotate` property, which `transform` does not include: `none` or an angle. */
+  readonly rotate: string
   readonly backgroundColor: string
   readonly backgroundImage: string
   readonly boxShadow: string
@@ -87,7 +93,7 @@ export interface MediaFacts {
   readonly isComplete: boolean
   /** Whether the source is a vector image, which has no fixed resolution to judge. */
   readonly isVector: boolean
-  /** The intrinsic size of the loaded source, 0 when it has none. */
+  /** The pixel size of the loaded source file, unscaled by a `srcset` density; 0 when it has none. */
   readonly naturalWidth: number
   readonly naturalHeight: number
   /** The content box, inside padding and border. */
@@ -136,6 +142,18 @@ const SLASH_ALPHA: RegExp = /\/\s*([\d.]+%?)\s*\)$/u
 const PERCENT: string = '%'
 
 const alphaText = (color: string): string | undefined => COMMA_ALPHA.exec(color)?.[1] ?? SLASH_ALPHA.exec(color)?.[1]
+
+const FULL_ALPHAS: ReadonlySet<string> = new Set<string>(['1', `100${PERCENT}`])
+
+/**
+ * Whether a computed colour hides what lies beneath it.
+ * @param color a computed colour string.
+ * @returns true for a colour with no alpha or a full one.
+ */
+export const isOpaqueColor = (color: string): boolean => {
+  const alpha: string | undefined = alphaText(color.trim())
+  return isVisibleColor(color) && (alpha === undefined || FULL_ALPHAS.has(alpha))
+}
 
 /**
  * Whether a computed colour draws anything.
@@ -219,6 +237,52 @@ export const isInAriaHidden = (snapshot: LayoutSnapshot, node: LayoutNode): bool
 export const isInClip = (snapshot: LayoutSnapshot, node: LayoutNode): boolean => {
   const parent: LayoutNode | undefined = snapshot.nodes[node.parent]
   return node.isClipped || (parent !== undefined && isInClip(snapshot, parent))
+}
+
+// A matrix turns a box when it moves either axis toward the other: `b` and `c` of `matrix(a, b, c, d, e,
+// f)`, and the six off-diagonal terms of the column-major `matrix3d`. What is left is scaling and
+// translation, under which a bounding rectangle is still the painted box.
+const MATRIX: RegExp = /^matrix(3d)?\((.*)\)$/u
+const TURN_EPSILON: number = 1e-6
+
+const turnTermsOf = (terms: readonly number[], isSpatial: boolean): readonly (number | undefined)[] => {
+  const [, m12, m13, , m21, , m23, , m31, m32] = terms
+  return isSpatial ? [m12, m13, m21, m23, m31, m32] : [m12, m13]
+}
+
+const isTurnedTransform = (transform: string): boolean => {
+  const match: RegExpExecArray | null = MATRIX.exec(transform.trim())
+  if (match === null) {
+    return false
+  }
+  const terms: readonly number[] = (match[2] ?? '').split(',').map(Number)
+  return turnTermsOf(terms, match[1] !== undefined).some(
+    (term: number | undefined): boolean => Math.abs(term ?? 0) > TURN_EPSILON,
+  )
+}
+
+// The angle is the last word of the computed value, after any axis: `3deg`, `x 10deg`, `0 0 1 3deg`.
+const ANGLE_UNIT: RegExp = /(?:deg|g?rad|turn)$/u
+
+const isTurnedRotate = (rotate: string): boolean => {
+  const angle: number = Number((rotate.trim().split(/\s+/u).at(-1) ?? '').replace(ANGLE_UNIT, ''))
+  return Number.isFinite(angle) && angle !== 0
+}
+
+/**
+ * Whether an element or an ancestor is rotated or skewed. Its bounding rectangles are then the upright
+ * boxes around a turned shape, larger than what it paints, so no gap or overlap measured on them is real.
+ * @param snapshot the measured page.
+ * @param node the element.
+ * @returns true inside a turned subtree.
+ */
+export const isInTurn = (snapshot: LayoutSnapshot, node: LayoutNode): boolean => {
+  const parent: LayoutNode | undefined = snapshot.nodes[node.parent]
+  return (
+    isTurnedTransform(node.transform) ||
+    isTurnedRotate(node.rotate) ||
+    (parent !== undefined && isInTurn(snapshot, parent))
+  )
 }
 
 /**

@@ -1,6 +1,6 @@
 // The sweep's disclosure pass: every disclosure opened, what it reveals judged, and how it answers the
 // keyboard.
-import { type Locator, type Page, test } from '@playwright/test'
+import { errors, type Locator, type Page, test } from '@playwright/test'
 import {
   type BrowserFinding,
   disclosureDefects,
@@ -102,6 +102,41 @@ const disclosureFactsInPage = (selector: string): DisclosureFacts => {
 
 const MAX_TRAP_STEPS: number = 30
 
+// Whether the control a disclosure opened from holds focus again, and nothing it opened is still open.
+const isClosedToControlInPage = (selector: string): boolean => {
+  const control: DomElement | null = document.querySelector(selector)
+  const active: DomElement | null = document.activeElement
+  const modal: DomElement | null = document.querySelector(
+    'dialog:modal, [role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]',
+  )
+  return (
+    control !== null &&
+    active !== null &&
+    (control === active || control.contains(active)) &&
+    control.getAttribute('aria-expanded') !== 'true' &&
+    modal?.checkVisibility() !== true
+  )
+}
+
+// How long a disclosure may take to close and hand focus back after Escape. Libraries such as Radix
+// close in the key's own task and move focus once their exit has rendered, a tick or a frame later.
+const FOCUS_RETURN_MS: number = 1000
+
+const closedAfterEscape = async (page: Page, selector: string, isDismissible: boolean): Promise<DisclosureFacts> => {
+  if (!isDismissible) {
+    return await page.evaluate(disclosureFactsInPage, selector)
+  }
+  try {
+    await page.waitForFunction(isClosedToControlInPage, selector, { timeout: FOCUS_RETURN_MS })
+  } catch (error: unknown) {
+    // Not closed back to its control in time: the facts read next say which half failed.
+    if (!(error instanceof errors.TimeoutError)) {
+      throw error
+    }
+  }
+  return await page.evaluate(disclosureFactsInPage, selector)
+}
+
 const isTrapped = async (page: Page, selector: string, remaining: number): Promise<boolean> => {
   if (remaining <= 0) {
     return true
@@ -132,7 +167,7 @@ const dismissDisclosure = async (disclosure: OpenedDisclosure): Promise<readonly
   if (isDismissible) {
     await page.keyboard.press('Escape')
   }
-  const closed: DisclosureFacts = await page.evaluate(disclosureFactsInPage, selector)
+  const closed: DisclosureFacts = await closedAfterEscape(page, selector, isDismissible)
   const isClosedOnEscape: boolean = isDismissible && !closed.isModalOpen && closed.expanded !== 'true'
   if (!isClosedOnEscape && (await control.isVisible())) {
     await control.click()

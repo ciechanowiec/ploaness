@@ -13,6 +13,7 @@ import {
   hasPaintedBackground,
   hasPaintedBox,
   isInAriaHidden,
+  isInTurn,
   type LayoutNode,
   type LayoutRect,
   type LayoutSide,
@@ -243,11 +244,18 @@ const judgePair = (
 const isInlinePair = (first: LayoutNode, second: LayoutNode): boolean =>
   first.display === 'inline' && second.display === 'inline'
 
-const pairsOf = (siblings: readonly LayoutNode[]): readonly (readonly [LayoutNode, LayoutNode])[] =>
+// A rotated or skewed box reports the upright rectangle around it, so its gap to a sibling is not measured.
+const pairsOf = (
+  snapshot: LayoutSnapshot,
+  siblings: readonly LayoutNode[],
+): readonly (readonly [LayoutNode, LayoutNode])[] =>
   siblings.flatMap((first: LayoutNode, index: number): readonly (readonly [LayoutNode, LayoutNode])[] =>
     siblings
       .slice(index + 1)
-      .filter((second: LayoutNode): boolean => !isInlinePair(first, second))
+      .filter(
+        (second: LayoutNode): boolean =>
+          !(isInlinePair(first, second) || isInTurn(snapshot, first) || isInTurn(snapshot, second)),
+      )
       .map((second: LayoutNode): readonly [LayoutNode, LayoutNode] => [first, second]),
   )
 
@@ -261,7 +269,7 @@ export const findTouchingBoxes = (snapshot: LayoutSnapshot, minimumGap: number):
   snapshot.nodes
     .filter((node: LayoutNode): boolean => isGroupRoot(snapshot, node) && !isInAriaHidden(snapshot, node))
     .flatMap((parent: LayoutNode): readonly BoxFinding[] =>
-      pairsOf(layoutChildren(snapshot, parent)).flatMap(
+      pairsOf(snapshot, layoutChildren(snapshot, parent)).flatMap(
         (pair: readonly [LayoutNode, LayoutNode]): readonly BoxFinding[] => judgePair(snapshot, pair, minimumGap),
       ),
     )
