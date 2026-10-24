@@ -357,12 +357,8 @@ export const origin: string = new URL(projectSettings.serverUrl).origin
 const fixDateInPage = (instant: number): void => {
   const RealDate: DateConstructor = Date
   const FixedDate: DateConstructor = new Proxy(RealDate, {
-    construct: (target: DateConstructor, values: readonly unknown[], newTarget: unknown): object => {
-      const made: unknown = Reflect.construct(
-        target,
-        values.length === 0 ? [instant] : values,
-        newTarget as DateConstructor,
-      )
+    construct: (target: DateConstructor, values: readonly unknown[], newTarget: DateConstructor): object => {
+      const made: unknown = Reflect.construct(target, values.length === 0 ? [instant] : values, newTarget)
       return typeof made === 'object' && made !== null ? made : new RealDate(instant)
     },
     apply: (): string => new RealDate(instant).toString(),
