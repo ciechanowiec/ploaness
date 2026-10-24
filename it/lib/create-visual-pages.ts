@@ -173,6 +173,8 @@ const PAGES: Readonly<Record<string, Variant>> = {
   },
   // An animation started at `performance.now()`, as Motion starts its Web Animations.
   'timeline-start': { defect: '<Glide />', valid: '<Glide />' },
+  // A hidden span in the tab order, as a dialog or menu library places one to steer focus.
+  'focus-guard': { defect: '<Guard redirects={false} />', valid: '<Guard redirects={true} />' },
   'font-load': { defect: '<p className="broken-font">Display text</p>', valid: '<p>Display text</p>' },
   'page-error': { defect: '<Complaint />', valid: '<p>Nothing to complain about.</p>' },
   'focus-visible': {
@@ -318,6 +320,26 @@ const GLIDE: string = [
   '',
 ].join('\n')
 
+const GUARD: string = [
+  "'use client'",
+  "import { useRef } from 'react'",
+  '',
+  'export function Guard({ redirects }: { redirects: boolean }): React.JSX.Element {',
+  '  const target = useRef<HTMLButtonElement>(null)',
+  '  return (',
+  '    <div>',
+  '      <span aria-hidden="true" tabIndex={0} onFocus={(): void => {',
+  '        if (redirects) {',
+  '          target.current?.focus()',
+  '        }',
+  '      }} />',
+  '      <button ref={target} type="button">Panel</button>',
+  '    </div>',
+  '  )',
+  '}',
+  '',
+].join('\n')
+
 const MENU: string = [
   "'use client'",
   "import { useEffect, useRef, useState } from 'react'",
@@ -428,7 +450,7 @@ const writeModule = (file: string, source: string | Buffer): void => {
   writeFileSync(file, source)
 }
 
-const COMPONENTS: readonly string[] = ['AxeEcho', 'Complaint', 'Glide', 'Grow', 'Menu']
+const COMPONENTS: readonly string[] = ['AxeEcho', 'Complaint', 'Glide', 'Grow', 'Guard', 'Menu']
 
 // Each page imports only the client components it renders, as the compiler requires.
 const importsOf = (body: string): readonly string[] =>
@@ -484,6 +506,7 @@ writeModule(path.join(appRoot, 'sitemap.xml', 'route.ts'), SITEMAP_ROUTE)
 writeModule(path.join(directory, 'src', 'complaint.tsx'), COMPLAINT)
 writeModule(path.join(directory, 'src', 'glide.tsx'), GLIDE)
 writeModule(path.join(directory, 'src', 'grow.tsx'), GROW)
+writeModule(path.join(directory, 'src', 'guard.tsx'), GUARD)
 writeModule(path.join(directory, 'src', 'menu.tsx'), MENU)
 writeModule(path.join(directory, 'src', 'axeecho.tsx'), AXE_ECHO)
 writeModule(

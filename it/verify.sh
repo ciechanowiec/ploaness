@@ -322,6 +322,7 @@ visual_contracts() {
         '[text-overlap] /scrolled-blurb @390x844 (chromium, resting): overlapping text: p' \
         '[attached] /scrolled-blurb @390x844 (chromium, resting): overlapping boxes: p' \
         '[text-overlap] /covered-text @390x844 (chromium, resting): overlapping text: h2' \
+        '[axe:aria-hidden-focus] /focus-guard @390x844 (chromium, resting): ' \
         '[font-load] /font-load @390x844 (chromium, resting): @font-face \"Broken\"' \
         '[page-error] /page-error (chromium, resting): console.error: fixture page error' \
         '[page-not-stable] /unstable @390x844 (chromium, resting): ' \
