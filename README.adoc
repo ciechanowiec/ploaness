@@ -53,7 +53,8 @@ endif::[]
 [[gates]]
 === Gates
 
-. A [[gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding]]_finding_ is one problem a gate reports. Default verification runs 38 gates. Extended verification adds ten more, covering the shell scripts, the infrastructure definitions, the history, the production build, the client bundle, the browser suite, the dependency inventory, and the compliance report on open source dependencies.
+. A [[gate]]_gate_ is one named verification that a xref:#commands[command] runs, and a [[finding]]_finding_ is one problem a gate reports. Verification runs at three levels, and each level contains the one before it. Quick verification runs 38 gates and opens no browser. Delta verification adds ten more, covering the shell scripts, the infrastructure definitions, the history, the production build, the client bundle, the browser suite, the dependency inventory, and the compliance report on open source dependencies. Full verification runs the same gates as delta verification.
+. Delta verification scopes the browser sweep to the routes and stories a change can affect, in Chromium. The change is everything that differs from the merge-base of `HEAD` with `origin/main`, and the import graph decides which pages the change reaches. A change to a global input, such as a global stylesheet or the lockfile, sweeps everything. Full verification sweeps every route and story in Chromium, Firefox and WebKit, which takes over an hour on a large project, so full verification belongs to a nightly CI run on the default branch and to each release.
 . The browser suite discovers the application's pages, stories, breakpoints, locales and colour schemes from the running application. The suite judges each one for runtime errors, broken requests and links, layout, text, media, focus and keyboard defects, and accessibility. The suite measures with pinned browsers and fixed clocks, so the same tree receives the same verdict on every machine. The suite reports each defect as a line of text naming the rule, the page, the state, the engine and the viewport.
 . A run stops at the first failing gate and names how many gates the run didn't reach. Stopping there is deliberate: a gate is free to leave the tree in a shape the next gate misreads, and a column of passes beneath a failure would describe a state nobody established.
 
@@ -70,7 +71,7 @@ _ploaness_ owns the text of certain files in the project, among them the editor 
 . Use the dependency versions pinned by _ploaness_.
 . Declare `@ploaness/runtime` in each application's `dependencies`, matching its `ploaness` version.
 . Provide a reachable Docker daemon and network access to the package and advisory registries.
-. Before extended verification, pull the Playwright image the browser suite measures in, `mcr.microsoft.com/playwright:v<version>-noble` for the project's Playwright version. The suite runs offline against that image and never pulls the image itself; when the image is missing, the `e2e` gate prints the command that fetches the image.
+. Before delta or full verification, pull the Playwright image the browser suite measures in, `mcr.microsoft.com/playwright:v<version>-noble` for the project's Playwright version. The suite runs offline against that image and never pulls the image itself; when the image is missing, the `e2e` gate prints the command that fetches the image.
 
 [[adding-ploaness-to-a-project]]
 == Adding _ploaness_ to a Project
@@ -88,7 +89,7 @@ pnpm add -D ploaness@{ploaness-version}
 pnpm exec ploaness init && pnpm install
 ----
 +
-`ploaness init` writes the project's scripts, creates the configuration files that point at the shipped settings, and materializes the xref:#managed-files[managed files]. Existing member configurations are left in place. Root scripts and managed content are updated.
+`ploaness init` writes the project's scripts, creates the configuration files that point at the shipped settings, writes a nightly full verification workflow, and materializes the xref:#managed-files[managed files]. Existing member configurations and an existing workflow are left in place. Root scripts and managed content are updated.
 . Hand the project to a coding agent and ask the agent to bring the project up to the harness. `ploaness init` has already written the instructions that agent reads: a managed block at the top of `AGENTS.md` points at `.ploaness/agent-guide.md`, which describes the harness and the order to work in.
 
 [[commands]]
@@ -100,26 +101,32 @@ pnpm exec ploaness init && pnpm install
 |===
 | Command | Behavior
 
-| `ploaness verify`
-| Runs the default verification gates. Written as `pnpm run verify`.
+| `ploaness verify [quick]`
+| Runs the quick verification gates. Written as `pnpm run verify`.
 
-| `ploaness verify --extended`
-| Runs the default verification gates and the ten extended gates as well. Written as `pnpm run verify:full`.
+| `ploaness verify delta`
+| Runs the quick verification gates and the ten delta gates, with the browser sweep scoped to the change. Written as `pnpm run verify:delta`.
+
+| `ploaness verify full`
+| Runs the delta verification gates with the complete browser sweep in every engine. Written as `pnpm run verify:full`.
+
+| `ploaness scope [--json]`
+| Prints which routes and stories delta verification sweeps in the application where the command runs, and the reason for each.
 
 | `ploaness format`
 | Formats member-owned source with Biome, formats SCSS with the pinned Prettier settings, and applies the fixes ESLint can make unaided. Written as `pnpm run format`.
 
 | `ploaness sync`
-| Writes the xref:#managed-files[managed files], and names every file `ploaness sync` refuses to overwrite.
+| Writes the xref:#managed-files[managed files] and the verification scripts, and names every file `ploaness sync` refuses to overwrite.
 
 | `ploaness init`
 | Writes the scripts, the configuration files, and the xref:#managed-files[managed files].
 
 | `ploaness gate <id> [--verbose]`
-| Runs one xref:#gate[gate]. `--verbose` also prints the whole unedited output of that gate's analyzer.
+| Runs one xref:#gate[gate] at the delta level. `--verbose` also prints the whole unedited output of that gate's analyzer.
 
 | `ploaness gates`
-| Prints every xref:#gate[gate] in run order.
+| Prints every xref:#gate[gate] in run order, with the level that first runs the gate.
 
 | `ploaness sbom --artifact <file> [--artifact <file> ...] [--output <directory>]`
 | Exports a dependency inventory and release metadata to `dist/sbom/` by default.

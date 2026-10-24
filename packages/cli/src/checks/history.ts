@@ -20,7 +20,7 @@ const nonEmptyLines = (raw: string): readonly string[] =>
 const shasOf = (context: Context, revisionArguments: readonly string[]): readonly string[] =>
   nonEmptyLines(git(context, ['rev-list', ...revisionArguments]))
 
-/** Extended verification walks every commit, so a shallow clone is rejected up front. */
+/** Delta and full verification walk every commit, so a shallow clone is rejected up front. */
 // Enough of a commit hash to identify it in a report without filling the line.
 const SHORT_SHA_LENGTH: number = 9
 

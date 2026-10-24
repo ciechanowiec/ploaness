@@ -83,11 +83,15 @@ manual repair before synchronization. Generated application files change through
    seeds missing configuration files, and synchronizes managed content; it leaves existing member
    configurations in place. `sync` repairs managed files, not project-owned configuration stubs.
 3. Implement the change and its meaningful tests. Run `pnpm run format` to apply Biome and ESLint fixes.
-4. Use `pnpm run verify` during development. Use `pnpm exec ploaness gate <id> --verbose` to diagnose
-   an individual gate; its analyzer output is evidence for that gate alone.
-5. Run `pnpm run verify:full` before finishing. It includes history, production build, bundle, and
-   browser checks, writes the dependency inventory and the compliance report, and must reach the
-   final tree check without a failure.
+4. Use `pnpm run verify` (quick verification) during development. Use
+   `pnpm exec ploaness gate <id> --verbose` to diagnose an individual gate; its analyzer output is
+   evidence for that gate alone.
+5. Run `pnpm run verify:delta` before finishing. It adds history, production build, bundle, and the
+   browser suite, with the browser sweep scoped to the routes and stories the change reaches; it writes
+   the dependency inventory and the compliance report, and must reach the final tree check without a
+   failure. `pnpm run verify:full` sweeps every route and story in every engine. It belongs to CI,
+   nightly on the default branch and on each release commit; run it locally only to reproduce a CI
+   failure.
 6. Review the diff, commit, and verify the resulting commit. A commit changing more than two files or
    more than 50 added/deleted lines needs a body explaining why. Check a new message with
    `pnpm exec ploaness commit-message --range HEAD~1..HEAD`; the complete policy is in the guideline.
@@ -98,8 +102,9 @@ changes are reviewed and a subsequent run leaves it unchanged. Logs and build ar
 ignored locations. Do not edit source while a full run is in progress.
 
 `--enforce=false` surveys findings and exits zero; that exit status is not a pass. Failed preconditions
-still stop the survey. `ploaness gates` lists the current registry; `--scope=repository --ids` restricts
-that listing. Neither a diagnostic subset nor a survey replaces full verification.
+still stop the survey. `ploaness gates` lists the current registry with the level that first runs each
+gate; `--scope=repository --ids` restricts that listing. Neither a diagnostic subset nor a survey
+replaces delta verification.
 
 When a correct program is blocked by a reproducible harness defect, repair it in Ploaness. Preserve the
 failing output and a minimal synthetic reproduction. A consumer must not weaken a check to hide a
@@ -107,10 +112,11 @@ harness bug. A managed sweep can contain a defect just as another check can.
 
 ## Gates
 
-Default verification runs 38 gates. These are gate definitions; workspace members can produce multiple
-invocations of a package gate. `tree-verify` runs after all other gates in either tier.
+There are three levels, and each contains the one before it. Quick verification (`ploaness verify`,
+`pnpm run verify`) runs 38 gates. These are gate definitions; workspace members can produce multiple
+invocations of a package gate. `tree-verify` runs after all other gates at every level.
 
-### Default Verification Gates
+### Quick Verification Gates
 
 | Gate | Scope | What it verifies |
 | --- | --- | --- |
@@ -153,9 +159,12 @@ invocations of a package gate. `tree-verify` runs after all other gates in eithe
 | `tests` | package | The suite and its per-file coverage floors, under the network guard and the shuffle. Asynchronous assertions must be awaited. |
 | `tree-verify` | repository | The working tree is unchanged since `tree-snapshot` ran. |
 
-### Extended Verification Gates
+### Delta Verification Gates
 
-Extended verification adds 10 gates before the final tree check.
+Delta verification (`ploaness verify delta`, `pnpm run verify:delta`) adds 10 gates before the final
+tree check. Full verification (`ploaness verify full`, `pnpm run verify:full`) runs the same gates; what
+it adds is the complete browser sweep, every route and story in Chromium, Firefox and WebKit. Outside
+CI it first states that cost.
 
 | Gate | Scope | What it verifies |
 | --- | --- | --- |
@@ -166,7 +175,7 @@ Extended verification adds 10 gates before the final tree check.
 | `linear-history` | repository | No merge commit anywhere in the history. |
 | `build` | package | The production build. |
 | `bundle` | package | The gzipped client JavaScript in Next's configured production output stays under the bundle budget. |
-| `e2e` | package | The end-to-end suite in the pinned browsers, including the three sweeps ploaness ships into it; the browser sweep runs every pass in Chromium and its engine pass in Firefox and WebKit. |
+| `e2e` | package | The end-to-end suite in the pinned browsers, including the three sweeps ploaness ships into it. At delta the browser sweep covers what the change reaches, in Chromium; at full it runs every pass in Chromium over everything and its engine pass in Firefox and WebKit. |
 | `sbom` | repository | Generates and validates the resolved workspace dependency inventory and its source metadata. |
 | `compliance-report` | repository | Writes the shareable compliance report from the inventory `sbom` wrote for the current tree. |
 
@@ -391,16 +400,16 @@ Vitest collects:
 - `tests/int/**/*.int.spec.ts` and `tests/int/**/*.int.spec.tsx` for integration behavior.
 
 The `e2e` gate always starts fresh application and auxiliary servers, locally as well as in CI.
-Full verification tests the production build already produced in that run. Running `ploaness gate e2e`
-builds first. Ordinary Next output uses `next start`; standalone output uses its generated server with
+Delta and full verification test the production build already produced in that run. Running
+`ploaness gate e2e` builds first and runs at the delta level. Ordinary Next output uses `next start`; standalone output uses its generated server with
 the public and static assets prepared under generated output. Bundle measurement resolves the same
 configured build directory and fails when that output is missing. Static exports and custom server layouts
 are unsupported and fail explicitly. The normal pretest and test wrapper still supply isolated services.
-Before running `ploaness verify --extended` or `ploaness gate e2e`, stop servers already listening at
-the configured `serverUrl` and `auxiliaryServers` addresses. An occupied port fails the gate even when
-its health endpoint is failing. Ploaness reports the address to release and leaves the existing process
-running. Direct local `pnpm exec playwright test` runs use development mode and may reuse existing servers; they do not establish
-a verification verdict.
+Before running `ploaness verify delta`, `ploaness verify full` or `ploaness gate e2e`, stop servers
+already listening at the configured `serverUrl` and `auxiliaryServers` addresses. An occupied port fails
+the gate even when its health endpoint is failing. Ploaness reports the address to release and leaves
+the existing process running. Direct local `pnpm exec playwright test` runs use development mode and
+may reuse existing servers; they do not establish a verification verdict.
 
 The `e2e` gate measures in the browsers of the Playwright image matching the project's resolved
 Playwright, `mcr.microsoft.com/playwright:v<version>-noble`, started in Docker for the run and removed
@@ -590,3 +599,38 @@ Each exemption counts toward the suppression ceiling. A missing reason, an unkno
 the exemption excused in no pass, viewport, engine or state fail the sweep. Page-level rules -
 `page-error`, `failed-request`, `broken-link`, `page-not-stable`, `font-load` - and axe take no element
 exemption. A false positive is a defect of the rule; report it upstream rather than exempting it.
+
+### Change Scope
+
+Delta verification sweeps only the routes and stories a change can affect, in Chromium. The change is
+everything that differs from the merge-base of `HEAD` with the remote-tracking default branch of the
+first remote (`origin/main` when `origin/HEAD` is not recorded): commits not on it, staged and unstaged
+edits, and untracked files that are not ignored. Local `main` is never the baseline, so unpushed commits
+on it are checked. Nothing is fetched and nothing is remembered between runs; a stale `origin/main` only
+widens the change. CI must check out with the default branch present, for example `fetch-depth: 0`.
+
+A changed module reaches a route when the route's page, or a layout, template, loading, error or
+not-found module above it, imports it directly or transitively, and a story when its story file does,
+through the import graph the `arch` gate's analyzer resolves. A crawled route no file declares, and a
+story outside the application, are swept. Discovery still crawls every route, so broken links and
+security headers are judged everywhere.
+
+The sweep covers everything, and says why, when there is no baseline (no remote-tracking default branch,
+a shallow clone, no merge-base) or when a changed file is a global input: the lockfile, the workspace
+file, `.npmrc`, `.nvmrc`, a manifest, `tsconfig.json`, the Next.js, Tailwind or PostCSS configuration,
+middleware, proxy or instrumentation, an environment file, anything under `public/`, the Storybook
+configuration, a stylesheet that is not a CSS module, the root layout, a file under a source root that
+the import graph does not hold, or any file of a member the application starts as an auxiliary server
+or depends on. Documentation, workflows, tests and tool configuration outside the source roots change
+no page.
+
+The scope follows imports, not data: content a seed script or a migration writes reaches the pages that
+show it only through full verification. Full verification of the default branch is what makes a scoped
+run safe.
+
+`pnpm exec ploaness scope` prints the scope of the application it runs in without running anything, and
+`--json` prints the document the `e2e` gate hands the sweep. `coverage.txt` begins with the same scope:
+the level, the baseline commit, every changed file, each swept route and story with its reason, and how
+many were not reached. A scoped pass is reported as scoped, never as complete coverage. `ploaness init`
+writes `.github/workflows/verify-full.yml`, which runs full verification nightly and on release tags;
+it is the project's from then on, so a project verifying elsewhere replaces it.

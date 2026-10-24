@@ -3,7 +3,7 @@
 //
 // Everything here is policy rather than preference. `forbidOnly` is the end-to-end analogue of the
 // focused-test ban ploaness already enforces for Vitest: a left-behind `test.only` would otherwise turn
-// a local extended run into one green test. The project's own specs run on one worker, because they
+// a local browser-level run into one green test. The project's own specs run on one worker, because they
 // may share database state and one server; the managed sweep's tests each load their pages fresh and
 // judge each one alone, so they spread over parallel workers without any verdict depending on it. The
 // project-specific inputs are the origin and any server its own specs need started beside the
@@ -19,6 +19,7 @@ import {
   browserServerEndpoint,
   CLOCK_ENVIRONMENT_VARIABLE,
   canReuseBrowserServer,
+  coversEveryEngine,
   DEVICE_SCALE_FACTOR,
   portOf,
   REAL_CLOCK,
@@ -95,7 +96,8 @@ const remote: Readonly<Record<string, unknown>> =
         },
       }
 
-// The sweep alone runs in the other engines; a project's own specs describe its behaviour once.
+// The sweep alone runs in the other engines; a project's own specs describe its behaviour once. A
+// `delta` run's change scope keeps the sweep in Chromium.
 const SWEEP_SPEC: RegExp = /a11y\.e2e\.spec\.ts$/u
 
 const chromiumDevice: Readonly<Record<string, unknown>> = {
@@ -168,9 +170,8 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
       fullyParallel: true,
       use: chromiumDevice,
     },
-    ...(browserEndpoint === undefined
-      ? []
-      : [
+    ...(coversEveryEngine(process.env)
+      ? [
           {
             name: 'sweep-firefox',
             testMatch: SWEEP_SPEC,
@@ -187,7 +188,8 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
             fullyParallel: true,
             use: { ...devices['Desktop Safari'], deviceScaleFactor: DEVICE_SCALE_FACTOR },
           },
-        ]),
+        ]
+      : []),
     { name: SWEEP_SUMMARY, testMatch: SWEEP_SPEC, grep: /@ploaness-summary/u, use: chromiumDevice },
   ],
   // Auxiliary servers first, then the application under test. Playwright awaits each entry in this

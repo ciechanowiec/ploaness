@@ -7,9 +7,9 @@ const MEMBERS: readonly MemberDescriptor[] = [
   { path: 'packages/shared', isPayload: false },
 ]
 
-describe('mandatory full-run inventory', () => {
+describe('mandatory browser-level inventory', () => {
   it('generates one repository inventory after all member checks and before the final tree check', () => {
-    const plan: readonly PlanStep[] = planSteps(ALL_GATES, MEMBERS, true)
+    const plan: readonly PlanStep[] = planSteps(ALL_GATES, MEMBERS, 'delta')
     expect(plan.filter((step: PlanStep): boolean => step.gateId === 'sbom')).toEqual([
       { gateId: 'sbom', member: undefined },
     ])
@@ -21,7 +21,7 @@ describe('mandatory full-run inventory', () => {
   })
 
   it('keeps inventory generation outside the declared development subset', () => {
-    const plan: readonly PlanStep[] = planSteps(ALL_GATES, MEMBERS, false)
+    const plan: readonly PlanStep[] = planSteps(ALL_GATES, MEMBERS, 'quick')
     expect(plan.some((step: PlanStep): boolean => step.gateId === 'sbom' || step.gateId === 'compliance-report')).toBe(
       false,
     )

@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   canRunBuiltBrowser,
+  coversLevel,
   type GateDescriptor,
   type GateScope,
+  isVerificationLevel,
   type MemberDescriptor,
   type PlanStep,
   planSteps,
   recordBuildSuccess,
+  type VerificationLevel,
 } from '../src/run-plan.js'
 
 describe('production build evidence', () => {
@@ -35,58 +38,58 @@ describe('production build evidence', () => {
 // than imported from the CLI because governance may not depend on it - and because a copy that has to
 // agree with the real registry is exactly what `gate-scopes.spec.ts` asserts on the CLI side. What is
 // pinned HERE is the ordering rule; what is pinned THERE is that the registry still says this.
-const REGISTRY: readonly (readonly [string, GateScope, boolean])[] = [
-  ['preflight', 'repository', false],
-  ['wiring', 'repository', false],
-  ['assets', 'repository', false],
-  ['tree-snapshot', 'repository', false],
-  ['types', 'package', false],
-  ['biome', 'package', false],
-  ['biome-schema', 'repository', false],
-  ['eslint', 'package', false],
-  ['conventions', 'repository', false],
-  ['editorconfig', 'repository', false],
-  ['suppressions', 'package', false],
-  ['css', 'package', false],
-  ['tailwind-tokens', 'package', false],
-  ['arch', 'package', false],
-  ['type-coverage', 'package', false],
-  ['payload-generated', 'payload', false],
-  ['generated-denial', 'repository', false],
-  ['payload-rules', 'payload', false],
-  ['config-refs', 'package', false],
-  ['secrets', 'repository', false],
-  ['licenses', 'repository', false],
-  ['vulnerabilities', 'repository', false],
-  ['install-scripts', 'repository', false],
-  ['release-age', 'repository', false],
-  ['deps', 'repository', false],
-  ['image-assets', 'repository', false],
-  ['docs', 'repository', false],
-  ['skills', 'repository', false],
-  ['docker', 'repository', false],
-  ['actions', 'repository', false],
-  ['knip', 'package', false],
-  ['tests', 'package', false],
-  ['require-full-history', 'repository', true],
-  ['commit-history', 'repository', true],
-  ['linear-history', 'repository', true],
-  ['build', 'package', true],
-  ['bundle', 'package', true],
-  ['e2e', 'package', true],
-  ['tree-verify', 'repository', false],
+const REGISTRY: readonly (readonly [string, GateScope, VerificationLevel])[] = [
+  ['preflight', 'repository', 'quick'],
+  ['wiring', 'repository', 'quick'],
+  ['assets', 'repository', 'quick'],
+  ['tree-snapshot', 'repository', 'quick'],
+  ['types', 'package', 'quick'],
+  ['biome', 'package', 'quick'],
+  ['biome-schema', 'repository', 'quick'],
+  ['eslint', 'package', 'quick'],
+  ['conventions', 'repository', 'quick'],
+  ['editorconfig', 'repository', 'quick'],
+  ['suppressions', 'package', 'quick'],
+  ['css', 'package', 'quick'],
+  ['tailwind-tokens', 'package', 'quick'],
+  ['arch', 'package', 'quick'],
+  ['type-coverage', 'package', 'quick'],
+  ['payload-generated', 'payload', 'quick'],
+  ['generated-denial', 'repository', 'quick'],
+  ['payload-rules', 'payload', 'quick'],
+  ['config-refs', 'package', 'quick'],
+  ['secrets', 'repository', 'quick'],
+  ['licenses', 'repository', 'quick'],
+  ['vulnerabilities', 'repository', 'quick'],
+  ['install-scripts', 'repository', 'quick'],
+  ['release-age', 'repository', 'quick'],
+  ['deps', 'repository', 'quick'],
+  ['image-assets', 'repository', 'quick'],
+  ['docs', 'repository', 'quick'],
+  ['skills', 'repository', 'quick'],
+  ['docker', 'repository', 'quick'],
+  ['actions', 'repository', 'quick'],
+  ['knip', 'package', 'quick'],
+  ['tests', 'package', 'quick'],
+  ['require-full-history', 'repository', 'delta'],
+  ['commit-history', 'repository', 'delta'],
+  ['linear-history', 'repository', 'delta'],
+  ['build', 'package', 'delta'],
+  ['bundle', 'package', 'delta'],
+  ['e2e', 'package', 'delta'],
+  ['tree-verify', 'repository', 'quick'],
 ]
 
 const GATES: readonly GateDescriptor[] = REGISTRY.map(
-  ([id, scope, isExtended]: readonly [string, GateScope, boolean]): GateDescriptor => ({
+  ([id, scope, level]: readonly [string, GateScope, VerificationLevel]): GateDescriptor => ({
     id,
     scope,
-    isExtended,
+    level,
   }),
 )
 
 // The sequence ploaness ran before it knew about members. Every id, in the order `ploaness gates`
-// printed them, filtered to Default verification. If this list needs editing to make a test pass, the
+// printed them, filtered to quick verification. If this list needs editing to make a test pass, the
 // refactor has changed what a single-package project experiences and the change is the defect.
 const DEFAULT_SEQUENCE: readonly string[] = [
   'preflight',
@@ -124,7 +127,7 @@ const DEFAULT_SEQUENCE: readonly string[] = [
   'tree-verify',
 ]
 
-const EXTENDED_ADDITIONS: ReadonlySet<string> = new Set([
+const DELTA_ADDITIONS: ReadonlySet<string> = new Set([
   'require-full-history',
   'commit-history',
   'linear-history',
@@ -137,25 +140,47 @@ const SOLE_PAYLOAD_MEMBER: readonly MemberDescriptor[] = [{ path: '.', isPayload
 
 const idsOf = (steps: readonly PlanStep[]): readonly string[] => steps.map((step: PlanStep): string => step.gateId)
 
+const LEVELS: readonly VerificationLevel[] = ['quick', 'delta', 'full']
+
+describe('verification levels', () => {
+  it('names exactly the three levels', () => {
+    expect(
+      ['quick', 'delta', 'full', 'extended', 'Full', ''].filter((word: string) => isVerificationLevel(word)),
+    ).toEqual(LEVELS)
+  })
+
+  it('makes each level contain the one before it and nothing after it', () => {
+    expect(coversLevel('quick', 'quick')).toBe(true)
+    expect(coversLevel('quick', 'delta')).toBe(false)
+    expect(coversLevel('delta', 'quick')).toBe(true)
+    expect(coversLevel('full', 'delta')).toBe(true)
+    expect(coversLevel('delta', 'full')).toBe(false)
+  })
+})
+
 describe('planSteps', () => {
   it('reproduces the single-package run order exactly', () => {
-    expect(idsOf(planSteps(GATES, SOLE_PAYLOAD_MEMBER, false))).toEqual(DEFAULT_SEQUENCE)
+    expect(idsOf(planSteps(GATES, SOLE_PAYLOAD_MEMBER, 'quick'))).toEqual(DEFAULT_SEQUENCE)
   })
 
-  it('adds the extended gates without reordering the default ones', () => {
-    const extended: readonly string[] = idsOf(planSteps(GATES, SOLE_PAYLOAD_MEMBER, true))
-    expect(extended.filter((id: string): boolean => !EXTENDED_ADDITIONS.has(id))).toEqual(DEFAULT_SEQUENCE)
+  it('adds the delta gates without reordering the quick ones', () => {
+    const delta: readonly string[] = idsOf(planSteps(GATES, SOLE_PAYLOAD_MEMBER, 'delta'))
+    expect(delta.filter((id: string): boolean => !DELTA_ADDITIONS.has(id))).toEqual(DEFAULT_SEQUENCE)
   })
 
-  it('ends both modes with the working-tree fingerprint', () => {
-    for (const isExtended of [false, true]) {
-      expect(idsOf(planSteps(GATES, SOLE_PAYLOAD_MEMBER, isExtended)).at(-1)).toBe('tree-verify')
+  it('runs the same gates at full as at delta', () => {
+    expect(planSteps(GATES, SOLE_PAYLOAD_MEMBER, 'full')).toEqual(planSteps(GATES, SOLE_PAYLOAD_MEMBER, 'delta'))
+  })
+
+  it('ends every level with the working-tree fingerprint', () => {
+    for (const level of LEVELS) {
+      expect(idsOf(planSteps(GATES, SOLE_PAYLOAD_MEMBER, level)).at(-1)).toBe('tree-verify')
     }
   })
 
-  it('leads both modes with the two preconditions', () => {
-    for (const isExtended of [false, true]) {
-      expect(idsOf(planSteps(GATES, SOLE_PAYLOAD_MEMBER, isExtended)).slice(0, 2)).toEqual(['preflight', 'wiring'])
+  it('leads every level with the two preconditions', () => {
+    for (const level of LEVELS) {
+      expect(idsOf(planSteps(GATES, SOLE_PAYLOAD_MEMBER, level)).slice(0, 2)).toEqual(['preflight', 'wiring'])
     }
   })
 })
@@ -169,7 +194,7 @@ describe('planSteps across members', () => {
         { path: 'apps/web', isPayload: true },
         { path: 'apps/admin', isPayload: true },
       ],
-      false,
+      'quick',
     )
     expect(steps.filter((step: PlanStep): boolean => step.gateId === 'conventions')).toEqual([
       { gateId: 'conventions', member: undefined },
@@ -183,7 +208,7 @@ describe('planSteps across members', () => {
         { path: '.', isPayload: false },
         { path: 'apps/web', isPayload: true },
       ],
-      false,
+      'quick',
     )
     expect(
       steps
@@ -201,7 +226,7 @@ describe('planSteps scope selection', () => {
         { path: '.', isPayload: false },
         { path: 'apps/web', isPayload: true },
       ],
-      false,
+      'quick',
     )
     expect(
       steps
@@ -211,7 +236,7 @@ describe('planSteps scope selection', () => {
   })
 
   it('runs no package-scope gate when a repository has no governed member', () => {
-    const steps: readonly PlanStep[] = planSteps(GATES, [], false)
+    const steps: readonly PlanStep[] = planSteps(GATES, [], 'quick')
     expect(idsOf(steps)).not.toContain('types')
     expect(idsOf(steps)).toContain('preflight')
   })
@@ -223,7 +248,7 @@ describe('planSteps scope selection', () => {
         { path: 'apps/web', isPayload: true },
         { path: 'apps/admin', isPayload: true },
       ],
-      false,
+      'quick',
     )
     const window: readonly string[] = idsOf(steps).slice(
       idsOf(steps).indexOf('types'),

@@ -47,22 +47,26 @@ const statedCount = (source: string, pattern: RegExp): number => {
   const index: number = COUNT_WORDS.indexOf(value)
   return index === -1 ? Number(value) : index
 }
-const extended: readonly Gate[] = ALL_GATES.filter((gate: Gate): boolean => gate.isExtended)
+const delta: readonly Gate[] = ALL_GATES.filter((gate: Gate): boolean => gate.level === 'delta')
 
 describe('the installed gate reference', () => {
   it('states the actual registry counts in both documents', () => {
     for (const source of [README, GUIDE]) {
-      expect(statedCount(source, /Default verification runs (\d+) gates/)).toBe(gatesFor(false).length)
-      expect(statedCount(source, /Extended verification adds (\w+)/)).toBe(extended.length)
+      expect(statedCount(source, /Quick verification (?:\([^)]*\) )?runs (\d+) gates/)).toBe(gatesFor('quick').length)
+      expect(statedCount(source, /Delta verification (?:\([^)]*\) )?adds (\w+)/)).toBe(delta.length)
     }
   })
 
-  it('lists every default gate in registry order with its actual scope', () => {
-    expect(gateRows('### Default Verification Gates')).toEqual(expectedRows(gatesFor(false)))
+  it('lists every quick gate in registry order with its actual scope', () => {
+    expect(gateRows('### Quick Verification Gates')).toEqual(expectedRows(gatesFor('quick')))
   })
 
-  it('lists only the extended gates in registry order with their actual scopes', () => {
-    expect(gateRows('### Extended Verification Gates')).toEqual(expectedRows(extended))
+  it('lists only the delta gates in registry order with their actual scopes', () => {
+    expect(gateRows('### Delta Verification Gates')).toEqual(expectedRows(delta))
+  })
+
+  it('runs the same gates at full as at delta', () => {
+    expect(gatesFor('full')).toEqual(gatesFor('delta'))
   })
 
   it('documents every consumer setting exactly once', () => {

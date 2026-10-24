@@ -10,6 +10,7 @@
 // mistaken for a hung one. Everything else - a pipe, a file, CI, an agent reading the log - gets plain
 // ASCII whose "[PASS] <id>" token stays greppable and carries no escape sequence to strip.
 
+import type { VerificationLevel } from '@ploaness/governance'
 import type { GateResult } from './exec.js'
 import type { Gate } from './gates.js'
 
@@ -133,9 +134,9 @@ const spread = (left: string, right: string, decoratedLeft: string): string => {
     : `${decoratedLeft}${' '.repeat(gap)}${paint(right, DIM)}`
 }
 
-/** Print the run header naming the mode and how many gates it covers. */
-export const reportHeader = (isExtended: boolean, gateCount: number): void => {
-  const mode: string = isExtended ? 'extended verification' : 'default verification'
+/** Print the run header naming the level and how many gates it covers. */
+export const reportHeader = (level: VerificationLevel, gateCount: number): void => {
+  const mode: string = `${level} verification`
   line('')
   line(`  ${paint('ploaness', BOLD)} ${paint(mode, DIM)}  ${String(gateCount)} gates`)
   line('')
@@ -149,8 +150,8 @@ export const beginGate = (gate: Gate, width: number): void => {
   write(`  ${paint('.', DIM)} ${gate.id.padEnd(width)}  ${paint('running', DIM)}`)
 }
 
-// A gate prints its findings or update report where it ran, not at the end of the run. Extended
-// verification is thirty-eight gates and several minutes; deferring the detail puts it minutes away from
+// A gate prints its findings or update report where it ran, not at the end of the run. Delta
+// verification runs dozens of gates over many minutes; deferring the detail puts it minutes away from
 // the line that announced it. The closing verdict still names every failed gate.
 const reportGateFindings = (outcome: GateOutcome): void => {
   const verdict: string = verdictOf(outcome.result)
@@ -237,7 +238,7 @@ const tally = (outcomes: readonly GateOutcome[], verdict: string): number =>
 /** Print the closing verdict and return the process exit code. */
 export const reportVerdict = (
   outcomes: readonly GateOutcome[],
-  isExtended: boolean,
+  level: VerificationLevel,
   isEnforced: boolean,
   totalDurationMs: number = outcomes.reduce((sum: number, outcome: GateOutcome): number => sum + outcome.durationMs, 0),
 ): number => {
@@ -247,7 +248,7 @@ export const reportVerdict = (
     `${String(failures.length)} failed`,
     `${String(outcomes.length)} gates`,
   ].join('  ')
-  const mode: string = isExtended ? 'Extended verification' : 'Default verification'
+  const mode: string = `${level.charAt(0).toUpperCase()}${level.slice(1)} verification`
   const summary: string = `${counts}  total: ${duration(totalDurationMs)}`
   line('')
   line(`  ${paint(summary, DIM)}`)

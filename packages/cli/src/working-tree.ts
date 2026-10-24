@@ -47,3 +47,14 @@ export const workingTreeFingerprint = (root: string): string =>
       JSON.stringify(workingTreeFiles(root).map((file: string): readonly (string | number)[] => fileState(root, file))),
     )
     .digest('hex')
+
+/** The non-ignored untracked half of the inventory: files Git would add, but has not yet. */
+export const untrackedWorkingTreeFiles = (root: string): readonly string[] =>
+  execFileSync('git', ['ls-files', '-z', '--others', '--exclude-standard'], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: MAX_OUTPUT_MIB * KIB_PER_MIB * BYTES_PER_KIB,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+    .split('\0')
+    .filter((file: string): boolean => file !== '')

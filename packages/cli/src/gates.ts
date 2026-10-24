@@ -1,6 +1,13 @@
 // Registry order is run order: structural preconditions precede analyzers, and tree verification is last.
 
-import { type GateDescriptor, type MemberDescriptor, type PlanStep, planSteps } from '@ploaness/governance'
+import {
+  coversLevel,
+  type GateDescriptor,
+  type MemberDescriptor,
+  type PlanStep,
+  planSteps,
+  type VerificationLevel,
+} from '@ploaness/governance'
 import { assets } from './checks/assets.js'
 import { blocklist } from './checks/blocklist.js'
 import { complianceReport } from './checks/compliance-report.js'
@@ -26,7 +33,7 @@ import { build, endToEnd, tests } from './checks/tests.js'
 import { architecture, biome, biomeSchema, css, eslint, knip, typeCoverage, types } from './checks/toolchain.js'
 import { treeSnapshot, treeVerify } from './checks/tree.js'
 import { wiring } from './checks/wiring.js'
-import type { Member, Repository } from './context.js'
+import type { GateRun, Member, Repository } from './context.js'
 import type { GateResult } from './exec.js'
 
 /** What every gate declares, whatever it judges. */
@@ -35,8 +42,8 @@ interface GateMeta {
   readonly id: string
   /** What the gate is checking, shown in the run log. */
   readonly title: string
-  /** True when the gate belongs to extended verification only. */
-  readonly isExtended: boolean
+  /** The lowest verification level that runs the gate. */
+  readonly level: VerificationLevel
   /**
    * True when a failure here makes every later gate meaningless rather than merely unreported, which is
    * what stops even a report-only run. `preflight` decides whether ploaness may judge this project at
@@ -58,20 +65,20 @@ interface GateMeta {
 export type Gate =
   | (GateMeta & {
       readonly scope: 'repository'
-      readonly run: (repository: Repository) => GateResult | Promise<GateResult>
+      readonly run: (repository: Repository, run: GateRun) => GateResult | Promise<GateResult>
     })
   | (GateMeta & {
       readonly scope: 'package' | 'payload'
-      readonly run: (member: Member) => GateResult | Promise<GateResult>
+      readonly run: (member: Member, run: GateRun) => GateResult | Promise<GateResult>
     })
 
-/** Default verification: the gates that run on every invocation. */
-const DEFAULT_GATES: readonly Gate[] = [
+/** Quick verification: the static gates that run on every invocation. */
+const QUICK_GATES: readonly Gate[] = [
   {
     id: 'preflight',
     scope: 'repository',
     title: 'supported Payload project',
-    isExtended: false,
+    level: 'quick',
     isPrecondition: true,
     run: preflight,
   },
@@ -79,89 +86,89 @@ const DEFAULT_GATES: readonly Gate[] = [
     id: 'wiring',
     scope: 'repository',
     title: 'harness wiring',
-    isExtended: false,
+    level: 'quick',
     isPrecondition: true,
     run: wiring,
   },
-  { id: 'assets', scope: 'repository', title: 'managed files', isExtended: false, run: assets },
+  { id: 'assets', scope: 'repository', title: 'managed files', level: 'quick', run: assets },
   {
     id: 'tree-snapshot',
     scope: 'repository',
     title: 'working-tree fingerprint',
-    isExtended: false,
+    level: 'quick',
     run: treeSnapshot,
   },
-  { id: 'types', scope: 'package', title: 'strict type check', isExtended: false, run: types },
+  { id: 'types', scope: 'package', title: 'strict type check', level: 'quick', run: types },
   {
     id: 'biome',
     scope: 'package',
     title: 'formatting and fast lint',
-    isExtended: false,
+    level: 'quick',
     run: biome,
   },
   {
     id: 'biome-schema',
     scope: 'repository',
     title: 'Biome schema drift',
-    isExtended: false,
+    level: 'quick',
     run: biomeSchema,
   },
   {
     id: 'oxlint',
     scope: 'package',
     title: 'Native JavaScript and TypeScript rules',
-    isExtended: false,
+    level: 'quick',
     run: oxlint,
   },
-  { id: 'eslint', scope: 'package', title: 'type-aware lint', isExtended: false, run: eslint },
+  { id: 'eslint', scope: 'package', title: 'type-aware lint', level: 'quick', run: eslint },
   {
     id: 'conventions',
     scope: 'repository',
     title: 'source conventions',
-    isExtended: false,
+    level: 'quick',
     run: conventions,
   },
   {
     id: 'editorconfig',
     scope: 'repository',
     title: 'committed formatting',
-    isExtended: false,
+    level: 'quick',
     run: editorconfig,
   },
   {
     id: 'suppressions',
     scope: 'package',
     title: 'suppression ceiling',
-    isExtended: false,
+    level: 'quick',
     run: suppressions,
   },
-  { id: 'css', scope: 'package', title: 'style sheets', isExtended: false, run: css },
+  { id: 'css', scope: 'package', title: 'style sheets', level: 'quick', run: css },
   {
     id: 'tailwind-tokens',
     scope: 'package',
     title: 'token-bound Tailwind values',
-    isExtended: false,
+    level: 'quick',
     run: tailwindTokens,
   },
   {
     id: 'arch',
     scope: 'package',
     title: 'module architecture',
-    isExtended: false,
+    level: 'quick',
     run: architecture,
   },
   {
     id: 'type-coverage',
     scope: 'package',
     title: 'type coverage',
-    isExtended: false,
+    level: 'quick',
     run: typeCoverage,
   },
   {
     id: 'payload-generated',
     scope: 'payload',
     title: 'generated Payload artefacts',
-    isExtended: false,
+    level: 'quick',
     run: payloadGenerated,
   },
   {
@@ -170,14 +177,14 @@ const DEFAULT_GATES: readonly Gate[] = [
     id: 'payload-defaults',
     scope: 'payload',
     title: 'access decided in the built configuration',
-    isExtended: false,
+    level: 'quick',
     run: payloadDefaults,
   },
   {
     id: 'generated-denial',
     scope: 'repository',
     title: 'generated files denied',
-    isExtended: false,
+    level: 'quick',
     run: generatedDenial,
   },
   {
@@ -186,7 +193,7 @@ const DEFAULT_GATES: readonly Gate[] = [
     // it here meant it ran only where Payload did.
     scope: 'package',
     title: 'source usage rules',
-    isExtended: false,
+    level: 'quick',
     run: payloadRules,
   },
   {
@@ -195,43 +202,43 @@ const DEFAULT_GATES: readonly Gate[] = [
     id: 'admin-views',
     scope: 'payload',
     title: 'custom admin views scanned',
-    isExtended: false,
+    level: 'quick',
     run: adminViews,
   },
   {
     id: 'config-refs',
     scope: 'package',
     title: 'config references',
-    isExtended: false,
+    level: 'quick',
     run: configReferences,
   },
-  { id: 'secrets', scope: 'repository', title: 'secret scan', isExtended: false, run: secrets },
+  { id: 'secrets', scope: 'repository', title: 'secret scan', level: 'quick', run: secrets },
   {
     id: 'licenses',
     scope: 'repository',
     title: 'dependency licenses',
-    isExtended: false,
+    level: 'quick',
     run: licenses,
   },
   {
     id: 'vulnerabilities',
     scope: 'repository',
     title: 'known vulnerabilities',
-    isExtended: false,
+    level: 'quick',
     run: vulnerabilities,
   },
   {
     id: 'install-scripts',
     scope: 'repository',
     title: 'install-script allowlist',
-    isExtended: false,
+    level: 'quick',
     run: installScripts,
   },
   {
     id: 'release-age',
     scope: 'repository',
     title: 'release-age floor',
-    isExtended: false,
+    level: 'quick',
     run: releaseAge,
   },
   // Before `deps`, so a refused image or package is named before the freshness report that has to
@@ -240,21 +247,21 @@ const DEFAULT_GATES: readonly Gate[] = [
     id: 'blocklist',
     scope: 'repository',
     title: 'refused images and packages',
-    isExtended: false,
+    level: 'quick',
     run: blocklist,
   },
   {
     id: 'deps',
     scope: 'repository',
     title: 'dependency freshness',
-    isExtended: false,
+    level: 'quick',
     run: dependencyFreshness,
   },
   {
     id: 'image-assets',
     scope: 'repository',
     title: 'image integrity',
-    isExtended: false,
+    level: 'quick',
     run: imageAssets,
   },
   {
@@ -263,14 +270,14 @@ const DEFAULT_GATES: readonly Gate[] = [
     id: 'environment',
     scope: 'repository',
     title: 'environment variable coherence',
-    isExtended: false,
+    level: 'quick',
     run: environment,
   },
   {
     id: 'docs',
     scope: 'repository',
     title: 'agent documentation references',
-    isExtended: false,
+    level: 'quick',
     // The gate identifiers are supplied as reserved words: documenting a gate must not be read as a
     // reference to a script that no longer exists, since the two share a vocabulary. ALL_GATES is read
     // when the gate runs, by which point this module has finished initialising.
@@ -281,104 +288,105 @@ const DEFAULT_GATES: readonly Gate[] = [
     id: 'skills',
     scope: 'repository',
     title: 'agent skill manifests',
-    isExtended: false,
+    level: 'quick',
     run: skills,
   },
   {
     id: 'docker',
     scope: 'repository',
     title: 'container definitions',
-    isExtended: false,
+    level: 'quick',
     run: containers,
   },
   {
     id: 'actions',
     scope: 'repository',
     title: 'workflow definitions',
-    isExtended: false,
+    level: 'quick',
     run: actions,
   },
   {
     id: 'knip',
     scope: 'package',
     title: 'dead code and unused dependencies',
-    isExtended: false,
+    level: 'quick',
     run: knip,
   },
-  { id: 'tests', scope: 'package', title: 'suite and coverage', isExtended: false, run: tests },
+  { id: 'tests', scope: 'package', title: 'suite and coverage', level: 'quick', run: tests },
 ]
 
 /**
- * Extended verification adds the shell scripts, the infrastructure definitions, history, build, bundle,
- * end-to-end checks, and a workspace dependency inventory.
+ * Delta verification adds the shell scripts, the infrastructure definitions, history, build, bundle,
+ * end-to-end checks, and a workspace dependency inventory. Full verification runs the same gates; what
+ * it adds is the complete browser sweep in every engine.
  */
-const EXTENDED_GATES: readonly Gate[] = [
+const DELTA_GATES: readonly Gate[] = [
   // First in the tier because it is the cheapest thing in it: a static read of the tracked scripts,
   // ahead of a production build that takes minutes. A broken deployment script should be reported
   // before the time is spent, not after.
-  { id: 'shell', scope: 'repository', title: 'shell scripts', isExtended: true, run: shell },
+  { id: 'shell', scope: 'repository', title: 'shell scripts', level: 'delta', run: shell },
   {
     id: 'infra',
     scope: 'repository',
     title: 'infrastructure definitions',
-    isExtended: true,
+    level: 'delta',
     run: infrastructure,
   },
   {
     id: 'require-full-history',
     scope: 'repository',
     title: 'full history present',
-    isExtended: true,
+    level: 'delta',
     run: requireFullHistory,
   },
   {
     id: 'commit-history',
     scope: 'repository',
     title: 'commit messages across the whole history',
-    isExtended: true,
-    run: commitHistory,
+    level: 'delta',
+    // Wrapped, because its second parameter is a revision range for the `commit-message` command.
+    run: (repository: Repository): GateResult => commitHistory(repository),
   },
   {
     id: 'linear-history',
     scope: 'repository',
     title: 'linear history',
-    isExtended: true,
+    level: 'delta',
     run: linearHistory,
   },
-  { id: 'build', scope: 'package', title: 'production build', isExtended: true, run: build },
-  { id: 'bundle', scope: 'package', title: 'client bundle budget', isExtended: true, run: bundle },
-  { id: 'e2e', scope: 'package', title: 'end-to-end suite', isExtended: true, run: endToEnd },
-  { id: 'sbom', scope: 'repository', title: 'dependency inventory', isExtended: true, run: sbomInventory },
+  { id: 'build', scope: 'package', title: 'production build', level: 'delta', run: build },
+  { id: 'bundle', scope: 'package', title: 'client bundle budget', level: 'delta', run: bundle },
+  { id: 'e2e', scope: 'package', title: 'end-to-end suite', level: 'delta', run: endToEnd },
+  { id: 'sbom', scope: 'repository', title: 'dependency inventory', level: 'delta', run: sbomInventory },
   {
     id: 'compliance-report',
     scope: 'repository',
     title: 'compliance report',
-    isExtended: true,
+    level: 'delta',
     run: complianceReport,
   },
 ]
 
-// Last in BOTH modes, which it was not. It closed `DEFAULT_GATES`, and the extended gates were appended
-// after it - so `build`, `bundle`, and `e2e` all ran once the fingerprint had already been compared.
-// `next build` rewriting a tracked file is exactly what this gate exists to catch, and extended
-// verification was the one mode that could not see it.
+// Last at every level. It once closed the static gates, with the browser-level gates appended after it,
+// so `build`, `bundle`, and `e2e` all ran once the fingerprint had already been compared - and `next
+// build` rewriting a tracked file is exactly what this gate exists to catch.
 const TREE_VERIFY: Gate = {
   id: 'tree-verify',
   scope: 'repository',
   title: 'working tree unchanged',
-  isExtended: false,
+  level: 'quick',
   run: treeVerify,
 }
 
 /** Every gate ploaness knows, in run order. */
-export const ALL_GATES: readonly Gate[] = [...DEFAULT_GATES, ...EXTENDED_GATES, TREE_VERIFY]
+export const ALL_GATES: readonly Gate[] = [...QUICK_GATES, ...DELTA_GATES, TREE_VERIFY]
 
 /**
- * The gates for one verification mode. Extended verification includes Default verification: the extra
- * gates are added rather than substituted, so `--extended` is never a different verdict about less.
+ * The gates for one verification level. Each level includes the one before it: the extra gates are
+ * added rather than substituted, so a later level is never a different verdict about less.
  */
-export const gatesFor = (isExtended: boolean): readonly Gate[] =>
-  isExtended ? ALL_GATES : [...DEFAULT_GATES, TREE_VERIFY]
+export const gatesFor = (level: VerificationLevel): readonly Gate[] =>
+  ALL_GATES.filter((gate: Gate): boolean => coversLevel(level, gate.level))
 
 /** Look up one gate by identifier. */
 export const gateById = (id: string): Gate | undefined => ALL_GATES.find((gate: Gate): boolean => gate.id === id)
@@ -392,7 +400,7 @@ export interface PlannedGate {
 const describe = (gate: Gate): GateDescriptor => ({
   id: gate.id,
   scope: gate.scope,
-  isExtended: gate.isExtended,
+  level: gate.level,
 })
 
 /**
@@ -402,17 +410,17 @@ const describe = (gate: Gate): GateDescriptor => ({
  * before members existed; this only zips that plan back onto the registry entries and the member
  * objects the gates are actually handed.
  * @param repository the repository being judged.
- * @param isExtended whether extended verification's gates are included.
+ * @param level the level the run was asked for.
  * @returns one planned invocation per step, in run order.
  */
-export const planFor = (repository: Repository, isExtended: boolean): readonly PlannedGate[] => {
+export const planFor = (repository: Repository, level: VerificationLevel): readonly PlannedGate[] => {
   const members: readonly MemberDescriptor[] = repository.members.map(
     (member: Member): MemberDescriptor => ({ path: member.path, isPayload: member.isPayload }),
   )
   return planSteps(
     ALL_GATES.map((gate: Gate): GateDescriptor => describe(gate)),
     members,
-    isExtended,
+    level,
   ).flatMap((step: PlanStep): readonly PlannedGate[] => {
     const gate: Gate | undefined = gateById(step.gateId)
     if (gate === undefined) {

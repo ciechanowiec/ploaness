@@ -31,6 +31,7 @@ import {
   runEnvironmentOverrides,
   type Settings,
   selectProjects,
+  type VerificationLevel,
 } from '@ploaness/governance'
 
 import { workingTreeFiles } from './working-tree.js'
@@ -91,6 +92,16 @@ export interface Repository extends Context {
   readonly members: readonly Member[]
   /** Every pnpm project the workspace selects, governed or not, for the anti-bypass rule. */
   readonly projects: readonly ProjectManifest[]
+}
+
+/**
+ * What a run tells every gate beside the thing it judges: the level it was asked for, which decides how
+ * much of the browser sweep `e2e` runs, and the repository, whose other members decide what a change
+ * in one of them reaches.
+ */
+export interface GateRun {
+  readonly level: VerificationLevel
+  readonly repository: Repository
 }
 
 /**

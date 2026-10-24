@@ -1,21 +1,15 @@
-// Scaffold missing member configurations, update root scripts, and synchronize managed content.
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import path from 'node:path'
+// Scaffold missing member configurations and scaffold files, then synchronize scripts and managed content.
 import {
-  asRecord,
   type MemberKind,
   type MemberWiringTargets,
   memberKindOf,
-  type ParsedJson,
-  parseJsonc,
-  REQUIRED_SCRIPTS,
   ROOT_MEMBER_PATH,
   requiredBiomeFiles,
   tsconfigPathsFor,
   VITEST_CONFIG_FILE,
   wiringTargetsFor,
 } from '@ploaness/governance'
-import { hasSeededFile } from '../checks/assets.js'
+import { hasSeededFile, writeScaffolds } from '../checks/assets.js'
 import type { Member, Repository } from '../context.js'
 import { sync } from './sync.js'
 
@@ -72,27 +66,6 @@ const stubs = (member: Member): Readonly<Record<string, string>> => {
   }
 }
 
-const patchPackageJson = (repository: Repository): readonly string[] => {
-  const file: string = path.join(repository.root, 'package.json')
-  if (!existsSync(file)) {
-    return ['package.json is missing, so the scripts were not written']
-  }
-  const read: ParsedJson = parseJsonc(readFileSync(file, 'utf8'))
-  if (read.problem !== undefined) {
-    return [`package.json is not valid JSON (${read.problem}), so the scripts were not written`]
-  }
-  const parsed: Record<string, unknown> = asRecord(read.value)
-  const scripts: Record<string, unknown> = {
-    ...asRecord(parsed['scripts']),
-    ...REQUIRED_SCRIPTS,
-  }
-  const updated: Record<string, unknown> = { ...parsed, scripts }
-  writeFileSync(file, `${JSON.stringify(updated, null, JSON_INDENT)}\n`)
-  return ['package.json: wrote the ploaness scripts']
-}
-
-// The scripts are written once, at the repository root: `pnpm run verify` is invoked there and fans out
-// from there, so a copy inside every member would be several entry points to one run.
 const memberNotes = (member: Member, isSolo: boolean): readonly string[] => {
   const label: string = isSolo || member.path === ROOT_MEMBER_PATH ? '' : `${member.path}/`
   return Object.entries(stubs(member)).map(([file, body]: readonly [string, string]): string =>
@@ -106,13 +79,17 @@ const memberNotes = (member: Member, isSolo: boolean): readonly string[] => {
 export const init = (repository: Repository): number => {
   const isSolo: boolean = repository.members.length <= 1
   const notes: readonly string[] = [
-    ...patchPackageJson(repository),
     ...repository.members.flatMap((member: Member): readonly string[] => memberNotes(member, isSolo)),
+    ...writeScaffolds(repository).map(([file, isWritten]: readonly [string, boolean]): string =>
+      isWritten ? `${file}: written` : `${file}: left alone because it already exists`,
+    ),
   ]
   for (const note of notes) {
     console.info(`  ${note}`)
   }
-  // `sync` writes the managed files and merges the write denial into the runtime settings.
+  // `sync` writes the root scripts and the managed files, and merges the write denial into the runtime
+  // settings. The scripts sit at the repository root only: `pnpm run verify` is invoked there and fans
+  // out from there, so a copy inside every member would be several entry points to one run.
   const syncExit: number = sync(repository)
   if (syncExit !== 0) {
     return syncExit

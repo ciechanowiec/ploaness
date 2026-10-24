@@ -10,9 +10,11 @@ import {
   asRecord,
   biomeSelection,
   eslintArguments,
+  importGraphOf,
   isArray,
   type MemberKind,
   memberKindOf,
+  parseJsonc,
   pureLogicRule,
   requiredBiomeFiles,
 } from '@ploaness/governance'
@@ -24,7 +26,7 @@ import {
   resolveTool,
   shippedDirectory,
 } from '../context.js'
-import { failed, fromRun, type GateResult, passed, type RunResult, runNode } from '../exec.js'
+import { asFindings, failed, fromRun, type GateResult, passed, type RunResult, runNode } from '../exec.js'
 
 const configFile = (name: string): string => path.join(shippedDirectory('@ploaness/config'), name)
 
@@ -147,19 +149,35 @@ const architectureConfig = (context: Context, kind: MemberKind): string => {
 const presentSourceRoots = (context: Member): readonly string[] =>
   context.settings.sourceRoots.filter((root: string): boolean => existsSync(path.join(context.root, root)))
 
+const cruise = (context: Member, roots: readonly string[], options: readonly string[] = []): RunResult =>
+  runNode(
+    resolveTool('dependency-cruiser', 'depcruise'),
+    [...roots, '--config', architectureConfig(context, memberKindOf(context.packageJson)), ...options],
+    { cwd: context.root },
+  )
+
 export const architecture = (context: Member): GateResult => {
   const roots: readonly string[] = presentSourceRoots(context)
   if (roots.length === 0) {
     return passed('this package holds no source directory to cruise')
   }
-  const kind: MemberKind = memberKindOf(context.packageJson)
-  return fromRun(
-    runNode(resolveTool('dependency-cruiser', 'depcruise'), [...roots, '--config', architectureConfig(context, kind)], {
-      cwd: context.root,
-    }),
-    'module architecture holds',
-    'the module architecture contract is broken',
-  )
+  return fromRun(cruise(context, roots), 'module architecture holds', 'the module architecture contract is broken')
+}
+
+/**
+ * The member's import graph, as the architecture gate's analyzer resolves it from the same roots under
+ * the same configuration: path aliases, type-only imports and stylesheet modules included.
+ * @param context the member.
+ * @returns each module, relative to the member root, and the modules it imports; or the failure.
+ */
+export const importGraph = (context: Member): Readonly<Record<string, readonly string[]>> | GateResult => {
+  const roots: readonly string[] = presentSourceRoots(context)
+  if (roots.length === 0) {
+    return {}
+  }
+  const result: RunResult = cruise(context, roots, ['--output-type', 'json'])
+  const graph: Readonly<Record<string, readonly string[]>> | undefined = importGraphOf(parseJsonc(result.stdout).value)
+  return graph ?? failed('the import graph could not be read', asFindings(result.output))
 }
 
 // Roles with no hand-written type surface to measure: framework glue, generated files, views, and

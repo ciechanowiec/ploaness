@@ -2,6 +2,7 @@
 # Columns: path, disposition, scope.
 # PINNED: required content matches the shipped body.
 # SEED: written when absent, then owned by the project.
+# SCAFFOLD: written by `ploaness init` when absent; sync never writes it and the gate never judges it.
 # SECTION: the leading marked block is owned; the remainder belongs to the project.
 # REFERENCE: optional file containing only a reference to AGENTS.md.
 # FORBIDDEN: a local file that could shadow the harness must not exist.
@@ -17,6 +18,7 @@ AGENTS.md	SECTION	REPOSITORY
 .npmrc	PINNED	REPOSITORY
 .dockerignore	PINNED	REPOSITORY
 .gitignore	SEED	REPOSITORY
+.github/workflows/verify-full.yml	SCAFFOLD	REPOSITORY
 
 tests/e2e/a11y.e2e.spec.ts	PINNED	APPLICATION
 tests/e2e/security-headers.e2e.spec.ts	PINNED	APPLICATION

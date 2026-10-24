@@ -152,6 +152,9 @@ export const assets = (repository: Repository): GateResult => {
     : passed(`${String(checked)} managed path(s) match the catalogue`)
 }
 
+// A forbidden path is one ploaness keeps out, and a scaffold is the project's once `init` wrote it.
+const PROJECT_OWNED: ReadonlySet<string> = new Set<string>(['FORBIDDEN', 'SCAFFOLD'])
+
 /**
  * The paths ploaness owns in this working tree, minus any the project has taken over.
  *
@@ -166,7 +169,7 @@ export const managedPaths = (context: Context): ReadonlySet<string> => {
   const owned: ReadonlySet<string> = new Set(unmanagedPaths(context))
   return new Set(
     catalogue()
-      .assets.filter((asset: ManagedAsset): boolean => asset.disposition !== 'FORBIDDEN' && !owned.has(asset.path))
+      .assets.filter((asset: ManagedAsset): boolean => !(PROJECT_OWNED.has(asset.disposition) || owned.has(asset.path)))
       .map((asset: ManagedAsset): string => asset.path),
   )
 }
@@ -265,3 +268,17 @@ export const hasSeededFile = (root: string, assetPath: string, body: string): bo
   writeFileSync(target, body)
   return true
 }
+
+/**
+ * Write each scaffold the catalogue lists at the repository root where it is absent, used by
+ * `ploaness init`. Sync never writes one, so a project that removes it keeps it removed.
+ * @param repository the repository being scaffolded.
+ * @returns each scaffold's path and whether it was written.
+ */
+export const writeScaffolds = (repository: Repository): readonly (readonly [string, boolean])[] =>
+  repositoryAssets(catalogue().assets)
+    .filter((asset: ManagedAsset): boolean => asset.disposition === 'SCAFFOLD')
+    .flatMap((asset: ManagedAsset): readonly (readonly [string, boolean])[] => {
+      const body: string | undefined = shippedBody(asset.path)
+      return body === undefined ? [] : [[asset.path, hasSeededFile(repository.root, asset.path, body)]]
+    })

@@ -17,9 +17,9 @@ import { readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, type TestInfo, test } from '@playwright/test'
 import {
-  BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE,
   BROWSER_ENGINES,
   type BrowserFinding,
+  coversEveryEngine,
   type DeclaredExemption,
   distinctFindings,
   findingLine,
@@ -92,12 +92,14 @@ const presentEngines = (info: TestInfo): readonly string[] => {
   }
 }
 
-// Chromium always runs; the other engines run when the pinned browsers do, and whatever ran in them
-// is judged even when the endpoint is no longer named.
+// Chromium always runs; the other engines run when the pinned browsers do outside a `delta` run's
+// change scope, and whatever ran in them is judged even when the endpoint is no longer named.
 const expectedEngines = (info: TestInfo): readonly string[] => {
-  const isPinned: boolean = process.env[BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE] !== undefined
+  const isEveryEngine: boolean = coversEveryEngine(process.env)
   const present: ReadonlySet<string> = new Set<string>(presentEngines(info))
-  return BROWSER_ENGINES.filter((engine: string): boolean => engine === CHROMIUM || isPinned || present.has(engine))
+  return BROWSER_ENGINES.filter(
+    (engine: string): boolean => engine === CHROMIUM || isEveryEngine || present.has(engine),
+  )
 }
 
 const expectedReports = (engines: readonly string[]): readonly ExpectedReport[] =>
@@ -115,7 +117,14 @@ const MS_PER_SECOND: number = 1000
 
 const NOTHING_DISCOVERED: Discovery = { routes: [], stories: [], locations: [], samples: [] }
 
-const NO_DISCOVERY_REPORT: DiscoveryReport = { findings: [], problems: [], places: 0, locations: [], elapsedMs: 0 }
+const NO_DISCOVERY_REPORT: DiscoveryReport = {
+  findings: [],
+  problems: [],
+  places: 0,
+  locations: [],
+  elapsedMs: 0,
+  scope: { isScoped: false, lines: [] },
+}
 
 const discoveryText = (discovery: Discovery, report: DiscoveryReport): string =>
   `discovery (${CHROMIUM}): ${String(discovery.routes.length)} routes, ${String(discovery.stories.length)} stories, ` +
@@ -123,8 +132,9 @@ const discoveryText = (discovery: Discovery, report: DiscoveryReport): string =>
   `${String(Math.round(report.elapsedMs / MS_PER_SECOND))}s`
 
 // One line per pass in each engine: the places and findings of its parts summed, the locations they
-// covered, and the slowest part, which is how long the pass held the run.
-const passLine = (engine: string, pass: SweepPass, reports: readonly PassReport[]): string => {
+// covered, and the slowest part, which is how long the pass held the run. A pass a change scope narrowed
+// says so, because its coverage is not complete.
+const passLine = (engine: string, pass: SweepPass, reports: readonly PassReport[], isScoped: boolean): string => {
   const parts: readonly PassReport[] = reports.filter(
     (report: PassReport): boolean => report.engine === engine && report.pass === pass,
   )
@@ -137,7 +147,8 @@ const passLine = (engine: string, pass: SweepPass, reports: readonly PassReport[
     .size
   const slowestMs: number = Math.max(0, ...parts.map((report: PassReport): number => report.elapsedMs))
   return (
-    `${pass} (${engine}): ${String(places)} places over ${String(locations)} locations, ${String(findings)} ` +
+    `${pass} (${engine}${isScoped ? ', scoped to the change' : ''}): ${String(places)} places over ` +
+    `${String(locations)} locations, ${String(findings)} ` +
     `findings, ${String(parts.length)} of ${String(SWEEP_SHARDS)} parts, slowest part ` +
     `${String(Math.round(slowestMs / MS_PER_SECOND))}s`
   )
@@ -154,6 +165,7 @@ interface SweepRecord {
 
 const coverageText = (record: SweepRecord): string =>
   [
+    ...(record.discoveryReport ?? NO_DISCOVERY_REPORT).scope.lines.map((line: string): string => `scope: ${line}`),
     discoveryText(record.discovery ?? NOTHING_DISCOVERED, record.discoveryReport ?? NO_DISCOVERY_REPORT),
     ...(record.discovery?.samples ?? []).map(
       (sample: TemplateSample): string =>
@@ -161,7 +173,7 @@ const coverageText = (record: SweepRecord): string =>
     ),
     ...record.engines.flatMap((engine: string): readonly string[] =>
       (engine === CHROMIUM ? CHROMIUM_PASSES : ENGINE_PASSES).map((pass: SweepPass): string =>
-        passLine(engine, pass, record.reports),
+        passLine(engine, pass, record.reports, record.discoveryReport?.scope.isScoped ?? false),
       ),
     ),
     ...[...new Set<string>(record.reports.flatMap((report: PassReport): readonly string[] => report.notes))].map(
@@ -226,6 +238,7 @@ export const expectSweepSummary = async (): Promise<void> => {
       ...stale,
     ]),
     problems,
+    scope: record.discoveryReport?.scope,
     passes: record.reports.map((report: PassReport) => ({
       pass: report.pass,
       engine: report.engine,

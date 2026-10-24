@@ -16,8 +16,9 @@
 // one. Each shard has its own budget, derived from the work discovery found, and reports every defect
 // it finds rather than stopping at the first. The summary runs last, whatever failed before it: it
 // judges discovery's problems and the exemptions no pass used, reports a shard that did not finish,
-// and prints what was covered. Under `ploaness verify` the sweep also runs in Firefox and WebKit, where
-// the engine pass covers one route per template and one story per component.
+// and prints what was covered. Under `ploaness verify full` the sweep also runs in Firefox and WebKit,
+// where the engine pass covers one route per template and one story per component; `ploaness verify
+// delta` sweeps only the routes and stories the change reaches, in Chromium.
 import { test } from '@playwright/test'
 import {
   expectDarkScheme,

@@ -12,11 +12,23 @@ import {
   coverageOwnedFiles,
   diagnoseBuildFailure,
   hasExtension,
+  SWEEP_SCOPE_ENVIRONMENT_VARIABLE,
+  type SweepScope,
+  scopeHeadline,
+  scopeLines,
   VERIFICATION_ENVIRONMENT_VARIABLE,
   VITEST_CONFIG_FILE,
 } from '@ploaness/governance'
 import { browserServerProblems } from '../browser-servers.js'
-import { type Context, hasOwnRuntime, type Member, resolveProjectTool, workingTreeFiles } from '../context.js'
+import { isScopeFailure, sweepScopeFor, withScopeFile } from '../change-scope.js'
+import {
+  type Context,
+  type GateRun,
+  hasOwnRuntime,
+  type Member,
+  resolveProjectTool,
+  workingTreeFiles,
+} from '../context.js'
 import { failed, fromRun, type GateResult, passed, type RunResult, run } from '../exec.js'
 import { clockedEnvironment, isStartFailure, type PinnedBrowsers, startPinnedBrowsers } from '../pinned-browsers.js'
 import { type Invocation, withPretest, wrapped } from '../test-invocation.js'
@@ -88,8 +100,53 @@ export const browserReadiness = async (context: Context): Promise<GateResult | u
   return problems.length > 0 ? failed('the end-to-end suite requires fresh browser servers', problems) : undefined
 }
 
-/** Run the Playwright end-to-end suite. */
-export const endToEnd = async (context: Context): Promise<GateResult> => {
+// The suite itself, with the sweep scoped when a scope file is named. The scope is stated on a pass as
+// well as a failure, so a scoped verdict is never read as complete coverage.
+const runSuite = async (context: Member, scope: SweepScope | undefined, scopeFile?: string): Promise<GateResult> => {
+  const playwright: string | undefined = resolveProjectToolOrUndefined(context, '@playwright/test', 'playwright')
+  if (playwright === undefined) {
+    return failed('@playwright/test could not be resolved from the project', [
+      'the project must declare @playwright/test itself, because its specs import it directly',
+    ])
+  }
+  const browsers: PinnedBrowsers | GateResult = await startPinnedBrowsers(context)
+  if (isStartFailure(browsers)) {
+    return browsers
+  }
+  const invocation: Invocation = wrapped(context, [playwright, 'test', '--config=playwright.config.ts'])
+  try {
+    const outcome: GateResult = fromRun(
+      run(invocation.command, invocation.commandArguments, {
+        cwd: context.root,
+        env: {
+          ...clockedEnvironment(context, '--no-deprecation --import=tsx/esm'),
+          NODE_ENV: 'production',
+          [VERIFICATION_ENVIRONMENT_VARIABLE]: '1',
+          [BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE]: browsers.endpoint,
+          ...(browsers.isTunnelled && { [BROWSER_TUNNEL_ENVIRONMENT_VARIABLE]: '1' }),
+          ...(scopeFile !== undefined && { [SWEEP_SCOPE_ENVIRONMENT_VARIABLE]: scopeFile }),
+        },
+      }),
+      'the end-to-end suite passes',
+      'the end-to-end suite failed',
+    )
+    return scope === undefined
+      ? outcome
+      : {
+          ...outcome,
+          summary: `${outcome.summary}; the sweep covered ${scopeHeadline(scope)}`,
+          findings: outcome.ok ? scopeLines(scope) : outcome.findings,
+        }
+  } finally {
+    browsers.stop()
+  }
+}
+
+/**
+ * Run the Playwright end-to-end suite. At `delta` the browser sweep covers the routes and stories the
+ * change reaches, in Chromium; at `full` it covers everything, in every engine.
+ */
+export const endToEnd = async (context: Member, gateRun: GateRun): Promise<GateResult> => {
   // A library has no browser to drive, and `assets` already withholds the managed specs from one on the
   // same test. Without this the two gates contradicted each other: the catalogue correctly gave a
   // library no `playwright.config.ts`, and this gate then failed it for the file's absence.
@@ -109,35 +166,14 @@ export const endToEnd = async (context: Context): Promise<GateResult> => {
     if (readiness !== undefined) {
       return readiness
     }
-    const playwright: string | undefined = resolveProjectToolOrUndefined(context, '@playwright/test', 'playwright')
-    if (playwright === undefined) {
-      return failed('@playwright/test could not be resolved from the project', [
-        'the project must declare @playwright/test itself, because its specs import it directly',
-      ])
+    if (gateRun.level === 'full') {
+      return await runSuite(context, undefined)
     }
-    const browsers: PinnedBrowsers | GateResult = await startPinnedBrowsers(context)
-    if (isStartFailure(browsers)) {
-      return browsers
+    const scope: SweepScope | GateResult = sweepScopeFor(gateRun.repository, context)
+    if (isScopeFailure(scope)) {
+      return scope
     }
-    const invocation: Invocation = wrapped(context, [playwright, 'test', '--config=playwright.config.ts'])
-    try {
-      return fromRun(
-        run(invocation.command, invocation.commandArguments, {
-          cwd: context.root,
-          env: {
-            ...clockedEnvironment(context, '--no-deprecation --import=tsx/esm'),
-            NODE_ENV: 'production',
-            [VERIFICATION_ENVIRONMENT_VARIABLE]: '1',
-            [BROWSER_ENDPOINT_ENVIRONMENT_VARIABLE]: browsers.endpoint,
-            ...(browsers.isTunnelled && { [BROWSER_TUNNEL_ENVIRONMENT_VARIABLE]: '1' }),
-          },
-        }),
-        'the end-to-end suite passes',
-        'the end-to-end suite failed',
-      )
-    } finally {
-      browsers.stop()
-    }
+    return await withScopeFile(scope, async (file: string): Promise<GateResult> => await runSuite(context, scope, file))
   })
 }
 

@@ -87,6 +87,18 @@ describe('script tampering', () => {
       'package.json scripts.verify:full',
     )
   })
+
+  it('catches a missing delta script and a full script still invoking the removed extended mode', () => {
+    const { 'verify:delta': _dropped, ...scripts } = REQUIRED_SCRIPTS
+    const stale: Record<string, unknown> = {
+      ...WIRED_PACKAGE_JSON,
+      scripts: { ...scripts, 'verify:full': 'ploaness verify --extended' },
+    }
+    expect(locations(wiredInputs({ packageJson: stale }))).toEqual(
+      expect.arrayContaining(['package.json scripts.verify:delta', 'package.json scripts.verify:full']),
+    )
+    expect(locations(wiredInputs())).not.toContain('package.json scripts.verify:delta')
+  })
 })
 
 describe('config tampering', () => {

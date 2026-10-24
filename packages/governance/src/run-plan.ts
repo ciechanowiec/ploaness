@@ -3,11 +3,42 @@
 /** Which of the three scopes a gate judges. */
 export type GateScope = 'repository' | 'package' | 'payload'
 
+/**
+ * How much one verification run checks. Each level contains the one before it: `quick` runs the static
+ * gates, `delta` adds history, build, bundle and the browser suite with its sweep scoped to the change,
+ * and `full` runs the same gates with the complete sweep in every engine.
+ */
+export type VerificationLevel = 'quick' | 'delta' | 'full'
+
+/** The levels in the order each contains the one before it. */
+export const VERIFICATION_LEVELS: readonly VerificationLevel[] = ['quick', 'delta', 'full']
+
+/** The level a bare `ploaness verify` runs. */
+export const DEFAULT_VERIFICATION_LEVEL: VerificationLevel = 'quick'
+
+/**
+ * Whether a word names a verification level.
+ * @param word the word, as typed.
+ * @returns true for `quick`, `delta` and `full`.
+ */
+export const isVerificationLevel = (word: string): word is VerificationLevel =>
+  new Set<string>(VERIFICATION_LEVELS).has(word)
+
+/**
+ * Whether a run at one level includes what another level adds.
+ * @param run the level the run was asked for.
+ * @param required the lowest level that includes the work.
+ * @returns true when the run's level is the required one or a later one.
+ */
+export const coversLevel = (run: VerificationLevel, required: VerificationLevel): boolean =>
+  VERIFICATION_LEVELS.indexOf(run) >= VERIFICATION_LEVELS.indexOf(required)
+
 /** One gate, reduced to what deciding the order needs. */
 export interface GateDescriptor {
   readonly id: string
   readonly scope: GateScope
-  readonly isExtended: boolean
+  /** The lowest level that runs the gate. */
+  readonly level: VerificationLevel
 }
 
 /** One governed member, reduced to what deciding the order needs. */
@@ -54,14 +85,14 @@ const stepsFor = (gate: GateDescriptor, members: readonly MemberDescriptor[]): r
  * project rather than merely compatible with it.
  * @param gates every gate ploaness knows, in registry order.
  * @param members the governed members, in discovery order.
- * @param isExtended whether extended verification's gates are included.
+ * @param level the level the run was asked for.
  * @returns one step per gate invocation, in run order.
  */
 export const planSteps = (
   gates: readonly GateDescriptor[],
   members: readonly MemberDescriptor[],
-  isExtended: boolean,
+  level: VerificationLevel,
 ): readonly PlanStep[] =>
   gates
-    .filter((gate: GateDescriptor): boolean => isExtended || !gate.isExtended)
+    .filter((gate: GateDescriptor): boolean => coversLevel(level, gate.level))
     .flatMap((gate: GateDescriptor): readonly PlanStep[] => stepsFor(gate, members))

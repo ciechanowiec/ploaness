@@ -141,6 +141,14 @@ export interface PassReport {
   readonly elapsedMs: number
 }
 
+/** What the sweep covers: everything, or the routes and stories a `delta` run's change reaches. */
+export interface ScopeRecord {
+  /** True when a change scope narrowed the sweep, so its coverage is not complete. */
+  readonly isScoped: boolean
+  /** The level, the baseline, the changed files, and each route and story with the reason it is swept. */
+  readonly lines: readonly string[]
+}
+
 /**
  * What discovery leaves for the summary. Discovery records its problems rather than failing on them,
  * because every pass depends on it and a failed dependency would stop them all; the summary judges them.
@@ -152,6 +160,7 @@ export interface DiscoveryReport {
   readonly places: number
   readonly locations: readonly string[]
   readonly elapsedMs: number
+  readonly scope: ScopeRecord
 }
 
 /** What visiting one item of a pass yields. */
@@ -280,7 +289,10 @@ export const isDiscovery = (value: unknown): value is Discovery =>
 export const isDiscoveryReport = (value: unknown): value is DiscoveryReport =>
   isRecord(value) &&
   hasArrays(value, ['findings', 'problems', 'locations']) &&
-  hasNumbers(value, ['places', 'elapsedMs'])
+  hasNumbers(value, ['places', 'elapsedMs']) &&
+  isRecord(value['scope']) &&
+  typeof value['scope']['isScoped'] === 'boolean' &&
+  hasArrays(value['scope'], ['lines'])
 
 /**
  * Whether a parsed value is what a shard of a pass writes for the summary.

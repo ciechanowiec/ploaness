@@ -30,7 +30,7 @@ export const VERIFICATION_ENVIRONMENT_VARIABLE: string = 'PLOANESS_VERIFICATION'
 // property a fixed build lifecycle would have supplied for free.
 //
 // What this module deliberately does NOT rule on is where verification runs. It once required a workflow
-// invoking extended verification, and refused `--enforce=false` and `continue-on-error` around it. The
+// invoking the browser-level verification, and refused `--enforce=false` and `continue-on-error` around it. The
 // governing standard states no such rule: it says the head commit of the main branch passes the
 // verification command, and leaves the mechanism to the project. A rule the standard does not state is
 // ploaness dictating a hosting platform, so it is gone rather than kept for being useful.
@@ -77,10 +77,14 @@ export interface WiringInputs {
   readonly requiredBiomeFiles: Readonly<Record<string, unknown>>
 }
 
-/** The exact script bodies ploaness owns. The consumer declares the name; ploaness dictates the command. */
+/**
+ * The exact script bodies ploaness owns, one per verification level. The consumer declares the name;
+ * ploaness dictates the command, and `ploaness sync` writes it.
+ */
 export const REQUIRED_SCRIPTS: Readonly<Record<string, string>> = {
   verify: 'ploaness verify',
-  'verify:full': 'ploaness verify --extended',
+  'verify:delta': 'ploaness verify delta',
+  'verify:full': 'ploaness verify full',
   format: 'ploaness format',
 }
 

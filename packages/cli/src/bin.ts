@@ -1,16 +1,23 @@
 #!/usr/bin/env node
-import { parseComplianceReportArguments, parseSbomArguments } from '@ploaness/governance'
+import {
+  DEFAULT_VERIFICATION_LEVEL,
+  isVerificationLevel,
+  parseComplianceReportArguments,
+  parseSbomArguments,
+  type VerificationLevel,
+} from '@ploaness/governance'
 import { commitMessage } from './commands/commit-message.js'
 import { complianceReport } from './commands/compliance-report.js'
 import { format } from './commands/format.js'
 import { init } from './commands/init.js'
 import { sbom } from './commands/sbom.js'
+import { scope } from './commands/scope.js'
 import { sync } from './commands/sync.js'
 import { verify, verifyOne } from './commands/verify.js'
 // The `ploaness` command. Argument handling is deliberately small: ploaness offers commands, not
-// options that change what is checked. Two flags exist and neither reaches a rule: --enforce=false
-// changes whether findings are fatal, and --verbose changes what is shown. There is no flag that skips
-// a gate.
+// options that change what is checked. A verification level is a word, not a flag, and each level
+// contains the one before it. Three flags exist and none reaches a rule: --enforce=false changes whether
+// findings are fatal, and --verbose and --json change what is shown. There is no flag that skips a gate.
 import { createRepository, type Member, memberAt, type Repository } from './context.js'
 import { ALL_GATES, type Gate, gateById } from './gates.js'
 
@@ -21,16 +28,20 @@ const GATE_ID_COLUMN: number = 22
 
 const USAGE: string = `ploaness, the quality harness for Payload CMS projects
 
-  ploaness verify [--extended] [--enforce=false]   run Default or Extended verification
+  ploaness verify [quick|delta|full] [--enforce=false]
+                                                   run verification; bare \`verify\` is quick
+  ploaness scope [--json]                          show what delta's browser sweep covers here
   ploaness format                                  apply formatting and safe fixes
   ploaness sync                                    materialise the managed files
   ploaness init                                    scaffold the consumer wiring
   ploaness sbom --artifact <file> [--output <dir>] export a release dependency inventory
   ploaness compliance-report [--output <dir>]      write the shareable compliance report
-  ploaness gate <id> [--verbose]                   run one gate, for debugging
-  ploaness gates                                   list the gates in run order
+  ploaness gate <id> [--verbose]                   run one gate at the delta level, for debugging
+  ploaness gates                                   list the gates in run order, with their level
   ploaness commit-message <file|--range R|--all>   check one message, a range, or the history
 
+quick runs the static gates, delta adds history, build, bundle and the browser suite with its sweep
+scoped to the change, and full sweeps every route and story in every engine.
 Report-only mode (--enforce=false) prints findings and exits 0. It is not a pass.
 Verbose mode (--verbose) prints what the gate's tool wrote, passing or failing.`
 
@@ -40,6 +51,9 @@ const GATE_SCOPES: ReadonlySet<string> = new Set<string>(['repository', 'package
 
 // Wide enough for the longest scope name, so the titles beside them line up.
 const GATE_SCOPE_COLUMN: number = 10
+
+// Wide enough for the longest level a gate declares.
+const LEVEL_COLUMN: number = 5
 
 // `--scope` and `--ids` exist so a script can ask which gates judge a repository's shape rather than
 // keeping its own copy of the answer. ploaness's own verification runs such a list, in an order it
@@ -59,8 +73,13 @@ const listGates = (rest: readonly string[]): number => {
     if (rest.includes(IDS_OPTION)) {
       console.info(gate.id)
     } else {
-      const mode: string = gate.isExtended ? 'extended' : 'default '
-      console.info(`${mode}  ${gate.id.padEnd(GATE_ID_COLUMN)} ${gate.scope.padEnd(GATE_SCOPE_COLUMN)} ${gate.title}`)
+      const columns: readonly string[] = [
+        gate.level.padEnd(LEVEL_COLUMN),
+        ` ${gate.id.padEnd(GATE_ID_COLUMN)}`,
+        gate.scope.padEnd(GATE_SCOPE_COLUMN),
+        gate.title,
+      ]
+      console.info(columns.join(' '))
     }
   }
   return 0
@@ -83,9 +102,14 @@ const runOneGate = async (repository: Repository, id: string | undefined, isVerb
 // small enough to read on its own - which the switch it replaced no longer was.
 type CommandRunner = (repository: Repository, rest: readonly string[]) => number | Promise<number>
 
+const levelOf = (rest: readonly string[]): VerificationLevel =>
+  rest.find((argument: string): argument is VerificationLevel => isVerificationLevel(argument)) ??
+  DEFAULT_VERIFICATION_LEVEL
+
 const COMMANDS: Readonly<Record<string, CommandRunner>> = {
   verify: async (repository: Repository, rest: readonly string[]): Promise<number> =>
-    await verify(repository, rest.includes('--extended')),
+    await verify(repository, levelOf(rest)),
+  scope: (repository: Repository, rest: readonly string[]): number => scope(repository, rest.includes(JSON_OPTION)),
   format: (repository: Repository): number => format(repository),
   sync: (repository: Repository): number => sync(repository),
   init: (repository: Repository): number => init(repository),
@@ -99,10 +123,11 @@ const COMMANDS: Readonly<Record<string, CommandRunner>> = {
 }
 
 // Each command owns its grammar. A global allowlist rejected the documented `commit-message --all` and
-// `--range` modes while accepting `--extended` on commands that do not use it; checking the whole shape
-// also stops extra positional arguments and single-dash options from disappearing silently.
-const VERIFY_OPTIONS: ReadonlySet<string> = new Set<string>(['--extended', '--enforce=false'])
+// `--range` modes while accepting a verification option on commands that do not use it; checking the
+// whole shape also stops extra positional arguments and single-dash options from disappearing silently.
+const ENFORCE_OPTION: string = '--enforce=false'
 const VERBOSE_OPTION: string = '--verbose'
+const JSON_OPTION: string = '--json'
 const GATE_OPTIONS: ReadonlySet<string> = new Set<string>([VERBOSE_OPTION])
 const RANGE_ARGUMENT_COUNT: number = 2
 
@@ -119,8 +144,16 @@ const isCommitMessageArguments = (rest: readonly string[]): boolean => {
     : rest.length === 1 && mode !== undefined && !mode.startsWith('-')
 }
 
+// At most one level, anywhere among the arguments, beside the report-only option.
+const isVerifyArguments = (rest: readonly string[]): boolean => {
+  const levels: readonly string[] = rest.filter((argument: string): boolean => isVerificationLevel(argument))
+  const options: readonly string[] = rest.filter((argument: string): boolean => !isVerificationLevel(argument))
+  return levels.length <= 1 && hasDistinctMembersOf(options, new Set<string>([ENFORCE_OPTION]))
+}
+
 const acceptsArguments: Readonly<Record<string, (rest: readonly string[]) => boolean>> = {
-  verify: (rest: readonly string[]): boolean => hasDistinctMembersOf(rest, VERIFY_OPTIONS),
+  verify: isVerifyArguments,
+  scope: (rest: readonly string[]): boolean => hasDistinctMembersOf(rest, new Set<string>([JSON_OPTION])),
   format: (rest: readonly string[]): boolean => rest.length === 0,
   sync: (rest: readonly string[]): boolean => rest.length === 0,
   init: (rest: readonly string[]): boolean => rest.length === 0,
@@ -165,7 +198,7 @@ const main = async (): Promise<number> => {
     console.error(`unknown command "${command}"\n\n${USAGE}`)
     return 1
   }
-  const isEnforce: boolean = !rest.includes('--enforce=false')
+  const isEnforce: boolean = !rest.includes(ENFORCE_OPTION)
   return await runCommand(createRepository(process.cwd(), isEnforce), rest)
 }
 

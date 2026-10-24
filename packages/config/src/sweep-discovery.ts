@@ -6,15 +6,23 @@ import {
   BROKEN_LINK_RULE,
   type BrowserFinding,
   breakpointEdges,
+  type DeclaredRoute,
   type DiscoveredStory,
   findingAt,
+  isSweepScope,
   localAddress,
   onOrigin,
+  routeReason,
   type SitemapEntries,
+  SWEEP_SCOPE_ENVIRONMENT_VARIABLE,
+  type SweepScope,
+  scopeHeadline,
   securityHeaderProblems,
   sitemapEntries,
   storiesOfIndex,
+  storyFileOf,
   storyLocation,
+  storyReason,
   storyUrl,
   templateSamples,
 } from '@ploaness/governance'
@@ -38,6 +46,8 @@ import {
   origin,
   placeAt,
   preparePage,
+  readJson,
+  type ScopeRecord,
   type SweepLocation,
   WHOLE_PASS,
   writeJson,
@@ -374,35 +384,136 @@ const problemsOf = (crawled: CrawlState, routes: readonly string[]): readonly st
   ),
 ]
 
+/** The scope a `delta` run named, or why it could not be read. */
+interface NamedScope {
+  readonly scope: SweepScope | undefined
+  readonly problem: string | undefined
+}
+
+// A scope that cannot be read is a problem the summary fails on, and the sweep covers everything.
+const namedScope = (): NamedScope => {
+  const file: string | undefined = process.env[SWEEP_SCOPE_ENVIRONMENT_VARIABLE]
+  if (file === undefined) {
+    return { scope: undefined, problem: undefined }
+  }
+  const scope: SweepScope | undefined = readJson(file, isSweepScope)
+  return {
+    scope,
+    problem:
+      scope === undefined ? `the change scope ${file} could not be read, so the sweep covered everything` : undefined,
+  }
+}
+
+/** Something discovery found, and why the scope sweeps it. */
+interface Chosen<Item> {
+  readonly item: Item
+  readonly reason: string
+}
+
+const chosen = <Item>(items: readonly Item[], reasonOf: (item: Item) => string | undefined): readonly Chosen<Item>[] =>
+  items.flatMap((item: Item): readonly Chosen<Item>[] => {
+    const reason: string | undefined = reasonOf(item)
+    return reason === undefined ? [] : [{ item, reason }]
+  })
+
+// The directory a story's Storybook runs in, relative to this application, which its import path is
+// relative to.
+const storyDirectory = (story: DiscoveredStory): string =>
+  projectSettings.auxiliaryServers.find((server): boolean => new URL(server.url).origin === story.server)?.cwd ?? '.'
+
+const storyFile = (story: DiscoveredStory): string =>
+  story.importPath === '' ? '' : storyFileOf(story.importPath, storyDirectory(story))
+
+/** What discovery found, and what of it the scope sweeps. */
+interface ScopedFinds {
+  readonly routes: readonly Chosen<SweepLocation>[]
+  readonly stories: readonly Chosen<DiscoveredStory>[]
+  readonly everyRoute: number
+  readonly everyStory: number
+}
+
+const scopeRecordOf = (scope: SweepScope | undefined, finds: ScopedFinds): ScopeRecord => {
+  if (scope === undefined) {
+    return { isScoped: false, lines: ['complete: no change scope was given, so every route and story is swept'] }
+  }
+  const changed: readonly string[] = scope.changed.map((file: string): string => `  changed ${file}`)
+  if (scope.isComplete) {
+    return { isScoped: false, lines: [scopeHeadline(scope), ...changed, '  swept every route and story'] }
+  }
+  const unreached: string =
+    `  not swept: ${String(finds.everyRoute - finds.routes.length)} of ${String(finds.everyRoute)} routes and ` +
+    `${String(finds.everyStory - finds.stories.length)} of ${String(finds.everyStory)} stories, which the change ` +
+    'does not reach'
+  return {
+    isScoped: true,
+    lines: [
+      scopeHeadline(scope),
+      ...changed,
+      ...finds.routes.map((route: Chosen<SweepLocation>): string => `  swept ${route.item.location}: ${route.reason}`),
+      ...finds.stories.map(
+        (story: Chosen<DiscoveredStory>): string => `  swept ${storyLocation(story.item)}: ${story.reason}`,
+      ),
+      unreached,
+    ],
+  }
+}
+
 /**
  * Discover every page the sweep scans, and record it with whatever made the discovery incomplete.
  *
  * Routes come from a link crawl from `/`, every same-origin `hreflang` alternate, and `sitemap.xml`;
  * stories from each auxiliary server that answers `/index.json`; breakpoints and colour schemes from
- * each page's stylesheets. A crawled internal link that does not answer is a broken link. Every pass
- * depends on this test, so it fails only when it could not write its record; the summary judges the
- * findings and problems it recorded.
+ * each page's stylesheets. A crawled internal link that does not answer is a broken link. Under a
+ * `delta` run's change scope the crawl still reaches and checks every route, and the passes are handed
+ * only the routes and stories the change reaches, each with the reason it is swept. Every pass depends
+ * on this test, so it fails only when it could not write its record; the summary judges the findings
+ * and problems it recorded.
  * @param page the test's page.
  */
 export const expectDiscoveredSite = async (page: Page): Promise<void> => {
   const budget: Budget = armBudget(page, 'discovery', WHOLE_PASS, MAX_SWEEP_ROUTES)
   await preparePage(page)
+  const { scope, problem }: NamedScope = namedScope()
+  const declared: readonly DeclaredRoute[] = declaredRoutes()
   const fromSitemap: readonly string[] = await sitemapPages(page, [`${origin}/sitemap.xml`])
   const crawled: CrawlState = await crawl(page, crawlStart(fromSitemap))
-  const routes: readonly string[] = crawled.reachable.map((location: SweepLocation): string => location.location)
-  const stories: readonly DiscoveredStory[] = await storiesOf(page)
+  const everyStory: readonly DiscoveredStory[] = await storiesOf(page)
+  const finds: ScopedFinds = {
+    routes: chosen(crawled.reachable, (location: SweepLocation): string | undefined =>
+      scope === undefined ? '' : routeReason(scope, declared, location.location),
+    ),
+    stories: chosen(everyStory, (story: DiscoveredStory): string | undefined =>
+      scope === undefined ? '' : storyReason(scope, storyFile(story)),
+    ),
+    everyRoute: crawled.reachable.length,
+    everyStory: everyStory.length,
+  }
+  const routes: readonly string[] = finds.routes.map((route: Chosen<SweepLocation>): string => route.item.location)
+  const stories: readonly DiscoveredStory[] = finds.stories.map(
+    (story: Chosen<DiscoveredStory>): DiscoveredStory => story.item,
+  )
   const discovery: Discovery = {
     routes,
     stories,
-    locations: [...crawled.reachable, ...(await storyLocations(page, stories))],
-    samples: templateSamples(routes, declaredRoutes()),
+    locations: [
+      ...finds.routes.map((route: Chosen<SweepLocation>): SweepLocation => route.item),
+      ...(await storyLocations(page, stories)),
+    ],
+    samples: templateSamples(routes, declared),
   }
   const report: DiscoveryReport = {
     findings: crawled.findings,
-    problems: problemsOf(crawled, routes),
+    problems: [
+      ...problemsOf(
+        crawled,
+        crawled.reachable.map((location: SweepLocation): string => location.location),
+      ),
+      ...(problem === undefined ? [] : [problem]),
+    ],
     places: crawled.answered.size + stories.length,
     locations: discovery.locations.map((location: SweepLocation): string => location.location),
     elapsedMs: Math.round(performance.now() - budget.startedAt),
+    scope: scopeRecordOf(scope, finds),
   }
   const isRecorded: boolean =
     wasRecorded(discoveryReportFile(test.info()), report) && wasRecorded(discoveryFile(test.info()), discovery)
