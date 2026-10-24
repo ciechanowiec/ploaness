@@ -458,6 +458,114 @@ browser_environment_contracts() {
         pnpm exec playwright test tests/e2e/environment.e2e.spec.ts --reporter=line
 }
 
+# A case's history needs a remote for its change to have a baseline: a bare clone of the case, named
+# `origin` and fetched, whose `main` is the case's first commit.
+with_origin() {
+    git clone -q --bare "$scratch/$1" "$scratch/$1.git"
+    git -C "$scratch/$1" remote add origin "$scratch/$1.git"
+    git -C "$scratch/$1" fetch -q origin
+}
+
+commit_change() {
+    git -C "$scratch/$1" add -A
+    git -C "$scratch/$1" \
+        -c user.name='ploaness integration suite' \
+        -c user.email='it@ploaness.invalid' \
+        -c commit.gpgsign=false \
+        commit -q -m "$2" -m "$CONFORMING_BODY"
+}
+
+# Delta verification's change scope against real Git histories and a real import graph. A changed
+# component reaches only the route and the story that import it; commits not on `origin/main`, staged,
+# unstaged and untracked files are all in the change; and a global stylesheet, a missing `origin/main`
+# and a shallow clone each sweep everything. The sweep itself, handed the scope, scans exactly what it
+# names and says that its coverage is scoped. `init` writes the nightly full workflow once, and `sync`
+# neither recreates it nor leaves a project on the renamed scripts.
+scope_contracts() {
+    scope_variable="$(node "$lib/print-scope-variable.ts")"
+
+    new_case scope-graph
+    node "$lib/create-a11y-page.ts" "$scratch/scope-graph" valid
+    node "$lib/create-scope-case.ts" "$scratch/scope-graph"
+    commit_case scope-graph 'test(fixture): import one component from one route and one story' "$CONFORMING_BODY"
+    with_origin scope-graph
+    printf 'export const BADGE_TONE: string = "plain"\n' >> "$scratch/scope-graph/src/badge.tsx"
+    expect_command scope-graph PASS 'route /alpha: src/app/alpha/page.tsx reaches src/badge.tsx' \
+        "$scratch/scope-graph/node_modules/.bin/ploaness" scope
+    expect_layout_line scope-graph 'story src/badge.stories.tsx: src/badge.stories.tsx reaches src/badge.tsx'
+    expect_layout_line scope-graph '1 changed file(s) reach 1 route(s) and 1 story file(s)'
+    expect_no_layout_line scope-graph 'route /beta'
+    expect_no_layout_line scope-graph 'other.stories'
+
+    new_case scope-history
+    node "$lib/create-a11y-page.ts" "$scratch/scope-history" valid
+    node "$lib/create-scope-case.ts" "$scratch/scope-history"
+    commit_case scope-history 'test(fixture): start the history the change is measured from' "$CONFORMING_BODY"
+    with_origin scope-history
+    printf 'export const OTHER_TONE: string = "plain"\n' >> "$scratch/scope-history/src/other.tsx"
+    commit_change scope-history 'test(fixture): commit a change nobody pushed'
+    printf 'export const STAGED: number = 1\n' > "$scratch/scope-history/src/staged.ts"
+    git -C "$scratch/scope-history" add src/staged.ts
+    printf 'export const BADGE_TONE: string = "plain"\n' >> "$scratch/scope-history/src/badge.tsx"
+    printf 'export const UNTRACKED: number = 1\n' > "$scratch/scope-history/src/untracked.ts"
+    expect_command scope-history PASS 'changed src/other.tsx' "$scratch/scope-history/node_modules/.bin/ploaness" scope
+    for file in src/staged.ts src/badge.tsx src/untracked.ts; do
+        expect_layout_line scope-history "changed $file"
+    done
+    expect_layout_line scope-history 'story src/other.stories.tsx: src/other.stories.tsx reaches src/other.tsx'
+
+    new_case scope-stylesheet
+    node "$lib/create-a11y-page.ts" "$scratch/scope-stylesheet" valid
+    node "$lib/create-scope-case.ts" "$scratch/scope-stylesheet"
+    commit_case scope-stylesheet 'test(fixture): style every page from one global stylesheet' "$CONFORMING_BODY"
+    with_origin scope-stylesheet
+    printf 'p { margin: 0; }\n' >> "$scratch/scope-stylesheet/src/app/globals.css"
+    expect_command scope-stylesheet PASS 'complete because src/app/globals.css is a global stylesheet' \
+        "$scratch/scope-stylesheet/node_modules/.bin/ploaness" scope
+
+    new_case scope-no-origin
+    node "$lib/create-a11y-page.ts" "$scratch/scope-no-origin" valid
+    node "$lib/create-scope-case.ts" "$scratch/scope-no-origin"
+    commit_case scope-no-origin 'test(fixture): keep a history with no remote' "$CONFORMING_BODY"
+    expect_command scope-no-origin PASS 'complete because the repository has no remote-tracking default branch' \
+        "$scratch/scope-no-origin/node_modules/.bin/ploaness" scope
+
+    git clone -q --depth 1 "file://$scratch/scope-graph" "$scratch/scope-shallow"
+    ln -s "$template/node_modules" "$scratch/scope-shallow/node_modules"
+    expect_command scope-shallow PASS 'complete because the clone is shallow' \
+        "$scratch/scope-shallow/node_modules/.bin/ploaness" scope
+
+    (cd "$scratch/scope-graph" && ./node_modules/.bin/ploaness scope --json) > "$scratch/scope-graph.json"
+    expect scope-graph build PASS
+    expect_command scope-graph PASS 'scope: delta since' \
+        env "$scope_variable=$scratch/scope-graph.json" \
+        pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+    expect_layout_line scope-graph 'scope:   swept /alpha: src/app/alpha/page.tsx reaches src/badge.tsx'
+    expect_layout_line scope-graph \
+        'scope:   swept story:fixture-badge--default: src/badge.stories.tsx reaches src/badge.tsx'
+    expect_layout_line scope-graph 'scope:   not swept: 2 of 3 routes and 1 of 2 stories'
+    expect_layout_line scope-graph 'discovery (chromium): 1 routes, 1 stories'
+    expect_layout_line scope-graph 'resting (chromium, scoped to the change): '
+    expect_no_layout_line scope-graph 'swept /beta'
+    expect_no_layout_line scope-graph 'swept story:fixture-other--default'
+
+    if [ ! -f "$template/.github/workflows/verify-full.yml" ]; then
+        echo 'FAILED scaffold: ploaness init did not write the nightly full workflow' >&2
+        failures=$((failures + 1))
+    fi
+    new_case scope-scaffold
+    rm "$scratch/scope-scaffold/.github/workflows/verify-full.yml"
+    edit_json "$scratch/scope-scaffold/package.json" scripts '{"verify":"ploaness verify","verify:full":"ploaness verify --extended","format":"ploaness format"}'
+    commit_case scope-scaffold 'test(fixture): keep the scripts of the previous release' "$CONFORMING_BODY"
+    expect scope-scaffold wiring FAIL 'scripts.verify:delta'
+    expect_command scope-scaffold PASS 'wrote package.json scripts' "$scratch/scope-scaffold/node_modules/.bin/ploaness" sync
+    if [ -e "$scratch/scope-scaffold/.github/workflows/verify-full.yml" ]; then
+        echo 'FAILED scope-scaffold: ploaness sync recreated the workflow the project removed' >&2
+        failures=$((failures + 1))
+    fi
+    expect scope-scaffold wiring PASS
+}
+
 browser_server_contracts() {
     new_case browser-servers
     node "$lib/create-a11y-page.ts" "$scratch/browser-servers" valid
@@ -965,8 +1073,8 @@ file_scope_contracts() {
 
 # Declared focused subsets; the default run remains complete.
 case "${1-}" in
-    ''|--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only|--consumer-gates-only) ;;
-    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only|--consumer-gates-only]' >&2; exit 1 ;;
+    ''|--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--scope-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only|--consumer-gates-only) ;;
+    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--scope-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only|--consumer-gates-only]' >&2; exit 1 ;;
 esac
 
 if [ -z "${1-}" ] || [ "${1-}" = --file-scopes-only ]; then
@@ -1086,6 +1194,17 @@ if [ "${1-}" = --visual-only ]; then
         exit 1
     fi
     echo 'visual fixture contracts passed; run pnpm run verify for the complete verdict'
+    exit 0
+fi
+
+if [ "${1-}" = --scope-only ]; then
+    (cd "$template" && pnpm exec playwright install chromium >/dev/null)
+    scope_contracts
+    if [ "$failures" -ne 0 ]; then
+        echo "$failures change-scope fixture assertion(s) failed" >&2
+        exit 1
+    fi
+    echo 'change-scope fixture contracts passed; run pnpm run verify for the complete verdict'
     exit 0
 fi
 
@@ -1287,6 +1406,7 @@ fi
 
 layout_contracts
 visual_contracts
+scope_contracts
 clock_contracts
 browser_server_contracts
 fi
