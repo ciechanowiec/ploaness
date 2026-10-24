@@ -1,7 +1,11 @@
 // Manage files that tools read from the working tree, where installed package configuration cannot reach them.
 
-/** How ploaness treats a path in the consumer working tree. */
-export type Disposition = 'PINNED' | 'SEED' | 'FORBIDDEN' | 'SECTION' | 'REFERENCE'
+/**
+ * How ploaness treats a path in the consumer working tree. A SCAFFOLD file is written by `ploaness init`
+ * when absent and is the project's from then on: `sync` never writes it and the gate never judges it,
+ * so a project that verifies on another platform deletes it once and it stays deleted.
+ */
+export type Disposition = 'PINNED' | 'SEED' | 'SCAFFOLD' | 'FORBIDDEN' | 'SECTION' | 'REFERENCE'
 
 /**
  * Where a managed path lives.
@@ -46,7 +50,14 @@ export interface ParsedManifest {
   readonly problems: readonly string[]
 }
 
-const DISPOSITIONS: ReadonlySet<string> = new Set<string>(['PINNED', 'SEED', 'FORBIDDEN', 'SECTION', 'REFERENCE'])
+const DISPOSITIONS: ReadonlySet<string> = new Set<string>([
+  'PINNED',
+  'SEED',
+  'SCAFFOLD',
+  'FORBIDDEN',
+  'SECTION',
+  'REFERENCE',
+])
 
 // A guard rather than a set membership test followed by an assertion. Both say the same thing; only
 // this one is a claim the compiler checks, so a disposition added to the union without being added to
@@ -299,6 +310,7 @@ const CHECKERS: Readonly<Record<Disposition, AssetChecker>> = {
   FORBIDDEN: checkForbidden,
   PINNED: checkPinned,
   REFERENCE: checkReference,
+  SCAFFOLD: (): AssetViolation | undefined => undefined,
   SECTION: (asset: ManagedAsset, state: AssetState): AssetViolation | undefined =>
     state.isPresent ? checkSection(asset, state) : missing(asset),
   SEED: checkSeed,
@@ -338,30 +350,33 @@ export const findAssetViolations = (
 /** What `ploaness sync` should do with one managed path. */
 export type SyncAction = 'write' | 'delete' | 'skip' | 'splice'
 
+// One rule per disposition, like the checkers above, so a disposition added to the union cannot compile
+// without saying what sync does with it.
+const SYNC_ACTIONS: Readonly<Record<Disposition, (isPresent: boolean) => SyncAction>> = {
+  FORBIDDEN: (isPresent: boolean): SyncAction => (isPresent ? 'delete' : 'skip'),
+  PINNED: (): SyncAction => 'write',
+  // Never written by sync, in either state. Creating a reference would hand the project an entry point
+  // for a tool it may not use, and rewriting one would replace a pointer the tool understands with a
+  // guess.
+  REFERENCE: (): SyncAction => 'skip',
+  // A scaffold is `init`'s to write once; recreating it would undo a project's deletion.
+  SCAFFOLD: (): SyncAction => 'skip',
+  // Never overwritten, even when absent: the project text below the block is the project's, and
+  // creating the file wholesale would be ploaness writing that text on its behalf.
+  SECTION: (): SyncAction => 'splice',
+  SEED: (isPresent: boolean): SyncAction => (isPresent ? 'skip' : 'write'),
+}
+
 /**
  * Decide the sync action for one path. A PINNED file is always rewritten, so drift is repaired; a SEED
- * file is written only when absent, so the project's own edits survive; a FORBIDDEN file is deleted; a
- * SECTION file has only its marked block replaced.
+ * file is written only when absent, so the project's own edits survive; a SCAFFOLD file is left to
+ * `init`; a FORBIDDEN file is deleted; a SECTION file has only its marked block replaced.
  * @param asset the catalogue entry.
  * @param isPresent whether the path is currently present in the working tree.
  * @returns the action `ploaness sync` performs.
  */
-export const syncAction = (asset: ManagedAsset, isPresent: boolean): SyncAction => {
-  if (asset.disposition === 'FORBIDDEN') {
-    return isPresent ? 'delete' : 'skip'
-  }
-  // Never written, in either state. Creating one would hand the project an entry point for a tool it
-  // may not use, and rewriting one would replace a pointer the tool understands with a guess.
-  if (asset.disposition === 'REFERENCE') {
-    return 'skip'
-  }
-  if (asset.disposition === 'SEED') {
-    return isPresent ? 'skip' : 'write'
-  }
-  // A SECTION file is never overwritten, even when absent: the project text below the block is the
-  // project's, and creating the file wholesale would be ploaness writing that text on its behalf.
-  return asset.disposition === 'SECTION' ? 'splice' : 'write'
-}
+export const syncAction = (asset: ManagedAsset, isPresent: boolean): SyncAction =>
+  SYNC_ACTIONS[asset.disposition](isPresent)
 
 /** What a member can hold a managed file for, derived from its kind. */
 export interface AssetHost {

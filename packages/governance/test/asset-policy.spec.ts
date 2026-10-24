@@ -112,6 +112,17 @@ describe('syncAction', () => {
     expect(syncAction({ path: 'a', disposition: 'SEED', scope: 'REPOSITORY' }, false)).toBe('write')
   })
 
+  it('leaves a scaffold to init, present or deleted, and never judges it', () => {
+    const scaffold: ManagedAsset = {
+      path: '.github/workflows/verify-full.yml',
+      disposition: 'SCAFFOLD',
+      scope: 'REPOSITORY',
+    }
+    expect([syncAction(scaffold, true), syncAction(scaffold, false)]).toEqual(['skip', 'skip'])
+    expect(checkAsset(scaffold, { isPresent: false, actual: undefined, expected: 'on: schedule' })).toBeUndefined()
+    expect(checkAsset(scaffold, { isPresent: true, actual: 'edited', expected: 'on: schedule' })).toBeUndefined()
+  })
+
   it('deletes a forbidden path that exists', () => {
     expect(syncAction({ path: 'a', disposition: 'FORBIDDEN', scope: 'REPOSITORY' }, true)).toBe('delete')
     expect(syncAction({ path: 'a', disposition: 'FORBIDDEN', scope: 'REPOSITORY' }, false)).toBe('skip')
