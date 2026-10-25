@@ -4,11 +4,11 @@ import { errors, type Locator, type Page, test } from '@playwright/test'
 import {
   type BrowserFinding,
   disclosureDefects,
+  drivenViewports,
   type FindingPlace,
   type FindingViewport,
   findingAt,
   type ShardItem,
-  STRESS_VIEWPORTS,
   shardOf,
 } from '@ploaness/governance'
 import { type TargetFacts, targetFacts } from './layout.js'
@@ -260,7 +260,7 @@ export const expectDisclosureStates = async (page: Page, shard: Shard): Promise<
   const discovery: Discovery = readDiscovery(test.info())
   const items: readonly ShardItem<PlaceItem>[] = shardOf(
     discovery.locations.flatMap((location: SweepLocation): readonly PlaceItem[] =>
-      STRESS_VIEWPORTS.map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
+      drivenViewports(location.isStory).map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
     ),
     shard,
   )

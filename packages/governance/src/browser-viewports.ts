@@ -23,6 +23,16 @@ export const STRESS_VIEWPORTS: readonly FindingViewport[] = [
   { width: 1280, height: 800 },
 ]
 
+/**
+ * The viewports the interaction and disclosure passes drive a location at. A story renders one component
+ * apart from any page, and its layout at every width is already judged at rest and by the width sweep, so
+ * its controls are driven only at the desktop, where hover is judged too. A route is driven at both.
+ * @param isStory whether the location is a story.
+ * @returns the viewports to drive it at.
+ */
+export const drivenViewports = (isStory: boolean): readonly FindingViewport[] =>
+  isStory ? STRESS_VIEWPORTS.slice(-1) : STRESS_VIEWPORTS
+
 /** The narrowest width the sweep measures: the WCAG 1.4.10 reflow bound. */
 export const SWEEP_MIN_WIDTH: number = 320
 

@@ -538,8 +538,8 @@ committed.
 | --- | --- | --- | --- |
 | Discovery | Chromium, once | desktop | every route and story |
 | Resting rules | Chromium | baseline and declared; for routes also both sides of every breakpoint that styles them | every route and story |
-| Interaction states | Chromium | 390x844 and 1280x800; hover at 1280 | every route and story |
-| Disclosures | Chromium | 390x844 and 1280x800 | every route and story |
+| Interaction states | Chromium | routes at 390x844 and 1280x800, stories at 1280x800; hover at 1280 | every route and story |
+| Disclosures | Chromium | routes at 390x844 and 1280x800, stories at 1280x800 | every route and story |
 | Text stress | Chromium | spacing at 390x844 and 1280x800; resize at 1280x800 | one route per template, one story per component |
 | Width sweep | Chromium | 320 to 1920 px in 32 px steps, bisected | one route per template, one story per component |
 | Dark scheme | Chromium | 390x844 and 1280x800 | pages whose stylesheets answer `prefers-color-scheme`; a `.dark` class alone is not followed |

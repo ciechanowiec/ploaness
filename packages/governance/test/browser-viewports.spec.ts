@@ -3,6 +3,7 @@ import {
   BASELINE_VIEWPORTS,
   bisectionWidth,
   breakpointEdges,
+  drivenViewports,
   failingRanges,
   pageViewports,
   SWEEP_MAX_WIDTH,
@@ -68,5 +69,15 @@ describe('the width sweep', () => {
       { from: 441, to: 464 },
       { from: 640, to: 640 },
     ])
+  })
+})
+
+const drivenLabels = (isStory: boolean): readonly string[] =>
+  drivenViewports(isStory).map((viewport): string => `${String(viewport.width)}x${String(viewport.height)}`)
+
+describe('driven viewports', () => {
+  it('drives a route at the phone and the desktop, and a story at the desktop only', () => {
+    expect(drivenLabels(false)).toEqual(['390x844', '1280x800'])
+    expect(drivenLabels(true)).toEqual(['1280x800'])
   })
 })

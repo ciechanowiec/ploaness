@@ -4,6 +4,7 @@ import {
   type BrowserFinding,
   type CarriedJudgement,
   classifyHitTarget,
+  drivenViewports,
   type FindingPlace,
   type FindingViewport,
   FOCUS_RING_WIDTH,
@@ -343,22 +344,26 @@ const INTERACTION_RULES: readonly string[] = ['obscured', 'focus-obscured', 'foc
 export const expectInteractionStates = async (page: Page, shard: Shard): Promise<void> => {
   test.info().skip(!isChromium(page), 'the interaction pass runs in Chromium')
   const discovery: Discovery = readDiscovery(test.info())
-  const items: readonly ShardItem<PlaceItem>[] = shardOf(
-    discovery.locations.flatMap((location: SweepLocation): readonly PlaceItem[] =>
-      STRESS_VIEWPORTS.map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
-    ),
-    shard,
+  const places: readonly PlaceItem[] = discovery.locations.flatMap((location: SweepLocation): readonly PlaceItem[] =>
+    drivenViewports(location.isStory).map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
   )
+  // The chrome is driven once per viewport across every shard, at the first place the whole pass has at
+  // that viewport, by whichever shard holds it.
+  const chromePlaces: ReadonlySet<number> = new Set<number>(
+    STRESS_VIEWPORTS.map((viewport: FindingViewport): number =>
+      places.findIndex((place: PlaceItem): boolean => place.viewport.width === viewport.width),
+    ),
+  )
+  const items: readonly ShardItem<PlaceItem>[] = shardOf(places, shard)
   const units: number = shardUnits(items, (item: PlaceItem): number => item.location.controls + 1)
   const budget: Budget = armBudget(page, 'interaction', shard, units)
   await preparePage(page)
   const visits: readonly Visit[] = await visitAll(items, {
     budget,
     labelOf: itemLabel,
-    // The index is the item's place in the whole pass, so the chrome is driven once per viewport
-    // across every shard, by whichever shard holds the first location.
+    // The index is the item's place in the whole pass.
     visit: async (item: PlaceItem, index: number): Promise<Visit> =>
-      await interactionVisit(page, item, index < STRESS_VIEWPORTS.length),
+      await interactionVisit(page, item, chromePlaces.has(index)),
   })
   finishPass(page, {
     budget,
