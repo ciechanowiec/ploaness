@@ -571,6 +571,7 @@ const clampedCeiling = (declared: unknown, shipped: number): number =>
  * @returns the effective settings, with every field populated.
  */
 export const readRawSettings = (raw: Record<string, unknown>): Settings => {
+  const lists: DeclaredLists = readDeclaredLists(raw)
   const {
     typography: declaredTypography,
     javascript: declaredJavascript,
@@ -579,7 +580,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     glue: declaredGlue,
     generated: declaredGenerated,
     layers: declaredLayers,
-  }: DeclaredLists = readDeclaredLists(raw)
+  }: DeclaredLists = lists
   return {
     // Additive, like every other list field. Replacing the default let a project declare `["src"]` and
     // silently drop `tests` and `scripts` from the conventions, payload-rules, suppressions, css and
@@ -590,15 +591,7 @@ export const readRawSettings = (raw: Record<string, unknown>): Settings => {
     frameworkGlue: [...DEFAULT_FRAMEWORK_GLUE, ...honoured(declaredGlue)],
     generatedArtefacts: [...GENERATED_ARTEFACTS, ...honoured(declaredGenerated)],
     pureLogicRoots: [...DEFAULT_PURE_LOGIC_ROOTS, ...layerRoots(declaredLayers)],
-    declaredExclusions: [
-      ...declaredTypography,
-      ...declaredJavascript,
-      ...declaredCoverage,
-      ...declaredRoutes,
-      ...declaredGlue,
-      ...declaredGenerated,
-      ...declaredLayers,
-    ],
+    declaredExclusions: Object.values(lists).flat(),
     javascriptAllowlist: [...DEFAULT_JAVASCRIPT_ALLOWLIST, ...honoured(declaredJavascript)],
     javascriptRuntimes: [...DEFAULT_JAVASCRIPT_RUNTIMES, ...declaredRuntimeRoles(declaredJavascript)],
     coverageExclude: [
