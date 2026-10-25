@@ -571,6 +571,7 @@ cleared `aria-busy` regions - and measured twice.
 | `obscured` | something other than a control or its descendant sits at the control's centre; a hidden or inert control, or one with `pointer-events: none`, is offered to no pointer and is not judged |
 | `focus-obscured` | a keyboard-focused element is entirely hidden by fixed or sticky content |
 | `focus-visible` | the pixels of a keyboard-focused element and a 4 px ring do not change when it takes focus |
+| `focus-contrast` | the focus change shows, but the pixels whose colour contrasts 3:1 with their unfocused colour cover less than a 1 px line along half the element's longer side (WCAG 1.4.11): a faint tint or glow, not an outline, ring, underline or strong fill |
 | `disclosure-keyboard` | `Escape` does not close a popup or modal dialog, focus does not return to its control within a second, or focus leaves an open modal dialog |
 | `text-spacing` | the WCAG 1.4.12 overrides cause a new overflow, overlap, or clip |
 | `text-resize` | doubling every text size causes a new overflow, overlap, or clip, or text does not grow |

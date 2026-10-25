@@ -184,6 +184,10 @@ const PAGES: Readonly<Record<string, Variant>> = {
     defect: '<button type="button" className="no-ring">Silent focus</button>',
     valid: '<button type="button">Visible focus</button>',
   },
+  'focus-contrast': {
+    defect: '<button type="button" className="faint-ring">Faint focus</button>',
+    valid: '<button type="button" className="strong-ring">Strong focus</button>',
+  },
   obscured: {
     defect: '<div className="covered"><a href="/">Covered link</a><div className="overlay"></div></div>',
     valid:
@@ -241,6 +245,8 @@ h1, p { margin: 0; }
 @font-face { font-family: Broken; src: url('/missing.woff2') format('woff2'); }
 .broken-font { font-family: Broken, sans-serif; }
 .no-ring:focus, .no-ring:focus-visible { outline: none; }
+.faint-ring:focus-visible { outline: 2px solid #f3f4f6; outline-offset: 2px; }
+.strong-ring:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
 .covered { position: relative; }
 .overlay { position: absolute; inset: 0; background: #ffffff; }
 .fixed-line { height: 20px; line-height: 20px; overflow: hidden; }

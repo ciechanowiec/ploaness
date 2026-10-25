@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CandidateFinding } from '../src/browser-exemptions.js'
 import {
+  contrastRatio,
   type DisclosureProbe,
   disclosureDefects,
   findDistortedImages,
@@ -9,6 +10,7 @@ import {
   findUnloadedImages,
   findUnreservedMedia,
   findUpscaledImages,
+  hasContrastingFocus,
   hasVisibleFocus,
   instability,
   obscuringContent,
@@ -183,6 +185,9 @@ describe('font loading', () => {
   })
 })
 
+const pixels = (count: number, colour: readonly number[]): readonly number[] =>
+  Array.from({ length: count }, (): readonly number[] => colour).flat()
+
 describe('focus and disclosures', () => {
   it('reports a focused element only when every sample of it is covered', () => {
     expect([
@@ -204,6 +209,25 @@ describe('focus and disclosures', () => {
       hasVisibleFocus(Uint8Array.of(1, 2, 3), Uint8Array.of(1, 9, 3)),
       hasVisibleFocus(Uint8Array.of(1, 2), Uint8Array.of(1, 2, 3)),
     ]).toEqual([false, true, true])
+  })
+
+  it('measures the WCAG contrast ratio from either side', () => {
+    expect([contrastRatio(1, 0), contrastRatio(0, 1), contrastRatio(0.5, 0.5)]).toEqual([21, 21, 1])
+  })
+
+  it('accepts a focus change whose contrasting pixels cover a line along half the longer side', () => {
+    const white: readonly number[] = [255, 255, 255, 255]
+    const unfocused: readonly number[] = pixels(20, white)
+    // Ten of twenty pixels turn dark blue (contrast 8.6:1), the rest stay white.
+    const ring: readonly number[] = [...pixels(10, [29, 78, 216, 255]), ...pixels(10, white)]
+    // Every pixel turns a pale grey (contrast 1.1:1).
+    const tint: readonly number[] = pixels(20, [243, 244, 246, 255])
+    expect([
+      hasContrastingFocus({ unfocused, focused: ring, scale: 1, extent: 20 }),
+      hasContrastingFocus({ unfocused, focused: ring, scale: 1, extent: 21 }),
+      hasContrastingFocus({ unfocused, focused: ring, scale: 2, extent: 20 }),
+      hasContrastingFocus({ unfocused, focused: tint, scale: 1, extent: 2 }),
+    ]).toEqual([true, false, false, false])
   })
 
   it('holds a popup and a modal dialog to Escape and focus return, and an accordion to neither', () => {

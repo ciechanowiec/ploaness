@@ -317,6 +317,72 @@ export const hasVisibleFocus = (unfocused: Uint8Array, focused: Uint8Array): boo
   unfocused.length !== focused.length ||
   unfocused.some((byte: number, index: number): boolean => byte !== focused[index])
 
+/** The contrast a focus indicator's changed pixels need against what they replaced (WCAG 1.4.11). */
+export const FOCUS_CONTRAST_RATIO: number = 3
+
+const RGBA_BYTES: number = 4
+const CHANNEL_MAX: number = 255
+const LINEAR_KNEE: number = 0.04045
+const LINEAR_SLOPE: number = 12.92
+const GAMMA_OFFSET: number = 0.055
+const GAMMA_SCALE: number = 1.055
+const GAMMA: number = 2.4
+const RED_WEIGHT: number = 0.2126
+const GREEN_WEIGHT: number = 0.7152
+const BLUE_WEIGHT: number = 0.0722
+const FLARE: number = 0.05
+const BLUE_OFFSET: number = 2
+// The share of the element's longer side a contrasting one-pixel line must cover.
+const LINE_SHARE: number = 0.5
+
+const linearChannel = (value: number): number => {
+  const fraction: number = value / CHANNEL_MAX
+  return fraction <= LINEAR_KNEE ? fraction / LINEAR_SLOPE : ((fraction + GAMMA_OFFSET) / GAMMA_SCALE) ** GAMMA
+}
+
+const luminanceAt = (pixels: readonly number[], offset: number): number =>
+  RED_WEIGHT * linearChannel(pixels[offset] ?? 0) +
+  GREEN_WEIGHT * linearChannel(pixels[offset + 1] ?? 0) +
+  BLUE_WEIGHT * linearChannel(pixels[offset + BLUE_OFFSET] ?? 0)
+
+/**
+ * The WCAG contrast ratio between two relative luminances.
+ * @param first one luminance.
+ * @param second the other.
+ * @returns the ratio, from 1 to 21.
+ */
+export const contrastRatio = (first: number, second: number): number =>
+  (Math.max(first, second) + FLARE) / (Math.min(first, second) + FLARE)
+
+/** A focused element's region rendered focused and unfocused, decoded to RGBA. */
+export interface FocusRenderings {
+  readonly unfocused: readonly number[]
+  readonly focused: readonly number[]
+  /** Device pixels per CSS pixel along one side. */
+  readonly scale: number
+  /** The longer side of the element's visible box, in CSS pixels. */
+  readonly extent: number
+}
+
+/**
+ * Whether a focus indicator contrasts with what it replaced (rule `focus-contrast`). The pixels whose
+ * focused colour contrasts at least 3:1 with their unfocused colour must cover as much as a one-pixel line
+ * along half the element's longer side, so an outline, a ring, an underline or a strong fill passes and a
+ * faint tint or glow does not.
+ * @param renderings the two renderings, their scale, and the element's longer side.
+ * @returns true when enough of the change contrasts.
+ */
+export const hasContrastingFocus = (renderings: FocusRenderings): boolean => {
+  const { unfocused, focused, scale, extent }: FocusRenderings = renderings
+  const pixels: number = Math.floor(Math.min(unfocused.length, focused.length) / RGBA_BYTES)
+  const contrasting: number = Array.from({ length: pixels }, (_unused: unknown, pixel: number): number => pixel).filter(
+    (pixel: number): boolean =>
+      contrastRatio(luminanceAt(unfocused, pixel * RGBA_BYTES), luminanceAt(focused, pixel * RGBA_BYTES)) >=
+      FOCUS_CONTRAST_RATIO,
+  ).length
+  return contrasting / (scale * scale) >= extent * LINE_SHARE
+}
+
 /** What driving one opened disclosure with the keyboard showed. */
 export interface DisclosureProbe {
   /** Whether the control declares a popup, which the keyboard pattern says `Escape` dismisses. */
