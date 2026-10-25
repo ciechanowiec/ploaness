@@ -338,6 +338,8 @@ visual_contracts() {
         expect_layout_line fail-visual "$line"
     done
     expect_no_layout_line fail-visual '[overflow] /sweep (chromium, width-sweep): from 432'
+    # Only the application can set a .dark class, so styling under one is not judged as a dark scheme.
+    expect_no_layout_line fail-visual '/class-night @390x844 (chromium, dark)'
     expect_no_layout_line fail-visual '/clean'
 
     new_case pass-visual

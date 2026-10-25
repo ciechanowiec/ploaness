@@ -542,7 +542,7 @@ committed.
 | Disclosures | Chromium | 390x844 and 1280x800 | every route and story |
 | Text stress | Chromium | spacing at 390x844 and 1280x800; resize at 1280x800 | one route per template, one story per component |
 | Width sweep | Chromium | 320 to 1920 px in 16 px steps, bisected | one route per template, one story per component |
-| Dark scheme | Chromium | 390x844 and 1280x800 | pages whose stylesheets declare a dark scheme |
+| Dark scheme | Chromium | 390x844 and 1280x800 | pages whose stylesheets answer `prefers-color-scheme`; a `.dark` class alone is not followed |
 | Engine | Firefox, WebKit | baseline | one route per template, one story per component |
 
 The baseline is 390x844, 768x1024 and 1280x800; the width sweep covers overflow at every width between

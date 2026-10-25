@@ -209,6 +209,7 @@ const PAGES: Readonly<Record<string, Variant>> = {
   unstable: { defect: '<Grow />', valid: '<p>Holding still.</p>' },
   sweep: { defect: '<div className="band">Band</div>', valid: '<div className="band fluid-band">Band</div>' },
   night: { defect: '<p className="night">Night text</p>', valid: '<p className="night readable">Night text</p>' },
+  'class-night': { defect: '<p className="class-night">Class night text</p>', valid: '<p>Class night text</p>' },
   'stale-exemption': {
     defect:
       '<p data-ploaness-layout="small-text" data-ploaness-layout-reason="the note is set small on purpose">Note</p>',
@@ -254,6 +255,7 @@ h1, p { margin: 0; }
   .night { color: #333333; background: #222222; }
   .night.readable { color: #f9fafb; }
 }
+.dark .class-night { color: #333333; background: #222222; }
 .growth { overflow: hidden; width: 300px; }
 .growth div { height: 20px; background: #dbeafe; }
 .menu { display: flex; flex-direction: column; gap: 8px; }

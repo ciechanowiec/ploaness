@@ -82,7 +82,6 @@ interface PageFacts {
   /** The page's `<link rel="canonical">` href, or empty. */
   readonly canonical: string
   readonly hasDarkMedia: boolean
-  readonly hasDarkClass: boolean
   readonly controls: number
   readonly hrefs: readonly string[]
   readonly alternates: readonly AlternateLink[]
@@ -124,9 +123,6 @@ const pageFactsInPage = (controls: string): PageFacts => {
     canonical: document.querySelector('link[rel="canonical"]')?.getAttribute('href') ?? '',
     hasDarkMedia: mediaRules.some((rule: CssRule): boolean =>
       (rule.media?.mediaText ?? '').includes('prefers-color-scheme'),
-    ),
-    hasDarkClass: rules.some((rule: CssRule): boolean =>
-      /(?:^|[\s,>+~(])\.dark(?![\w-])/u.test(rule.selectorText ?? ''),
     ),
     controls: document.querySelectorAll(controls).length,
     hrefs: Array.from(
@@ -226,7 +222,6 @@ const crawl = async (page: Page, state: CrawlState): Promise<CrawlState> => {
     isStory: false,
     edges: breakpointEdges(facts.mediaTexts),
     hasDarkMedia: facts.hasDarkMedia,
-    hasDarkClass: facts.hasDarkClass,
     controls: facts.controls,
   }
   return await crawl(
@@ -305,7 +300,6 @@ const readStoryLocation = async (page: Page, story: DiscoveredStory): Promise<Sw
     isStory: true,
     edges: [],
     hasDarkMedia: false,
-    hasDarkClass: false,
     controls: 0,
   }
   await loadLocation(page, location, DESKTOP, placeAt(page, location, undefined, 'discovery'))
@@ -315,7 +309,6 @@ const readStoryLocation = async (page: Page, story: DiscoveredStory): Promise<Sw
     ...location,
     edges: breakpointEdges(facts.mediaTexts),
     hasDarkMedia: facts.hasDarkMedia,
-    hasDarkClass: facts.hasDarkClass,
     controls: facts.controls,
   }
 }

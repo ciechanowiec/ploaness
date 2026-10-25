@@ -17,8 +17,6 @@ import {
   armBudget,
   type Budget,
   type Discovery,
-  type DomDocument,
-  type DomElement,
   finishPass,
   healthOf,
   isChromium,
@@ -39,9 +37,6 @@ import {
   type Visit,
   visitAll,
 } from './sweep-shared.js'
-
-// The browser surface the page functions below touch, declared for the reason `settle.ts` records.
-declare const document: DomDocument
 
 const restingVisit = async (page: Page, item: PlaceItem, index: number): Promise<Visit> => {
   const place: FindingPlace = placeAt(page, item.location, item.viewport, 'resting')
@@ -124,20 +119,10 @@ export const expectEngineRules = async (page: Page, shard: Shard): Promise<void>
   })
 }
 
-const DARK_CLASS: string = 'dark'
-
-const addRootClassInPage = (name: string): void => {
-  const root: DomElement = document.documentElement
-  root.setAttribute('class', `${root.getAttribute('class') ?? ''} ${name}`.trim())
-}
-
 const darkVisit = async (page: Page, item: PlaceItem, index: number): Promise<Visit> => {
-  await page.emulateMedia({ colorScheme: item.location.hasDarkMedia ? 'dark' : 'light' })
+  await page.emulateMedia({ colorScheme: 'dark' })
   const place: FindingPlace = placeAt(page, item.location, item.viewport, 'dark')
   const loaded: readonly BrowserFinding[] = await loadLocation(page, item.location, item.viewport, place)
-  if (item.location.hasDarkClass) {
-    await page.evaluate(addRootClassInPage, DARK_CLASS)
-  }
   const unsettled: readonly BrowserFinding[] = await settleFindings(page, place)
   const judged: PlaceScan = await judgeRestingPlace(page, place)
   const axe: readonly BrowserFinding[] = isStressViewport(item.viewport) ? await axeFindings(page, place) : []
@@ -147,9 +132,11 @@ const darkVisit = async (page: Page, item: PlaceItem, index: number): Promise<Vi
 }
 
 /**
- * Judge one shard of every location whose stylesheets declare a dark scheme again in it, from a fresh
- * load. Only at the two axe widths: the dark scheme changes colour, which axe judges there, while the
- * geometry it shares with the light scheme is judged by the resting pass at every viewport.
+ * Judge one shard of every location whose stylesheets answer `prefers-color-scheme` again in the dark
+ * scheme, from a fresh load. A `.dark` class is not followed: only the application's own code can set it,
+ * so its presence does not show that a visitor can reach it. Only at the two axe widths: the dark scheme
+ * changes colour, which axe judges there, while the geometry it shares with the light scheme is judged by
+ * the resting pass at every viewport.
  * @param page the test's page.
  * @param shard the part of the pass this test visits.
  */
@@ -157,7 +144,7 @@ export const expectDarkScheme = async (page: Page, shard: Shard): Promise<void> 
   test.info().skip(!isChromium(page), 'the dark-scheme pass runs in Chromium')
   const discovery: Discovery = readDiscovery(test.info())
   const locations: readonly SweepLocation[] = discovery.locations.filter(
-    (location: SweepLocation): boolean => location.hasDarkMedia || location.hasDarkClass,
+    (location: SweepLocation): boolean => location.hasDarkMedia,
   )
   await runRestingPass(page, shard, {
     pass: 'dark-scheme',

@@ -113,7 +113,6 @@ export interface SweepLocation {
   readonly isStory: boolean
   readonly edges: readonly number[]
   readonly hasDarkMedia: boolean
-  readonly hasDarkClass: boolean
   readonly controls: number
 }
 
