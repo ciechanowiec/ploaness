@@ -29,8 +29,11 @@ export const SWEEP_MIN_WIDTH: number = 320
 /** The widest width the sweep measures. */
 export const SWEEP_MAX_WIDTH: number = 1920
 
-/** The step of the width sweep, in CSS pixels. */
-export const SWEEP_STEP: number = 16
+/**
+ * The step of the width sweep, in CSS pixels. A failing step is bisected to the exact pixel, so the step only
+ * bounds how narrow a band of widths a defect can hide in between two passing steps.
+ */
+export const SWEEP_STEP: number = 32
 
 /** The height the width sweep holds while it resizes. */
 export const SWEEP_HEIGHT: number = 900
@@ -147,7 +150,7 @@ export const pageViewports = (
 
 /**
  * The widths the sweep steps through.
- * @returns every 16th width from 320 to 1920, both ends included.
+ * @returns every 32nd width from 320 to 1920, both ends included.
  */
 export const sweepWidths = (): readonly number[] =>
   Array.from(

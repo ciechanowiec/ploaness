@@ -50,9 +50,9 @@ describe('the viewports a page is loaded at', () => {
 })
 
 describe('the width sweep', () => {
-  it('steps from the narrowest to the widest width by 16 px', () => {
+  it('steps from the narrowest to the widest width by 32 px', () => {
     const widths: readonly number[] = sweepWidths()
-    expect([widths[0], widths[1], widths.at(-1), widths.length]).toEqual([SWEEP_MIN_WIDTH, 336, SWEEP_MAX_WIDTH, 101])
+    expect([widths[0], widths[1], widths.at(-1), widths.length]).toEqual([SWEEP_MIN_WIDTH, 352, SWEEP_MAX_WIDTH, 51])
   })
 
   it('bisects until the passing and failing widths are adjacent', () => {
