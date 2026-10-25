@@ -4,6 +4,7 @@ import {
   contrastRatio,
   type DisclosureProbe,
   disclosureDefects,
+  type FocusPosition,
   findDistortedImages,
   findSmallText,
   findUnloadedFonts,
@@ -13,6 +14,7 @@ import {
   hasContrastingFocus,
   hasVisibleFocus,
   instability,
+  isFocusBackwards,
   obscuringContent,
 } from '../src/browser-rules.js'
 import type { FontFaceFacts, LayoutNode, LayoutSnapshot, MediaFacts } from '../src/layout-snapshot.js'
@@ -185,6 +187,17 @@ describe('font loading', () => {
   })
 })
 
+const placed = (top: number, left: number, changes: Partial<FocusPosition> = {}): FocusPosition => ({
+  top,
+  bottom: top + 40,
+  left,
+  right: left + 100,
+  landmark: 'main',
+  isUnplaced: false,
+  isRightToLeft: false,
+  ...changes,
+})
+
 const pixels = (count: number, colour: readonly number[]): readonly number[] =>
   Array.from({ length: count }, (): readonly number[] => colour).flat()
 
@@ -228,6 +241,35 @@ describe('focus and disclosures', () => {
       hasContrastingFocus({ unfocused, focused: ring, scale: 2, extent: 20 }),
       hasContrastingFocus({ unfocused, focused: tint, scale: 1, extent: 2 }),
     ]).toEqual([true, false, false, false])
+  })
+
+  it('reports focus moving entirely above the previous element in the same landmark', () => {
+    expect([
+      // The next row, and the next control on the same row.
+      isFocusBackwards(placed(100, 0), placed(200, 0)),
+      isFocusBackwards(placed(100, 0), placed(100, 120)),
+      // Back up the page, beside or behind the previous control.
+      isFocusBackwards(placed(200, 0), placed(100, 0)),
+      isFocusBackwards(placed(200, 120), placed(100, 50)),
+      // Overlapping rows are not entirely above.
+      isFocusBackwards(placed(200, 0), placed(170, 0)),
+    ]).toEqual([false, false, true, true, false])
+  })
+
+  it('lets focus climb to the head of the next column, in either direction of text', () => {
+    expect([
+      isFocusBackwards(placed(400, 0), placed(100, 120)),
+      isFocusBackwards(placed(400, 200, { isRightToLeft: true }), placed(100, 50, { isRightToLeft: true })),
+      isFocusBackwards(placed(400, 0, { isRightToLeft: true }), placed(100, 120, { isRightToLeft: true })),
+    ]).toEqual([false, false, true])
+  })
+
+  it('compares positions only within one landmark and only where they mean an order', () => {
+    expect([
+      isFocusBackwards(placed(900, 0, { landmark: 'footer' }), placed(100, 0)),
+      isFocusBackwards(placed(200, 0), placed(100, 0, { isUnplaced: true })),
+      isFocusBackwards(placed(200, 0, { isUnplaced: true }), placed(100, 0)),
+    ]).toEqual([false, false, false])
   })
 
   it('holds a popup and a modal dialog to Escape and focus return, and an accordion to neither', () => {

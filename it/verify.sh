@@ -328,6 +328,7 @@ visual_contracts() {
         '[page-not-stable] /unstable @390x844 (chromium, resting): ' \
         '[obscured] /obscured @1280x800 (chromium, resting): a \"Covered link\" cannot be reached by a pointer' \
         '[focus-visible] /focus-visible @390x844 (chromium, focus): button.no-ring \"Silent focus\" shows no visible change' \
+        '[focus-order] /focus-order @390x844 (chromium, focus): a \"Second in source\" takes focus after a \"First in source\"' \
         '[focus-contrast] /focus-contrast @390x844 (chromium, focus): button.faint-ring \"Faint focus\" changes when focused by keyboard, but too little' \
         '[focus-obscured] /focus-obscured @390x844 (chromium, focus): a \"Hidden link\" is focused and entirely hidden' \
         '[disclosure-keyboard] /disclosure-keyboard @390x844 (chromium, disclosure button \"Options\"): button \"Options\": Escape does not close it' \

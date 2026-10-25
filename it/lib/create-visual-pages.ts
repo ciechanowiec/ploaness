@@ -184,6 +184,11 @@ const PAGES: Readonly<Record<string, Variant>> = {
     defect: '<button type="button" className="no-ring">Silent focus</button>',
     valid: '<button type="button">Visible focus</button>',
   },
+  // Source order runs down the page; the defect reverses it visually, so tabbing climbs.
+  'focus-order': {
+    defect: '<div className="reversed"><a href="/">First in source</a><a href="/">Second in source</a></div>',
+    valid: '<div className="stacked"><a href="/">First in source</a><a href="/">Second in source</a></div>',
+  },
   'focus-contrast': {
     defect: '<button type="button" className="faint-ring">Faint focus</button>',
     valid: '<button type="button" className="strong-ring">Strong focus</button>',
@@ -245,6 +250,8 @@ h1, p { margin: 0; }
 @font-face { font-family: Broken; src: url('/missing.woff2') format('woff2'); }
 .broken-font { font-family: Broken, sans-serif; }
 .no-ring:focus, .no-ring:focus-visible { outline: none; }
+.stacked, .reversed { display: flex; flex-direction: column; gap: 24px; }
+.reversed { flex-direction: column-reverse; }
 .faint-ring:focus-visible { outline: 2px solid #f3f4f6; outline-offset: 2px; }
 .strong-ring:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
 .covered { position: relative; }

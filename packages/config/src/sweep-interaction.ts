@@ -9,12 +9,14 @@ import {
   type FindingViewport,
   FOCUS_CONTRAST_RATIO,
   FOCUS_RING_WIDTH,
+  type FocusPosition,
   type FocusSample,
   findingAt,
   type HitTargetClassification,
   type HitTargetProbe,
   hasContrastingFocus,
   hasVisibleFocus,
+  isFocusBackwards,
   judgeCarried,
   obscuringContent,
   STRESS_VIEWPORTS,
@@ -248,6 +250,61 @@ interface CanvasLike {
   getContext: (kind: '2d') => CanvasContextLike | null
 }
 
+declare const scrollX: number
+declare const scrollY: number
+
+// The elements whose extent a focus position is compared within, and those whose order is their own.
+const LANDMARKS: string = [
+  'header',
+  'nav',
+  'main',
+  'aside',
+  'footer',
+  'search',
+  '[role="banner"]',
+  '[role="navigation"]',
+  '[role="main"]',
+  '[role="complementary"]',
+  '[role="contentinfo"]',
+  '[role="region"]',
+  '[role="search"]',
+  'section[aria-label]',
+  'section[aria-labelledby]',
+  'form[aria-label]',
+  'form[aria-labelledby]',
+].join(', ')
+const DIALOGS: string = 'dialog, [role="dialog"], [role="alertdialog"]'
+
+// Where the focused element sits in the document, and the landmark it sits in, named by its path of
+// child indices so two stops in one landmark name it alike.
+const focusPositionInPage = ([landmarks, dialogs]: readonly [string, string]): FocusPosition | undefined => {
+  const active: DomElement | null = document.activeElement
+  if (active === null || active === document.body) {
+    return undefined
+  }
+  const box: DomRect = active.getBoundingClientRect()
+  const isPinned = (element: DomElement | null): boolean =>
+    element !== null &&
+    (['fixed', 'sticky'].includes(getComputedStyle(element).position) || isPinned(element.parentElement))
+  const pathOf = (element: DomElement | null): string => {
+    const parent: DomElement | null = element?.parentElement ?? null
+    if (element === null || parent === null) {
+      return ''
+    }
+    const index: number = Array.from(parent.querySelectorAll(':scope > *')).indexOf(element)
+    return `${pathOf(parent)}/${String(index)}`
+  }
+  return {
+    top: box.top + scrollY,
+    bottom: box.bottom + scrollY,
+    left: box.left + scrollX,
+    right: box.right + scrollX,
+    landmark: pathOf(active.closest(landmarks)),
+    isUnplaced: active.closest(dialogs) !== null || isPinned(active) || box.width <= 1 || box.height <= 1,
+    isRightToLeft: getComputedStyle(active).getPropertyValue('direction') === 'rtl',
+  }
+}
+
 declare const createImageBitmap: (image: Blob) => Promise<ImageBitmapLike>
 declare const OffscreenCanvas: new (width: number, height: number) => CanvasLike
 
@@ -335,18 +392,47 @@ const unmarkInPage = ([selector, name]: readonly [string, string]): void => {
   document.querySelector(selector)?.removeAttribute(name)
 }
 
-interface FocusStop {
-  readonly visit: Visit
-  readonly key: string | undefined
+/** Where the previous stop of a tab walk sat, and what it was. */
+interface PreviousStop {
+  readonly position: FocusPosition
+  readonly label: string
 }
 
-const focusStop = async (page: Page, place: FindingPlace): Promise<FocusStop> => {
+interface FocusStop {
+  readonly visit: Visit
+  /** The order finding, kept apart because a stop the walk has already visited is the walk wrapping. */
+  readonly order: Visit
+  readonly key: string | undefined
+  readonly previous: PreviousStop | undefined
+}
+
+const focusOrder = (
+  place: FindingPlace,
+  facts: TargetFacts,
+  previous: PreviousStop | undefined,
+  position: FocusPosition | undefined,
+): Visit =>
+  previous === undefined || position === undefined || !isFocusBackwards(previous.position, position)
+    ? EMPTY_VISIT
+    : carried(
+        findingAt(
+          place,
+          'focus-order',
+          `${facts.label} takes focus after ${previous.label}, but sits entirely above it in the same landmark`,
+        ),
+        facts,
+      )
+
+const focusStop = async (page: Page, place: FindingPlace, previous: PreviousStop | undefined): Promise<FocusStop> => {
   const facts: TargetFacts | undefined = await targetFacts(page, null)
   if (facts === undefined) {
-    return { visit: EMPTY_VISIT, key: undefined }
+    return { visit: EMPTY_VISIT, order: EMPTY_VISIT, key: undefined, previous: undefined }
   }
   const state: Omit<FocusState, 'facts'> = await page.evaluate(focusStateInPage, FOCUS_RING_WIDTH)
   const focusPlace: FindingPlace = { ...place, state: 'focus' }
+  const position: FocusPosition | undefined = await page.evaluate(focusPositionInPage, [LANDMARKS, DIALOGS] as const)
+  const order: Visit = focusOrder(focusPlace, facts, previous, position)
+  const here: PreviousStop | undefined = position === undefined ? undefined : { position, label: facts.label }
   const covering: string | undefined = obscuringContent(state.samples)
   const obscured: Visit =
     covering === undefined
@@ -362,7 +448,7 @@ const focusStop = async (page: Page, place: FindingPlace): Promise<FocusStop> =>
   await page.evaluate(unmarkInPage, [PROBE_SELECTOR, PROBE_ATTRIBUTE] as const)
   const clip: ScreenClip | undefined = state.clip
   if (clip === undefined) {
-    return { visit: merged([obscured, { ...EMPTY_VISIT, findings: contrast }]), key: facts.key }
+    return { visit: merged([obscured, { ...EMPTY_VISIT, findings: contrast }]), order, key: facts.key, previous: here }
   }
   const focused: Uint8Array = await page.screenshot({ clip, animations: 'disabled', caret: 'hide' })
   await page.evaluate(blurInPage)
@@ -371,7 +457,12 @@ const focusStop = async (page: Page, place: FindingPlace): Promise<FocusStop> =>
     shots: { focused, unfocused },
     measure: { clip, extent: state.extent },
   })
-  return { visit: merged([obscured, indicator, { ...EMPTY_VISIT, findings: contrast }]), key: facts.key }
+  return {
+    visit: merged([obscured, indicator, { ...EMPTY_VISIT, findings: contrast }]),
+    order,
+    key: facts.key,
+    previous: here,
+  }
 }
 
 // Tab through the page once from its start: each stop is judged, and the walk ends when focus leaves
@@ -380,17 +471,24 @@ const tabThrough = async (
   page: Page,
   place: FindingPlace,
   remaining: number,
-  seen: ReadonlySet<string>,
+  walked: { readonly seen: ReadonlySet<string>; readonly previous: PreviousStop | undefined },
 ): Promise<readonly Visit[]> => {
   if (remaining <= 0) {
     return []
   }
   await page.keyboard.press('Tab')
-  const stop: FocusStop = await focusStop(page, place)
-  if (stop.key === undefined || seen.has(stop.key)) {
+  const stop: FocusStop = await focusStop(page, place, walked.previous)
+  if (stop.key === undefined || walked.seen.has(stop.key)) {
     return [stop.visit]
   }
-  return [stop.visit, ...(await tabThrough(page, place, remaining - 1, new Set<string>([...seen, stop.key])))]
+  return [
+    stop.visit,
+    stop.order,
+    ...(await tabThrough(page, place, remaining - 1, {
+      seen: new Set<string>([...walked.seen, stop.key]),
+      previous: stop.previous,
+    })),
+  ]
 }
 
 // The tab walk may take this many stops beyond the controls discovery counted.
@@ -415,12 +513,10 @@ const interactionVisit = async (page: Page, item: PlaceItem, isFirst: boolean): 
   await page.goto(item.location.url)
   await page.addStyleTag({ content: STILL_STYLE })
   await settleForScan(page)
-  const focused: readonly Visit[] = await tabThrough(
-    page,
-    place,
-    item.location.controls + EXTRA_TAB_STOPS,
-    new Set<string>(),
-  )
+  const focused: readonly Visit[] = await tabThrough(page, place, item.location.controls + EXTRA_TAB_STOPS, {
+    seen: new Set<string>(),
+    previous: undefined,
+  })
   return merged([
     { ...EMPTY_VISIT, findings: [...loaded, ...unsettled] },
     ...hovered,
@@ -429,7 +525,13 @@ const interactionVisit = async (page: Page, item: PlaceItem, isFirst: boolean): 
   ])
 }
 
-const INTERACTION_RULES: readonly string[] = ['obscured', 'focus-obscured', 'focus-visible', 'focus-contrast']
+const INTERACTION_RULES: readonly string[] = [
+  'obscured',
+  'focus-obscured',
+  'focus-visible',
+  'focus-contrast',
+  'focus-order',
+]
 
 /**
  * Drive every control of one shard of the locations into hover and keyboard focus, and judge contrast,

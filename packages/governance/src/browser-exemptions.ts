@@ -36,6 +36,7 @@ export const EXEMPTIBLE_RULES: readonly string[] = [
   'media-space',
   'focus-visible',
   'focus-contrast',
+  'focus-order',
   'disclosure-keyboard',
 ]
 

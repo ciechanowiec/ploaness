@@ -383,6 +383,39 @@ export const hasContrastingFocus = (renderings: FocusRenderings): boolean => {
   return contrasting / (scale * scale) >= extent * LINE_SHARE
 }
 
+/** Where a keyboard-focused element sits, for the order focus moves in (rule `focus-order`). */
+export interface FocusPosition {
+  /** Its box in document coordinates, in CSS pixels. */
+  readonly top: number
+  readonly bottom: number
+  readonly left: number
+  readonly right: number
+  /** The landmark it sits in; positions are compared only within one. */
+  readonly landmark: string
+  /**
+   * Whether its position says nothing about order: it is in a dialog, in fixed or sticky content whose
+   * place moves with scrolling, or visually hidden.
+   */
+  readonly isUnplaced: boolean
+  readonly isRightToLeft: boolean
+}
+
+/**
+ * Whether focus moved backwards (rule `focus-order`): the next element sits entirely above the previous
+ * one in the same landmark. A next element in a column further along the line is not backwards, because
+ * that is where a reader goes after the foot of a column.
+ * @param previous where the previously focused element sits.
+ * @param next where the next focused element sits.
+ * @returns true when the move goes back up the page.
+ */
+export const isFocusBackwards = (previous: FocusPosition, next: FocusPosition): boolean => {
+  if (previous.isUnplaced || next.isUnplaced || previous.landmark !== next.landmark) {
+    return false
+  }
+  const isFurtherAlong: boolean = previous.isRightToLeft ? next.right <= previous.left : next.left >= previous.right
+  return next.bottom <= previous.top && !isFurtherAlong
+}
+
 /** What driving one opened disclosure with the keyboard showed. */
 export interface DisclosureProbe {
   /** Whether the control declares a popup, which the keyboard pattern says `Escape` dismisses. */
