@@ -134,3 +134,39 @@ export const stopApp = async (child: ChildProcess): Promise<void> => {
   process.kill(-pid, 'SIGTERM')
   await completion
 }
+
+/** Wait until a condition holds, with a deadline rather than a fixed sleep. */
+export const waitUntil = async (
+  isMet: () => boolean | Promise<boolean>,
+  what: string,
+  timeoutMs: number = STARTUP_TIMEOUT_MS,
+  started: number = Date.now(),
+): Promise<void> => {
+  if (await isMet()) {
+    return
+  }
+  if (Date.now() - started >= timeoutMs) {
+    throw new Error(`Timed out waiting until ${what}`)
+  }
+  await delay(POLL_INTERVAL_MS)
+  await waitUntil(isMet, what, timeoutMs, started)
+}
+
+const isPortFree = async (port: number): Promise<boolean> => {
+  const server: Server = createServer()
+  try {
+    await listen(server, port)
+  } catch {
+    return false
+  }
+  await close(server)
+  return true
+}
+
+/** Whether a listener of this fixture could take every port, which no running server then holds. */
+export const arePortsFree = async (ports: readonly number[]): Promise<boolean> => {
+  const answers: readonly boolean[] = await Promise.all(
+    ports.map(async (port: number): Promise<boolean> => await isPortFree(port)),
+  )
+  return answers.every(Boolean)
+}

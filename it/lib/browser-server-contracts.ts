@@ -8,6 +8,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { asRecord, asText, VERIFICATION_ENVIRONMENT_VARIABLE } from '@ploaness/governance'
 import {
+  arePortsFree,
   type CommandResult,
   close,
   freePort,
@@ -18,6 +19,7 @@ import {
   SIBLING_ENVIRONMENT_VARIABLE,
   stopApp,
   waitForApp,
+  waitUntil,
 } from './browser-server-support.js'
 
 const EXECUTABLE_ARGUMENT: number = 2
@@ -157,6 +159,46 @@ const freshStartup = async (ports: readonly number[]): Promise<void> => {
   }
 }
 
+const HELD_SPEC: string = 'tests/e2e/held.e2e.spec.ts'
+const HELD_MARKER: string = '.browser-tests-held'
+const RELEASE_TIMEOUT_MS: number = 15_000
+
+// A run ended by SIGTERM, as a cancelled CI job ends it, must stop the servers it started. Playwright
+// starts each one detached, in a process group of its own, so ending the run's group does not reach them.
+// The held spec keeps the run open until every server answers, so the signal arrives mid-run.
+const terminated = async (ports: readonly number[]): Promise<void> => {
+  writeFileSync(
+    HELD_SPEC,
+    [
+      "import { writeFileSync } from 'node:fs'",
+      "import { test } from '@playwright/test'",
+      "test('holds the run open until it is terminated', async () => {",
+      `  writeFileSync(${JSON.stringify(HELD_MARKER)}, 'held')`,
+      '  await new Promise<never>(() => {})',
+      '})',
+      '',
+    ].join('\n'),
+  )
+  rmSync(HELD_MARKER, { force: true })
+  const run: ChildProcess = spawn(executable, ['gate', 'e2e'], {
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env, CI: '', [VERIFICATION_ENVIRONMENT_VARIABLE]: '0' },
+  })
+  try {
+    await waitUntil((): boolean => existsSync(HELD_MARKER), 'the held spec runs')
+  } finally {
+    await stopApp(run)
+    rmSync(HELD_SPEC, { force: true })
+    rmSync(HELD_MARKER, { force: true })
+  }
+  await waitUntil(
+    async (): Promise<boolean> => await arePortsFree(ports),
+    `a terminated run stops every server it started, on ports ${ports.join(', ')}`,
+    RELEASE_TIMEOUT_MS,
+  )
+}
+
 const manualReuse = async (helperPorts: readonly number[]): Promise<void> => {
   const consumerRequire: NodeJS.Require = createRequire(manifestPath)
   const helpers: readonly HttpServer[] = HELPER_BODIES.map((body: string): HttpServer => healthServer(body))
@@ -228,5 +270,6 @@ await freshStartup([appPort, ...helperPorts])
 const nextConfig: string = readFileSync('next.config.ts', 'utf8')
 writeFileSync('next.config.ts', nextConfig.replace('export default {', "export default { output: 'standalone',"))
 await freshStartup([appPort, ...helperPorts])
+await terminated([appPort, ...helperPorts])
 await manualReuse(helperPorts)
 console.info('browser server ownership contracts passed')

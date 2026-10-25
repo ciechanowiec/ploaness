@@ -54,6 +54,18 @@ if (isVerification) {
   }
 }
 
+// Playwright starts each web server detached, in a process group of its own, and stops it when the run
+// is interrupted - but it treats only SIGINT as an interruption. A run ended by SIGTERM or SIGHUP, as a
+// cancelled CI job or a closed terminal ends it, left every server running on the port the next run
+// needs. Both are raised again as SIGINT, once, so the runner stops the run and its servers itself; a
+// second signal keeps its default. A test worker ignores SIGINT and is ended by its runner, so there the
+// forwarded signal changes nothing.
+for (const signal of ['SIGTERM', 'SIGHUP'] as const) {
+  process.once(signal, (): void => {
+    process.kill(process.pid, 'SIGINT')
+  })
+}
+
 const isReuseExistingServer: boolean = canReuseBrowserServer(process.env)
 const productionLauncher: string = fileURLToPath(new URL('production-server.js', import.meta.url))
 
