@@ -6,7 +6,9 @@ export type ContainerTool = 'gitleaks' | 'hadolint' | 'actionlint' | 'shellcheck
 
 /** The exact image each containerised analyzer runs, by digest. */
 export const CONTAINER_IMAGES: Readonly<Record<ContainerTool, string>> = {
-  cdxgen: 'ghcr.io/cdxgen/cdxgen:13.4.0@sha256:c1c933ce31df8b3978566b4dc8369ce3ac049a802aa90cb8f02a29be4820c798',
+  // The inventory only ever scans JavaScript (`-t js`), so the Node image serves it. The general image
+  // carries every language's toolchain: five times the download and 16 GB unpacked, on every fresh agent.
+  cdxgen: 'ghcr.io/cdxgen/cdxgen-node:13.4.0@sha256:d4688420e1c8e292b1e48ef02dfa95b30326f26c2d08088f4577c0d01b1ba6af',
   gitleaks: 'zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f',
   hadolint: 'hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d',
   actionlint: 'rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667',
