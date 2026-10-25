@@ -38,7 +38,7 @@ ifndef::env-github[]
 endif::[]
 endif::[]
 
-:ploaness-version: 1.13.0
+:ploaness-version: 1.14.0
 
 [[overview]]
 == Overview
