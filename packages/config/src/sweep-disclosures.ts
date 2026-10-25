@@ -8,8 +8,6 @@ import {
   type FindingPlace,
   type FindingViewport,
   findingAt,
-  type ShardItem,
-  shardOf,
 } from '@ploaness/governance'
 import { type TargetFacts, targetFacts } from './layout.js'
 import { axeFindings, judgeRestingPlace, type PlaceScan, settleFindings } from './scanner.js'
@@ -36,6 +34,7 @@ import {
   RESTING_JUDGED,
   readDiscovery,
   type Shard,
+  type ShardVisits,
   type SweepLocation,
   shardLocations,
   type Visit,
@@ -258,15 +257,12 @@ const DISCLOSURE_RULES: readonly string[] = [...RESTING_JUDGED, 'disclosure-keyb
 export const expectDisclosureStates = async (page: Page, shard: Shard): Promise<void> => {
   test.info().skip(!isChromium(page), 'the disclosure pass runs in Chromium')
   const discovery: Discovery = readDiscovery(test.info())
-  const items: readonly ShardItem<PlaceItem>[] = shardOf(
-    discovery.locations.flatMap((location: SweepLocation): readonly PlaceItem[] =>
-      drivenViewports(location.isStory).map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
-    ),
-    shard,
+  const items: readonly PlaceItem[] = discovery.locations.flatMap((location: SweepLocation): readonly PlaceItem[] =>
+    drivenViewports(location.isStory).map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
   )
   const budget: Budget = armBudget(page, 'disclosures', shard, items.length)
   await preparePage(page)
-  const visits: readonly Visit[] = await visitAll(items, {
+  const { visits, taken }: ShardVisits<PlaceItem> = await visitAll(items, {
     budget,
     labelOf: itemLabel,
     visit: async (item: PlaceItem): Promise<Visit> => await disclosureVisit(page, item),
@@ -276,6 +272,6 @@ export const expectDisclosureStates = async (page: Page, shard: Shard): Promise<
     pass: 'disclosures',
     visits,
     judgedRules: DISCLOSURE_RULES,
-    locations: shardLocations(items, locationOfItem),
+    locations: shardLocations(taken, locationOfItem),
   })
 }

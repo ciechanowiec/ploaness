@@ -7,9 +7,7 @@ import {
   type FindingPlace,
   type FindingViewport,
   pageViewports,
-  type ShardItem,
   STRESS_VIEWPORTS,
-  shardOf,
 } from '@ploaness/governance'
 import { projectSettings } from './project-settings.js'
 import { axeFindings, isStressViewport, judgeRestingPlace, type PlaceScan, settleFindings } from './scanner.js'
@@ -30,6 +28,7 @@ import {
   RESTING_JUDGED,
   readDiscovery,
   type Shard,
+  type ShardVisits,
   type SweepLocation,
   sampledLocations,
   screenshotOf,
@@ -71,10 +70,9 @@ interface RestingPass {
 }
 
 const runRestingPass = async (page: Page, shard: Shard, restingPass: RestingPass): Promise<void> => {
-  const items: readonly ShardItem<PlaceItem>[] = shardOf(restingPass.items, shard)
-  const budget: Budget = armBudget(page, restingPass.pass, shard, items.length)
+  const budget: Budget = armBudget(page, restingPass.pass, shard, restingPass.items.length)
   await preparePage(page)
-  const visits: readonly Visit[] = await visitAll(items, {
+  const { visits, taken }: ShardVisits<PlaceItem> = await visitAll(restingPass.items, {
     budget,
     labelOf: itemLabel,
     visit: async (item: PlaceItem, index: number): Promise<Visit> => await restingPass.visit(page, item, index),
@@ -85,7 +83,7 @@ const runRestingPass = async (page: Page, shard: Shard, restingPass: RestingPass
     pass: restingPass.pass,
     visits,
     judgedRules: RESTING_JUDGED,
-    locations: shardLocations(items, locationOfItem),
+    locations: shardLocations(taken, locationOfItem),
   })
 }
 

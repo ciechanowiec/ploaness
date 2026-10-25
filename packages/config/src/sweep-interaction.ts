@@ -15,9 +15,7 @@ import {
   hasVisibleFocus,
   judgeCarried,
   obscuringContent,
-  type ShardItem,
   STRESS_VIEWPORTS,
-  shardOf,
 } from '@ploaness/governance'
 import { type TargetFacts, targetFacts } from './layout.js'
 import { axeFindings, settleFindings } from './scanner.js'
@@ -44,14 +42,15 @@ import {
   merged,
   type PlaceItem,
   PROBE_ATTRIBUTE,
+  passUnits,
   placeAt,
   preparePage,
   readDiscovery,
   type Shard,
+  type ShardVisits,
   STILL_STYLE,
   type SweepLocation,
   shardLocations,
-  shardUnits,
   type Visit,
   visitAll,
 } from './sweep-shared.js'
@@ -348,17 +347,16 @@ export const expectInteractionStates = async (page: Page, shard: Shard): Promise
     drivenViewports(location.isStory).map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
   )
   // The chrome is driven once per viewport across every shard, at the first place the whole pass has at
-  // that viewport, by whichever shard holds it.
+  // that viewport, by whichever shard takes it.
   const chromePlaces: ReadonlySet<number> = new Set<number>(
     STRESS_VIEWPORTS.map((viewport: FindingViewport): number =>
       places.findIndex((place: PlaceItem): boolean => place.viewport.width === viewport.width),
     ),
   )
-  const items: readonly ShardItem<PlaceItem>[] = shardOf(places, shard)
-  const units: number = shardUnits(items, (item: PlaceItem): number => item.location.controls + 1)
+  const units: number = passUnits(places, (place: PlaceItem): number => place.location.controls + 1)
   const budget: Budget = armBudget(page, 'interaction', shard, units)
   await preparePage(page)
-  const visits: readonly Visit[] = await visitAll(items, {
+  const { visits, taken }: ShardVisits<PlaceItem> = await visitAll(places, {
     budget,
     labelOf: itemLabel,
     // The index is the item's place in the whole pass.
@@ -370,6 +368,6 @@ export const expectInteractionStates = async (page: Page, shard: Shard): Promise
     pass: 'interaction',
     visits,
     judgedRules: INTERACTION_RULES,
-    locations: shardLocations(items, locationOfItem),
+    locations: shardLocations(taken, locationOfItem),
   })
 }

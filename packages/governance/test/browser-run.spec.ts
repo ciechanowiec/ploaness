@@ -2,13 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   clockOf,
   DEFAULT_CLOCK_INSTANT,
+  partBudgetMs,
   passBudgetMs,
   pinnedBrowserEndpoint,
   pinnedBrowserServerArguments,
   playwrightImageOf,
   REAL_CLOCK,
-  type ShardItem,
-  shardOf,
   shiftedTime,
 } from '../src/browser-run.js'
 import { readSettings } from '../src/settings.js'
@@ -55,37 +54,13 @@ describe('the pinned browsers and the pass budgets', () => {
   })
 })
 
-describe('the shards of a sweep pass', () => {
-  const items: readonly string[] = ['a', 'b', 'c', 'd', 'e']
-  const shards: readonly (readonly ShardItem<string>[])[] = [0, 1, 2].map(
-    (index: number): readonly ShardItem<string>[] => shardOf(items, { index, count: 3 }),
-  )
-
-  it('deals the items round-robin and keeps the index each had in the whole pass', () => {
-    expect(shards).toEqual([
-      [
-        { item: 'a', index: 0 },
-        { item: 'd', index: 3 },
-      ],
-      [
-        { item: 'b', index: 1 },
-        { item: 'e', index: 4 },
-      ],
-      [{ item: 'c', index: 2 }],
-    ])
-  })
-
-  it('visits every item exactly once across the shards', () => {
-    expect(
-      shards
-        .flat()
-        .map((visited: ShardItem<string>): number => visited.index)
-        .toSorted((left: number, right: number): number => left - right),
-    ).toEqual([0, 1, 2, 3, 4])
-  })
-
-  it('leaves a shard beyond the items empty', () => {
-    expect(shardOf(['a'], { index: 1, count: 2 })).toEqual([])
+describe('the budget of one part of a pass', () => {
+  it('is the budget of an equal share of the whole pass, rounded up to a whole unit', () => {
+    expect([
+      partBudgetMs('resting', 8, { index: 0, count: 4 }),
+      partBudgetMs('resting', 9, { index: 3, count: 4 }),
+      partBudgetMs('resting', 0, { index: 0, count: 4 }),
+    ]).toEqual([passBudgetMs('resting', 2), passBudgetMs('resting', 3), passBudgetMs('resting', 0)])
   })
 })
 

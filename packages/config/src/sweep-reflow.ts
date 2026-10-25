@@ -14,10 +14,8 @@ import {
   type LayoutSnapshot,
   REFLOW_RULES,
   reflowCandidates,
-  type ShardItem,
   STRESS_VIEWPORTS,
   SWEEP_HEIGHT,
-  shardOf,
   sweepWidths,
   type UsedExemption,
 } from '@ploaness/governance'
@@ -46,6 +44,7 @@ import {
   preparePage,
   readDiscovery,
   type Shard,
+  type ShardVisits,
   type SweepLocation,
   sampledLocations,
   shardLocations,
@@ -169,15 +168,13 @@ const stressVisit = async (page: Page, item: PlaceItem, mode: StressMode): Promi
 export const expectTextStress = async (page: Page, shard: Shard): Promise<void> => {
   test.info().skip(!isChromium(page), 'the text-stress pass runs in Chromium')
   const discovery: Discovery = readDiscovery(test.info())
-  const items: readonly ShardItem<PlaceItem>[] = shardOf(
-    sampledLocations(discovery).flatMap((location: SweepLocation): readonly PlaceItem[] =>
+  const items: readonly PlaceItem[] = sampledLocations(discovery).flatMap(
+    (location: SweepLocation): readonly PlaceItem[] =>
       STRESS_VIEWPORTS.map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
-    ),
-    shard,
   )
   const budget: Budget = armBudget(page, 'text-stress', shard, items.length)
   await preparePage(page)
-  const visits: readonly Visit[] = await visitAll(items, {
+  const { visits, taken }: ShardVisits<PlaceItem> = await visitAll(items, {
     budget,
     labelOf: itemLabel,
     visit: async (item: PlaceItem): Promise<Visit> =>
@@ -193,7 +190,7 @@ export const expectTextStress = async (page: Page, shard: Shard): Promise<void> 
     pass: 'text-stress',
     visits,
     judgedRules: ['text-spacing', 'text-resize'],
-    locations: shardLocations(items, locationOfItem),
+    locations: shardLocations(taken, locationOfItem),
   })
 }
 
@@ -341,10 +338,10 @@ const sweepLocation = async (page: Page, location: SweepLocation): Promise<Visit
 export const expectWidthSweep = async (page: Page, shard: Shard): Promise<void> => {
   test.info().skip(!isChromium(page), 'the width sweep runs in Chromium')
   const discovery: Discovery = readDiscovery(test.info())
-  const locations: readonly ShardItem<SweepLocation>[] = shardOf(sampledLocations(discovery), shard)
+  const locations: readonly SweepLocation[] = sampledLocations(discovery)
   const budget: Budget = armBudget(page, 'width-sweep', shard, locations.length * sweepWidths().length)
   await preparePage(page)
-  const visits: readonly Visit[] = await visitAll(locations, {
+  const { visits, taken }: ShardVisits<SweepLocation> = await visitAll(locations, {
     budget,
     labelOf: (location: SweepLocation): string => location.location,
     visit: async (location: SweepLocation): Promise<Visit> => await sweepLocation(page, location),
@@ -354,6 +351,6 @@ export const expectWidthSweep = async (page: Page, shard: Shard): Promise<void> 
     pass: 'width-sweep',
     visits,
     judgedRules: REFLOW_RULES,
-    locations: shardLocations(locations, (location: SweepLocation): SweepLocation => location),
+    locations: shardLocations(taken, (location: SweepLocation): SweepLocation => location),
   })
 }

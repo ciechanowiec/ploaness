@@ -22,7 +22,7 @@ import {
   LAYOUT_RULES,
   PAGE_ERROR_RULE,
   PASS_BUDGET_RULE,
-  passBudgetMs,
+  partBudgetMs,
   REAL_CLOCK,
   RESTING_ELEMENT_RULES,
   SETTLED_STORY_PHASES,
@@ -37,6 +37,7 @@ import {
 import { outlineElements } from './layout.js'
 import { projectSettings } from './project-settings.js'
 import { engineOf, type HealthReading, healthFindings, type PlaceScan } from './scanner.js'
+import { firstUntaken, takeNext, untakenCount } from './sweep-queue.js'
 
 export type { Shard } from '@ploaness/governance'
 
@@ -514,11 +515,12 @@ const MS_PER_SECOND: number = 1000
 /** The whole of a pass that is not split, which is discovery. */
 export const WHOLE_PASS: Shard = { index: 0, count: 1 }
 
-/** The time one shard of a pass may spend, and where it records its progress. */
+/** The time one shard of a pass may spend, where it records its progress, and the queue it takes from. */
 export interface Budget {
   readonly pass: SweepPass
   readonly shard: Shard
   readonly progressFile: string
+  readonly queue: string
   readonly startedAt: number
   readonly deadline: number
 }
@@ -528,26 +530,34 @@ export interface Budget {
  * @param page the test's page, whose engine names the progress log.
  * @param pass the pass.
  * @param shard the shard.
- * @param units how many units of work the shard has.
+ * @param units how many units of work the whole pass has.
  * @returns the budget.
  */
 export const armBudget = (page: Page, pass: SweepPass, shard: Shard, units: number): Budget => {
-  const budgetMs: number = passBudgetMs(pass, units)
+  const budgetMs: number = partBudgetMs(pass, units, shard)
   test.info().setTimeout(budgetMs + TIMEOUT_GRACE_MS)
   const directory: string = engineDirectory(test.info(), engineOf(page))
-  mkdirSync(directory, { recursive: true })
+  const queue: string = path.join(directory, 'queue', pass)
+  mkdirSync(queue, { recursive: true })
   const startedAt: number = performance.now()
-  return { pass, shard, progressFile: path.join(directory, 'progress.log'), startedAt, deadline: startedAt + budgetMs }
+  return {
+    pass,
+    shard,
+    progressFile: path.join(directory, 'progress.log'),
+    queue,
+    startedAt,
+    deadline: startedAt + budgetMs,
+  }
 }
 
 /**
- * How many units of work a shard's items carry, for its budget.
- * @param items the shard's items.
+ * How many units of work a pass's items carry, for its budget.
+ * @param items the pass's items.
  * @param unitsOf the units one item carries.
  * @returns their sum.
  */
-export const shardUnits = <Item>(items: readonly ShardItem<Item>[], unitsOf: (item: Item) => number): number =>
-  items.reduce((total: number, shardItem: ShardItem<Item>): number => total + unitsOf(shardItem.item), 0)
+export const passUnits = <Item>(items: readonly Item[], unitsOf: (item: Item) => number): number =>
+  items.reduce((total: number, item: Item): number => total + unitsOf(item), 0)
 
 /** How a pass visits its items. */
 interface ItemVisitor<Item> {
@@ -567,42 +577,57 @@ const recordProgress = (budget: Budget, item: string): void => {
   appendFileSync(budget.progressFile, `${budget.pass} part ${part} ${seconds}s ${item}\n`)
 }
 
+/** What one shard of a pass visited: a visit per item it took, and the items with their index in the pass. */
+export interface ShardVisits<Item> {
+  readonly visits: readonly Visit[]
+  readonly taken: readonly ShardItem<Item>[]
+}
+
+const NOTHING_VISITED: ShardVisits<never> = { visits: [], taken: [] }
+
+const budgetFinding = <Item>(items: readonly Item[], visitor: ItemVisitor<Item>, item: Item): Visit => {
+  const { budget, labelOf }: ItemVisitor<Item> = visitor
+  return {
+    ...EMPTY_VISIT,
+    findings: [
+      findingAt(
+        { location: labelOf(item), state: budget.pass, engine: '', viewport: undefined },
+        PASS_BUDGET_RULE,
+        `part ${String(budget.shard.index + 1)} of the ${budget.pass} pass ran out of its budget at this item, ` +
+          `with ${String(untakenCount(budget.queue, items.length))} of the pass's ${String(items.length)} items ` +
+          'not yet taken by any part',
+      ),
+    ],
+  }
+}
+
 /**
- * Visit each item of a shard in turn, stopping with a finding when the shard runs out of budget.
- * @param items the items of the shard, each with its index in the whole pass.
+ * Take items of a pass from the queue its shards share and visit each, until none is left or the shard
+ * runs out of budget, which it reports at the first item it left untaken.
+ * @param items every item of the pass, in order.
  * @param visitor the budget, and how to name and visit an item.
- * @param index the item of the shard to visit next.
- * @returns one visit per item visited, and a budget finding when the shard stopped early.
+ * @param from the index to look for the next untaken item at.
+ * @returns the visits, a budget finding among them when the shard stopped early, and the items it took.
  */
 export const visitAll = async <Item>(
-  items: readonly ShardItem<Item>[],
+  items: readonly Item[],
   visitor: ItemVisitor<Item>,
-  index: number = 0,
-): Promise<readonly Visit[]> => {
+  from: number = 0,
+): Promise<ShardVisits<Item>> => {
   const { budget, labelOf, visit }: ItemVisitor<Item> = visitor
-  const next: ShardItem<Item> | undefined = items[index]
-  if (next === undefined) {
-    return []
-  }
-  const { item }: ShardItem<Item> = next
   if (performance.now() > budget.deadline) {
-    return [
-      {
-        ...EMPTY_VISIT,
-        findings: [
-          findingAt(
-            { location: labelOf(item), state: budget.pass, engine: '', viewport: undefined },
-            PASS_BUDGET_RULE,
-            `part ${String(budget.shard.index + 1)} of the ${budget.pass} pass ran out of its budget at this item, ` +
-              `with ${String(items.length - index)} of its ${String(items.length)} items unvisited`,
-          ),
-        ],
-      },
-    ]
+    const left: Item | undefined = items[firstUntaken(budget.queue, items.length, from) ?? items.length]
+    return left === undefined ? NOTHING_VISITED : { visits: [budgetFinding(items, visitor, left)], taken: [] }
   }
-  const visited: Visit = await visit(item, next.index)
+  const index: number = takeNext(budget.queue, items.length, from) ?? items.length
+  const item: Item | undefined = items[index]
+  if (item === undefined) {
+    return NOTHING_VISITED
+  }
+  const visited: Visit = await visit(item, index)
   recordProgress(budget, `${String(index + 1)}/${String(items.length)} ${labelOf(item)}`)
-  return [visited, ...(await visitAll(items, visitor, index + 1))]
+  const rest: ShardVisits<Item> = await visitAll(items, visitor, index + 1)
+  return { visits: [visited, ...rest.visits], taken: [{ item, index }, ...rest.taken] }
 }
 
 /** What a finished pass hands to its report. */

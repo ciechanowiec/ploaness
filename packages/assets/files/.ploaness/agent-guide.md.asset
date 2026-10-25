@@ -516,11 +516,12 @@ tests may also import the re-export from `ploaness/runtime`.
 
 Discovery runs first, once, in Chromium, as a setup project every pass depends on. It records what to
 scan, and its findings and problems - the seed did not answer, the route cap was reached, a declared page
-nothing scans - rather than failing, so every pass still runs. Each pass is then split into four shards,
-one test each, spread over parallel workers; each page is loaded fresh and judged alone, so the split
-changes no verdict. The project's own specs run on one worker beside them. Each shard has a budget derived
-from the work discovery found and reports every defect it finds; one failing shard hides nothing another
-reports. The summary runs last, whatever failed before it: it fails on discovery's findings and problems,
+nothing scans - rather than failing, so every pass still runs. Each pass then runs as four shards, one
+test each, on parallel workers that take its pages from one shared queue, so a shard that meets slow pages
+does not hold the pass while the others wait; each page is loaded fresh and judged alone, so the split
+changes no verdict. The project's own specs run on one worker beside them. Each shard has a budget of an
+equal share of the work discovery found and reports every defect it finds; one failing shard hides nothing
+another reports. The summary runs last, whatever failed before it: it fails on discovery's findings and problems,
 on a shard that recorded no report, and on exemptions no shard in that engine used. Each finding is one
 line:
 

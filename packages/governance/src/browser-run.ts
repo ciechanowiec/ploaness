@@ -117,15 +117,15 @@ export interface ShardItem<Item> {
 }
 
 /**
- * The items one shard of a pass visits, dealt round-robin so every shard gets a similar mix.
- * @param items every item of the pass, in order.
- * @param shard the shard.
- * @returns the shard's items, each with its index in the whole pass.
+ * The time one part of a pass may take. The parts take the pass's items from one queue, so each does an
+ * equal share of the work whatever items it happens to take.
+ * @param pass the pass.
+ * @param units how many units of work the whole pass has.
+ * @param shard the part.
+ * @returns its budget in milliseconds.
  */
-export const shardOf = <Item>(items: readonly Item[], shard: Shard): readonly ShardItem<Item>[] =>
-  items.flatMap((item: Item, index: number): readonly ShardItem<Item>[] =>
-    index % shard.count === shard.index ? [{ item, index }] : [],
-  )
+export const partBudgetMs = (pass: SweepPass, units: number, shard: Shard): number =>
+  passBudgetMs(pass, Math.ceil(units / shard.count))
 
 /** Where the container sees the host's Playwright, mounted read-only. */
 const CONTAINER_PLAYWRIGHT: string = '/ploaness/playwright-core'
