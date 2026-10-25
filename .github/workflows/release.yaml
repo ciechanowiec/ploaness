@@ -117,6 +117,11 @@ jobs:
       - name: 'Install dependencies'
         run: pnpm install --frozen-lockfile
 
+      # The browser suite measures in the Playwright image matching the pinned Playwright, and a
+      # verification run never pulls it, so it is fetched here, before the run.
+      - name: 'Pull the pinned browser image'
+        run: docker pull "mcr.microsoft.com/playwright:v$(node -p "require('./packages/config/node_modules/@playwright/test/package.json').version")-noble"
+
       # Two questions, asked before anything is built. Whether this commit declares the version
       # being released - `pnpm run verify` proves the other ten sites agree with it, so only the
       # meta package is compared here. And whether npm already has it: a published version is
