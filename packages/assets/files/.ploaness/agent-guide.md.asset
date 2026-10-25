@@ -23,11 +23,11 @@ copy its rules locally, or suppress a finding where a structural repair is avail
 Container analyzers and the browser suite require Docker; the browser suite also requires the Playwright
 image pulled beforehand. Dependency and vulnerability checks require their registries.
 Unavailable infrastructure and tool failures fail verification. Set up the required infrastructure and
-rerun; an incomplete run establishes no full verdict.
+rerun; an incomplete run establishes no verdict.
 
 ### Repository and Member Configuration
 
-Run full verification from the repository root. Repository gates run once, package gates run per governed
+Run verification from the repository root. Repository gates run once, package gates run per governed
 member, and Payload gates run only for Payload members. Registry order determines the sequence; a
 workspace report labels each member invocation. Libraries receive the framework-neutral configurations
 and have no application build or browser suite.
@@ -86,20 +86,23 @@ manual repair before synchronization. Generated application files change through
 4. Use `pnpm run verify` (quick verification) during development. Use
    `pnpm exec ploaness gate <id> --verbose` to diagnose an individual gate; its analyzer output is
    evidence for that gate alone.
-5. Run `pnpm run verify:delta` before finishing. It adds history, production build, bundle, and the
-   browser suite, with the browser sweep scoped to the routes and stories the change reaches; it writes
-   the dependency inventory and the compliance report, and must reach the final tree check without a
-   failure. `pnpm run verify:full` sweeps every route and story in every engine. It belongs to CI,
-   nightly on the default branch and on each release commit; run it locally only to reproduce a CI
-   failure.
-6. Review the diff, commit, and verify the resulting commit. A commit changing more than two files or
-   more than 50 added/deleted lines needs a body explaining why. Check a new message with
+5. Review the diff and commit. A commit changing more than two files or more than 50 added/deleted
+   lines needs a body explaining why. Check a new message with
    `pnpm exec ploaness commit-message --range HEAD~1..HEAD`; the complete policy is in the guideline.
+6. Run `pnpm run verify:delta` on the resulting commit before finishing; it is the run that accepts the
+   change, and its history gates check the new commit. It adds history, production build, bundle, and
+   the browser suite, with the browser sweep scoped to the routes and stories the change reaches; it
+   writes the dependency inventory and the compliance report, and must reach the final tree check
+   without a failure. A change to the lockfile, a package manifest or a global stylesheet reaches every
+   route and story, so its delta sweep covers everything in Chromium and can take as long as an hour;
+   that is expected, not a fault. `pnpm run verify:full` sweeps every route and story in every engine.
+   It belongs to CI, nightly on the default branch and on each release commit; run it locally only to
+   reproduce a CI failure.
 
-Verification stops at its first failing gate. Fix the reported cause, then start a new full run.
+Verification stops at its first failing gate. Fix the reported cause, then rerun the level that failed.
 A formatter or generator that changes source during verification leaves the tree unverified until the
 changes are reviewed and a subsequent run leaves it unchanged. Logs and build artifacts belong in
-ignored locations. Do not edit source while a full run is in progress.
+ignored locations. Do not edit source while verification is running.
 
 `--enforce=false` surveys findings and exits zero; that exit status is not a pass. Failed preconditions
 still stop the survey. `ploaness gates` lists the current registry with the level that first runs each
@@ -207,9 +210,9 @@ linted only for the runtime its entry declares.
 
 ## Release Dependency Inventory
 
-Full verification runs the required `sbom` gate once for the repository, after the browser suite and before
+Delta and full verification run the required `sbom` gate once for the repository, after the browser suite and before
 the final tree check. It writes bom.cdx.json and source metadata in release.json under the repository's ignored
-dist/sbom directory. The metadata contains no release artifact associations at this stage; full verification does
+dist/sbom directory. The metadata contains no release artifact associations at this stage; verification does
 not assume a container or archive format. A generation failure fails verification, even if an older inventory exists.
 
 Run `ploaness sbom --artifact <file> [--artifact <file> ...] [--output <directory>]` after building
@@ -239,7 +242,7 @@ vulnerability gate nor proves deployment provenance.
 
 ## Compliance Report
 
-Full verification runs the `compliance-report` gate after `sbom`. It writes one self-contained HTML document
+Delta and full verification run the `compliance-report` gate after `sbom`. It writes one self-contained HTML document
 under the repository's ignored dist/compliance directory, named after the project and the source commit, and a
 PDF rendering of the same document beside it. That pair is what a project sends when a reviewer asks for a
 license and vulnerability report on its open source dependencies. Earlier reports in the directory are removed,
