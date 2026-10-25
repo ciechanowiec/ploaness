@@ -42,6 +42,7 @@ import {
   type UsedExemption,
 } from '@ploaness/governance'
 import { LAYOUT_SCAN_VIEWPORTS, measurePage } from './layout.js'
+import { hasMarkedPayloadView, unmarkPayloadView, VIEW_ROOT_SELECTOR } from './payload-view.js'
 import { projectSettings } from './project-settings.js'
 import { type SettleOutcome, settleForScan } from './settle.js'
 
@@ -350,12 +351,26 @@ const placeOf = (page: Page, viewport: FindingViewport, state: string): FindingP
  * Scan a page in place at every required viewport, then restore its viewport.
  *
  * What a project's own specification calls on a state the sweep cannot reach. The page is resized
- * rather than reloaded, so the state the specification drove it into is what is judged.
+ * rather than reloaded, so the state the specification drove it into is what is judged. On a Payload
+ * admin view only the view's own content is judged, never Payload's navigation, header or frame.
  * @param page the page, on the route and in the state to judge.
  * @param shouldRunAxe whether to run axe as well, at the phone and desktop viewports.
  * @returns every finding, stale exemptions included.
  */
 export const scanPageInPlace = async (page: Page, shouldRunAxe: boolean): Promise<readonly BrowserFinding[]> => {
+  const isView: boolean = await hasMarkedPayloadView(page)
+  try {
+    return await scanMarkedPage(page, shouldRunAxe, isView)
+  } finally {
+    await unmarkPayloadView(page)
+  }
+}
+
+const scanMarkedPage = async (
+  page: Page,
+  shouldRunAxe: boolean,
+  isView: boolean,
+): Promise<readonly BrowserFinding[]> => {
   const original: FindingViewport | null = page.viewportSize()
   const scans: readonly PageScan[] = await LAYOUT_SCAN_VIEWPORTS.reduce(
     async (earlier: Promise<readonly PageScan[]>, viewport: FindingViewport): Promise<readonly PageScan[]> => {
@@ -365,7 +380,13 @@ export const scanPageInPlace = async (page: Page, shouldRunAxe: boolean): Promis
       const unsettled: readonly BrowserFinding[] = await settleFindings(page, place)
       const judged: PlaceScan = await judgeRestingPlace(page, place)
       const axe: readonly BrowserFinding[] =
-        shouldRunAxe && isStressViewport(viewport) ? await axeFindings(page, place) : []
+        shouldRunAxe && isStressViewport(viewport)
+          ? await axeFindings(
+              page,
+              place,
+              (builder: AxeBuilder): AxeBuilder => (isView ? builder.include(VIEW_ROOT_SELECTOR) : builder),
+            )
+          : []
       return [...done, { ...judged, findings: [...unsettled, ...judged.findings, ...axe] }]
     },
     Promise.resolve<readonly PageScan[]>([]),

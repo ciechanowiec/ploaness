@@ -424,13 +424,22 @@ layout_contracts() {
         expect_layout_line fail-layout "/closed-disclosure-box @${viewport} (chromium, resting): touching boxes"
     done
 
+    # On a Payload admin view the project's scan judges the view, never Payload's navigation or header.
+    expect_command fail-layout FAIL 'defects on' \
+        pnpm exec playwright test tests/e2e/admin.e2e.spec.ts --reporter=line
+    expect_layout_line fail-layout \
+        '[clipped-text] /admin/report @390x844 (chromium, resting): truncated text without its full text in title or aria-label: span.truncated'
+    expect_no_layout_line fail-layout 'p.clipped'
+    expect_no_layout_line fail-layout 'button-name'
+
     new_case pass-layout
     node "$lib/create-a11y-page.ts" "$scratch/pass-layout" valid
     node "$lib/create-layout-pages.ts" "$scratch/pass-layout" repaired
     commit_case pass-layout 'test(fixture): lay every page out with room between its boxes' "$CONFORMING_BODY"
     expect pass-layout build PASS
-    expect_command pass-layout PASS '27 passed' \
-        pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts tests/e2e/items.e2e.spec.ts --reporter=line
+    expect_command pass-layout PASS '28 passed' \
+        pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts tests/e2e/items.e2e.spec.ts tests/e2e/admin.e2e.spec.ts \
+        --reporter=line
     # The exemption the repaired tab list carries is a suppression, and is counted as one.
     edit_json "$scratch/pass-layout/package.json" ploaness.maxSuppressions 0
     expect pass-layout suppressions FAIL 'data-ploaness-layout'

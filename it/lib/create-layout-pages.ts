@@ -7,6 +7,8 @@
 // `defects` holds one page per rule, the stale and unexplained exemptions, and the clean pages that must
 // stay silent beside them. `repaired` holds the same markup laid out correctly, plus a dynamic route its
 // own spec covers with the combined helper. `unmeasured` holds a dynamic route scanned with axe alone.
+// `defects` and `repaired` also hold a custom Payload admin view its own spec scans, with the defect or
+// its repair in the view and defects in Payload's chrome around it.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
@@ -141,6 +143,43 @@ const ITEM_MODULE: string = [
   '',
 ].join('\n')
 
+// A custom view inside Payload's default admin template, as the admin panel renders one. Payload's own
+// navigation and header carry defects the project cannot repair, which the project's scan must not judge;
+// the view's own column holds the defect, or its repair, that it must.
+const adminModule = (view: string): string =>
+  [
+    'export default function Page(): React.JSX.Element {',
+    '  return (',
+    '    <div className="template-default">',
+    '      <aside className="nav">',
+    '        <p className="clipped">Collections and globals of the panel</p><button type="button" />',
+    '      </aside>',
+    '      <div className="template-default__wrap">',
+    '        <header className="app-header"><p className="clipped">Breadcrumbs of the panel header</p></header>',
+    `        <main><h1>Report</h1>${view}</main>`,
+    '      </div>',
+    '    </div>',
+    '  )',
+    '}',
+    '',
+  ].join('\n')
+
+const ADMIN_VIEWS: Readonly<Record<Exclude<Mode, 'unmeasured'>, string>> = {
+  defects: '<span className="truncated">A summary far too long for its box</span>',
+  repaired: '<p>Every result is in.</p>',
+}
+
+const ADMIN_SPEC: string = [
+  "import { test } from '@playwright/test'",
+  "import { expectSweptPage } from 'ploaness/a11y'",
+  '',
+  "test('the report view passes both scans', async ({ page }) => {",
+  "  await page.goto('/admin/report')",
+  '  await expectSweptPage(page)',
+  '})',
+  '',
+].join('\n')
+
 // The generated specs build the item address with a template literal, as a project's spec would. The
 // placeholder is assembled so this file does not read as one that forgot to interpolate.
 const DOLLAR: string = '$'
@@ -190,6 +229,10 @@ if (directory === undefined || !isMode(mode)) {
   throw new Error(`Expected a fixture directory and one of: ${MODES.join(', ')}`)
 }
 writePages(directory, mode === 'defects' ? DEFECT_PAGES : REPAIRED_PAGES)
+if (mode !== 'unmeasured') {
+  writeModule(path.join(directory, 'src', 'app', 'admin', 'report', 'page.tsx'), adminModule(ADMIN_VIEWS[mode]))
+  writeModule(path.join(directory, 'tests', 'e2e', 'admin.e2e.spec.ts'), ADMIN_SPEC)
+}
 if (mode !== 'defects') {
   writeModule(path.join(directory, 'src', 'app', 'items', '[id]', 'page.tsx'), ITEM_MODULE)
   writeModule(path.join(directory, 'tests', 'e2e', 'items.e2e.spec.ts'), ITEM_SPECS[mode])

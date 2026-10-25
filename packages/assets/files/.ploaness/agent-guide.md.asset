@@ -488,6 +488,10 @@ await page.goto(`/en/teams/${team.slug}`)
 await expectSweptPage(page)
 ```
 
+On a custom Payload admin view, both judge only the view's own content - what Payload's default or
+minimal template renders as its children - and never Payload's navigation, header or frame, which the
+project cannot repair.
+
 `expectNoLayoutDefects(page)` runs the layout, text and media rules alone, beside a project's own axe
 scan. Both judge the page in the state the spec left it, resized rather than reloaded, so drive it into
 the state worth judging first. They do not fix the browser clock or block third-party requests; the

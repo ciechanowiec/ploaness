@@ -68,6 +68,7 @@ interface PageElement {
   readonly scrollHeight: number
   readonly clientHeight: number
   readonly getAttribute: (name: string) => string | null
+  readonly contains: (other: PageElement) => boolean
   readonly getClientRects: () => ArrayLike<PageRect>
   readonly querySelector: (selectors: string) => PageElement | null
   readonly querySelectorAll: (selectors: string) => ArrayLike<PageElement>
@@ -91,6 +92,7 @@ declare const document: {
   readonly fonts: Iterable<FontFaceFacts> | undefined
   readonly activeElement: PageElement | null
   readonly querySelector: (selectors: string) => PageElement | null
+  readonly querySelectorAll: (selectors: string) => ArrayLike<PageElement>
 }
 declare const getComputedStyle: (element: PageElement) => PageStyle
 declare const Image: new () => {
@@ -116,6 +118,7 @@ interface NodeContext {
 interface LayoutTools {
   readonly isClosedDetails: (element: PageElement) => boolean
   readonly isHiddenByDisclosure: (element: PageElement, tools: LayoutTools) => boolean
+  readonly isOutsideView: (element: PageElement) => boolean
   readonly roundRects: (rects: ArrayLike<PageRect>) => readonly LayoutRect[]
   readonly ownText: (element: PageElement, tools: LayoutTools) => readonly PageText[]
   readonly ownTextRects: (element: PageElement, tools: LayoutTools) => readonly LayoutRect[]
@@ -171,6 +174,15 @@ const isHiddenByDisclosure = (element: PageElement, tools: LayoutTools): boolean
   }
   const isClosedBody: boolean = tools.isClosedDetails(parent) && parent.querySelector(':scope > summary') !== element
   return isClosedBody || tools.isHiddenByDisclosure(parent, tools)
+}
+
+// Outside a marked view only the ancestors that hold it are measured; on a page with no mark, every
+// element is. The attribute is spelt out because this runs in the page: `payload-view.ts` sets it.
+const isOutsideView = (element: PageElement): boolean => {
+  const roots: readonly PageElement[] = Array.from(document.querySelectorAll('[data-ploaness-view]'))
+  return (
+    roots.length > 0 && !roots.some((root: PageElement): boolean => root.contains(element) || element.contains(root))
+  )
 }
 
 const roundRects = (rects: ArrayLike<PageRect>): readonly LayoutRect[] =>
@@ -428,7 +440,8 @@ const measuredElements = (tools: LayoutTools): readonly PageElement[] => {
   return [document.body, ...Array.from(document.body.querySelectorAll('*'))].filter(
     (element: PageElement): boolean =>
       (element.namespaceURI !== svgNamespace || element.parentElement?.namespaceURI !== svgNamespace) &&
-      !tools.isHiddenByDisclosure(element, tools),
+      !tools.isHiddenByDisclosure(element, tools) &&
+      !tools.isOutsideView(element),
   )
 }
 
@@ -518,6 +531,7 @@ type Step = (...parameters: never[]) => unknown
 const STEPS: Readonly<Record<keyof LayoutTools, Step>> = {
   isClosedDetails,
   isHiddenByDisclosure,
+  isOutsideView,
   roundRects,
   ownText,
   ownTextRects,
