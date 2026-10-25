@@ -14,6 +14,7 @@ import {
   harnessSetupFile,
   projectSetupFiles,
   TEST_TRANSFORM_INCLUDE,
+  testReporters,
 } from './vitest-core.js'
 
 const declared: ReturnType<typeof defineConfig> = defineConfig({
@@ -24,6 +25,7 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
     include: ['tests/unit/**/*.unit.spec.ts', 'tests/int/**/*.int.spec.ts'],
     setupFiles: [harnessSetupFile(), ...projectSetupFiles()],
     sequence: DETERMINISTIC_SEQUENCE,
+    reporters: [...testReporters()],
     coverage: {
       provider: 'v8',
       include: [...coverageIncludes(settings.sourceRoots)],

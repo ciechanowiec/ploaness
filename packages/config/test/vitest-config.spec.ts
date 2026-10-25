@@ -63,6 +63,7 @@ const loadConfig = async (modulePath: string): Promise<VitestConfig> => {
 // no such clock, and a spec that measures a rule should not also be measuring an import.
 const SHIPPED: VitestConfig = await loadConfig(path.join(configBuild, 'vitest.js'))
 const WORKSPACE: VitestConfig = await loadConfig(path.join(workspaceRoot, 'vitest.config.mts'))
+const LIBRARY: VitestConfig = await loadConfig(path.join(configBuild, 'vitest-library.js'))
 
 // A config declaring projects runs those and never its own root globs, so the root block is the suite
 // only when there are no projects. Throwing on neither keeps a renamed key from emptying the list.
@@ -196,6 +197,11 @@ describe('the environment a suite runs in', () => {
 describe('the reporter list', () => {
   it('is declared by the shipped config, so the runner appends no reporter of its own', () => {
     const config: VitestConfig = SHIPPED
+    expect(config.test?.reporters).toEqual(testReporters())
+  })
+
+  it('is declared by the shipped library config too, which a member serving no application loads', () => {
+    const config: VitestConfig = LIBRARY
     expect(config.test?.reporters).toEqual(testReporters())
   })
 

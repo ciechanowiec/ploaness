@@ -132,7 +132,7 @@ export const GITHUB_ACTIONS_REPORTERS: readonly ReporterEntry[] = [
 ]
 
 /**
- * The reporters both Vitest configs declare.
+ * The reporters every Vitest config declares.
  *
  * The branch mirrors the condition Vitest itself applies rather than declaring the reporter
  * unconditionally: outside a workflow there is no job summary and no annotation surface, so the
