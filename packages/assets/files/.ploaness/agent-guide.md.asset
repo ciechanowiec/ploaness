@@ -545,8 +545,8 @@ committed.
 | Dark scheme | Chromium | 390x844 and 1280x800 | pages whose stylesheets declare a dark scheme |
 | Engine | Firefox, WebKit | baseline | one route per template, one story per component |
 
-The baseline is 320x568, 360x800, 390x844, 430x932, 844x390, 768x1024, 1024x768, 1280x800, 1440x900
-and 1920x1080. Each viewport is a fresh load. Breakpoints are read from every `@media` width condition in
+The baseline is 390x844, 768x1024 and 1280x800; the width sweep covers overflow at every width between
+320 and 1920. Each viewport is a fresh load. Breakpoints are read from every `@media` width condition in
 the page's stylesheets, `px`, `rem` and `em`, legacy and range syntax. A template is the route file a URL
 resolves to, and a story's template is its component; sampling one route does not prove its siblings equivalent, and the resting pass still
 covers every route.

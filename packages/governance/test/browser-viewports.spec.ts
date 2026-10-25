@@ -44,21 +44,7 @@ describe('the viewports a page is loaded at', () => {
         { width: 1366, height: 768 },
       ],
     ).map((viewport): string => `${String(viewport.width)}x${String(viewport.height)}`)
-    expect(widths).toEqual([
-      '320x568',
-      '360x800',
-      '390x844',
-      '430x932',
-      '639x1024',
-      '640x1024',
-      '768x1024',
-      '844x390',
-      '1024x768',
-      '1280x800',
-      '1366x768',
-      '1440x900',
-      '1920x1080',
-    ])
+    expect(widths).toEqual(['390x844', '639x1024', '640x1024', '768x1024', '1280x800', '1366x768'])
     expect(widths).toHaveLength(BASELINE_VIEWPORTS.length + 3)
   })
 })

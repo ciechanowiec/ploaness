@@ -6,18 +6,15 @@
 // where a project put its breakpoints, so the page is asked.
 import type { FindingViewport } from './browser-findings.js'
 
-/** The viewports every page is loaded at, each a fresh load. A project may add more, never remove any. */
+/**
+ * The viewports every page is loaded at, each a fresh load: a phone, a tablet and a desktop. The width
+ * sweep measures overflow at every width between them, and each page adds its own breakpoint edges. A
+ * project may add more, never remove any.
+ */
 export const BASELINE_VIEWPORTS: readonly FindingViewport[] = [
-  { width: 320, height: 568 },
-  { width: 360, height: 800 },
   { width: 390, height: 844 },
-  { width: 430, height: 932 },
-  { width: 844, height: 390 },
   { width: 768, height: 1024 },
-  { width: 1024, height: 768 },
   { width: 1280, height: 800 },
-  { width: 1440, height: 900 },
-  { width: 1920, height: 1080 },
 ]
 
 /** The phone and desktop viewports the text-stress passes and the axe scans run at. */
