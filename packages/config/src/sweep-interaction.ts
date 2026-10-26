@@ -6,7 +6,6 @@ import {
   classifyHitTarget,
   type FindingPlace,
   FOCUS_CONTRAST_RATIO,
-  FOCUS_RING_WIDTH,
   type FocusPosition,
   type FocusSample,
   findingAt,
@@ -14,10 +13,12 @@ import {
   type HitTargetProbe,
   hasContrastingFocus,
   hasVisibleFocus,
+  indicatorReach,
   isFocusBackwards,
   judgeCarried,
   obscuringContent,
 } from '@ploaness/governance'
+import { indicatorStyleInPage } from './focus-indicator-style.js'
 import { type TargetFacts, targetFacts } from './layout.js'
 import { axeFindings, settleFindings } from './scanner.js'
 import { settleForScan } from './settle.js'
@@ -425,7 +426,8 @@ const focusStop = async (page: Page, place: FindingPlace, previous: PreviousStop
   if (facts === undefined) {
     return { visit: EMPTY_VISIT, order: EMPTY_VISIT, key: undefined, previous: undefined }
   }
-  const state: Omit<FocusState, 'facts'> = await page.evaluate(focusStateInPage, FOCUS_RING_WIDTH)
+  const reach: number = indicatorReach(await page.evaluate(indicatorStyleInPage))
+  const state: Omit<FocusState, 'facts'> = await page.evaluate(focusStateInPage, reach)
   const focusPlace: FindingPlace = { ...place, state: 'focus' }
   const position: FocusPosition | undefined = await page.evaluate(focusPositionInPage, [LANDMARKS, DIALOGS] as const)
   const order: Visit = focusOrder(focusPlace, facts, previous, position)

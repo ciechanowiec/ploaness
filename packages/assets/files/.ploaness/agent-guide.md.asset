@@ -591,7 +591,7 @@ cleared `aria-busy` regions, then every face its text uses loaded or failed - an
 | `attached` | boxed siblings are closer than the minimum gap, 4 CSS pixels by default, measured on what their clipping and scrolling ancestors leave visible; boxes in a rotated or skewed subtree are not compared |
 | `obscured` | something other than a control or its descendant sits at the control's centre; a hidden or inert control, or one with `pointer-events: none`, is offered to no pointer and is not judged |
 | `focus-obscured` | a keyboard-focused element is entirely hidden by fixed or sticky content |
-| `focus-visible` | the pixels of a keyboard-focused element and a 4 px ring do not change when it takes focus |
+| `focus-visible` | the pixels of a keyboard-focused element and the band its own outline and shadows reach - at least 4 px - do not change when it takes focus |
 | `focus-order` | tabbing moves focus to an element entirely above the previous one in the same landmark, and not to the head of a column further along the line; dialogs, fixed and sticky content and visually hidden elements are not compared |
 | `focus-contrast` | the focus change shows, but the pixels whose colour contrasts 3:1 with their unfocused colour cover less than a 1 px line along half the element's longer side (WCAG 1.4.11): a faint tint or glow, not an outline, ring, underline or strong fill |
 | `disclosure-keyboard` | `Escape` does not close a popup or modal dialog, focus does not return to its control within a second, or focus leaves an open modal dialog |

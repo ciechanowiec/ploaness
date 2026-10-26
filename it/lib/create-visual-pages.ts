@@ -256,7 +256,8 @@ h1, p { margin: 0; }
 .stacked, .reversed { display: flex; flex-direction: column; gap: 24px; }
 .reversed { flex-direction: column-reverse; }
 .faint-ring:focus-visible { outline: 2px solid #f3f4f6; outline-offset: 2px; }
-.strong-ring:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+/* Drawn beyond a gap, as a ring with an offset is: the focus rules compare the whole indicator. */
+.strong-ring:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 6px; }
 .covered { position: relative; }
 .overlay { position: absolute; inset: 0; background: #ffffff; }
 .fixed-line { height: 20px; line-height: 20px; overflow: hidden; }
