@@ -340,7 +340,7 @@ const linearChannel = (value: number): number => {
   return fraction <= LINEAR_KNEE ? fraction / LINEAR_SLOPE : ((fraction + GAMMA_OFFSET) / GAMMA_SCALE) ** GAMMA
 }
 
-const luminanceAt = (pixels: readonly number[], offset: number): number =>
+const luminanceAt = (pixels: ArrayLike<number>, offset: number): number =>
   RED_WEIGHT * linearChannel(pixels[offset] ?? 0) +
   GREEN_WEIGHT * linearChannel(pixels[offset + 1] ?? 0) +
   BLUE_WEIGHT * linearChannel(pixels[offset + BLUE_OFFSET] ?? 0)
@@ -356,8 +356,8 @@ export const contrastRatio = (first: number, second: number): number =>
 
 /** A focused element's region rendered focused and unfocused, decoded to RGBA. */
 export interface FocusRenderings {
-  readonly unfocused: readonly number[]
-  readonly focused: readonly number[]
+  readonly unfocused: ArrayLike<number>
+  readonly focused: ArrayLike<number>
   /** Device pixels per CSS pixel along one side. */
   readonly scale: number
   /** The longer side of the element's visible box, in CSS pixels. */

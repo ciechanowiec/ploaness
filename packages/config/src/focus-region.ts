@@ -30,7 +30,7 @@ interface PageBitmap {
 
 interface PageCanvasContext {
   drawImage: (image: PageBitmap, x: number, y: number) => void
-  getImageData: (x: number, y: number, width: number, height: number) => { readonly data: ArrayLike<number> }
+  getImageData: (x: number, y: number, width: number, height: number) => { readonly data: Uint8ClampedArray }
 }
 
 declare const document: {
@@ -109,39 +109,57 @@ const blurInPage = (): void => {
   document.activeElement?.blur?.()
 }
 
-/** One rendering of a region, decoded to RGBA. */
-interface RegionPixels {
-  readonly pixels: readonly number[]
-  /** Device pixels per CSS pixel along one side. */
+/**
+ * A region of both renderings, decoded to RGBA and carried as base64: an array of numbers crosses from the
+ * page one element at a time, which costs far more than the decoding.
+ */
+interface RegionRenderings {
+  readonly focused: string
+  readonly unfocused: string
+  /** Device pixels per CSS pixel along one side; zero when the browser could not decode the shots. */
   readonly scale: number
 }
 
 // The browser decodes the screenshots it took: PNG is its own format, and Node has no decoder for it.
-const regionPixelsInPage = async ([image, region, viewportWidth]: readonly [
-  string,
+const regionRenderingsInPage = async ([images, region, viewportWidth]: readonly [
+  readonly [string, string],
   FocusRegion,
   number,
-]): Promise<RegionPixels> => {
-  const bytes: Uint8Array<ArrayBuffer> = Uint8Array.from(
-    atob(image),
-    (character: string): number => character.codePointAt(0) ?? 0,
-  )
-  const bitmap: PageBitmap & { readonly height: number } = await createImageBitmap(
-    new Blob([bytes], { type: 'image/png' }),
-  )
-  const context: PageCanvasContext | null = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d')
-  if (context === null) {
-    return { pixels: [], scale: 0 }
+]): Promise<RegionRenderings> => {
+  const regionOf = async (image: string): Promise<{ readonly encoded: string; readonly scale: number }> => {
+    const bytes: Uint8Array<ArrayBuffer> = Uint8Array.from(
+      atob(image),
+      (character: string): number => character.codePointAt(0) ?? 0,
+    )
+    const bitmap: PageBitmap & { readonly height: number } = await createImageBitmap(
+      new Blob([bytes], { type: 'image/png' }),
+    )
+    const context: PageCanvasContext | null = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d')
+    if (context === null) {
+      return { encoded: '', scale: 0 }
+    }
+    context.drawImage(bitmap, 0, 0)
+    const scale: number = bitmap.width / viewportWidth
+    const { data }: { readonly data: Uint8ClampedArray } = context.getImageData(
+      Math.round(region.x * scale),
+      Math.round(region.y * scale),
+      Math.round(region.width * scale),
+      Math.round(region.height * scale),
+    )
+    // Converted in chunks: one call can take only so many arguments.
+    const chunk: number = 32_768
+    const binary: string = Array.from(
+      { length: Math.ceil(data.length / chunk) },
+      (_unused: unknown, index: number): string =>
+        String.fromCodePoint(...data.subarray(index * chunk, (index + 1) * chunk)),
+    ).join('')
+    return { encoded: btoa(binary), scale }
   }
-  context.drawImage(bitmap, 0, 0)
-  const scale: number = bitmap.width / viewportWidth
-  const data: ArrayLike<number> = context.getImageData(
-    Math.round(region.x * scale),
-    Math.round(region.y * scale),
-    Math.round(region.width * scale),
-    Math.round(region.height * scale),
-  ).data
-  return { pixels: Array.from(data), scale }
+  const [focused, unfocused]: readonly [
+    { readonly encoded: string; readonly scale: number },
+    { readonly encoded: string; readonly scale: number },
+  ] = await Promise.all([regionOf(images[0]), regionOf(images[1])])
+  return { focused: focused.encoded, unfocused: unfocused.encoded, scale: Math.min(focused.scale, unfocused.scale) }
 }
 
 /** How a keyboard-focused element shows its focus. */
@@ -196,13 +214,17 @@ const captureFocus = async (page: Page): Promise<FocusCapture> => {
   return { focusedShot, unfocusedShot, focusedFacts, unfocusedFacts }
 }
 
-const pixelsIn = async (
+const renderingsIn = async (
   page: Page,
-  shot: Uint8Array,
+  capture: FocusCapture,
   region: FocusRegion,
   viewportWidth: number,
-): Promise<RegionPixels> =>
-  await page.evaluate(regionPixelsInPage, [Buffer.from(shot).toString(BASE64), region, viewportWidth] as const)
+): Promise<RegionRenderings> =>
+  await page.evaluate(regionRenderingsInPage, [
+    [Buffer.from(capture.focusedShot).toString(BASE64), Buffer.from(capture.unfocusedShot).toString(BASE64)],
+    region,
+    viewportWidth,
+  ] as const)
 
 /**
  * Shoot the page with the active element focused and again blurred, and judge its indicator where it shows.
@@ -219,15 +241,14 @@ export const judgeFocusIndicator = async (page: Page, extent: number): Promise<F
   if (viewport === null || region === undefined) {
     return 'out of view'
   }
-  const focused: RegionPixels = await pixelsIn(page, capture.focusedShot, region, viewport.width)
-  const unfocused: RegionPixels = await pixelsIn(page, capture.unfocusedShot, region, viewport.width)
-  if (focused.scale === 0) {
+  const renderings: RegionRenderings = await renderingsIn(page, capture, region, viewport.width)
+  if (renderings.scale === 0) {
     throw new Error('the browser could not decode the focus screenshots')
   }
-  if (!hasVisibleFocus(unfocused.pixels, focused.pixels)) {
+  const focused: Uint8Array = Buffer.from(renderings.focused, BASE64)
+  const unfocused: Uint8Array = Buffer.from(renderings.unfocused, BASE64)
+  if (!hasVisibleFocus(unfocused, focused)) {
     return 'unchanged'
   }
-  return hasContrastingFocus({ focused: focused.pixels, unfocused: unfocused.pixels, scale: focused.scale, extent })
-    ? 'contrasting'
-    : 'faint'
+  return hasContrastingFocus({ focused, unfocused, scale: renderings.scale, extent }) ? 'contrasting' : 'faint'
 }
