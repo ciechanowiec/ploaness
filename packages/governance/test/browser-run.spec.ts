@@ -3,9 +3,12 @@ import {
   type BrowserServerOwner,
   clockOf,
   DEFAULT_CLOCK_INSTANT,
+  declaredSweepWorkers,
+  dockerCapacityOf,
   isOrphanedBrowserServer,
   itemLimitMs,
   listedBrowserServers,
+  type MachineCapacity,
   partBudgetMs,
   passBudgetMs,
   pinnedBrowserEndpoint,
@@ -13,6 +16,7 @@ import {
   playwrightImageOf,
   REAL_CLOCK,
   shiftedTime,
+  sweepWorkersAcross,
   sweepWorkersFor,
 } from '../src/browser-run.js'
 import { readSettings } from '../src/settings.js'
@@ -188,6 +192,36 @@ describe('the workers a browser run spreads the sweep over', () => {
   it('adds a worker for every two processors and every two gigabytes a larger machine offers, up to eight', () => {
     expect([sweepWorkersFor(12, 64 * GIB), sweepWorkersFor(18, 64 * GIB), sweepWorkersFor(64, 256 * GIB)]).toEqual([
       6, 8, 8,
+    ])
+  })
+})
+
+describe('the workers a run gives the sweep, across the host and the machine of the browsers', () => {
+  it('reads the processors and memory Docker reports, and nothing from output it cannot read', () => {
+    expect([dockerCapacityOf('9 33582346240\n'), dockerCapacityOf(''), dockerCapacityOf('error')]).toEqual([
+      { processors: 9, memoryBytes: 33_582_346_240 },
+      undefined,
+      undefined,
+    ])
+  })
+
+  it('takes the fewer of the host and a smaller virtual machine the browsers run in', () => {
+    const mac: MachineCapacity = { processors: 18, memoryBytes: 64 * GIB }
+    expect([
+      sweepWorkersAcross(mac, { processors: 9, memoryBytes: 32 * GIB }),
+      sweepWorkersAcross({ processors: 16, memoryBytes: 64 * GIB }, { processors: 16, memoryBytes: 64 * GIB }),
+      sweepWorkersAcross(mac, undefined),
+    ]).toEqual([4, 8, 8])
+  })
+
+  it('carries a worker count the sweep allows, and refuses any other', () => {
+    expect(['4', '8', '3', '9', 'six', undefined].map((value) => declaredSweepWorkers(value))).toEqual([
+      4,
+      8,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
     ])
   })
 })

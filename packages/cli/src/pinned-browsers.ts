@@ -8,19 +8,23 @@ import { randomBytes } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createConnection, createServer, type Server, type Socket } from 'node:net'
-import { hostname } from 'node:os'
+import { availableParallelism, hostname, totalmem } from 'node:os'
 import path from 'node:path'
 import {
   type BrowserServerOwner,
   browserServerListingArguments,
   CLOCK_ENVIRONMENT_VARIABLE,
+  dockerCapacityArguments,
+  dockerCapacityOf,
   isOrphanedBrowserServer,
   type ListedBrowserServer,
   listedBrowserServers,
+  type MachineCapacity,
   pinnedBrowserEndpoint,
   pinnedBrowserServerArguments,
   playwrightImageOf,
   REAL_CLOCK,
+  sweepWorkersAcross,
 } from '@ploaness/governance'
 import type { Context } from './context.js'
 import { failed, type GateResult, type RunResult, run } from './exec.js'
@@ -43,6 +47,8 @@ export interface PinnedBrowsers {
   readonly stop: () => void
   /** Whether pages reach the application only through the client's tunnel. */
   readonly isTunnelled: boolean
+  /** The workers the sweep may use, given both the host and the machine the browsers run on. */
+  readonly workers: number
 }
 
 const freePort = async (): Promise<number> =>
@@ -155,6 +161,15 @@ const ownerAfterRemovingOrphans = (context: Context): BrowserServerOwner | GateR
   return removeOrphans(context, owner.host) ?? owner
 }
 
+const hostCapacity = (): MachineCapacity => ({ processors: availableParallelism(), memoryBytes: totalmem() })
+
+// The machine Docker runs the browsers in, which Docker Desktop and Colima keep smaller than the host; on
+// Linux it is the host itself. Unknown when Docker cannot say, and the host then decides alone.
+const browserMachineCapacity = (context: Context): MachineCapacity | undefined => {
+  const reported: RunResult = run('docker', [...dockerCapacityArguments], { cwd: context.root })
+  return reported.code === 0 ? dockerCapacityOf(reported.stdout) : undefined
+}
+
 /**
  * Start the pinned browser server for one end-to-end run.
  * @param context the member under test.
@@ -230,7 +245,12 @@ const startServer = async (
       logs.output,
     ])
   }
-  return { endpoint: pinnedBrowserEndpoint(port, secret), stop, isTunnelled: !plan.isHostNetwork }
+  return {
+    endpoint: pinnedBrowserEndpoint(port, secret),
+    stop,
+    isTunnelled: !plan.isHostNetwork,
+    workers: sweepWorkersAcross(hostCapacity(), browserMachineCapacity(context)),
+  }
 }
 
 /** Whether a start answered a failure rather than browsers. */

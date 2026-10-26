@@ -141,6 +141,57 @@ export const sweepWorkersFor = (processors: number, memoryBytes: number): number
   return Math.min(MAX_SWEEP_WORKERS, Math.max(MIN_SWEEP_WORKERS, Math.min(byProcessors, byMemory)))
 }
 
+/** What a machine offers the sweep. */
+export interface MachineCapacity {
+  readonly processors: number
+  readonly memoryBytes: number
+}
+
+/** The variable carrying the workers a run decided on to the suite and each of its workers. */
+export const SWEEP_WORKERS_ENVIRONMENT_VARIABLE: string = 'PLOANESS_SWEEP_WORKERS'
+
+/** The `docker` arguments that report the processors and memory the browsers' machine has. */
+export const dockerCapacityArguments: readonly string[] = ['info', '--format', '{{.NCPU}} {{.MemTotal}}']
+
+/**
+ * Read what `dockerCapacityArguments` reports.
+ * @param output what `docker` wrote.
+ * @returns the capacity, or undefined when the output is not two positive whole numbers.
+ */
+export const dockerCapacityOf = (output: string): MachineCapacity | undefined => {
+  const [processors, memoryBytes]: readonly number[] = output.trim().split(/\s+/u).map(Number)
+  return processors !== undefined && memoryBytes !== undefined && processors > 0 && memoryBytes > 0
+    ? { processors, memoryBytes }
+    : undefined
+}
+
+/**
+ * The workers a run can give the sweep: the fewer of what the host affords, where the runner, the servers
+ * and the test workers live, and what the browsers' machine affords. On Linux the two are one machine;
+ * Docker Desktop and Colima run the browsers in a virtual machine smaller than the host, and eight
+ * browsers in a machine of nine processors made every pass slower than four did.
+ * @param host the machine the run starts on.
+ * @param browsers the machine the browsers run on, when it is known.
+ * @returns the workers.
+ */
+export const sweepWorkersAcross = (host: MachineCapacity, browsers: MachineCapacity | undefined): number =>
+  Math.min(
+    sweepWorkersFor(host.processors, host.memoryBytes),
+    browsers === undefined ? MAX_SWEEP_WORKERS : sweepWorkersFor(browsers.processors, browsers.memoryBytes),
+  )
+
+/**
+ * The workers a run decided on, as its environment carries them.
+ * @param value the variable's value.
+ * @returns the workers, or undefined when the value is not a worker count the sweep allows.
+ */
+export const declaredSweepWorkers = (value: string | undefined): number | undefined => {
+  const workers: number = Number(value)
+  return Number.isSafeInteger(workers) && workers >= MIN_SWEEP_WORKERS && workers <= MAX_SWEEP_WORKERS
+    ? workers
+    : undefined
+}
+
 /** One part of a sweep pass: its zero-based index among `count` parts. */
 export interface Shard {
   readonly index: number
