@@ -87,7 +87,8 @@ describe('the findings a part reports as soon as it ends', () => {
       ]),
     ).toEqual([
       '[ploaness-sweep] chromium resting (pass 2 of 7) part 3 of 4: 1 finding',
-      '[ploaness-sweep]   [page-not-stable] story:pages-homepage--post-games @768x1024 (chromium, resting): the page kept changing',
+      '[ploaness-sweep]   [page-not-stable] story:pages-homepage--post-games @768x1024 ' +
+        '(chromium, resting): the page kept changing',
     ])
   })
 
