@@ -192,7 +192,9 @@ const PAGES: Readonly<Record<string, Variant>> = {
   },
   'focus-contrast': {
     defect: '<button type="button" className="faint-ring">Faint focus</button>',
-    valid: '<button type="button" className="strong-ring">Strong focus</button>',
+    valid:
+      '<div><button type="button" className="strong-ring">Strong focus</button>' +
+      '<div className="stretched-card"><a href="/" className="stretched">Stretched link</a></div></div>',
   },
   obscured: {
     defect: '<div className="covered"><a href="/">Covered link</a><div className="overlay"></div></div>',
@@ -258,6 +260,11 @@ h1, p { margin: 0; }
 .faint-ring:focus-visible { outline: 2px solid #f3f4f6; outline-offset: 2px; }
 /* Drawn beyond a gap, as a ring with an offset is: the focus rules compare the whole indicator. */
 .strong-ring:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 6px; }
+/* The card a stretched link covers draws the link's focus, as a news or product card does. */
+.stretched-card { position: relative; margin-top: 24px; padding: 16px; }
+.stretched-card:has(.stretched:focus-visible) { box-shadow: 0 0 0 3px #1d4ed8; }
+.stretched { outline: none; }
+.stretched::after { content: ''; position: absolute; inset: 0; }
 .covered { position: relative; }
 .overlay { position: absolute; inset: 0; background: #ffffff; }
 .fixed-line { height: 20px; line-height: 20px; overflow: hidden; }

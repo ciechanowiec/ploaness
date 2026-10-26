@@ -313,9 +313,9 @@ export const obscuringContent = (samples: readonly FocusSample[]): string | unde
  * @param focused the same region with the element focused by keyboard.
  * @returns true when at least one byte differs.
  */
-export const hasVisibleFocus = (unfocused: Uint8Array, focused: Uint8Array): boolean =>
+export const hasVisibleFocus = (unfocused: ArrayLike<number>, focused: ArrayLike<number>): boolean =>
   unfocused.length !== focused.length ||
-  unfocused.some((byte: number, index: number): boolean => byte !== focused[index])
+  Array.from(unfocused).some((value: number, index: number): boolean => value !== focused[index])
 
 /** The contrast a focus indicator's changed pixels need against what they replaced (WCAG 1.4.11). */
 export const FOCUS_CONTRAST_RATIO: number = 3

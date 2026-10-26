@@ -6,19 +6,17 @@ import {
   classifyHitTarget,
   type FindingPlace,
   FOCUS_CONTRAST_RATIO,
+  FOCUS_RING_WIDTH,
   type FocusPosition,
   type FocusSample,
   findingAt,
   type HitTargetClassification,
   type HitTargetProbe,
-  hasContrastingFocus,
-  hasVisibleFocus,
-  indicatorReach,
   isFocusBackwards,
   judgeCarried,
   obscuringContent,
 } from '@ploaness/governance'
-import { indicatorStyleInPage } from './focus-indicator-style.js'
+import { type FocusVerdict, judgeFocusIndicator } from './focus-region.js'
 import { type TargetFacts, targetFacts } from './layout.js'
 import { axeFindings, settleFindings } from './scanner.js'
 import { settleForScan } from './settle.js'
@@ -229,25 +227,6 @@ const focusStateInPage = (ring: number): Omit<FocusState, 'facts'> => {
   }
 }
 
-interface DecodedImage {
-  readonly width: number
-  readonly pixels: readonly number[]
-}
-
-interface ImageBitmapLike {
-  readonly width: number
-  readonly height: number
-}
-
-interface CanvasContextLike {
-  drawImage: (image: ImageBitmapLike, x: number, y: number) => void
-  getImageData: (x: number, y: number, width: number, height: number) => { readonly data: ArrayLike<number> }
-}
-
-interface CanvasLike {
-  getContext: (kind: '2d') => CanvasContextLike | null
-}
-
 declare const scrollX: number
 declare const scrollY: number
 
@@ -303,83 +282,25 @@ const focusPositionInPage = ([landmarks, dialogs]: readonly [string, string]): F
   }
 }
 
-declare const createImageBitmap: (image: Blob) => Promise<ImageBitmapLike>
-declare const OffscreenCanvas: new (width: number, height: number) => CanvasLike
-
-// The browser decodes the screenshots it took: PNG is its own format, and Node has no decoder for it.
-const decodeInPage = async (images: readonly string[]): Promise<readonly DecodedImage[]> =>
-  await Promise.all(
-    images.map(async (image: string): Promise<DecodedImage> => {
-      const bytes: Uint8Array<ArrayBuffer> = Uint8Array.from(
-        atob(image),
-        (character: string): number => character.codePointAt(0) ?? 0,
-      )
-      const bitmap: ImageBitmapLike = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
-      const context: CanvasContextLike | null = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d')
-      if (context === null) {
-        return { width: 0, pixels: [] }
-      }
-      context.drawImage(bitmap, 0, 0)
-      return { width: bitmap.width, pixels: Array.from(context.getImageData(0, 0, bitmap.width, bitmap.height).data) }
-    }),
-  )
-
-const BASE64: BufferEncoding = 'base64'
-
-// Judged only where a focus indicator shows at all; one that does not is the `focus-visible` finding.
-const hasFocusContrast = async (
-  page: Page,
-  shots: { readonly focused: Uint8Array; readonly unfocused: Uint8Array },
-  measure: { readonly clip: ScreenClip; readonly extent: number },
-): Promise<boolean> => {
-  const [focused, unfocused]: readonly DecodedImage[] = await page.evaluate(decodeInPage, [
-    Buffer.from(shots.focused).toString(BASE64),
-    Buffer.from(shots.unfocused).toString(BASE64),
-  ])
-  if (focused === undefined || unfocused === undefined || focused.width === 0) {
-    throw new Error('the browser could not decode the focus screenshots')
-  }
-  return hasContrastingFocus({
-    focused: focused.pixels,
-    unfocused: unfocused.pixels,
-    scale: focused.width / measure.clip.width,
-    extent: measure.extent,
-  })
-}
-
-interface FocusShots {
-  readonly shots: { readonly focused: Uint8Array; readonly unfocused: Uint8Array }
-  readonly measure: { readonly clip: ScreenClip; readonly extent: number }
-}
-
-const focusIndicator = async (
-  page: Page,
-  place: FindingPlace,
-  facts: TargetFacts,
-  { shots, measure }: FocusShots,
-): Promise<Visit> => {
-  if (!hasVisibleFocus(shots.unfocused, shots.focused)) {
+// How a focused element's indicator showed, as the focus rules report it.
+const indicatorVisit = (place: FindingPlace, facts: TargetFacts, verdict: FocusVerdict): Visit => {
+  if (verdict === 'unchanged') {
     return carried(
       findingAt(place, 'focus-visible', `${facts.label} shows no visible change when focused by keyboard`),
       facts,
     )
   }
-  if (await hasFocusContrast(page, shots, measure)) {
-    return EMPTY_VISIT
-  }
-  return carried(
-    findingAt(
-      place,
-      'focus-contrast',
-      `${facts.label} changes when focused by keyboard, but too little of the change contrasts ` +
-        `${String(FOCUS_CONTRAST_RATIO)}:1 with its unfocused rendering`,
-    ),
-    facts,
-  )
-}
-
-const blurInPage = (): void => {
-  document.activeElement?.blur?.()
+  return verdict === 'faint'
+    ? carried(
+        findingAt(
+          place,
+          'focus-contrast',
+          `${facts.label} changes when focused by keyboard, but too little of the change contrasts ` +
+            `${String(FOCUS_CONTRAST_RATIO)}:1 with its unfocused rendering`,
+        ),
+        facts,
+      )
+    : EMPTY_VISIT
 }
 
 const markFocusedInPage = (name: string): void => {
@@ -426,8 +347,7 @@ const focusStop = async (page: Page, place: FindingPlace, previous: PreviousStop
   if (facts === undefined) {
     return { visit: EMPTY_VISIT, order: EMPTY_VISIT, key: undefined, previous: undefined }
   }
-  const reach: number = indicatorReach(await page.evaluate(indicatorStyleInPage))
-  const state: Omit<FocusState, 'facts'> = await page.evaluate(focusStateInPage, reach)
+  const state: Omit<FocusState, 'facts'> = await page.evaluate(focusStateInPage, FOCUS_RING_WIDTH)
   const focusPlace: FindingPlace = { ...place, state: 'focus' }
   const position: FocusPosition | undefined = await page.evaluate(focusPositionInPage, [LANDMARKS, DIALOGS] as const)
   const order: Visit = focusOrder(focusPlace, facts, previous, position)
@@ -445,17 +365,10 @@ const focusStop = async (page: Page, place: FindingPlace, previous: PreviousStop
     builder.include(PROBE_SELECTOR).withRules(['color-contrast']),
   )
   await page.evaluate(unmarkInPage, [PROBE_SELECTOR, PROBE_ATTRIBUTE] as const)
-  const clip: ScreenClip | undefined = state.clip
-  if (clip === undefined) {
+  if (state.clip === undefined) {
     return { visit: merged([obscured, { ...EMPTY_VISIT, findings: contrast }]), order, key: facts.key, previous: here }
   }
-  const focused: Uint8Array = await page.screenshot({ clip, animations: 'disabled', caret: 'hide' })
-  await page.evaluate(blurInPage)
-  const unfocused: Uint8Array = await page.screenshot({ clip, animations: 'disabled', caret: 'hide' })
-  const indicator: Visit = await focusIndicator(page, focusPlace, facts, {
-    shots: { focused, unfocused },
-    measure: { clip, extent: state.extent },
-  })
+  const indicator: Visit = indicatorVisit(focusPlace, facts, await judgeFocusIndicator(page, state.extent))
   return {
     visit: merged([obscured, indicator, { ...EMPTY_VISIT, findings: contrast }]),
     order,
