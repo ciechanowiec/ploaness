@@ -9,6 +9,7 @@
 import { execFileSync } from 'node:child_process'
 import { realpathSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { hostname } from 'node:os'
 import path from 'node:path'
 import { pinnedBrowserEndpoint, pinnedBrowserServerArguments, playwrightImageOf } from '@ploaness/governance'
 import type { measurePage as MeasurePage } from '../../packages/config/src/layout.ts'
@@ -74,6 +75,13 @@ const serverArguments: readonly string[] = pinnedBrowserServerArguments({
   // The page is set directly, so it makes no request that a tunnel or a shared network would carry.
   isHostNetwork: false,
   secret: 'geometry',
+  owner: {
+    pid: process.pid,
+    started: execFileSync('ps', ['-o', 'lstart=', '-p', String(process.pid)], { encoding: 'utf8' })
+      .trim()
+      .replaceAll(/\s+/gu, ' '),
+    host: hostname(),
+  },
 })
 execFileSync('docker', serverArguments)
 

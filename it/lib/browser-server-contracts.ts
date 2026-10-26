@@ -1,12 +1,20 @@
 // Exercise fresh-server ownership through the installed CLI, runner, wrapper and real Next application.
-import { type ChildProcess, spawn } from 'node:child_process'
+import { type ChildProcess, execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type { Server as HttpServer } from 'node:http'
 import { createRequire } from 'node:module'
 import { createServer, type Server } from 'node:net'
+import { hostname } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { asRecord, asText, VERIFICATION_ENVIRONMENT_VARIABLE } from '@ploaness/governance'
+import {
+  asRecord,
+  asText,
+  BROWSER_SERVER_OWNER_LABELS,
+  type BrowserServerOwner,
+  playwrightImageOf,
+  VERIFICATION_ENVIRONMENT_VARIABLE,
+} from '@ploaness/governance'
 import {
   arePortsFree,
   type CommandResult,
@@ -199,6 +207,61 @@ const terminated = async (ports: readonly number[]): Promise<void> => {
   )
 }
 
+// A run killed outright leaves its browser server behind, so the next run removes the servers whose owner
+// is gone. Three stand-ins are started from the pinned image: one whose owner has exited, which the gate
+// must remove; one owned by this live process; and one recorded on another machine, whose PID means
+// nothing here. The last two must survive.
+const STAND_IN_SECONDS: string = '600'
+const standInImage = (): string => {
+  const consumerRequire: NodeJS.Require = createRequire(manifestPath)
+  const testRequire: NodeJS.Require = createRequire(consumerRequire.resolve('@playwright/test/package.json'))
+  const playwrightRequire: NodeJS.Require = createRequire(testRequire.resolve('playwright/package.json'))
+  const manifest: Record<string, unknown> = asRecord(playwrightRequire('playwright-core/package.json'))
+  return playwrightImageOf(asText(manifest['version']))
+}
+const processStart = (pid: number): string =>
+  execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8' })
+    .trim()
+    .replaceAll(/\s+/gu, ' ')
+const startStandIn = (name: string, owner: BrowserServerOwner): void => {
+  execFileSync('docker', [
+    'run',
+    '--detach',
+    '--rm',
+    `--name=${name}`,
+    `--label=${BROWSER_SERVER_OWNER_LABELS.pid}=${String(owner.pid)}`,
+    `--label=${BROWSER_SERVER_OWNER_LABELS.started}=${owner.started}`,
+    `--label=${BROWSER_SERVER_OWNER_LABELS.host}=${owner.host}`,
+    standInImage(),
+    'sleep',
+    STAND_IN_SECONDS,
+  ])
+}
+const isPresent = (name: string): boolean =>
+  spawnSync('docker', ['container', 'inspect', name], { stdio: 'ignore' }).status === 0
+
+const orphanRemoval = async (ports: readonly number[]): Promise<void> => {
+  const exited: number = spawnSync(process.execPath, ['-e', '']).pid
+  const suffix: string = String(process.pid)
+  const orphan: string = `ploaness-browsers-orphan-${suffix}`
+  const live: string = `ploaness-browsers-live-${suffix}`
+  const foreign: string = `ploaness-browsers-foreign-${suffix}`
+  startStandIn(orphan, { pid: exited, started: processStart(process.pid), host: hostname() })
+  startStandIn(live, { pid: process.pid, started: processStart(process.pid), host: hostname() })
+  startStandIn(foreign, { pid: exited, started: processStart(process.pid), host: 'another-machine' })
+  try {
+    await freshStartup(ports)
+    const states: readonly boolean[] = [orphan, live, foreign].map((name: string): boolean => isPresent(name))
+    if (states.join(',') !== [false, true, true].join(',')) {
+      throw new Error(
+        `A run must remove only the browser servers whose owner is gone; present after the gate: ${states.join(', ')}`,
+      )
+    }
+  } finally {
+    spawnSync('docker', ['rm', '--force', orphan, live, foreign], { stdio: 'ignore' })
+  }
+}
+
 const manualReuse = async (helperPorts: readonly number[]): Promise<void> => {
   const consumerRequire: NodeJS.Require = createRequire(manifestPath)
   const helpers: readonly HttpServer[] = HELPER_BODIES.map((body: string): HttpServer => healthServer(body))
@@ -266,7 +329,7 @@ await occupied(createServer(), localhostUrl, '::1')
 writeSettings({ ...settings, serverUrl: 'file:///browser-server' })
 requireResult(await gate(), 1, 'browser server URLs must use http or https')
 writeSettings(settings)
-await freshStartup([appPort, ...helperPorts])
+await orphanRemoval([appPort, ...helperPorts])
 const nextConfig: string = readFileSync('next.config.ts', 'utf8')
 writeFileSync('next.config.ts', nextConfig.replace('export default {', "export default { output: 'standalone',"))
 await freshStartup([appPort, ...helperPorts])

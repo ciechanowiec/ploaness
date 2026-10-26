@@ -8,9 +8,15 @@ import { randomBytes } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createConnection, createServer, type Server, type Socket } from 'node:net'
+import { hostname } from 'node:os'
 import path from 'node:path'
 import {
+  type BrowserServerOwner,
+  browserServerListingArguments,
   CLOCK_ENVIRONMENT_VARIABLE,
+  isOrphanedBrowserServer,
+  type ListedBrowserServer,
+  listedBrowserServers,
   pinnedBrowserEndpoint,
   pinnedBrowserServerArguments,
   playwrightImageOf,
@@ -100,6 +106,55 @@ const resolvePlaywrightCore = (context: Context): ResolvedPlaywright | undefined
   }
 }
 
+// When a process started, as `ps` reports it; undefined when no process holds the PID.
+const processStart = (context: Context, pid: number): string | undefined => {
+  const result: RunResult = run('ps', ['-o', 'lstart=', '-p', String(pid)], { cwd: context.root })
+  const started: string = result.output.trim().replaceAll(/\s+/gu, ' ')
+  return started !== '' && result.code === 0 ? started : undefined
+}
+
+const isPresent = (context: Context, name: string): boolean =>
+  run('docker', ['container', 'inspect', name], { cwd: context.root }).code === 0
+
+// A run killed outright, by SIGKILL, a timeout or a machine that went to sleep, never removes its browser
+// server, so each run first removes the ones whose owner is gone. Another run may remove the same one at
+// the same moment, which is why a failed removal only counts while the container is still there.
+const removeOrphans = (context: Context, host: string): GateResult | undefined => {
+  const listed: RunResult = run('docker', [...browserServerListingArguments], { cwd: context.root })
+  if (listed.code !== 0) {
+    return failed('the browser servers earlier runs started could not be listed', [listed.output])
+  }
+  const stuck: readonly string[] = listedBrowserServers(listed.output)
+    .filter(
+      (server: ListedBrowserServer): boolean =>
+        server.owner !== undefined &&
+        isOrphanedBrowserServer(server.owner, host, processStart(context, server.owner.pid)),
+    )
+    .filter(
+      (server: ListedBrowserServer): boolean =>
+        run('docker', ['rm', '--force', server.name], { cwd: context.root }).code !== 0 &&
+        isPresent(context, server.name),
+    )
+    .map((server: ListedBrowserServer): string => server.name)
+  return stuck.length === 0
+    ? undefined
+    : failed('a browser server left by a run that no longer exists could not be removed', [
+        `remove it with docker rm --force: ${stuck.join(', ')}`,
+      ])
+}
+
+// This run, recorded on the server it starts, once the servers of runs that are gone have been removed.
+const ownerAfterRemovingOrphans = (context: Context): BrowserServerOwner | GateResult => {
+  const started: string | undefined = processStart(context, process.pid)
+  if (started === undefined) {
+    return failed('the run could not read its own start time, which marks the browser server it starts', [
+      'ploaness reads it with `ps -o lstart= -p <pid>`; make `ps` available on the PATH',
+    ])
+  }
+  const owner: BrowserServerOwner = { pid: process.pid, started, host: hostname() }
+  return removeOrphans(context, owner.host) ?? owner
+}
+
 /**
  * Start the pinned browser server for one end-to-end run.
  * @param context the member under test.
@@ -120,6 +175,10 @@ export const startPinnedBrowsers = async (context: Context): Promise<PinnedBrows
       ...(inspected.output.length > 0 ? [inspected.output] : []),
     ])
   }
+  const owner: BrowserServerOwner | GateResult = ownerAfterRemovingOrphans(context)
+  if (!('pid' in owner)) {
+    return owner
+  }
   // A Linux Docker engine shares the host's network, so the container reaches the application without a
   // tunnel. Docker Desktop's VM does not share the host's loopback, which shows as a server the host
   // cannot reach on its own loopback, and the run then publishes a port and tunnels instead.
@@ -127,14 +186,14 @@ export const startPinnedBrowsers = async (context: Context): Promise<PinnedBrows
     process.platform === 'linux'
       ? await startServer(
           context,
-          { image, playwrightCore: playwright.directory, isHostNetwork: true },
+          { image, playwrightCore: playwright.directory, isHostNetwork: true, owner },
           HOST_NETWORK_PROBE_MS,
         )
       : undefined
   return shared === undefined || isStartFailure(shared)
     ? await startServer(
         context,
-        { image, playwrightCore: playwright.directory, isHostNetwork: false },
+        { image, playwrightCore: playwright.directory, isHostNetwork: false, owner },
         START_TIMEOUT_MS,
       )
     : shared
@@ -144,6 +203,7 @@ interface ServerPlan {
   readonly image: string
   readonly playwrightCore: string
   readonly isHostNetwork: boolean
+  readonly owner: BrowserServerOwner
 }
 
 const startServer = async (

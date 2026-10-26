@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  type BrowserServerOwner,
   clockOf,
   DEFAULT_CLOCK_INSTANT,
+  isOrphanedBrowserServer,
+  listedBrowserServers,
   partBudgetMs,
   passBudgetMs,
   pinnedBrowserEndpoint,
@@ -64,6 +67,8 @@ describe('the budget of one part of a pass', () => {
   })
 })
 
+const OWNER: BrowserServerOwner = { pid: 4321, started: 'Mon Oct 26 09:52:44 2026', host: 'builder' }
+
 describe('the pinned browser server', () => {
   it('runs the host Playwright, read-only, against the image browsers on a loopback port', () => {
     expect(
@@ -74,6 +79,7 @@ describe('the pinned browser server', () => {
         playwrightCore: '/repo/node_modules/playwright-core',
         isHostNetwork: false,
         secret: 'f3a9',
+        owner: OWNER,
       }),
     ).toEqual([
       'run',
@@ -82,6 +88,9 @@ describe('the pinned browser server', () => {
       '--init',
       '--ipc=host',
       '--name=ploaness-browsers-4100',
+      '--label=ploaness.owner.pid=4321',
+      '--label=ploaness.owner.started=Mon Oct 26 09:52:44 2026',
+      '--label=ploaness.owner.host=builder',
       '--publish=127.0.0.1:4100:4100',
       '--volume=/repo/node_modules/playwright-core:/ploaness/playwright-core:ro',
       '--workdir=/tmp',
@@ -104,11 +113,45 @@ describe('the pinned browser server', () => {
       playwrightCore: '/repo/node_modules/playwright-core',
       isHostNetwork: true,
       secret: 'f3a9',
+      owner: OWNER,
     })
     expect([
       hostArguments.includes('--network=host'),
       hostArguments.some((part: string): boolean => part.startsWith('--publish')),
       hostArguments.at(-2),
     ]).toEqual([true, false, '--host=127.0.0.1'])
+  })
+})
+
+describe('a browser server left behind by its run', () => {
+  it('is read from the listing with its owner, and without one when a label is missing', () => {
+    expect(
+      listedBrowserServers(
+        [
+          'ploaness-browsers-4100|4321|Mon Oct 26 09:52:44 2026|builder',
+          '',
+          'ploaness-browsers-4200||Mon Oct 26 09:52:44 2026|builder',
+          'ploaness-browsers-4300|0|Mon Oct 26 09:52:44 2026|builder',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      { name: 'ploaness-browsers-4100', owner: OWNER },
+      { name: 'ploaness-browsers-4200', owner: undefined },
+      { name: 'ploaness-browsers-4300', owner: undefined },
+    ])
+  })
+
+  it('is an orphan once no process holds its owner PID, or one that started at another time does', () => {
+    expect([
+      isOrphanedBrowserServer(OWNER, 'builder', undefined),
+      isOrphanedBrowserServer(OWNER, 'builder', 'Mon Oct 26 10:01:07 2026'),
+    ]).toEqual([true, true])
+  })
+
+  it('is kept while its owner runs, and whenever it was started on another machine', () => {
+    expect([
+      isOrphanedBrowserServer(OWNER, 'builder', OWNER.started),
+      isOrphanedBrowserServer(OWNER, 'another-machine', undefined),
+    ]).toEqual([false, false])
   })
 })
