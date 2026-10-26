@@ -4,14 +4,14 @@ import { withinLimit } from '../src/deadline.js'
 const LIMIT_MS: number = 50
 const LONG_AFTER_MS: number = 2000
 
-const after = async <Result>(ms: number, result: Result): Promise<Result> =>
+const resolvingAfter = async <Result>(ms: number, result: Result): Promise<Result> =>
   await new Promise<Result>((resolve): void => {
     setTimeout(resolve, ms, result)
   })
 
 describe('a limit on how long a step may keep its caller waiting', () => {
   it('hands back the result of work that finishes within the limit', async () => {
-    expect(await withinLimit(after(1, 'visited'), LIMIT_MS)).toBe('visited')
+    expect(await withinLimit(resolvingAfter(1, 'visited'), LIMIT_MS)).toBe('visited')
   })
 
   it('stops waiting for work that never finishes, and hands back nothing', async () => {
@@ -20,7 +20,7 @@ describe('a limit on how long a step may keep its caller waiting', () => {
 
   it('stops waiting for work that would finish only long after the limit', async () => {
     const started: number = performance.now()
-    expect(await withinLimit(after(LONG_AFTER_MS, 'late'), LIMIT_MS)).toBeUndefined()
+    expect(await withinLimit(resolvingAfter(LONG_AFTER_MS, 'late'), LIMIT_MS)).toBeUndefined()
     expect(performance.now() - started).toBeLessThan(LONG_AFTER_MS)
   })
 
