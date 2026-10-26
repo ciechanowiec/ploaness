@@ -29,7 +29,8 @@ export const interactionPlan = (locations: readonly SweepLocation[]): Interactio
 }
 
 /**
- * The units of work a place carries: each of its controls, and the page itself.
+ * The units of work a place carries: each of its controls, and the page itself. The disclosure pass
+ * counts a place the same way, because a page's disclosures are among its controls.
  * @param place the place.
  * @returns its units.
  */

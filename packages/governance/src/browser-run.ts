@@ -68,12 +68,15 @@ export type SweepPass =
 
 // What one unit of each pass's work may cost, in milliseconds. A unit is what the pass multiplies:
 // a route for discovery, a page at one viewport for the passes that load pages, a control at one
-// viewport for the interaction pass, a width for the sweep.
+// viewport for the interaction and disclosure passes, a width for the sweep. A disclosure visit costs in
+// proportion to the controls on the page: a story with eight of them took four seconds and one with 192
+// over a minute, so a fixed cost per page left the heavy ones short of both their item's limit and the
+// part's budget.
 const ALLOWANCES_MS: Readonly<Record<SweepPass, number>> = {
   discovery: 30_000,
   resting: 12_000,
   interaction: 5000,
-  disclosures: 8000,
+  disclosures: 1000,
   'text-stress': 15_000,
   'width-sweep': 2000,
   'dark-scheme': 10_000,

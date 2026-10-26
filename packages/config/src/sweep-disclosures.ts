@@ -13,6 +13,7 @@ import { type TargetFacts, targetFacts } from './layout.js'
 import { axeFindings, judgeRestingPlace, type PlaceScan, settleFindings } from './scanner.js'
 import { settleForScan } from './settle.js'
 import { carried } from './sweep-interaction.js'
+import { placeUnits } from './sweep-interaction-plan.js'
 import {
   armBudget,
   type Budget,
@@ -29,6 +30,7 @@ import {
   locationOfItem,
   merged,
   type PlaceItem,
+  passUnits,
   placeAt,
   preparePage,
   RESTING_JUDGED,
@@ -260,10 +262,11 @@ export const expectDisclosureStates = async (page: Page, shard: Shard): Promise<
   const items: readonly PlaceItem[] = discovery.locations.flatMap((location: SweepLocation): readonly PlaceItem[] =>
     drivenViewports(location.isStory).map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
   )
-  const budget: Budget = armBudget(page, 'disclosures', shard, items.length)
+  const budget: Budget = armBudget(page, 'disclosures', shard, passUnits(items, placeUnits))
   await preparePage(page)
   const { visits, taken }: ShardVisits<PlaceItem> = await visitAll(items, {
     budget,
+    unitsOf: placeUnits,
     labelOf: itemLabel,
     visit: async (item: PlaceItem): Promise<Visit> => await disclosureVisit(page, item),
   })

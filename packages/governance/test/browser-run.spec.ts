@@ -168,6 +168,10 @@ describe('the time one item of a pass may take', () => {
     ])
   })
 
+  it('gives a disclosure visit a second per control, so a heavy page is not cut short', () => {
+    expect([itemLimitMs('disclosures', 9), itemLimitMs('disclosures', 193)]).toEqual([60_000, 772_000])
+  })
+
   it('grows with the work an item carries, so a page with many controls is not cut short', () => {
     expect([itemLimitMs('interaction', 21), itemLimitMs('width-sweep', 50)]).toEqual([420_000, 400_000])
   })
