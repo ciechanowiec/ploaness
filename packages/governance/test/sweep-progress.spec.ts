@@ -4,6 +4,7 @@ import {
   heartbeatSlot,
   isProgressLine,
   type PassProgress,
+  partFindingLines,
   passFinishLine,
   passProgressLine,
   passStartLine,
@@ -75,5 +76,22 @@ describe('the progress of a sweep pass', () => {
       heartbeatSlot(HEARTBEAT_MS * 6 - 1),
       heartbeatSlot(HEARTBEAT_MS * 6),
     ]).toEqual([5, 5, 6])
+  })
+})
+
+describe('the findings a part reports as soon as it ends', () => {
+  it('heads the findings with the pass and the part, and lists each as the report words it', () => {
+    expect(
+      partFindingLines('chromium', 'resting', { index: 2, count: 4 }, [
+        '[page-not-stable] story:pages-homepage--post-games @768x1024 (chromium, resting): the page kept changing',
+      ]),
+    ).toEqual([
+      '[ploaness-sweep] chromium resting (pass 2 of 7) part 3 of 4: 1 finding',
+      '[ploaness-sweep]   [page-not-stable] story:pages-homepage--post-games @768x1024 (chromium, resting): the page kept changing',
+    ])
+  })
+
+  it('stays quiet for a part that found nothing', () => {
+    expect(partFindingLines('webkit', 'engine', { index: 0, count: 4 }, [])).toEqual([])
   })
 })

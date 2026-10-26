@@ -41,7 +41,7 @@ import { withinLimit } from './deadline.js'
 import { outlineElements } from './layout.js'
 import { projectSettings } from './project-settings.js'
 import { engineOf, type HealthReading, healthFindings, type PlaceScan } from './scanner.js'
-import { recordProgress, reportPass } from './sweep-progress-log.js'
+import { recordProgress, reportPartFindings, reportPass } from './sweep-progress-log.js'
 import { firstUntaken, takeNext, untakenCount } from './sweep-queue.js'
 
 export type { Shard } from '@ploaness/governance'
@@ -701,10 +701,9 @@ export const finishPass = (page: Page, finished: FinishedPass): void => {
     elapsedMs: Math.round(performance.now() - budget.startedAt),
   }
   writeJson(reportFile(test.info(), engine, pass, budget.shard), report)
-  expect(
-    findings.map((finding: BrowserFinding): string => findingLine(finding)),
-    `${pass} pass findings`,
-  ).toEqual([])
+  const lines: readonly string[] = findings.map((finding: BrowserFinding): string => findingLine(finding))
+  reportPartFindings(budget, lines)
+  expect(lines, `${pass} pass findings`).toEqual([])
 }
 
 /**

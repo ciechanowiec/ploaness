@@ -5,7 +5,7 @@
 // it gave no clue how far the sweep had got. The suite's own result lines, and the lines each pass of
 // the sweep prints as it starts, works and finishes, are what the run log streams as they are written.
 // Everything else the suite prints, server logs included, stays in the gate's report.
-import type { SweepPass } from './browser-run.js'
+import type { Shard, SweepPass } from './browser-run.js'
 
 /** The prefix of every line the sweep prints about its own progress. */
 export const SWEEP_PROGRESS_MARKER: string = '[ploaness-sweep]'
@@ -109,6 +109,29 @@ export const passProgressLine = (progress: PassProgress): string => {
  */
 export const passFinishLine = (engine: string, pass: SweepPass, total: number, elapsedMs: number): string =>
   `${headingOf(engine, pass)}: finished ${String(total)} items in ${duration(elapsedMs)}`
+
+/**
+ * The lines a part prints when it ends with findings, so a reader learns what fails as soon as the part
+ * is done rather than when the whole suite reports: a heading, then each finding as the report words it.
+ * @param engine the browser engine.
+ * @param pass the pass.
+ * @param shard the part.
+ * @param findings each finding, worded as the suite's report words it.
+ * @returns the lines; none for a part without findings.
+ */
+export const partFindingLines = (
+  engine: string,
+  pass: SweepPass,
+  shard: Shard,
+  findings: readonly string[],
+): readonly string[] =>
+  findings.length === 0
+    ? []
+    : [
+        `${headingOf(engine, pass)} part ${String(shard.index + 1)} of ${String(shard.count)}: ` +
+          `${String(findings.length)} ${findings.length === 1 ? 'finding' : 'findings'}`,
+        ...findings.map((finding: string): string => `${SWEEP_PROGRESS_MARKER}   ${finding}`),
+      ]
 
 /**
  * The interval a moment falls in, which the parts of a pass compete to report once.

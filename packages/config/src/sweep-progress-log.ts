@@ -6,6 +6,7 @@ import { appendFileSync, readFileSync } from 'node:fs'
 import {
   heartbeatSlot,
   type PassProgress,
+  partFindingLines,
   passFinishLine,
   passProgressLine,
   type Shard,
@@ -73,4 +74,15 @@ export const reportPass = (log: PassLog, total: number): void => {
     elapsedMs,
   }
   console.info(passProgressLine(progress))
+}
+
+/**
+ * Print the findings a part ends with, as soon as it ends, rather than leave them to the suite's report.
+ * @param log the part.
+ * @param findings each finding, worded as the report words it.
+ */
+export const reportPartFindings = (log: PassLog, findings: readonly string[]): void => {
+  for (const line of partFindingLines(log.engine, log.pass, log.shard, findings)) {
+    console.info(line)
+  }
 }
