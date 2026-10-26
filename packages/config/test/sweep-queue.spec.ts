@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { firstUntaken, takeNext, untakenCount } from '../src/sweep-queue.js'
+import { firstUntaken, isClaimedFirst, takeNext, untakenCount } from '../src/sweep-queue.js'
 
 const inQueue = (run: (queue: string) => void): void => {
   const queue: string = mkdtempSync(path.join(tmpdir(), 'ploaness-sweep-queue-'))
@@ -38,6 +38,18 @@ describe('the queue the parts of a sweep pass share', () => {
       takeNext(queue, 4, 0)
       takeNext(queue, 4, 0)
       expect([firstUntaken(queue, 4, 0), untakenCount(queue, 4)]).toEqual([undefined, 0])
+    })
+  })
+
+  it('grants each claim to the first part that makes it, and keeps separate claims apart', () => {
+    inQueue((claims: string): void => {
+      expect([
+        isClaimedFirst(claims, 'beat-41'),
+        isClaimedFirst(claims, 'beat-41'),
+        isClaimedFirst(claims, 'beat-42'),
+        isClaimedFirst(claims, 'finished'),
+        isClaimedFirst(claims, 'finished'),
+      ]).toEqual([true, false, true, true, false])
     })
   })
 })

@@ -2,10 +2,10 @@
 //
 // A full sweep keeps one gate busy for hours, and a gate's report arrives only when it ends. On CI that
 // left a log that stopped mid-run with no sign of whether the sweep was moving, and when an agent died
-// it gave no clue how far the sweep had got. The suite's own result lines, and a heartbeat each part of
-// the sweep prints while it works, are the lines the run log streams as they are written. Everything
-// else the suite prints, server logs included, stays in the gate's report.
-import type { Shard } from './browser-run.js'
+// it gave no clue how far the sweep had got. The suite's own result lines, and the lines each pass of
+// the sweep prints as it starts, works and finishes, are what the run log streams as they are written.
+// Everything else the suite prints, server logs included, stays in the gate's report.
+import type { SweepPass } from './browser-run.js'
 
 /** The prefix of every line the sweep prints about its own progress. */
 export const SWEEP_PROGRESS_MARKER: string = '[ploaness-sweep]'
@@ -29,20 +29,32 @@ const RUN_OPENING: RegExp = /^\s*Running \d+ tests? using \d+ workers?/u
 export const isProgressLine = (line: string): boolean =>
   line.includes(SWEEP_PROGRESS_MARKER) || TEST_RESULT.test(line) || RUN_OPENING.test(line)
 
-/** Where a part of a sweep pass stands. */
-export interface SweepProgress {
-  readonly pass: string
+// The passes in the order a Chromium run takes them; Firefox and WebKit run the engine pass alone.
+const CHROMIUM_PASSES: readonly SweepPass[] = [
+  'discovery',
+  'resting',
+  'interaction',
+  'disclosures',
+  'text-stress',
+  'width-sweep',
+  'dark-scheme',
+]
+
+const PERCENT: number = 100
+
+/** Where a sweep pass stands, counted across all its parallel parts. */
+export interface PassProgress {
   readonly engine: string
-  readonly shard: Shard
-  /** Items this part has visited. */
-  readonly visited: number
-  /** Items of the whole pass that no part has taken yet. */
-  readonly untaken: number
+  readonly pass: SweepPass
   readonly total: number
+  /** Items any part has finished. */
+  readonly done: number
+  /** Items no part has taken yet. */
+  readonly waiting: number
   readonly elapsedMs: number
 }
 
-const elapsed = (ms: number): string => {
+const duration = (ms: number): string => {
   const seconds: number = Math.floor(ms / MS_PER_SECOND)
   const minutes: number = Math.floor(seconds / SECONDS_PER_MINUTE)
   return minutes === 0
@@ -50,31 +62,57 @@ const elapsed = (ms: number): string => {
     : `${String(minutes)}m ${String(seconds % SECONDS_PER_MINUTE).padStart(SECONDS_WIDTH, '0')}s`
 }
 
-const partOf = (progress: Pick<SweepProgress, 'engine' | 'pass' | 'shard'>): string =>
-  `${SWEEP_PROGRESS_MARKER} ${progress.pass} (${progress.engine}) part ${String(progress.shard.index + 1)} of ` +
-  String(progress.shard.count)
+// Which of an engine's passes this is, so a reader knows how much of the engine's work is behind it.
+const headingOf = (engine: string, pass: SweepPass): string => {
+  const index: number = CHROMIUM_PASSES.indexOf(pass)
+  const position: string =
+    index === -1 ? 'pass 1 of 1' : `pass ${String(index + 1)} of ${String(CHROMIUM_PASSES.length)}`
+  return `${SWEEP_PROGRESS_MARKER} ${engine} ${pass} (${position})`
+}
 
 /**
- * The line a part prints when it starts.
- * @param progress the part, and how many items its pass has.
+ * The line a pass prints when it starts.
+ * @param engine the browser engine.
+ * @param pass the pass.
+ * @param total how many items the pass has.
+ * @param parts how many parts share them.
  * @returns the line.
  */
-export const sweepStartLine = (progress: Pick<SweepProgress, 'engine' | 'pass' | 'shard' | 'total'>): string =>
-  `${partOf(progress)}: started, ${String(progress.total)} items in the pass`
+export const passStartLine = (engine: string, pass: SweepPass, total: number, parts: number): string =>
+  `${headingOf(engine, pass)}: started, ${String(total)} items across ${String(parts)} parallel parts`
 
 /**
- * The line a part prints while it works.
- * @param progress where the part stands.
+ * The line a pass prints while it works: what is done, what is under way, what waits, and how long the
+ * rest should take at the pace so far.
+ * @param progress where the pass stands.
  * @returns the line.
  */
-export const sweepProgressLine = (progress: SweepProgress): string =>
-  `${partOf(progress)}: ${String(progress.visited)} visited here, ${String(progress.untaken)} of ` +
-  `${String(progress.total)} not yet taken, ${elapsed(progress.elapsedMs)}`
+export const passProgressLine = (progress: PassProgress): string => {
+  const { done, total, waiting, elapsedMs }: PassProgress = progress
+  const working: number = Math.max(0, total - waiting - done)
+  const share: number = total === 0 ? PERCENT : Math.floor((done / total) * PERCENT)
+  const left: string =
+    done === 0 ? 'estimating what is left' : `about ${duration((elapsedMs / done) * (total - done))} left`
+  return (
+    `${headingOf(progress.engine, progress.pass)}: ${String(done)}/${String(total)} done (${String(share)}%), ` +
+    `${String(working)} in progress, ${String(waiting)} waiting · ${duration(elapsedMs)} elapsed, ${left}`
+  )
+}
 
 /**
- * Whether a part has been quiet long enough to say how far it has got.
- * @param lastMs when it last said so, or started.
- * @param nowMs now.
- * @returns true once a heartbeat interval has passed.
+ * The line a pass prints when its last item is done.
+ * @param engine the browser engine.
+ * @param pass the pass.
+ * @param total how many items it had.
+ * @param elapsedMs how long it took.
+ * @returns the line.
  */
-export const isHeartbeatDue = (lastMs: number, nowMs: number): boolean => nowMs - lastMs >= HEARTBEAT_MS
+export const passFinishLine = (engine: string, pass: SweepPass, total: number, elapsedMs: number): string =>
+  `${headingOf(engine, pass)}: finished ${String(total)} items in ${duration(elapsedMs)}`
+
+/**
+ * The interval a moment falls in, which the parts of a pass compete to report once.
+ * @param epochMs the moment, by the real clock.
+ * @returns the interval's number.
+ */
+export const heartbeatSlot = (epochMs: number): number => Math.floor(epochMs / HEARTBEAT_MS)

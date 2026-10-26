@@ -11,9 +11,11 @@ const isTakenAlready = (error: unknown): boolean =>
   'code' in error &&
   (error as { readonly code?: unknown }).code === 'EEXIST'
 
-const isTakenNow = (directory: string, index: number): boolean => {
+// Creating a directory succeeds for exactly one of the processes that try, which is the whole of the
+// coordination the parts need.
+const isClaimedNow = (entry: string): boolean => {
   try {
-    mkdirSync(path.join(directory, String(index)))
+    mkdirSync(entry)
     return true
   } catch (error) {
     if (isTakenAlready(error)) {
@@ -34,7 +36,7 @@ export const takeNext = (directory: string, count: number, from: number): number
   if (from >= count) {
     return undefined
   }
-  return isTakenNow(directory, from) ? from : takeNext(directory, count, from + 1)
+  return isClaimedNow(path.join(directory, String(from))) ? from : takeNext(directory, count, from + 1)
 }
 
 /**
@@ -58,3 +60,11 @@ export const firstUntaken = (directory: string, count: number, from: number): nu
  * @returns the number not taken.
  */
 export const untakenCount = (directory: string, count: number): number => count - readdirSync(directory).length
+
+/**
+ * Claim something the parts of a pass must do once between them, such as reporting how far it has got.
+ * @param directory where the pass keeps its claims, which must exist and hold nothing but claims.
+ * @param name what is claimed.
+ * @returns true for the one part that claims it first.
+ */
+export const isClaimedFirst = (directory: string, name: string): boolean => isClaimedNow(path.join(directory, name))

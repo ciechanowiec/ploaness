@@ -1,6 +1,6 @@
 // What every pass of the managed browser sweep shares: the browser surface its page functions touch,
 // the files the passes hand each other, loading a location, and the budget each pass runs under.
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, type Page, type TestInfo, test } from '@playwright/test'
 import {
@@ -17,13 +17,13 @@ import {
   findingLine,
   isAllowedRequest,
   isArray,
-  isHeartbeatDue,
   isRecord,
   type JudgedPage,
   LAYOUT_RULES,
   PAGE_ERROR_RULE,
   PASS_BUDGET_RULE,
   partBudgetMs,
+  passStartLine,
   REAL_CLOCK,
   RESTING_ELEMENT_RULES,
   SETTLED_STORY_PHASES,
@@ -32,14 +32,13 @@ import {
   type SweepPass,
   storyLocation,
   storySamples,
-  sweepProgressLine,
-  sweepStartLine,
   type TemplateSample,
   type UsedExemption,
 } from '@ploaness/governance'
 import { outlineElements } from './layout.js'
 import { projectSettings } from './project-settings.js'
 import { engineOf, type HealthReading, healthFindings, type PlaceScan } from './scanner.js'
+import { recordProgress, reportPass } from './sweep-progress-log.js'
 import { firstUntaken, takeNext, untakenCount } from './sweep-queue.js'
 
 export type { Shard } from '@ploaness/governance'
@@ -513,8 +512,6 @@ export const screenshotOf = async (page: Page, scan: PlaceScan, place: FindingPl
 // ---------------------------------------------------------------------------------------------------
 // Budgets
 
-const MS_PER_SECOND: number = 1000
-
 /** The whole of a pass that is not split, which is discovery. */
 export const WHOLE_PASS: Shard = { index: 0, count: 1 }
 
@@ -525,6 +522,8 @@ export interface Budget {
   readonly engine: string
   readonly progressFile: string
   readonly queue: string
+  /** Where the parts claim what only one of them should do, such as report the pass. */
+  readonly claims: string
   readonly startedAt: number
   readonly deadline: number
 }
@@ -544,6 +543,8 @@ export const armBudget = (page: Page, pass: SweepPass, shard: Shard, units: numb
   const directory: string = engineDirectory(test.info(), engine)
   const queue: string = path.join(directory, 'queue', pass)
   mkdirSync(queue, { recursive: true })
+  const claims: string = path.join(directory, 'claims', pass)
+  mkdirSync(claims, { recursive: true })
   const startedAt: number = performance.now()
   return {
     pass,
@@ -551,6 +552,7 @@ export const armBudget = (page: Page, pass: SweepPass, shard: Shard, units: numb
     engine,
     progressFile: path.join(directory, 'progress.log'),
     queue,
+    claims,
     startedAt,
     deadline: startedAt + budgetMs,
   }
@@ -571,16 +573,6 @@ interface ItemVisitor<Item> {
   readonly labelOf: (item: Item) => string
   /** Visit an item; the index is its place in the whole pass, not in the shard. */
   readonly visit: (item: Item, index: number) => Promise<Visit>
-}
-
-// A pass of thousands of loads otherwise says nothing until it ends, and the e2e gate shows its output
-// only then too. One line per item, written as it finishes, lets anyone see how far a pass has got and
-// how fast it goes. Seconds since the shard started, because the runner's own clock is the shifted one.
-// The shards of every pass in one engine append to one log, a line at a time.
-const recordProgress = (budget: Budget, item: string): void => {
-  const seconds: string = ((performance.now() - budget.startedAt) / MS_PER_SECOND).toFixed(1)
-  const part: string = `${String(budget.shard.index + 1)}/${String(budget.shard.count)}`
-  appendFileSync(budget.progressFile, `${budget.pass} part ${part} ${seconds}s ${item}\n`)
 }
 
 /** What one shard of a pass visited: a visit per item it took, and the items with their index in the pass. */
@@ -607,39 +599,10 @@ const budgetFinding = <Item>(items: readonly Item[], visitor: ItemVisitor<Item>,
   }
 }
 
-/** How far a shard has got, carried from one item to the next. */
-interface ShardProgress {
-  readonly visited: number
-  /** When the shard last printed its heartbeat, or started. */
-  readonly lastBeat: number
-}
-
-// Printed rather than only logged to the progress file: the e2e gate streams these lines into the run
-// log while the suite runs, so a part that works for an hour visibly moves.
-const beatIfDue = (total: number, budget: Budget, progress: ShardProgress): ShardProgress => {
-  const now: number = performance.now()
-  if (!isHeartbeatDue(progress.lastBeat, now)) {
-    return progress
-  }
-  console.info(
-    sweepProgressLine({
-      pass: budget.pass,
-      engine: budget.engine,
-      shard: budget.shard,
-      visited: progress.visited,
-      untaken: untakenCount(budget.queue, total),
-      total,
-      elapsedMs: now - budget.startedAt,
-    }),
-  )
-  return { ...progress, lastBeat: now }
-}
-
 const visitFrom = async <Item>(
   items: readonly Item[],
   visitor: ItemVisitor<Item>,
   from: number,
-  progress: ShardProgress,
 ): Promise<ShardVisits<Item>> => {
   const { budget, labelOf, visit }: ItemVisitor<Item> = visitor
   if (performance.now() > budget.deadline) {
@@ -653,12 +616,8 @@ const visitFrom = async <Item>(
   }
   const visited: Visit = await visit(item, index)
   recordProgress(budget, `${String(index + 1)}/${String(items.length)} ${labelOf(item)}`)
-  const rest: ShardVisits<Item> = await visitFrom(
-    items,
-    visitor,
-    index + 1,
-    beatIfDue(items.length, budget, { ...progress, visited: progress.visited + 1 }),
-  )
+  reportPass(budget, items.length)
+  const rest: ShardVisits<Item> = await visitFrom(items, visitor, index + 1)
   return { visits: [visited, ...rest.visits], taken: [{ item, index }, ...rest.taken] }
 }
 
@@ -674,8 +633,10 @@ export const visitAll = async <Item>(
   visitor: ItemVisitor<Item>,
 ): Promise<ShardVisits<Item>> => {
   const { budget }: ItemVisitor<Item> = visitor
-  console.info(sweepStartLine({ pass: budget.pass, engine: budget.engine, shard: budget.shard, total: items.length }))
-  return await visitFrom(items, visitor, 0, { visited: 0, lastBeat: budget.startedAt })
+  if (items.length > 0 && budget.shard.index === 0) {
+    console.info(passStartLine(budget.engine, budget.pass, items.length, budget.shard.count))
+  }
+  return await visitFrom(items, visitor, 0)
 }
 
 /** What a finished pass hands to its report. */
