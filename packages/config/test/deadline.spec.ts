@@ -15,7 +15,10 @@ describe('a limit on how long a step may keep its caller waiting', () => {
   })
 
   it('stops waiting for work that never finishes, and hands back nothing', async () => {
-    expect(await withinLimit(new Promise<string>((): void => undefined), LIMIT_MS)).toBeUndefined()
+    const never: Promise<string> = new Promise<string>((): void => {
+      // Never settles: the work a hung browser leaves behind.
+    })
+    expect(await withinLimit(never, LIMIT_MS)).toBeUndefined()
   })
 
   it('stops waiting for work that would finish only long after the limit', async () => {
