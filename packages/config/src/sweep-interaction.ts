@@ -4,9 +4,7 @@ import {
   type BrowserFinding,
   type CarriedJudgement,
   classifyHitTarget,
-  drivenViewports,
   type FindingPlace,
-  type FindingViewport,
   FOCUS_CONTRAST_RATIO,
   FOCUS_RING_WIDTH,
   type FocusPosition,
@@ -19,11 +17,11 @@ import {
   isFocusBackwards,
   judgeCarried,
   obscuringContent,
-  STRESS_VIEWPORTS,
 } from '@ploaness/governance'
 import { type TargetFacts, targetFacts } from './layout.js'
 import { axeFindings, settleFindings } from './scanner.js'
 import { settleForScan } from './settle.js'
+import { type InteractionPlan, interactionPlan, placeUnits } from './sweep-interaction-plan.js'
 import {
   armBudget,
   type Budget,
@@ -53,7 +51,6 @@ import {
   type Shard,
   type ShardVisits,
   STILL_STYLE,
-  type SweepLocation,
   shardLocations,
   type Visit,
   visitAll,
@@ -542,23 +539,13 @@ const INTERACTION_RULES: readonly string[] = [
 export const expectInteractionStates = async (page: Page, shard: Shard): Promise<void> => {
   test.info().skip(!isChromium(page), 'the interaction pass runs in Chromium')
   const discovery: Discovery = readDiscovery(test.info())
-  const places: readonly PlaceItem[] = discovery.locations.flatMap((location: SweepLocation): readonly PlaceItem[] =>
-    drivenViewports(location.isStory).map((viewport: FindingViewport): PlaceItem => ({ location, viewport })),
-  )
-  // The chrome is driven once per viewport across every shard, at the first place the whole pass has at
-  // that viewport, by whichever shard takes it.
-  const chromePlaces: ReadonlySet<number> = new Set<number>(
-    STRESS_VIEWPORTS.map((viewport: FindingViewport): number =>
-      places.findIndex((place: PlaceItem): boolean => place.viewport.width === viewport.width),
-    ),
-  )
-  const units: number = passUnits(places, (place: PlaceItem): number => place.location.controls + 1)
-  const budget: Budget = armBudget(page, 'interaction', shard, units)
+  const { places, chromePlaces }: InteractionPlan = interactionPlan(discovery.locations)
+  const budget: Budget = armBudget(page, 'interaction', shard, passUnits(places, placeUnits))
   await preparePage(page)
   const { visits, taken }: ShardVisits<PlaceItem> = await visitAll(places, {
     budget,
     labelOf: itemLabel,
-    // The index is the item's place in the whole pass.
+    unitsOf: placeUnits,
     visit: async (item: PlaceItem, index: number): Promise<Visit> =>
       await interactionVisit(page, item, chromePlaces.has(index)),
   })

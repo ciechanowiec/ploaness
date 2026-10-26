@@ -4,6 +4,7 @@ import {
   clockOf,
   DEFAULT_CLOCK_INSTANT,
   isOrphanedBrowserServer,
+  itemLimitMs,
   listedBrowserServers,
   partBudgetMs,
   passBudgetMs,
@@ -157,5 +158,17 @@ describe('a browser server left behind by its run', () => {
       isOrphanedBrowserServer(OWNER, 'builder', OWNER.started),
       isOrphanedBrowserServer(OWNER, 'another-machine', undefined),
     ]).toEqual([false, false])
+  })
+})
+
+describe('the time one item of a pass may take', () => {
+  it('is a minute at least, so a page that hangs costs a minute rather than the whole budget of its part', () => {
+    expect([itemLimitMs('engine', 1), itemLimitMs('resting', 1), itemLimitMs('width-sweep', 0)]).toEqual([
+      60_000, 60_000, 60_000,
+    ])
+  })
+
+  it('grows with the work an item carries, so a page with many controls is not cut short', () => {
+    expect([itemLimitMs('interaction', 21), itemLimitMs('width-sweep', 50)]).toEqual([420_000, 400_000])
   })
 })

@@ -86,6 +86,24 @@ const PASS_OVERHEAD_MS: number = 60_000
 /** The rule a pass that ran out of time reports. */
 export const PASS_BUDGET_RULE: string = 'pass-budget'
 
+/** The rule an item reports when its visit did not finish within the item's limit. */
+export const ITEM_LIMIT_RULE: string = 'item-limit'
+
+// An item may take this many times its pass's allowance, and never less than the floor: generous enough
+// for a slow agent, while a page that hangs - an axe run that never returns - holds its part for a
+// minute or so rather than for the part's whole budget.
+const ITEM_ALLOWANCE_FACTOR: number = 4
+const ITEM_LIMIT_FLOOR_MS: number = 60_000
+
+/**
+ * The time one item of a pass may take before the part gives up on it and moves on.
+ * @param pass the pass.
+ * @param units how many units of work the item carries.
+ * @returns the limit in milliseconds.
+ */
+export const itemLimitMs = (pass: SweepPass, units: number): number =>
+  Math.max(ITEM_LIMIT_FLOOR_MS, ITEM_ALLOWANCE_FACTOR * ALLOWANCES_MS[pass] * Math.max(1, units))
+
 /**
  * The time a pass may take, derived from the work it discovered.
  * @param pass the pass.

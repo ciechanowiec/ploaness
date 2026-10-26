@@ -15,9 +15,11 @@ import {
   failingPlaces,
   findingAt,
   findingLine,
+  ITEM_LIMIT_RULE,
   isAllowedRequest,
   isArray,
   isRecord,
+  itemLimitMs,
   type JudgedPage,
   LAYOUT_RULES,
   PAGE_ERROR_RULE,
@@ -35,6 +37,7 @@ import {
   type TemplateSample,
   type UsedExemption,
 } from '@ploaness/governance'
+import { withinLimit } from './deadline.js'
 import { outlineElements } from './layout.js'
 import { projectSettings } from './project-settings.js'
 import { engineOf, type HealthReading, healthFindings, type PlaceScan } from './scanner.js'
@@ -573,6 +576,8 @@ interface ItemVisitor<Item> {
   readonly labelOf: (item: Item) => string
   /** Visit an item; the index is its place in the whole pass, not in the shard. */
   readonly visit: (item: Item, index: number) => Promise<Visit>
+  /** The units of work an item carries, which scale the time it may take; one when the pass does not say. */
+  readonly unitsOf?: (item: Item) => number
 }
 
 /** What one shard of a pass visited: a visit per item it took, and the items with their index in the pass. */
@@ -599,12 +604,36 @@ const budgetFinding = <Item>(items: readonly Item[], visitor: ItemVisitor<Item>,
   }
 }
 
+const MS_PER_SECOND: number = 1000
+
+const limitFinding = <Item>(visitor: ItemVisitor<Item>, item: Item, limitMs: number): Visit => ({
+  ...EMPTY_VISIT,
+  findings: [
+    findingAt(
+      {
+        location: visitor.labelOf(item),
+        state: visitor.budget.pass,
+        engine: visitor.budget.engine,
+        viewport: undefined,
+      },
+      ITEM_LIMIT_RULE,
+      `the ${visitor.budget.pass} pass gave up on this item after ${String(limitMs / MS_PER_SECOND)}s: the visit did ` +
+        'not finish, so nothing on it was judged',
+    ),
+  ],
+})
+
+const visitWithinLimit = async <Item>(visitor: ItemVisitor<Item>, item: Item, index: number): Promise<Visit> => {
+  const limitMs: number = itemLimitMs(visitor.budget.pass, visitor.unitsOf?.(item) ?? 1)
+  return (await withinLimit(visitor.visit(item, index), limitMs)) ?? limitFinding(visitor, item, limitMs)
+}
+
 const visitFrom = async <Item>(
   items: readonly Item[],
   visitor: ItemVisitor<Item>,
   from: number,
 ): Promise<ShardVisits<Item>> => {
-  const { budget, labelOf, visit }: ItemVisitor<Item> = visitor
+  const { budget, labelOf }: ItemVisitor<Item> = visitor
   if (performance.now() > budget.deadline) {
     const left: Item | undefined = items[firstUntaken(budget.queue, items.length, from) ?? items.length]
     return left === undefined ? NOTHING_VISITED : { visits: [budgetFinding(items, visitor, left)], taken: [] }
@@ -614,7 +643,7 @@ const visitFrom = async <Item>(
   if (item === undefined) {
     return NOTHING_VISITED
   }
-  const visited: Visit = await visit(item, index)
+  const visited: Visit = await visitWithinLimit(visitor, item, index)
   recordProgress(budget, `${String(index + 1)}/${String(items.length)} ${labelOf(item)}`)
   reportPass(budget, items.length)
   const rest: ShardVisits<Item> = await visitFrom(items, visitor, index + 1)

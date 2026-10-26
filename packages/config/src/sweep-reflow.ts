@@ -344,6 +344,7 @@ export const expectWidthSweep = async (page: Page, shard: Shard): Promise<void> 
   const { visits, taken }: ShardVisits<SweepLocation> = await visitAll(locations, {
     budget,
     labelOf: (location: SweepLocation): string => location.location,
+    unitsOf: (): number => sweepWidths().length,
     visit: async (location: SweepLocation): Promise<Visit> => await sweepLocation(page, location),
   })
   finishPass(page, {
