@@ -93,11 +93,15 @@ describe('the pinned browser server', () => {
       '--label=ploaness.owner.host=builder',
       '--publish=127.0.0.1:4100:4100',
       '--volume=/repo/node_modules/playwright-core:/ploaness/playwright-core:ro',
+      '--env=MOZ_WEBGL_FORCE_EGL=1',
       '--workdir=/tmp',
       'mcr.microsoft.com/playwright:v1.64.1-noble',
-      'node',
+      'sh',
+      '-c',
+      'for config in /ms-playwright/firefox-*/firefox/playwright.cfg; do ' +
+        String.raw`printf "\npref(\"webgl.force-enabled\", true);\n" >> "$config"; done; ` +
+        'exec node "$0" run-server "$@"',
       '/ploaness/playwright-core/cli.js',
-      'run-server',
       '--port=4100',
       '--host=0.0.0.0',
       '--path=/f3a9',

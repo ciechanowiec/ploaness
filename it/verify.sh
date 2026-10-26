@@ -367,6 +367,14 @@ require_browser_image() {
 
 clock_contracts() {
     require_browser_image
+    # Every pinned engine draws WebGL under the server arguments and launch options the gate uses, so
+    # the engine pass judges the page a visitor's browser shows rather than one without its effects.
+    if output="$(cd "$root" && node it/lib/engine-webgl.ts 2>&1)"; then
+        echo "ok engine-webgl: $output"
+    else
+        echo "FAILED engine-webgl: $output" >&2
+        failures=$((failures + 1))
+    fi
     new_case clock-shifted
     node "$lib/create-a11y-page.ts" "$scratch/clock-shifted" valid
     node "$lib/create-clock-case.ts" "$scratch/clock-shifted"

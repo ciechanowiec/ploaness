@@ -224,6 +224,18 @@ export interface PinnedBrowserServer {
   readonly secret: string
 }
 
+// Headless Firefox in the image finds no native OpenGL and draws no WebGL at all, while Chromium and
+// WebKit draw it in software, so the Firefox pass judged a page without its WebGL effects - which almost
+// no Firefox visitor sees - and reported the error a WebGL library logs without a context. Given EGL by
+// the environment and WebGL forced on in the autoconfig file Playwright's Firefox reads, it draws WebGL
+// through the image's Mesa as the other engines do. The preference is written inside the container
+// before the server starts, so no client has to send it: a server that accepted client preferences would
+// accept a client's choice of executable as well.
+const FIREFOX_WEBGL: string =
+  'for config in /ms-playwright/firefox-*/firefox/playwright.cfg; do ' +
+  String.raw`printf "\npref(\"webgl.force-enabled\", true);\n" >> "$config"; done; ` +
+  'exec node "$0" run-server "$@"'
+
 /** The variable telling the suite its pinned browsers reach the application only through the tunnel. */
 export const BROWSER_TUNNEL_ENVIRONMENT_VARIABLE: string = 'PLOANESS_BROWSER_TUNNEL'
 
@@ -248,11 +260,16 @@ export const pinnedBrowserServerArguments = (server: PinnedBrowserServer): reado
   `--label=${BROWSER_SERVER_OWNER_LABELS.host}=${server.owner.host}`,
   server.isHostNetwork ? '--network=host' : `--publish=127.0.0.1:${String(server.port)}:${String(server.port)}`,
   `--volume=${server.playwrightCore}:${CONTAINER_PLAYWRIGHT}:ro`,
+  // The EGL path Firefox needs for software WebGL; see FIREFOX_WEBGL.
+  '--env=MOZ_WEBGL_FORCE_EGL=1',
   '--workdir=/tmp',
   server.image,
-  'node',
+  // The port and the path travel as arguments of the script rather than inside it, so nothing a run
+  // chooses is ever read as shell.
+  'sh',
+  '-c',
+  FIREFOX_WEBGL,
   `${CONTAINER_PLAYWRIGHT}/cli.js`,
-  'run-server',
   `--port=${String(server.port)}`,
   server.isHostNetwork ? '--host=127.0.0.1' : '--host=0.0.0.0',
   `--path=/${server.secret}`,
