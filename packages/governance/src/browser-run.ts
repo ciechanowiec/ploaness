@@ -215,6 +215,21 @@ export interface ShardItem<Item> {
 export const partBudgetMs = (pass: SweepPass, units: number, shard: Shard): number =>
   passBudgetMs(pass, Math.ceil(units / shard.count))
 
+// The pinned WebKit draws every page in software, so a heavy page holds a processor for seconds per frame,
+// and as many such pages at once as the sweep has workers starve one another until one stops answering.
+// Its engine pass runs in half as many parts, each with the budget of its larger share.
+const SOFTWARE_DRAWN_ENGINE: string = 'webkit'
+const SOFTWARE_DRAWN_SHARE: number = 2
+
+/**
+ * How many parts an engine's engine pass runs in.
+ * @param engine the engine.
+ * @param parts the parts every other pass runs in.
+ * @returns the parts, at least one.
+ */
+export const enginePassParts = (engine: string, parts: number): number =>
+  engine === SOFTWARE_DRAWN_ENGINE ? Math.max(1, Math.floor(parts / SOFTWARE_DRAWN_SHARE)) : parts
+
 /** Where the container sees the host's Playwright, mounted read-only. */
 const CONTAINER_PLAYWRIGHT: string = '/ploaness/playwright-core'
 

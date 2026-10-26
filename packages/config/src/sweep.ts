@@ -22,6 +22,7 @@ import {
   coversEveryEngine,
   type DeclaredExemption,
   distinctFindings,
+  enginePassParts,
   findingLine,
   type Shard,
   type SweepPass,
@@ -67,13 +68,11 @@ const CHROMIUM_PASSES: readonly SweepPass[] = [
 
 const ENGINE_PASSES: readonly SweepPass[] = ['engine']
 
-const SHARDS: readonly Shard[] = Array.from(
-  { length: SWEEP_SHARDS },
-  (_unused: unknown, index: number): Shard => ({
-    index,
-    count: SWEEP_SHARDS,
-  }),
-)
+// The engine pass runs in as many parts as its engine affords; every other pass in all of them.
+const shardsOf = (engine: string, pass: SweepPass): readonly Shard[] => {
+  const count: number = pass === 'engine' ? enginePassParts(engine, SWEEP_SHARDS) : SWEEP_SHARDS
+  return Array.from({ length: count }, (_unused: unknown, index: number): Shard => ({ index, count }))
+}
 
 /** One part of a pass the summary expects a report from. */
 interface ExpectedReport {
@@ -105,7 +104,7 @@ const expectedEngines = (info: TestInfo): readonly string[] => {
 const expectedReports = (engines: readonly string[]): readonly ExpectedReport[] =>
   engines.flatMap((engine: string): readonly ExpectedReport[] =>
     (engine === CHROMIUM ? CHROMIUM_PASSES : ENGINE_PASSES).flatMap((pass: SweepPass): readonly ExpectedReport[] =>
-      SHARDS.map((shard: Shard): ExpectedReport => ({ engine, pass, shard })),
+      shardsOf(engine, pass).map((shard: Shard): ExpectedReport => ({ engine, pass, shard })),
     ),
   )
 
@@ -149,7 +148,7 @@ const passLine = (engine: string, pass: SweepPass, reports: readonly PassReport[
   return (
     `${pass} (${engine}${isScoped ? ', scoped to the change' : ''}): ${String(places)} places over ` +
     `${String(locations)} locations, ${String(findings)} ` +
-    `findings, ${String(parts.length)} of ${String(SWEEP_SHARDS)} parts, slowest part ` +
+    `findings, ${String(parts.length)} of ${String(shardsOf(engine, pass).length)} parts, slowest part ` +
     `${String(Math.round(slowestMs / MS_PER_SECOND))}s`
   )
 }

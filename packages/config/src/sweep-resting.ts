@@ -4,13 +4,21 @@ import { type Page, test } from '@playwright/test'
 import {
   BASELINE_VIEWPORTS,
   type BrowserFinding,
+  enginePassParts,
   type FindingPlace,
   type FindingViewport,
   pageViewports,
   STRESS_VIEWPORTS,
 } from '@ploaness/governance'
 import { projectSettings } from './project-settings.js'
-import { axeFindings, isStressViewport, judgeRestingPlace, type PlaceScan, settleFindings } from './scanner.js'
+import {
+  axeFindings,
+  engineOf,
+  isStressViewport,
+  judgeRestingPlace,
+  type PlaceScan,
+  settleFindings,
+} from './scanner.js'
 import {
   armBudget,
   type Budget,
@@ -109,12 +117,19 @@ export const expectRestingRules = async (page: Page, shard: Shard): Promise<void
  */
 export const expectEngineRules = async (page: Page, shard: Shard): Promise<void> => {
   test.info().skip(isChromium(page), 'Chromium runs the full resting pass')
+  const engine: string = engineOf(page)
+  const parts: number = enginePassParts(engine, shard.count)
+  test.info().skip(shard.index >= parts, `${engine} runs its engine pass in ${String(parts)} parts`)
   const discovery: Discovery = readDiscovery(test.info())
-  await runRestingPass(page, shard, {
-    pass: 'engine',
-    items: placeItems(sampledLocations(discovery), (): readonly FindingViewport[] => BASELINE_VIEWPORTS),
-    visit: restingVisit,
-  })
+  await runRestingPass(
+    page,
+    { index: shard.index, count: parts },
+    {
+      pass: 'engine',
+      items: placeItems(sampledLocations(discovery), (): readonly FindingViewport[] => BASELINE_VIEWPORTS),
+      visit: restingVisit,
+    },
+  )
 }
 
 const darkVisit = async (page: Page, item: PlaceItem, index: number): Promise<Visit> => {

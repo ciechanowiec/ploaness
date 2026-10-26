@@ -538,7 +538,8 @@ worker - a worker for every two processors and every two gigabytes of memory, be
 counted on whichever is smaller of the host and the machine Docker runs the browsers in - one test
 each, taking its pages from one shared queue, so a shard that meets slow pages
 does not hold the pass while the others wait; each page is loaded fresh and judged alone, so the split
-changes no verdict. The project's own specs run on one worker beside them. Each shard has a budget of an
+changes no verdict. WebKit, which the pinned image draws in software, runs its engine pass in half as
+many shards, and its remaining shard tests are skipped. The project's own specs run on one worker beside them. Each shard has a budget of an
 equal share of the work discovery found and reports every defect it finds; one failing shard hides nothing
 another reports. The summary runs last, whatever failed before it: it fails on discovery's findings and problems,
 on a shard that recorded no report, and on exemptions no shard in that engine used. Each finding is one

@@ -5,6 +5,7 @@ import {
   DEFAULT_CLOCK_INSTANT,
   declaredSweepWorkers,
   dockerCapacityOf,
+  enginePassParts,
   isOrphanedBrowserServer,
   itemLimitMs,
   listedBrowserServers,
@@ -223,5 +224,22 @@ describe('the workers a run gives the sweep, across the host and the machine of 
       undefined,
       undefined,
     ])
+  })
+})
+
+describe('the parts an engine pass runs in', () => {
+  it('halves the parts of the engine that draws in software', () => {
+    expect(enginePassParts('webkit', 4)).toBe(2)
+    expect(enginePassParts('webkit', 7)).toBe(3)
+    expect(enginePassParts('webkit', 8)).toBe(4)
+  })
+
+  it('keeps at least one part', () => {
+    expect(enginePassParts('webkit', 1)).toBe(1)
+  })
+
+  it('keeps the parts of every other engine', () => {
+    expect(enginePassParts('firefox', 4)).toBe(4)
+    expect(enginePassParts('chromium', 8)).toBe(8)
   })
 })
