@@ -24,7 +24,6 @@ import {
   distinctFindings,
   findingLine,
   type Shard,
-  SWEEP_SHARDS,
   type SweepPass,
   staleExemptions,
   type TemplateSample,
@@ -45,14 +44,15 @@ import {
   sweepRoot,
   writeJson,
 } from './sweep-shared.js'
+import { SWEEP_WORKERS as SWEEP_SHARDS } from './sweep-workers.js'
 
-export { SWEEP_SHARDS } from '@ploaness/governance'
 export { expectDisclosureStates } from './sweep-disclosures.js'
 export { expectDiscoveredSite } from './sweep-discovery.js'
 export { expectInteractionStates } from './sweep-interaction.js'
 export { expectTextStress, expectWidthSweep } from './sweep-reflow.js'
 export { expectDarkScheme, expectEngineRules, expectRestingRules } from './sweep-resting.js'
 export type { Shard } from './sweep-shared.js'
+export { SWEEP_WORKERS as SWEEP_SHARDS } from './sweep-workers.js'
 
 const CHROMIUM: string = 'chromium'
 

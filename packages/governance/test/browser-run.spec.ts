@@ -13,6 +13,7 @@ import {
   playwrightImageOf,
   REAL_CLOCK,
   shiftedTime,
+  sweepWorkersFor,
 } from '../src/browser-run.js'
 import { readSettings } from '../src/settings.js'
 
@@ -174,5 +175,19 @@ describe('the time one item of a pass may take', () => {
 
   it('grows with the work an item carries, so a page with many controls is not cut short', () => {
     expect([itemLimitMs('interaction', 21), itemLimitMs('width-sweep', 50)]).toEqual([420_000, 400_000])
+  })
+})
+
+const GIB: number = 1024 ** 3
+
+describe('the workers a browser run spreads the sweep over', () => {
+  it('keeps four on a hosted agent, and on any machine short of processors or memory', () => {
+    expect([sweepWorkersFor(4, 16 * GIB), sweepWorkersFor(2, 8 * GIB), sweepWorkersFor(16, 8 * GIB)]).toEqual([4, 4, 4])
+  })
+
+  it('adds a worker for every two processors and every two gigabytes a larger machine offers, up to eight', () => {
+    expect([sweepWorkersFor(12, 64 * GIB), sweepWorkersFor(18, 64 * GIB), sweepWorkersFor(64, 256 * GIB)]).toEqual([
+      6, 8, 8,
+    ])
   })
 })

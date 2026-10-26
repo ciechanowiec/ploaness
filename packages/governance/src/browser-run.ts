@@ -117,13 +117,29 @@ export const passBudgetMs = (pass: SweepPass, units: number): number =>
   PASS_OVERHEAD_MS + ALLOWANCES_MS[pass] * Math.max(0, units)
 
 // Every sweep test loads its pages fresh and judges each one alone, so which worker runs it, and what
-// runs beside it, cannot change a verdict. The project's own specs are held to one worker separately,
-// because they may share database state.
-/** The workers a browser run spreads the sweep's tests over. */
-export const SWEEP_WORKERS: number = 4
+// runs beside it, cannot change a verdict; the project's own specs are held to one worker separately,
+// because they may share database state. The parts of a pass share one queue, so the sweep takes about
+// as long as its work divided by the workers, and a machine with more to give should give it: a worker
+// for every two processors and every two gigabytes of memory - a browser at work holds about one - but
+// never fewer than four, which a hosted agent with four processors and sixteen gigabytes runs today,
+// and never more than eight, beyond which one browser server is the limit rather than the machine.
+const MIN_SWEEP_WORKERS: number = 4
+const MAX_SWEEP_WORKERS: number = 8
+const PROCESSORS_PER_WORKER: number = 2
+const BYTES_PER_GIBIBYTE: number = 1_073_741_824
+const GIBIBYTES_PER_WORKER: number = 2
 
-/** How many tests each sweep pass is split into, so its parts run on parallel workers. */
-export const SWEEP_SHARDS: number = 4
+/**
+ * How many workers a browser run spreads the sweep over, and so how many parts each pass has.
+ * @param processors the processors the machine offers.
+ * @param memoryBytes the memory it has.
+ * @returns the workers, between four and eight.
+ */
+export const sweepWorkersFor = (processors: number, memoryBytes: number): number => {
+  const byProcessors: number = Math.floor(processors / PROCESSORS_PER_WORKER)
+  const byMemory: number = Math.floor(memoryBytes / (GIBIBYTES_PER_WORKER * BYTES_PER_GIBIBYTE))
+  return Math.min(MAX_SWEEP_WORKERS, Math.max(MIN_SWEEP_WORKERS, Math.min(byProcessors, byMemory)))
+}
 
 /** One part of a sweep pass: its zero-based index among `count` parts. */
 export interface Shard {

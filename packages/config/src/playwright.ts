@@ -24,12 +24,12 @@ import {
   portOf,
   REAL_CLOCK,
   runEnvironmentFiles,
-  SWEEP_WORKERS,
   shellArgument,
   VERIFICATION_ENVIRONMENT_VARIABLE,
 } from '@ploaness/governance'
 import { loadProductionEnvironment } from './production-environment.js'
 import { projectSettings } from './project-settings.js'
+import { SWEEP_WORKERS } from './sweep-workers.js'
 
 // Read before anything else, because a spec module is what needs it. Playwright evaluates this config
 // in the runner and again in every worker, which makes it the one place a value reaches both the pass
