@@ -343,6 +343,8 @@ visual_contracts() {
     # Only the application can set a .dark class, so styling under one is not judged as a dark scheme.
     expect_no_layout_line fail-visual '/class-night @390x844 (chromium, dark)'
     expect_no_layout_line fail-visual '/clean'
+    # Busy past one settle ceiling and not two: a second attempt finds it at rest.
+    expect_no_layout_line fail-visual '] /late-settle @'
     # Each part prints its findings as it ends, ahead of the suite's report.
     expect_layout_line fail-visual '[ploaness-sweep]   [page-not-stable] /unstable @390x844 (chromium, resting): '
 

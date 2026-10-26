@@ -10,6 +10,7 @@ import { createServer, type Server } from 'node:net'
 import path from 'node:path'
 import { deflateSync } from 'node:zlib'
 import { asRecord } from '@ploaness/governance'
+import { GROW, SETTLE } from './visual-busy-components.ts'
 
 const ARGUMENT_OFFSET: number = 2
 
@@ -216,6 +217,8 @@ const PAGES: Readonly<Record<string, Variant>> = {
     valid: '<p><span className="wrapping-label">Short label</span></p>',
   },
   unstable: { defect: '<Grow />', valid: '<p>Holding still.</p>' },
+  // Busy for longer than one settle ceiling and less than two: slow, not unstable, so it reports nothing.
+  'late-settle': { defect: '<Settle />', valid: '<p>Resting.</p>' },
   sweep: { defect: '<div className="band">Band</div>', valid: '<div className="band fluid-band">Band</div>' },
   night: { defect: '<p className="night">Night text</p>', valid: '<p className="night readable">Night text</p>' },
   'class-night': { defect: '<p className="class-night">Class night text</p>', valid: '<p>Class night text</p>' },
@@ -300,21 +303,6 @@ export function Complaint(): React.JSX.Element {
     console.error('fixture page error')
   }, [])
   return <p>This page logs an error.</p>
-}
-`
-
-const GROW: string = `'use client'
-import { useEffect, useState } from 'react'
-
-export function Grow(): React.JSX.Element {
-  const [width, setWidth] = useState(100)
-  useEffect((): (() => void) => {
-    const timer = setInterval((): void => {
-      setWidth((current: number): number => 100 + ((current - 90) % 1000))
-    }, 16)
-    return (): void => clearInterval(timer)
-  }, [])
-  return <div className="growth"><div style={{ width }} /></div>
 }
 `
 
@@ -468,7 +456,7 @@ const writeModule = (file: string, source: string | Buffer): void => {
   writeFileSync(file, source)
 }
 
-const COMPONENTS: readonly string[] = ['AxeEcho', 'Complaint', 'Glide', 'Grow', 'Guard', 'Menu']
+const COMPONENTS: readonly string[] = ['AxeEcho', 'Complaint', 'Glide', 'Grow', 'Guard', 'Menu', 'Settle']
 
 // Each page imports only the client components it renders, as the compiler requires.
 const importsOf = (body: string): readonly string[] =>
@@ -524,6 +512,7 @@ writeModule(path.join(appRoot, 'sitemap.xml', 'route.ts'), SITEMAP_ROUTE)
 writeModule(path.join(directory, 'src', 'complaint.tsx'), COMPLAINT)
 writeModule(path.join(directory, 'src', 'glide.tsx'), GLIDE)
 writeModule(path.join(directory, 'src', 'grow.tsx'), GROW)
+writeModule(path.join(directory, 'src', 'settle.tsx'), SETTLE)
 writeModule(path.join(directory, 'src', 'guard.tsx'), GUARD)
 writeModule(path.join(directory, 'src', 'menu.tsx'), MENU)
 writeModule(path.join(directory, 'src', 'axeecho.tsx'), AXE_ECHO)
