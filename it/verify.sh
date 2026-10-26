@@ -235,6 +235,10 @@ expect_suite() {
 # formatter, linter, or type checker read - the same blind spot the staged asset bodies exist to close.
 lib="$(cd "$(dirname "$0")" && pwd)/lib"
 
+# The sweep splits each pass into as many parts as the machine affords, and each part is a test. A suite
+# whose passed count is asserted runs on a fixed number, so the count is the same on every machine.
+fixture_sweep_workers=4
+
 # Browser checks inside this verification command require fresh servers, including direct runner calls.
 verification_variable="$(node "$lib/browser-server-config.ts" --environment)"
 export "$verification_variable=1"
@@ -354,6 +358,7 @@ visual_contracts() {
     commit_case pass-visual 'test(fixture): render every browser-rule page repaired' "$CONFORMING_BODY"
     expect pass-visual build PASS
     expect_command pass-visual PASS '26 passed' \
+        env "PLOANESS_SWEEP_WORKERS=$fixture_sweep_workers" \
         pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 }
 
@@ -455,6 +460,7 @@ layout_contracts() {
     commit_case pass-layout 'test(fixture): lay every page out with room between its boxes' "$CONFORMING_BODY"
     expect pass-layout build PASS
     expect_command pass-layout PASS '28 passed' \
+        env "PLOANESS_SWEEP_WORKERS=$fixture_sweep_workers" \
         pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts tests/e2e/items.e2e.spec.ts tests/e2e/admin.e2e.spec.ts \
         --reporter=line
     # The exemption the repaired tab list carries is a suppression, and is counted as one.
@@ -481,7 +487,7 @@ browser_environment_contracts() {
         env ENV_PRIORITY=from-process "$scratch/browser-environment/node_modules/.bin/ploaness" gate build
     # This minimal Next fixture exercises browser configuration; it serves no Payload access endpoint.
     expect_command browser-environment PASS '27 passed' \
-        env PLOANESS_VERIFICATION=1 NODE_ENV=production ENV_PRIORITY=from-process \
+        env PLOANESS_VERIFICATION=1 "PLOANESS_SWEEP_WORKERS=$fixture_sweep_workers" NODE_ENV=production ENV_PRIORITY=from-process \
         pnpm exec playwright test tests/e2e/environment.e2e.spec.ts tests/e2e/a11y.e2e.spec.ts --reporter=line
     expect_command browser-environment PASS '1 passed' \
         env -u PLOANESS_VERIFICATION NODE_ENV=development ENV_PRIORITY=from-process EXPECTED_DIRECTORY=.generic \
