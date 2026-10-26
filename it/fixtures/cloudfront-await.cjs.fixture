@@ -1,0 +1,24 @@
+const STORE = typeof module === 'undefined' ? require('cloudfront').kvs() : undefined
+
+async function expectedToken(store) {
+  return (await store.exists('token')) ? store.get('token') : undefined
+}
+
+function isAllowed(request, expected) {
+  return expected === undefined || request.headers.authorization !== undefined
+}
+
+async function respond(event, store) {
+  if (!isAllowed(event.request, await expectedToken(store))) {
+    return { statusCode: 401, statusDescription: 'Unauthorized' }
+  }
+  return event.request
+}
+
+async function handler(event) {
+  return respond(event, STORE)
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { handler, respond }
+}

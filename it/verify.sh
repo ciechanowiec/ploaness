@@ -1031,6 +1031,29 @@ scope_javascript_contracts() {
     done
 }
 
+scope_cloudfront_contracts() {
+    new_workspace scope-cloudfront
+    for member in apps/web packages/ui; do
+        edge_member="$scratch/scope-cloudfront/$member"
+        mkdir -p "$edge_member/edge"
+        edge_file="$edge_member/edge/viewer-request.cjs"
+        cp "$here/fixtures/cloudfront-await.cjs.fixture" "$edge_file"
+        edit_json "$edge_member/package.json" ploaness.javascriptAllowlist \
+            '[{"pattern":"^edge/","reason":"CloudFront deployment entry points","runtime":"cloudfront-js-2.0"}]'
+        expect_in scope-cloudfront "$member" eslint FAIL \
+            '12:33  error  await within call arguments.*cloudfront-js-2.0; await into a constant first'
+        node "$lib/replace-text.ts" "$edge_file" \
+            '  if (!isAllowed(event.request, await expectedToken(store))) {' \
+            '  const expected = await expectedToken(store)
+  if (!isAllowed(event.request, expected)) {'
+        expect_in scope-cloudfront "$member" eslint PASS
+        cp "$here/fixtures/cloudfront-await.cjs.fixture" "$edge_file"
+        edit_json "$edge_member/package.json" ploaness.javascriptAllowlist \
+            '[{"pattern":"^edge/","reason":"Node deployment entry points","runtime":"node"}]'
+        expect_in scope-cloudfront "$member" eslint PASS
+    done
+}
+
 scope_generated_contracts() {
     new_workspace scope-generated
     generated_member="$scratch/scope-generated/packages/ui"
@@ -1110,6 +1133,7 @@ scope_stylesheet_contracts() {
 
 file_scope_contracts() {
     scope_javascript_contracts
+    scope_cloudfront_contracts
     scope_generated_contracts
     scope_architecture_contracts
     scope_stylesheet_contracts

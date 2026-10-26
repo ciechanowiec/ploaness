@@ -202,8 +202,12 @@ Each `aws_cloudfront_function` must declare `runtime = "cloudfront-js-2.0"` and 
 declares the same runtime. Other `code` forms fail, because the gate cannot tell which file is
 deployed: `templatefile`, a variable, a heredoc, or a path relative to where OpenTofu runs. A build
 output the repository does not track fails too. The `cloudfront-js-2.0` lint rules follow AWS's
-documented feature list. They reject destructuring, object spread, and the globals the runtime lacks,
-such as `Set`, `Map` and `process`. Passing them lowers the risk without proving the function runs: only
+documented feature list and known deployment failures. They reject destructuring, object spread,
+`await` within call or constructor arguments, and the globals the runtime lacks, such as `Set`, `Map`
+and `process`. Await into a constant before passing the value as an argument. Direct awaited arguments
+are confirmed to fail; nested forms such as `call(!await value)` and `call({ value: await result })`
+are rejected as a precaution because AWS provides no exact grammar. A nested function's body is checked
+independently. Passing these rules lowers the risk without proving the function runs: only
 `aws cloudfront test-function` does, and it exits successfully even when the function fails, so read
 `FunctionErrorMessage` in its result. A function deployed by anything other than these `.tf` files is
 linted only for the runtime its entry declares.

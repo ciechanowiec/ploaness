@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { ESLint, type Linter } from 'eslint'
@@ -17,6 +17,12 @@ const CLOUDFRONT: readonly string[] = ['^edge/']
 const NODE: readonly string[] = ['^tools/']
 const ALLOWLIST: readonly string[] = [...CLOUDFRONT, ...NODE]
 const RUNTIME_RULES: ReadonlySet<string> = new Set<string>(['no-restricted-syntax', 'no-restricted-globals'])
+const AWAIT_MESSAGE: string =
+  'await within call arguments is not supported by runtime cloudfront-js-2.0; await into a constant first'
+const VIEWER_REQUEST: string = readFileSync(
+  path.join(import.meta.dirname, '../../../it/fixtures/cloudfront-await.cjs.fixture'),
+  'utf8',
+)
 
 const directory: string = mkdtempSync(path.join(tmpdir(), 'ploaness-cloudfront-runtime-'))
 mkdirSync(path.join(directory, 'src'))
@@ -49,8 +55,9 @@ const eslint: ESLint = new ESLint({
 
 const lint = async (directoryName: string, body: string): Promise<readonly Linter.LintMessage[]> => {
   // CI's parser treats repeated parses of one path as autofix passes, so every case lints its own file.
-  const file: string = path.join(directoryName, `${randomUUID()}.cjs`)
-  writeFileSync(path.join(directory, file), `'use strict'\n\n${body}\n`)
+  const file: string = path.join(directoryName, randomUUID(), 'viewer-request.cjs')
+  mkdirSync(path.dirname(path.join(directory, file)), { recursive: true })
+  writeFileSync(path.join(directory, file), `${body}\n`)
   const results: readonly ESLint.LintResult[] = await eslint.lintFiles([file])
   return results.flatMap((result: ESLint.LintResult): readonly Linter.LintMessage[] => result.messages)
 }
@@ -93,6 +100,28 @@ const REJECTED: readonly (readonly [string, string, string])[] = [
     "const ALLOWED = new Set(['GET', 'HEAD'])\n\nmodule.exports = (method) => ALLOWED.has(method)",
     'Set is not supported by runtime cloudfront-js-2.0',
   ],
+  ...[
+    'invoke(await value)',
+    'invoke(!await value)',
+    'invoke({ value: await value })',
+    'invoke([await value])',
+    'invoke(...await value)',
+    'invoke(value[await value])',
+    'invoke((await value) ? value : undefined)',
+    `invoke(\`value: \${await value}\`)`,
+    'invoke(invoke(await value))',
+    'invoke((await value)())',
+    'new invoke(await value)',
+    'new invoke(!await value)',
+    'new invoke({ value: await value })',
+    'new invoke([await value])',
+    'invoke(async function () { return invoke(await value) })',
+    'invoke(async () => invoke(await value))',
+  ].map((expression: string): readonly [string, string, string] => [
+    expression,
+    `module.exports = async (invoke, value) => ${expression}`,
+    AWAIT_MESSAGE,
+  ]),
 ]
 
 const SUPPORTED: readonly (readonly [string, string])[] = [
@@ -118,6 +147,20 @@ const SUPPORTED: readonly (readonly [string, string])[] = [
     'a local binding named Set, and the name inside a string and a comment',
     "// Set is not used here.\nconst Set = (value) => 'Set ' + value\n\nmodule.exports = (value) => Set(value)",
   ],
+  ...[
+    'return (await value) ? invoke(value) : undefined',
+    'return await value',
+    'const expected = await value; return invoke(expected)',
+    'return (await invoke)()',
+    'return new (await invoke)()',
+    'return await invoke(value)',
+    'return invoke(async function () { return await value })',
+    'return invoke(async () => await value)',
+    'return new invoke(async function () { return await value })',
+    'return invoke({ async method() { return await value } })',
+    'return invoke(async function () { return (await invoke)() })',
+    'return invoke("await value") // invoke(await value)',
+  ].map((body: string): readonly [string, string] => [body, `module.exports = async (invoke, value) => { ${body}\n }`]),
 ]
 
 describe('the cloudfront-js-2.0 runtime', () => {
@@ -129,7 +172,7 @@ describe('the cloudfront-js-2.0 runtime', () => {
 
   it('reports the destructured pair at the pattern, not at the misleading arrow', async () => {
     const findings: readonly string[] = await runtimeFindings('edge', REJECTED[0]?.[1] ?? '')
-    expect(findings[0]).toMatch(/^4:36 /u)
+    expect(findings[0]).toMatch(/^2:36 /u)
   })
 
   it.each(SUPPORTED)('accepts %s', async (_: string, body: string) => {
@@ -142,10 +185,53 @@ describe('the cloudfront-js-2.0 runtime', () => {
       'unicorn/prefer-set-has',
     )
   })
+
+  it('reports the viewer-request failure at the awaited argument on line 12', async () => {
+    expect(await runtimeFindings('edge', VIEWER_REQUEST)).toEqual([`12:33 ${AWAIT_MESSAGE}`])
+  })
+
+  it('accepts the viewer-request function after awaiting into a constant', async () => {
+    const repaired: string = VIEWER_REQUEST.replace(
+      '  if (!isAllowed(event.request, await expectedToken(store))) {',
+      '  const expected = await expectedToken(store)\n  if (!isAllowed(event.request, expected)) {',
+    )
+    expect(await lint('edge', repaired)).toEqual([])
+  })
+
+  it('honours a justified suppression for the single awaited argument', async () => {
+    const body: string =
+      '// eslint-disable-next-line cloudfront/no-await-in-arguments -- runtime compatibility fixture\n' +
+      'module.exports = async (invoke, value) => invoke(await value)'
+    expect(await runtimeFindings('edge', body)).toEqual([])
+  })
+
+  it('keeps a line suppression from hiding the next awaited argument', async () => {
+    const body: string = [
+      'module.exports = async (invoke, value) => {',
+      '// eslint-disable-next-line cloudfront/no-await-in-arguments -- runtime compatibility fixture',
+      'invoke(await value)',
+      'return invoke(await value)',
+      '}',
+    ].join('\n')
+    expect(await runtimeFindings('edge', body)).toEqual([`4:15 ${AWAIT_MESSAGE}`])
+  })
+
+  it('reports a suppression made unused by awaiting into a constant', async () => {
+    const body: string =
+      '// eslint-disable-next-line cloudfront/no-await-in-arguments -- runtime compatibility fixture\n' +
+      'module.exports = async (invoke, value) => { const expected = await value; return invoke(expected) }'
+    expect(await runtimeFindings('edge', body)).toEqual([
+      "1:1 Unused eslint-disable directive (no problems were reported from 'cloudfront/no-await-in-arguments').",
+    ])
+  })
 })
 
 describe('the node runtime', () => {
   it.each(REJECTED)('leaves %s to the Node.js rules', async (_: string, body: string) => {
     expect(await runtimeFindings('tools', body)).toEqual([])
+  })
+
+  it('accepts the unmodified viewer-request function', async () => {
+    expect(await lint('tools', VIEWER_REQUEST)).toEqual([])
   })
 })
