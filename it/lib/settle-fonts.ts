@@ -10,10 +10,12 @@ import { type Browser, type Page, type PinnedServer, startPinnedServer } from '.
 type Route = Parameters<Parameters<Page['route']>[1]>[0]
 
 // The one browser call the page function below makes; the lint project compiles without the DOM lib.
-declare const document: { readonly fonts: Iterable<{ readonly family: string; readonly status: string }> }
+declare const document: {
+  readonly fonts: Iterable<{ readonly family: string; readonly status: string }> | undefined
+}
 
 const lateFaceStatusInPage = (): string =>
-  Array.from(document.fonts)
+  Array.from(document.fonts ?? [])
     .filter((face: { readonly family: string }): boolean => face.family.replaceAll('"', '') === 'Late')
     .map((face: { readonly status: string }): string => face.status)
     .join(',')
