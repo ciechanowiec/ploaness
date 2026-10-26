@@ -12,6 +12,7 @@ import {
   hasExtension,
   isBinary,
   JAVASCRIPT_EXTENSIONS,
+  matchesAnyGlob,
   matchesRole,
   type TypographyViolation,
 } from '@ploaness/governance'
@@ -54,11 +55,16 @@ const typographyFindings = (context: Context, tracked: readonly string[]): reado
       )
     })
 
+// A generated artefact is not hand-written: its generator owns it, as `generatedArtefacts` declares, so
+// the ban has nothing to ask of it. The allowlist is no substitute, because its entries name a runtime
+// to lint for, and a generator's output, such as the browser scripts of a static export, may run in none.
 const javascriptFindings = (context: Context, tracked: readonly string[]): readonly string[] =>
   tracked
     .filter(
       (file: string): boolean =>
-        hasExtension(file, JAVASCRIPT_EXTENSIONS) && !matchesRole(file, context.settings.javascriptAllowlist),
+        hasExtension(file, JAVASCRIPT_EXTENSIONS) &&
+        !matchesRole(file, context.settings.javascriptAllowlist) &&
+        !matchesAnyGlob(file, context.settings.generatedArtefacts),
     )
     .map((file: string): string => `${file} hand-written JavaScript is banned; write TypeScript instead`)
 

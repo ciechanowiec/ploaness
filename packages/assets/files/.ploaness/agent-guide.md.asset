@@ -132,7 +132,7 @@ invocations of a package gate. `tree-verify` runs after all other gates at every
 | `biome-schema` | repository | The `$schema` in `biome.json` names the installed Biome version. |
 | `oxlint` | package | Three native rules across authored JS/TS plus 31 application JSX accessibility checks. Libraries retain Biome accessibility. |
 | `eslint` | package | The remaining type-aware and specialized lint checks. |
-| `conventions` | repository | The typography ban and the hand-written JavaScript ban, over tracked and non-ignored untracked text files, and documenting comments left above another comment rather than above what they document. |
+| `conventions` | repository | The typography ban and the hand-written JavaScript ban, which spares paths declared in `generatedArtefacts`, over tracked and non-ignored untracked text files, and documenting comments left above another comment rather than above what they document. |
 | `editorconfig` | repository | Every tracked and non-ignored untracked text file matches the pinned `.editorconfig`, and no code line passes 120 characters. |
 | `suppressions` | package | The suppression count against the earned ceiling, over the project's own files. |
 | `css` | package | Stylelint over authored CSS and SCSS under the source roots, plus SCSS formatting. Tailwind v4 is accepted as written. |
