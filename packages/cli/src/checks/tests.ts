@@ -12,6 +12,7 @@ import {
   coverageOwnedFiles,
   diagnoseBuildFailure,
   hasExtension,
+  isProgressLine,
   SWEEP_SCOPE_ENVIRONMENT_VARIABLE,
   type SweepScope,
   scopeHeadline,
@@ -29,7 +30,7 @@ import {
   resolveProjectTool,
   workingTreeFiles,
 } from '../context.js'
-import { failed, fromRun, type GateResult, passed, type RunResult, run } from '../exec.js'
+import { failed, fromRun, type GateResult, passed, type RunResult, run, runStreaming } from '../exec.js'
 import { clockedEnvironment, isStartFailure, type PinnedBrowsers, startPinnedBrowsers } from '../pinned-browsers.js'
 import { type Invocation, withPretest, wrapped } from '../test-invocation.js'
 
@@ -102,7 +103,12 @@ export const browserReadiness = async (context: Context): Promise<GateResult | u
 
 // The suite itself, with the sweep scoped when a scope file is named. The scope is stated on a pass as
 // well as a failure, so a scoped verdict is never read as complete coverage.
-const runSuite = async (context: Member, scope: SweepScope | undefined, scopeFile?: string): Promise<GateResult> => {
+const runSuite = async (
+  context: Member,
+  onProgress: GateRun['onProgress'],
+  scope: SweepScope | undefined,
+  scopeFile?: string,
+): Promise<GateResult> => {
   const playwright: string | undefined = resolveProjectToolOrUndefined(context, '@playwright/test', 'playwright')
   if (playwright === undefined) {
     return failed('@playwright/test could not be resolved from the project', [
@@ -116,8 +122,13 @@ const runSuite = async (context: Member, scope: SweepScope | undefined, scopeFil
   const invocation: Invocation = wrapped(context, [playwright, 'test', '--config=playwright.config.ts'])
   try {
     const outcome: GateResult = fromRun(
-      run(invocation.command, invocation.commandArguments, {
+      await runStreaming(invocation.command, invocation.commandArguments, {
         cwd: context.root,
+        onLine: (line: string): void => {
+          if (isProgressLine(line)) {
+            onProgress(line, context.path)
+          }
+        },
         env: {
           ...clockedEnvironment(context, '--no-deprecation --import=tsx/esm'),
           NODE_ENV: 'production',
@@ -167,13 +178,16 @@ export const endToEnd = async (context: Member, gateRun: GateRun): Promise<GateR
       return readiness
     }
     if (gateRun.level === 'full') {
-      return await runSuite(context, undefined)
+      return await runSuite(context, gateRun.onProgress, undefined)
     }
     const scope: SweepScope | GateResult = sweepScopeFor(gateRun.repository, context)
     if (isScopeFailure(scope)) {
       return scope
     }
-    return await withScopeFile(scope, async (file: string): Promise<GateResult> => await runSuite(context, scope, file))
+    return await withScopeFile(
+      scope,
+      async (file: string): Promise<GateResult> => await runSuite(context, gateRun.onProgress, scope, file),
+    )
   })
 }
 

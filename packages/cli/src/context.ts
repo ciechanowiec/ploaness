@@ -102,6 +102,8 @@ export interface Repository extends Context {
 export interface GateRun {
   readonly level: VerificationLevel
   readonly repository: Repository
+  /** Where a gate that runs for long reports its progress while it runs, for the member it runs for. */
+  readonly onProgress: (line: string, member: string) => void
 }
 
 /**

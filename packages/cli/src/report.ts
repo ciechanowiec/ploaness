@@ -226,6 +226,22 @@ export const reportHalt = (gate: Gate, skipped: number, isPrecondition: boolean)
   line(`  ${paint(aside, DIM)}`)
 }
 
+/**
+ * Print a line a running gate reports about its own progress, indented under the gate it belongs to.
+ *
+ * A gate's verdict arrives only when it ends, and the browser suite can run for hours; these lines are
+ * what shows, while it runs, that it is moving and how far it has got.
+ * @param text the line.
+ * @param member the member the gate runs for, named when it could be another.
+ */
+export const reportProgress = (text: string, member: string): void => {
+  if (IS_INTERACTIVE) {
+    write(CLEAR_LINE)
+  }
+  const owner: string = member === '.' ? '' : `(${member}) `
+  line(`    ${paint('|', DIM)} ${owner}${text.trim()}`)
+}
+
 /** Print a closing aside, such as the reminder that one gate is not a verdict. */
 export const reportNote = (text: string): void => {
   line('')

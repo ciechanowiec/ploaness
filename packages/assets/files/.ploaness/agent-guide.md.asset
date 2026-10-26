@@ -418,7 +418,10 @@ The `e2e` gate measures in the browsers of the Playwright image matching the pro
 Playwright, `mcr.microsoft.com/playwright:v<version>-noble`, started in Docker for the run and removed
 after it. A run killed outright cannot remove its container, so each run first removes the
 `ploaness-browsers-*` containers whose owning process on this machine is gone, and leaves those of runs
-still in progress. The image is never pulled during verification; pull it beforehand with the command the gate
+still in progress. While the suite runs, the gate streams each test's result and a `[ploaness-sweep]`
+heartbeat into the run log: every sweep part says when it starts and, about once a minute, how far its
+pass has got, so a long run shows that it is moving and where it stopped. The image is never pulled
+during verification; pull it beforehand with the command the gate
 prints. On Linux the container shares the host network and reaches the application's loopback origins
 directly. Docker Desktop does not share the host's loopback, so on macOS and Windows every request a
 page makes travels through Playwright's tunnel, which makes each load several times slower; expect a

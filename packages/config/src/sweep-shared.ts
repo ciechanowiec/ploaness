@@ -17,6 +17,7 @@ import {
   findingLine,
   isAllowedRequest,
   isArray,
+  isHeartbeatDue,
   isRecord,
   type JudgedPage,
   LAYOUT_RULES,
@@ -31,6 +32,8 @@ import {
   type SweepPass,
   storyLocation,
   storySamples,
+  sweepProgressLine,
+  sweepStartLine,
   type TemplateSample,
   type UsedExemption,
 } from '@ploaness/governance'
@@ -519,6 +522,7 @@ export const WHOLE_PASS: Shard = { index: 0, count: 1 }
 export interface Budget {
   readonly pass: SweepPass
   readonly shard: Shard
+  readonly engine: string
   readonly progressFile: string
   readonly queue: string
   readonly startedAt: number
@@ -536,13 +540,15 @@ export interface Budget {
 export const armBudget = (page: Page, pass: SweepPass, shard: Shard, units: number): Budget => {
   const budgetMs: number = partBudgetMs(pass, units, shard)
   test.info().setTimeout(budgetMs + TIMEOUT_GRACE_MS)
-  const directory: string = engineDirectory(test.info(), engineOf(page))
+  const engine: string = engineOf(page)
+  const directory: string = engineDirectory(test.info(), engine)
   const queue: string = path.join(directory, 'queue', pass)
   mkdirSync(queue, { recursive: true })
   const startedAt: number = performance.now()
   return {
     pass,
     shard,
+    engine,
     progressFile: path.join(directory, 'progress.log'),
     queue,
     startedAt,
@@ -601,18 +607,39 @@ const budgetFinding = <Item>(items: readonly Item[], visitor: ItemVisitor<Item>,
   }
 }
 
-/**
- * Take items of a pass from the queue its shards share and visit each, until none is left or the shard
- * runs out of budget, which it reports at the first item it left untaken.
- * @param items every item of the pass, in order.
- * @param visitor the budget, and how to name and visit an item.
- * @param from the index to look for the next untaken item at.
- * @returns the visits, a budget finding among them when the shard stopped early, and the items it took.
- */
-export const visitAll = async <Item>(
+/** How far a shard has got, carried from one item to the next. */
+interface ShardProgress {
+  readonly visited: number
+  /** When the shard last printed its heartbeat, or started. */
+  readonly lastBeat: number
+}
+
+// Printed rather than only logged to the progress file: the e2e gate streams these lines into the run
+// log while the suite runs, so a part that works for an hour visibly moves.
+const beatIfDue = (total: number, budget: Budget, progress: ShardProgress): ShardProgress => {
+  const now: number = performance.now()
+  if (!isHeartbeatDue(progress.lastBeat, now)) {
+    return progress
+  }
+  console.info(
+    sweepProgressLine({
+      pass: budget.pass,
+      engine: budget.engine,
+      shard: budget.shard,
+      visited: progress.visited,
+      untaken: untakenCount(budget.queue, total),
+      total,
+      elapsedMs: now - budget.startedAt,
+    }),
+  )
+  return { ...progress, lastBeat: now }
+}
+
+const visitFrom = async <Item>(
   items: readonly Item[],
   visitor: ItemVisitor<Item>,
-  from: number = 0,
+  from: number,
+  progress: ShardProgress,
 ): Promise<ShardVisits<Item>> => {
   const { budget, labelOf, visit }: ItemVisitor<Item> = visitor
   if (performance.now() > budget.deadline) {
@@ -626,8 +653,29 @@ export const visitAll = async <Item>(
   }
   const visited: Visit = await visit(item, index)
   recordProgress(budget, `${String(index + 1)}/${String(items.length)} ${labelOf(item)}`)
-  const rest: ShardVisits<Item> = await visitAll(items, visitor, index + 1)
+  const rest: ShardVisits<Item> = await visitFrom(
+    items,
+    visitor,
+    index + 1,
+    beatIfDue(items.length, budget, { ...progress, visited: progress.visited + 1 }),
+  )
   return { visits: [visited, ...rest.visits], taken: [{ item, index }, ...rest.taken] }
+}
+
+/**
+ * Take items of a pass from the queue its shards share and visit each, until none is left or the shard
+ * runs out of budget, which it reports at the first item it left untaken.
+ * @param items every item of the pass, in order.
+ * @param visitor the budget, and how to name and visit an item.
+ * @returns the visits, a budget finding among them when the shard stopped early, and the items it took.
+ */
+export const visitAll = async <Item>(
+  items: readonly Item[],
+  visitor: ItemVisitor<Item>,
+): Promise<ShardVisits<Item>> => {
+  const { budget }: ItemVisitor<Item> = visitor
+  console.info(sweepStartLine({ pass: budget.pass, engine: budget.engine, shard: budget.shard, total: items.length }))
+  return await visitFrom(items, visitor, 0, { visited: 0, lastBeat: budget.startedAt })
 }
 
 /** What a finished pass hands to its report. */

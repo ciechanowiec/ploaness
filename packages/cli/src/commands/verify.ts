@@ -20,6 +20,7 @@ import {
   reportHeader,
   reportNote,
   reportOutput,
+  reportProgress,
   reportVerdict,
 } from '../report.js'
 
@@ -128,7 +129,11 @@ export const verify = async (repository: Repository, level: VerificationLevel): 
     reportNote(FULL_COST_NOTE)
   }
   reportHeader(level, planned.length)
-  const outcomes: readonly GateOutcome[] = await runPlan(planned, { level, repository }, width)
+  const outcomes: readonly GateOutcome[] = await runPlan(
+    planned,
+    { level, repository, onProgress: reportProgress },
+    width,
+  )
   return reportVerdict(outcomes, level, repository.isEnforced, Date.now() - started)
 }
 
@@ -147,7 +152,10 @@ const hasBrowserBuild = async (repository: Repository, planned: PlannedGate): Pr
   if (buildGate === undefined) {
     throw new Error('the e2e prerequisite build gate is missing')
   }
-  const built: GateOutcome = await timeGate({ gate: buildGate, member: planned.member }, { level: 'delta', repository })
+  const built: GateOutcome = await timeGate(
+    { gate: buildGate, member: planned.member },
+    { level: 'delta', repository, onProgress: reportProgress },
+  )
   reportGate(built, buildGate.id.length)
   return built.result.ok
 }
@@ -168,7 +176,7 @@ export const verifyOne = async (
   if (planned.gate.id === 'e2e' && !(await hasBrowserBuild(repository, planned))) {
     return 1
   }
-  const outcome: GateOutcome = await timeGate(planned, { level: 'delta', repository })
+  const outcome: GateOutcome = await timeGate(planned, { level: 'delta', repository, onProgress: reportProgress })
   reportGate(outcome, planned.gate.id.length)
   if (isVerbose) {
     reportOutput(outcome)

@@ -374,6 +374,10 @@ clock_contracts() {
     expect clock-shifted build PASS
     expect_command clock-shifted PASS '\[PASS\] e2e' \
         env EXPECTED_YEAR=2100 "$scratch/clock-shifted/node_modules/.bin/ploaness" gate e2e
+    # A passing gate reports none of the suite's output, so these lines reach the log only by being
+    # streamed while the suite runs: a test's result, and the heartbeat a sweep part starts with.
+    expect_layout_line clock-shifted '[sweep-discovery] › tests/e2e/a11y.e2e.spec.ts'
+    expect_layout_line clock-shifted '[ploaness-sweep] resting (chromium) part 1 of 4: started'
 
     new_case clock-real
     node "$lib/create-a11y-page.ts" "$scratch/clock-real" valid
