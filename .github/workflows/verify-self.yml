@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       # The full history, because three gates read it: `require-full-history` refuses a shallow
@@ -110,7 +110,7 @@ jobs:
 
   geometry-agreement:
     needs: geometry
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -141,3 +141,25 @@ jobs:
 
       - name: 'Require the two architectures to agree'
         run: node it/lib/compare-geometry.ts amd64/geometry-ubuntu-24.04.json arm64/geometry-ubuntu-24.04-arm.json
+
+  # The measurements only carry each architecture's snapshot to the comparison. Once the two agree they say
+  # nothing more, so they are removed; when they disagree this job does not run and they stay, to be read.
+  # A job of its own, because removing them needs actions: write, and that token belongs nowhere near a job
+  # that installs dependencies and runs the repository's code: this one checks nothing out and runs only gh.
+  geometry-cleanup:
+    needs: geometry-agreement
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: 'Remove the measurements'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          for name in geometry-ubuntu-24.04 geometry-ubuntu-24.04-arm; do
+            id="$(gh api "repos/$GH_REPO/actions/runs/${{ github.run_id }}/artifacts" --jq ".artifacts[] | select(.name == \"$name\") | .id")"
+            gh api --method DELETE "repos/$GH_REPO/actions/artifacts/$id"
+          done
