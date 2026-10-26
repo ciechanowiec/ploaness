@@ -88,11 +88,12 @@ const judgeWorkspace = (scripts: readonly string[]): GateResult => {
   try {
     write(root, 'pnpm-workspace.yaml', `packages:\n  - ${MEMBER}\n`)
     write(root, 'package.json', `${JSON.stringify({ name: 'subject-root' })}\n`)
-    write(
-      root,
-      path.join(MEMBER, 'package.json'),
-      `${JSON.stringify({ name: 'subject-member', devDependencies: { ploaness: '0.0.0' }, ploaness: GENERATED_EXPORT })}\n`,
-    )
+    const manifest: Readonly<Record<string, unknown>> = {
+      name: 'subject-member',
+      devDependencies: { ploaness: '0.0.0' },
+      ploaness: GENERATED_EXPORT,
+    }
+    write(root, path.join(MEMBER, 'package.json'), `${JSON.stringify(manifest)}\n`)
     for (const script of scripts) {
       write(root, script, SCRIPT)
     }
