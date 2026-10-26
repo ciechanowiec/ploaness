@@ -241,14 +241,23 @@ export const typeCoverage = (context: Context): GateResult =>
 const stringEntries = (value: unknown): readonly string[] =>
   isArray(value) ? value.filter((entry: unknown): entry is string => typeof entry === 'string') : []
 
-const knipConfig = (context: Member): string => {
+// A generated artefact is ignored as ESLint ignores it: its generator owns it, so a file nothing imports,
+// such as the script a static export ships for a browser, is not dead code a project could remove.
+/**
+ * The knip configuration of one run: the shipped file, or a copy that adds the member's boundaries, its
+ * allowlisted JavaScript as entries, and its generated artefacts as ignored.
+ * @param context the member being judged.
+ * @returns the path of the configuration file.
+ */
+export const knipConfig = (context: Member): string => {
   const boundaries: readonly string[] = analysisBoundaries(context.siblingPaths)
+  const generated: readonly string[] = context.settings.generatedArtefacts
   const entries: readonly string[] = allowedJavaScriptFiles(
     presentWorkingTreeFiles(context.root),
     context.settings.javascriptAllowlist,
     context.siblingPaths,
   )
-  if (boundaries.length === 0 && entries.length === 0) {
+  if (boundaries.length === 0 && entries.length === 0 && generated.length === 0) {
     return configFile('knip.json')
   }
   const shipped: Record<string, unknown> = asRecord(readJson(configFile('knip.json')))
@@ -260,7 +269,7 @@ const knipConfig = (context: Member): string => {
       {
         ...shipped,
         entry: [...stringEntries(shipped['entry']), ...entries],
-        ignore: [...stringEntries(shipped['ignore']), ...boundaries],
+        ignore: [...stringEntries(shipped['ignore']), ...boundaries, ...generated],
       },
       null,
       JSON_INDENT,
