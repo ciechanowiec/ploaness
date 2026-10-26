@@ -347,3 +347,27 @@ export const keyOf = (snapshot: LayoutSnapshot, node: LayoutNode): string => {
     .indexOf(node)
   return `${keyOf(snapshot, parent)}/${node.tag}:${String(position)}`
 }
+
+/**
+ * The font faces of a page measured twice, each as loaded as it was in either measurement.
+ *
+ * A page cannot unload a face it has loaded, but a browser can drop what it holds of one: WebKit, after
+ * a stall, can report every face of an unchanged page unloaded again while its text still renders in
+ * them. A face loaded in the first measurement is therefore not judged missing in the second. Faces
+ * are paired by position, so a font set that changed between the two is taken from the second as it is.
+ * @param first the faces of the first measurement.
+ * @param second the faces of the second.
+ * @returns the faces to judge.
+ */
+export const heldFontFaces = (
+  first: readonly FontFaceFacts[],
+  second: readonly FontFaceFacts[],
+): readonly FontFaceFacts[] =>
+  first.length === second.length
+    ? second.map((face: FontFaceFacts, index: number): FontFaceFacts => {
+        const earlier: FontFaceFacts | undefined = first[index]
+        return earlier?.status === 'loaded' && earlier.family === face.family && face.status === 'unloaded'
+          ? { ...face, status: 'loaded' }
+          : face
+      })
+    : second

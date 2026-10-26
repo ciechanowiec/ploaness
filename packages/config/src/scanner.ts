@@ -23,6 +23,7 @@ import {
   findingAt,
   findingLine,
   findUnloadedFonts,
+  heldFontFaces,
   instability,
   isAllowedRequest,
   isArray,
@@ -130,10 +131,14 @@ export const judgeRestingPlace = async (page: Page, place: FindingPlace): Promis
       snapshot: second,
     }
   }
-  const judged: JudgedPage = judgeLayout(second, place, {
-    minimumGap: projectSettings.layoutMinimumGap,
-    extra: restingCandidates(second),
-  })
+  const judged: JudgedPage = judgeLayout(
+    { ...second, fontFaces: heldFontFaces(first.fontFaces, second.fontFaces) },
+    place,
+    {
+      minimumGap: projectSettings.layoutMinimumGap,
+      extra: restingCandidates(second),
+    },
+  )
   return {
     ...judged,
     findings: [
