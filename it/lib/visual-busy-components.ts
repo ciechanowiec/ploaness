@@ -18,25 +18,40 @@ export function Grow(): React.JSX.Element {
 }
 `
 
-/** Adds and removes an element on every frame for twelve seconds after it mounts, then rests. */
+/**
+ * Adds and removes an element on every frame for twelve seconds after it mounts, then rests. The element
+ * is toggled in the page's own frame callback rather than through state on a timer, so every frame the
+ * settle samples differs from the one before however late a loaded machine runs timers or renders.
+ */
 export const SETTLE: string = `'use client'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 const BUSY_MS = 12_000
 
 export function Settle(): React.JSX.Element {
-  const [isShown, setIsShown] = useState(false)
   useEffect((): (() => void) => {
     const started: number = performance.now()
-    const timer = setInterval((): void => {
-      if (performance.now() - started > BUSY_MS) {
-        clearInterval(timer)
+    const stopped: AbortController = new AbortController()
+    const marker: HTMLSpanElement = document.createElement('span')
+    marker.append('Settling')
+    const step = (): void => {
+      if (stopped.signal.aborted || performance.now() - started > BUSY_MS) {
+        marker.remove()
         return
       }
-      setIsShown((current: boolean): boolean => !current)
-    }, 16)
-    return (): void => clearInterval(timer)
+      if (marker.isConnected) {
+        marker.remove()
+      } else {
+        document.querySelector('.settle-region')?.append(marker)
+      }
+      requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+    return (): void => {
+      stopped.abort()
+      marker.remove()
+    }
   }, [])
-  return <div>{isShown ? <span>Settling</span> : null}</div>
+  return <div className="settle-region" />
 }
 `
