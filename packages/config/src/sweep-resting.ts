@@ -10,6 +10,7 @@ import {
   pageViewports,
   STRESS_VIEWPORTS,
 } from '@ploaness/governance'
+import { withinLimit } from './deadline.js'
 import { projectSettings } from './project-settings.js'
 import {
   axeFindings,
@@ -77,6 +78,32 @@ interface RestingPass {
   readonly visit: (page: Page, item: PlaceItem, index: number) => Promise<Visit>
 }
 
+// The engine pass visits each place in a page of its own. A WebKit page that has drawn a hundred stories in
+// software slows until it stops answering, and a visit given up at its limit leaves its page busy, so one
+// shared page turned one hang into every later visit hanging, and the part into one that never ended. A
+// page left busy is closed when the part ends, within a limit of its own.
+const ABANDONED_PAGE_CLOSE_MS: number = 10_000
+
+const freshPageVisit = async (page: Page, item: PlaceItem, index: number): Promise<Visit> => {
+  const fresh: Page = await page.context().newPage()
+  await preparePage(fresh)
+  const visit: Visit = await restingVisit(fresh, item, index)
+  await fresh.close()
+  return visit
+}
+
+const closeAbandonedPages = async (page: Page): Promise<void> => {
+  await Promise.all(
+    page
+      .context()
+      .pages()
+      .filter((other: Page): boolean => other !== page)
+      .map(async (other: Page): Promise<void> => {
+        await withinLimit(other.close(), ABANDONED_PAGE_CLOSE_MS)
+      }),
+  )
+}
+
 const runRestingPass = async (page: Page, shard: Shard, restingPass: RestingPass): Promise<void> => {
   const budget: Budget = armBudget(page, restingPass.pass, shard, restingPass.items.length)
   await preparePage(page)
@@ -85,6 +112,7 @@ const runRestingPass = async (page: Page, shard: Shard, restingPass: RestingPass
     labelOf: itemLabel,
     visit: async (item: PlaceItem, index: number): Promise<Visit> => await restingPass.visit(page, item, index),
   })
+  await closeAbandonedPages(page)
   await page.emulateMedia({ colorScheme: null })
   finishPass(page, {
     budget,
@@ -127,7 +155,7 @@ export const expectEngineRules = async (page: Page, shard: Shard): Promise<void>
     {
       pass: 'engine',
       items: placeItems(sampledLocations(discovery), (): readonly FindingViewport[] => BASELINE_VIEWPORTS),
-      visit: restingVisit,
+      visit: freshPageVisit,
     },
   )
 }
