@@ -1,5 +1,6 @@
 // The wait every browser scan takes before it measures, shared by the accessibility and layout scans.
 import type { Page } from '@playwright/test'
+import { loadFontFacesInPage, usedFontFamiliesInPage } from './font-settle.js'
 
 // Why a scan needs a wait at all: `page.goto` resolves at the `load` event, and a React application
 // hydrates after that. axe measured in between reads a tree still being assembled - a heading whose
@@ -232,7 +233,8 @@ export type SettleOutcome = 'settled' | 'ceiling' | 'busy' | 'interrupted'
  * Call it after a navigation, and after a state change a scan is about to judge. A still document
  * costs two animation frames; one that is animating costs however long its animations have left. A
  * visible `aria-busy="true"` region is waited for until it clears, on a longer ceiling of its own, and
- * the page is then settled again.
+ * the page is then settled again. The faces its text uses are then loaded, so a face the browser had
+ * yet to ask for is measured loaded rather than reported missing.
  * @param page the page about to be scanned, left on whatever route it holds.
  * @returns `settled`, or what stopped it: the ceiling, a region that stayed busy, or a navigation that
  * destroyed the page while it waited. The sweep reports every outcome but `settled` as a finding.
@@ -247,7 +249,14 @@ export const settleForScan = async (page: Page): Promise<SettleOutcome> => {
       return 'busy'
     }
     // Revealing the content changes the tree, so a page that was busy is settled once more after it.
-    return !busy.wasBusy || (await isSettledWithin(page, SETTLE_ATTEMPTS)) ? 'settled' : 'ceiling'
+    if (busy.wasBusy && !(await isSettledWithin(page, SETTLE_ATTEMPTS))) {
+      return 'ceiling'
+    }
+    const families: readonly string[] = await page.evaluate(usedFontFamiliesInPage)
+    if (families.length > 0) {
+      await page.evaluate(loadFontFacesInPage, { families, budgetMs: SETTLE_BUDGET_MS })
+    }
+    return 'settled'
   } catch {
     // A route that redirects on mount destroys the execution context while this is in flight, and a
     // closed page cannot be asked anything. The caller decides what that means for its scan.

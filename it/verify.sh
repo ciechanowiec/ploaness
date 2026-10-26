@@ -384,6 +384,14 @@ clock_contracts() {
         echo "FAILED engine-webgl: $output" >&2
         failures=$((failures + 1))
     fi
+    # The settle waits for the font of text that appears while it runs, so a face the browser had yet to
+    # ask for is measured finished rather than reported missing.
+    if output="$(cd "$root" && node it/lib/settle-fonts.ts 2>&1)"; then
+        echo "ok settle-fonts: $output"
+    else
+        echo "FAILED settle-fonts: $output" >&2
+        failures=$((failures + 1))
+    fi
     new_case clock-shifted
     node "$lib/create-a11y-page.ts" "$scratch/clock-shifted" valid
     node "$lib/create-clock-case.ts" "$scratch/clock-shifted"

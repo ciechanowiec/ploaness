@@ -572,7 +572,7 @@ Every page is loaded still: reduced motion, animations and transitions at zero d
 locale `en-US`, timezone UTC, pixel ratio 1, the browser's `Date` fixed at `ploaness.clock` while its
 timers and animations keep running, and every request outside the application and auxiliary origins
 blocked. Each page is settled - fonts, every image decoded, a quiet element tree, finished animations,
-cleared `aria-busy` regions - and measured twice.
+cleared `aria-busy` regions, then every face its text uses loaded or failed - and measured twice.
 
 | Rule | Fails when |
 | --- | --- |
