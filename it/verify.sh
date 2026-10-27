@@ -315,6 +315,7 @@ visual_contracts() {
         '[small-text] /from-sitemap @390x844 (chromium, resting): text rendered at 10px' \
         '[small-text] /pl-locale @390x844 (chromium, resting): text rendered at 10px' \
         '[small-text] story:fixture-story--default @390x844 (chromium, resting): text rendered at 10px' \
+        '[focus-visible] story:fixture-story--default @1280x800 (chromium, focus): button \"Story action\" shows no visible change' \
         '[image-load] /image-load @390x844 (chromium, resting): image did not load' \
         '[failed-request] /image-load (chromium, resting): GET http' \
         '[image-distorted] /image-distorted @390x844 (chromium, resting): image rendered at 160x60px from a 160x120px source' \

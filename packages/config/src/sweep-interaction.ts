@@ -49,7 +49,6 @@ import {
   readDiscovery,
   type Shard,
   type ShardVisits,
-  STILL_STYLE,
   shardLocations,
   type Visit,
   visitAll,
@@ -422,15 +421,16 @@ const interactionVisit = async (page: Page, item: PlaceItem, isFirst: boolean): 
           Promise.resolve<readonly Visit[]>([]),
         )
       : []
-  await page.goto(item.location.url)
-  await page.addStyleTag({ content: STILL_STYLE })
+  // Loaded afresh for the keyboard, as for the pointer: a story renders only after its preview has started,
+  // and a walk that began before it would find nothing to focus and end at its first stop.
+  const reloaded: readonly BrowserFinding[] = await loadLocation(page, item.location, item.viewport, place)
   await settleForScan(page)
   const focused: readonly Visit[] = await tabThrough(page, place, item.location.controls + EXTRA_TAB_STOPS, {
     seen: new Set<string>(),
     previous: undefined,
   })
   return merged([
-    { ...EMPTY_VISIT, findings: [...loaded, ...unsettled] },
+    { ...EMPTY_VISIT, findings: [...loaded, ...unsettled, ...reloaded] },
     ...hovered,
     ...focused,
     await healthOf(page, place),

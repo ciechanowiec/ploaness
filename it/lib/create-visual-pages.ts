@@ -433,8 +433,18 @@ const SITEMAP_ROUTE: string = `export function GET(request: Request): Response {
 }
 `
 
+// The story renders a moment after the page loads, as Storybook renders a story after its preview starts,
+// and reports its phase as finished only then: a pass that tabs before the story is there finds nothing to
+// focus. In the defects mode its button shows no change when focused.
+const STORY_RENDER_DELAY_MS: number = 600
+
 const storyServer = (port: number, mode: Mode): string => {
   const text: string = mode === 'defects' ? '<p style="font-size:10px">Tiny story text</p>' : '<p>Story text</p>'
+  const action: string =
+    mode === 'defects'
+      ? '<button type="button" style="outline:none">Story action</button>'
+      : '<button type="button">Story action</button>'
+  const story: string = JSON.stringify(`<h1>Story</h1>${text}${action}`)
   return `import { createServer } from 'node:http'
 
 const index = {
@@ -443,9 +453,11 @@ const index = {
     'fixture-story--default': { type: 'story', id: 'fixture-story--default', title: 'Fixture/Story', name: 'Default' },
   },
 }
-const preview = '<!doctype html><html lang="en"><head><title>Story</title></head>' +
-  '<body><main><h1>Story</h1>${text}</main>' +
-  '<script>window.__STORYBOOK_PREVIEW__ = { currentRender: { phase: "finished" } }</script></body></html>'
+const preview = '<!doctype html><html lang="en"><head><title>Story</title></head><body><main id="root"></main>' +
+  '<script>window.__STORYBOOK_PREVIEW__ = { currentRender: { phase: "rendering" } }; setTimeout(() => { ' +
+  'document.getElementById("root").innerHTML = ' + JSON.stringify(${story}) + '; ' +
+  'window.__STORYBOOK_PREVIEW__.currentRender.phase = "finished" }, ${String(STORY_RENDER_DELAY_MS)})</script>' +
+  '</body></html>'
 createServer((request, response) => {
   const url = new URL(request.url ?? '/', 'http://127.0.0.1')
   if (url.pathname === '/index.json') {
