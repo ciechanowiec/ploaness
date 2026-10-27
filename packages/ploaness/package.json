@@ -1,6 +1,6 @@
 {
   "name": "ploaness",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "description": "Shared governance, analyzer configuration, and managed files for Payload CMS repositories.",
   "keywords": [
     "payload",
@@ -85,11 +85,11 @@
     "build": "node build.ts && tsc --build tsconfig.build.json"
   },
   "dependencies": {
-    "@ploaness/assets": "1.16.0",
-    "@ploaness/cli": "1.16.0",
-    "@ploaness/config": "1.16.0",
-    "@ploaness/governance": "1.16.0",
-    "@ploaness/runtime": "1.16.0"
+    "@ploaness/assets": "1.17.0",
+    "@ploaness/cli": "1.17.0",
+    "@ploaness/config": "1.17.0",
+    "@ploaness/governance": "1.17.0",
+    "@ploaness/runtime": "1.17.0"
   },
   "engines": {
     "node": ">=26"
