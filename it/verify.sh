@@ -49,6 +49,13 @@ fi
 scratch="$(mktemp -d "$HOME/ploaness-it-XXXXXX")"
 trap 'chmod -R u+w "$scratch" 2>/dev/null || true; rm -rf "$scratch" 2>/dev/null || true' EXIT INT TERM
 
+# Give each run immutable archive paths: a lockfile or store entry for a previous build of the same
+# version must not select old package bytes while these fixtures judge the new source.
+archive_snapshot="$scratch/archives"
+mkdir -p "$archive_snapshot"
+cp "$tarballs"/*.tgz "$archive_snapshot/"
+tarballs="$archive_snapshot"
+
 template="$scratch/template"
 mkdir -p "$template"
 tar cf - -C "$here/project" . | tar xf - -C "$template"
@@ -301,6 +308,60 @@ expect_no_layout_line() {
 # then the same pages repaired, which must pass every pass of the sweep. The defect case also proves
 # discovery reaches a page only the sitemap lists, a page only an `hreflang` alternate names, and a story
 # an auxiliary server answers the Storybook contract for.
+browser_evidence_contracts() {
+    (cd "$template" && pnpm exec playwright install chromium >/dev/null)
+    for mode in defects valid unexecuted; do
+        name="browser-evidence-$mode"
+        new_case "$name"
+        node "$lib/create-a11y-page.ts" "$scratch/$name" valid
+        node "$lib/create-browser-evidence-case.ts" "$scratch/$name" "$mode"
+        commit_case "$name" 'test(fixture): exercise browser behavior and scan evidence' "$CONFORMING_BODY"
+        expect "$name" build PASS
+        if [ "$mode" = valid ]; then
+            expect_command "$name" PASS 'passed' \
+                env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test \
+                tests/e2e/a11y.e2e.spec.ts tests/e2e/project-scan.e2e.spec.ts --reporter=line
+        elif [ "$mode" = unexecuted ]; then
+            expect_command "$name" FAIL 'route-unexecuted' \
+                env PLOANESS_FIXTURE_SCAN=no PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test \
+                tests/e2e/a11y.e2e.spec.ts tests/e2e/project-scan.e2e.spec.ts --reporter=line
+        else
+            expect_command "$name" FAIL 'findings' \
+                env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test \
+                tests/e2e/a11y.e2e.spec.ts tests/e2e/project-scan.e2e.spec.ts --reporter=line
+            expect_layout_line "$name" '[clipped-text] /clipping'
+            expect_layout_line "$name" '[axe:landmark-main-is-top-level] not-found:'
+            expect_layout_line "$name" 'normal motion):'
+            expect_layout_line "$name" 'focus does not return'
+            expect_layout_line "$name" 'activation did not open the disclosure'
+            expect_layout_line "$name" '[obscured] /pointer'
+            expect_layout_line "$name" 'holds focus but is not perceivable'
+        fi
+    done
+}
+
+locale_error_contracts() {
+    for mode in defects valid; do
+        name="locale-error-$mode"
+        new_case "$name"
+        node "$lib/create-a11y-page.ts" "$scratch/$name" valid
+        node "$lib/create-locale-not-found-case.ts" "$scratch/$name" "$mode"
+        commit_case "$name" 'test(fixture): scan localized error layouts after redirects' "$CONFORMING_BODY"
+        expect "$name" build PASS
+        if [ "$mode" = valid ]; then
+            expect_command "$name" PASS 'passed' \
+                env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test \
+                tests/e2e/a11y.e2e.spec.ts tests/e2e/missing.e2e.spec.ts --reporter=line
+        else
+            expect_command "$name" FAIL 'landmark-main-is-top-level' \
+                env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test \
+                tests/e2e/a11y.e2e.spec.ts tests/e2e/missing.e2e.spec.ts --reporter=line
+            expect_layout_line "$name" 'not-found:/en/__ploaness_missing_page__'
+            expect_layout_line "$name" 'not-found:/fr/__ploaness_missing_page__'
+        fi
+    done
+}
+
 visual_contracts() {
     new_case fail-visual
     node "$lib/create-a11y-page.ts" "$scratch/fail-visual" valid
@@ -457,7 +518,7 @@ layout_contracts() {
 
     # On a Payload admin view the project's scan judges the view, never Payload's navigation or header.
     expect_command fail-layout FAIL 'defects on' \
-        pnpm exec playwright test tests/e2e/admin.e2e.spec.ts --reporter=line
+        pnpm exec playwright test tests/e2e/admin.e2e.spec.ts --no-deps --reporter=line
     expect_layout_line fail-layout \
         '[clipped-text] /admin/report @390x844 (chromium, resting): truncated text without its full text in title or aria-label: span.truncated'
     expect_no_layout_line fail-layout 'p.clipped'
@@ -500,7 +561,7 @@ browser_environment_contracts() {
         pnpm exec playwright test tests/e2e/environment.e2e.spec.ts tests/e2e/a11y.e2e.spec.ts --reporter=line
     expect_command browser-environment PASS '1 passed' \
         env -u PLOANESS_VERIFICATION NODE_ENV=development ENV_PRIORITY=from-process EXPECTED_DIRECTORY=.generic \
-        pnpm exec playwright test tests/e2e/environment.e2e.spec.ts --reporter=line
+        pnpm exec playwright test tests/e2e/environment.e2e.spec.ts --no-deps --reporter=line
 }
 
 # A case's history needs a remote for its change to have a baseline: a bare clone of the case, named
@@ -982,7 +1043,7 @@ document_a11y_contracts() {
     commit_case document-a11y 'test(fixture): scan controls throughout the document' "$CONFORMING_BODY"
     expect document-a11y build PASS
     expect_command document-a11y PASS '4 passed' \
-        env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/document.e2e.spec.ts --reporter=line
+        env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/document.e2e.spec.ts --no-deps --reporter=line
 }
 
 new_workspace() {
@@ -1144,8 +1205,8 @@ file_scope_contracts() {
 
 # Declared focused subsets; the default run remains complete.
 case "${1-}" in
-    ''|--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--scope-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only|--consumer-gates-only) ;;
-    *) echo 'usage: verify.sh [--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--scope-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only|--consumer-gates-only]' >&2; exit 1 ;;
+    ''|--browser-evidence-only|--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--scope-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only|--consumer-gates-only) ;;
+    *) echo 'usage: verify.sh [--browser-evidence-only|--jsx-only|--native-only|--layout-only|--visual-only|--clock-only|--scope-only|--browser-servers-only|--security-only|--configuration-only|--a11y-only|--bundle-only|--file-scopes-only|--consumer-gates-only]' >&2; exit 1 ;;
 esac
 
 if [ -z "${1-}" ] || [ "${1-}" = --file-scopes-only ]; then
@@ -1179,6 +1240,15 @@ if [ -z "${1-}" ] || [ "${1-}" = --bundle-only ]; then
         fi
         echo 'bundle directory contracts passed; run pnpm run verify for the complete verdict'
         exit 0
+    fi
+fi
+
+if [ -z "${1-}" ] || [ "${1-}" = --browser-evidence-only ]; then
+    browser_evidence_contracts
+    locale_error_contracts
+    if [ "${1-}" = --browser-evidence-only ]; then
+        [ "$failures" -eq 0 ]
+        exit
     fi
 fi
 

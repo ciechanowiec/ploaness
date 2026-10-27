@@ -30,6 +30,11 @@ describe('which directory holds the routes', () => {
     expect(appRootOf(['app/layout.tsx', 'app/page.tsx'])).toBe('app')
   })
 
+  it('recognizes root layouts under dynamic locale segments', () => {
+    expect(appRootOf(['src/app/[language]/layout.tsx', 'src/app/[language]/page.tsx'])).toBe('src/app')
+    expect(appRootOf(['app/(public)/[language]/layout.tsx', 'app/(public)/[language]/page.tsx'])).toBe('app')
+  })
+
   // The layout of a Payload application. Every one of its layouts sits inside a route group, so there
   // is no `src/app/layout.tsx` at all - and requiring one found no app directory in the commonest
   // project this harness governs, leaving the whole check passing by doing nothing.
@@ -50,6 +55,10 @@ describe('which directory holds the routes', () => {
 
   it('does not read a layout further down the tree as the root one', () => {
     expect(appRootOf(['src/app/(frontend)/dashboard/layout.tsx'])).toBeUndefined()
+  })
+
+  it('recognizes separate static root layouts when they own route pages', () => {
+    expect(appRootOf(['app/portal/layout.tsx', 'app/portal/dashboard/page.tsx'])).toBe('app')
   })
 
   it('says nothing about a package that declares no routes at all', () => {

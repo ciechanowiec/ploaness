@@ -18,9 +18,10 @@ import {
 } from '@ploaness/governance'
 import { type FocusVerdict, judgeFocusIndicator } from './focus-region.js'
 import { type TargetFacts, targetFacts } from './layout.js'
+import { isPerceivableWithin } from './perceivable.js'
 import { axeFindings, settleFindings } from './scanner.js'
 import { settleForScan } from './settle.js'
-import { type InteractionPlan, interactionPlan, placeUnits } from './sweep-interaction-plan.js'
+import { type InteractionPlace, type InteractionPlan, interactionPlan, placeUnits } from './sweep-interaction-plan.js'
 import {
   armBudget,
   type Budget,
@@ -41,7 +42,6 @@ import {
   loadLocation,
   locationOfItem,
   merged,
-  type PlaceItem,
   PROBE_ATTRIBUTE,
   passUnits,
   placeAt,
@@ -59,13 +59,13 @@ declare const document: DomDocument
 declare const getComputedStyle: ComputedStyleOf
 
 const PROBE_SELECTOR: string = `[${PROBE_ATTRIBUTE}]`
+const POINTER_ACTION_TIMEOUT_MS: number = 5000
 
-// What the browser has to say before a control can be classified. Scrolled and hit-tested in one
-// evaluate, so reading the box and hit-testing it cannot straddle a scroll.
-const probeHitTarget = async (control: Locator): Promise<HitTargetProbe> =>
-  await control.evaluate((element: DomElement): HitTargetProbe => {
+// Read the box and hit target together, without advancing a scroll-driven scene while measuring it.
+const probeHitTarget = async (control: Locator): Promise<HitTargetProbe> => {
+  await control.scrollIntoViewIfNeeded({ timeout: POINTER_ACTION_TIMEOUT_MS })
+  return await control.evaluate((element: DomElement): HitTargetProbe => {
     const halves: number = 2
-    element.scrollIntoView({ block: 'center', inline: 'center' })
     const box: DomRect = element.getBoundingClientRect()
     const style: DomStyle = getComputedStyle(element)
     const atCentre: DomElement | null = element.ownerDocument.elementFromPoint(
@@ -83,6 +83,7 @@ const probeHitTarget = async (control: Locator): Promise<HitTargetProbe> =>
       isInert: element.closest('[inert]') !== null,
     }
   })
+}
 
 const markProbe = async (control: Locator, isMarked: boolean): Promise<void> => {
   await control.evaluate(
@@ -128,7 +129,7 @@ const hoverControl = async (page: Page, control: Locator, place: FindingPlace): 
     await markProbe(control, false)
     return EMPTY_VISIT
   }
-  await control.hover()
+  await control.hover({ timeout: POINTER_ACTION_TIMEOUT_MS })
   await settleForScan(page)
   const contrast: readonly BrowserFinding[] = await axeFindings(page, { ...place, state: 'hover' }, (builder) =>
     builder.include(PROBE_SELECTOR).withRules(['color-contrast']),
@@ -151,6 +152,7 @@ const controlsToDrive = async (page: Page, shouldIncludeChrome: boolean): Promis
           (element: DomElement, [chrome, keep]: readonly [string, boolean]): boolean =>
             element.getRootNode() === element.ownerDocument &&
             element.checkVisibility() &&
+            element.closest('[inert]') === null &&
             (keep || element.closest(chrome) === null),
           [CHROME, shouldIncludeChrome] as const,
         ),
@@ -346,8 +348,19 @@ const focusStop = async (page: Page, place: FindingPlace, previous: PreviousStop
   if (facts === undefined) {
     return { visit: EMPTY_VISIT, order: EMPTY_VISIT, key: undefined, previous: undefined }
   }
+  if (!(await isPerceivableWithin(page.locator(':focus')))) {
+    return {
+      visit: carried(findingAt(place, 'focus-visible', `${facts.label} holds focus but is not perceivable`), facts),
+      order: EMPTY_VISIT,
+      key: facts.key,
+      previous,
+    }
+  }
   const state: Omit<FocusState, 'facts'> = await page.evaluate(focusStateInPage, FOCUS_RING_WIDTH)
-  const focusPlace: FindingPlace = { ...place, state: 'focus' }
+  const focusPlace: FindingPlace = {
+    ...place,
+    state: place.state === 'normal motion' ? 'focus, normal motion' : 'focus',
+  }
   const position: FocusPosition | undefined = await page.evaluate(focusPositionInPage, [LANDMARKS, DIALOGS] as const)
   const order: Visit = focusOrder(focusPlace, facts, previous, position)
   const here: PreviousStop | undefined = position === undefined ? undefined : { position, label: facts.label }
@@ -359,6 +372,11 @@ const focusStop = async (page: Page, place: FindingPlace, previous: PreviousStop
           findingAt(focusPlace, 'focus-obscured', `${facts.label} is focused and entirely hidden by ${covering}`),
           facts,
         )
+  // Pixel comparisons disable animations while capturing their two frames. The normal-motion pass
+  // judges reach and focus behavior without changing the animation it is exercising.
+  if (place.state === 'normal motion') {
+    return { visit: obscured, order, key: facts.key, previous: here }
+  }
   await page.evaluate(markFocusedInPage, PROBE_ATTRIBUTE)
   const contrast: readonly BrowserFinding[] = await axeFindings(page, focusPlace, (builder) =>
     builder.include(PROBE_SELECTOR).withRules(['color-contrast']),
@@ -405,14 +423,23 @@ const tabThrough = async (
 // The tab walk may take this many stops beyond the controls discovery counted.
 const EXTRA_TAB_STOPS: number = 2
 
-const interactionVisit = async (page: Page, item: PlaceItem, isFirst: boolean): Promise<Visit> => {
-  const place: FindingPlace = placeAt(page, item.location, item.viewport, 'resting')
-  const loaded: readonly BrowserFinding[] = await loadLocation(page, item.location, item.viewport, place)
-  const unsettled: readonly BrowserFinding[] = await settleFindings(page, place)
-  const controls: readonly Locator[] = await controlsToDrive(page, isFirst)
-  // Hover is a pointer state, and a phone has no pointer to hover with.
+const interactionVisit = async (page: Page, item: InteractionPlace, isFirst: boolean): Promise<Visit> => {
+  const place: FindingPlace = placeAt(
+    page,
+    item.location,
+    item.viewport,
+    item.motion === 'reduce' ? 'resting' : 'normal motion',
+  )
+  const loaded: readonly BrowserFinding[] = await loadLocation(page, item.location, item.viewport, {
+    ...place,
+    motion: item.motion,
+  })
+  const unsettled: readonly BrowserFinding[] = await settleFindings(page, place, item.motion === 'reduce')
+  const controls: readonly Locator[] = item.motion === 'reduce' ? await controlsToDrive(page, isFirst) : []
+  // Pointer geometry is judged still. A normal-motion scroll transition may intentionally cover an earlier panel;
+  // the independent keyboard walk must reveal focused controls even through those transitions.
   const hovered: readonly Visit[] =
-    item.viewport.width === DESKTOP.width
+    item.viewport.width === DESKTOP.width && item.motion === 'reduce'
       ? await controls.reduce(
           async (earlier: Promise<readonly Visit[]>, control: Locator): Promise<readonly Visit[]> => [
             ...(await earlier),
@@ -423,8 +450,11 @@ const interactionVisit = async (page: Page, item: PlaceItem, isFirst: boolean): 
       : []
   // Loaded afresh for the keyboard, as for the pointer: a story renders only after its preview has started,
   // and a walk that began before it would find nothing to focus and end at its first stop.
-  const reloaded: readonly BrowserFinding[] = await loadLocation(page, item.location, item.viewport, place)
-  await settleForScan(page)
+  const reloaded: readonly BrowserFinding[] = await loadLocation(page, item.location, item.viewport, {
+    ...place,
+    motion: item.motion,
+  })
+  await settleForScan(page, item.motion === 'reduce')
   const focused: readonly Visit[] = await tabThrough(page, place, item.location.controls + EXTRA_TAB_STOPS, {
     seen: new Set<string>(),
     previous: undefined,
@@ -457,11 +487,11 @@ export const expectInteractionStates = async (page: Page, shard: Shard): Promise
   const { places, chromePlaces }: InteractionPlan = interactionPlan(discovery.locations)
   const budget: Budget = armBudget(page, 'interaction', shard, passUnits(places, placeUnits))
   await preparePage(page)
-  const { visits, taken }: ShardVisits<PlaceItem> = await visitAll(places, {
+  const { visits, taken }: ShardVisits<InteractionPlace> = await visitAll(places, {
     budget,
     labelOf: itemLabel,
     unitsOf: placeUnits,
-    visit: async (item: PlaceItem, index: number): Promise<Visit> =>
+    visit: async (item: InteractionPlace, index: number): Promise<Visit> =>
       await interactionVisit(page, item, chromePlaces.has(index)),
   })
   finishPass(page, {

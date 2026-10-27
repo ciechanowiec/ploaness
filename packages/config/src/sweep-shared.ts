@@ -166,6 +166,8 @@ export interface DiscoveryReport {
   readonly locations: readonly string[]
   readonly elapsedMs: number
   readonly scope: ScopeRecord
+  readonly visitedRoutes: readonly string[]
+  readonly answeredRoutes: readonly string[]
 }
 
 /** What visiting one item of a pass yields. */
@@ -293,7 +295,7 @@ export const isDiscovery = (value: unknown): value is Discovery =>
  */
 export const isDiscoveryReport = (value: unknown): value is DiscoveryReport =>
   isRecord(value) &&
-  hasArrays(value, ['findings', 'problems', 'locations']) &&
+  hasArrays(value, ['findings', 'problems', 'locations', 'visitedRoutes', 'answeredRoutes']) &&
   hasNumbers(value, ['places', 'elapsedMs']) &&
   isRecord(value['scope']) &&
   typeof value['scope']['isScoped'] === 'boolean' &&
@@ -424,11 +426,14 @@ export const loadLocation = async (
   page: Page,
   location: SweepLocation,
   viewport: FindingViewport,
-  place: FindingPlace,
+  place: FindingPlace & { readonly motion?: 'reduce' | 'no-preference' },
 ): Promise<readonly BrowserFinding[]> => {
+  await page.emulateMedia({ reducedMotion: place.motion ?? 'reduce' })
   await page.setViewportSize(viewport)
   await page.goto(location.url)
-  await page.addStyleTag({ content: STILL_STYLE })
+  if (place.motion !== 'no-preference') {
+    await page.addStyleTag({ content: STILL_STYLE })
+  }
   if (!location.isStory) {
     return []
   }

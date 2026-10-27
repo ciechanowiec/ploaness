@@ -33,6 +33,7 @@ import {
   judgeLayout,
   LAYOUT_RULES,
   type LayoutSnapshot,
+  NOT_FOUND_LOCATION_PREFIX,
   PAGE_ERROR_RULE,
   PAGE_NOT_STABLE_RULE,
   RESTING_ELEMENT_RULES,
@@ -92,8 +93,12 @@ const SETTLE_MESSAGES: Readonly<Record<Exclude<SettleOutcome, 'settled'>, string
  * @param place where it is.
  * @returns a finding, or nothing when the page settled.
  */
-export const settleFindings = async (page: Page, place: FindingPlace): Promise<readonly BrowserFinding[]> => {
-  const outcome: SettleOutcome = await settleForScan(page)
+export const settleFindings = async (
+  page: Page,
+  place: FindingPlace,
+  shouldWaitForMotion: boolean = true,
+): Promise<readonly BrowserFinding[]> => {
+  const outcome: SettleOutcome = await settleForScan(page, shouldWaitForMotion)
   return outcome === 'settled' ? [] : [findingAt(place, PAGE_NOT_STABLE_RULE, SETTLE_MESSAGES[outcome])]
 }
 
@@ -260,6 +265,14 @@ export const axeFindings = async (
 // A request cancelled because the page moved on is not a failure of the page.
 const CANCELLED: RegExp = /ERR_ABORTED|NS_BINDING_ABORTED|cancelled/iu
 
+const NOT_FOUND_STATUS: number = 404
+
+const isExpectedNotFound = (place: FindingPlace, request: Request, status: number | undefined): boolean =>
+  status === NOT_FOUND_STATUS &&
+  request.isNavigationRequest() &&
+  request.frame().parentFrame() === null &&
+  place.location === `${NOT_FOUND_LOCATION_PREFIX}${new URL(request.url()).pathname}`
+
 const requestFinding = (place: FindingPlace, request: Request, origins: readonly string[]): BrowserFinding[] => {
   const url: string = request.url()
   if (!isAllowedRequest(url, origins)) {
@@ -272,6 +285,9 @@ const requestFinding = (place: FindingPlace, request: Request, origins: readonly
       : [findingAt(place, FAILED_REQUEST_RULE, `${request.method()} ${url} failed: ${failure.errorText}`)]
   }
   const status: number | undefined = request.existingResponse()?.status()
+  if (isExpectedNotFound(place, request, status)) {
+    return []
+  }
   return status !== undefined && isFailedStatus(status)
     ? [findingAt(place, FAILED_REQUEST_RULE, `${request.method()} ${url} answered ${String(status)}`)]
     : []
@@ -302,9 +318,16 @@ export const healthFindings = async (
 ): Promise<HealthReading> => {
   const errors: readonly Error[] = await page.pageErrors()
   const logged: readonly ConsoleMessage[] = await page.consoleMessages()
-  const messages: readonly ConsoleEntry[] = logged.map(
-    (message: ConsoleMessage): ConsoleEntry => ({ type: message.type(), text: message.text() }),
-  )
+  const messages: readonly ConsoleEntry[] = logged
+    .filter(
+      (message: ConsoleMessage): boolean =>
+        !(
+          place.location.startsWith(NOT_FOUND_LOCATION_PREFIX) &&
+          message.location().url === page.url() &&
+          /^Failed to load resource: the server responded with a status of 404\b/u.test(message.text())
+        ),
+    )
+    .map((message: ConsoleMessage): ConsoleEntry => ({ type: message.type(), text: message.text() }))
   const requests: readonly Request[] = await page.requests()
   const lastNavigation: number = requests.findLastIndex(
     (request: Request): boolean => request.isNavigationRequest() && request.frame() === page.mainFrame(),

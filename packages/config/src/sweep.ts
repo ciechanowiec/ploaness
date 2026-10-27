@@ -30,6 +30,9 @@ import {
   type TemplateSample,
   type UsedExemption,
 } from '@ploaness/governance'
+import { unsweptRoutes } from './a11y.js'
+import { projectSettings } from './project-settings.js'
+import { completedScanRoutes } from './scan-evidence.js'
 import {
   type Discovery,
   type DiscoveryReport,
@@ -117,6 +120,8 @@ const MS_PER_SECOND: number = 1000
 const NOTHING_DISCOVERED: Discovery = { routes: [], stories: [], locations: [], samples: [] }
 
 const NO_DISCOVERY_REPORT: DiscoveryReport = {
+  visitedRoutes: [],
+  answeredRoutes: [],
   findings: [],
   problems: [],
   places: 0,
@@ -213,6 +218,18 @@ const readRecord = (info: TestInfo): SweepRecord => {
   }
 }
 
+const summaryProblems = (record: SweepRecord): readonly string[] =>
+  record.discovery === undefined || record.discoveryReport === undefined
+    ? ['discovery did not record what to scan; its own test names the reason']
+    : [
+        ...record.discoveryReport.problems,
+        ...unsweptRoutes(
+          record.discoveryReport.visitedRoutes,
+          record.discoveryReport.answeredRoutes,
+          completedScanRoutes(new URL(projectSettings.serverUrl).origin),
+        ),
+      ]
+
 /**
  * Judge discovery's problems and findings and the exemptions no part of a pass used, write the report
  * and the coverage summary, and fail when a part of a pass did not finish. It runs as the sweep's
@@ -221,10 +238,7 @@ const readRecord = (info: TestInfo): SweepRecord => {
 export const expectSweepSummary = async (): Promise<void> => {
   const info: TestInfo = test.info()
   const record: SweepRecord = readRecord(info)
-  const problems: readonly string[] =
-    record.discovery === undefined || record.discoveryReport === undefined
-      ? ['discovery did not record what to scan; its own test names the reason']
-      : record.discoveryReport.problems
+  const problems: readonly string[] = summaryProblems(record)
   const discoveryFindings: readonly BrowserFinding[] = distinctFindings(record.discoveryReport?.findings ?? [])
   const stale: readonly BrowserFinding[] = record.engines.flatMap((engine: string): readonly BrowserFinding[] =>
     staleIn(engine, record.reports),

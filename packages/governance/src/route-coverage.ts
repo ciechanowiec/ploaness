@@ -33,6 +33,8 @@ export interface RouteSweep {
   readonly customSkippedPrefixes?: readonly string[] | undefined
   readonly specs: readonly SpecSource[]
   readonly everyFile: readonly SpecSource[]
+  /** Present at teardown, when actual execution must back any source-level scan evidence. */
+  readonly completedRoutes?: readonly string[] | undefined
 }
 
 /** A declared page nothing looked at. */
@@ -52,10 +54,12 @@ const REMEDIES: string =
 // Both visits and redirects credit only the declaration selected from the complete route set.
 const coveredFiles = (sweep: RouteSweep): ReadonlySet<string> =>
   new Set(
-    [...sweep.visitedRoutes, ...sweep.answeredRoutes].flatMap((visited: string): readonly string[] => {
-      const route: DeclaredRoute | undefined = resolvedRouteOf(sweep.declaredRoutes, visited)
-      return route === undefined ? [] : [route.file]
-    }),
+    [...sweep.visitedRoutes, ...sweep.answeredRoutes, ...(sweep.completedRoutes ?? [])].flatMap(
+      (visited: string): readonly string[] => {
+        const route: DeclaredRoute | undefined = resolvedRouteOf(sweep.declaredRoutes, visited)
+        return route === undefined ? [] : [route.file]
+      },
+    ),
   )
 
 // What counts as a specification driving this route. A static address can be looked for as itself; a
@@ -65,6 +69,21 @@ const isDrivenBy = (spec: SpecSource, route: DeclaredRoute): boolean =>
   route.isDynamic
     ? containsBuiltRoute(spec.source, staticPrefixOf(route.route))
     : containsRoute(spec.source, route.route)
+
+const executionFindings = (sweep: RouteSweep, route: DeclaredRoute): UnsweptRoute[] => {
+  return sweep.completedRoutes === undefined
+    ? []
+    : [
+        {
+          file: route.file,
+          route: route.route,
+          rule: 'route-unexecuted',
+          reason:
+            `no completed expectSweptPage scan reached "${route.route}" in this run; ` +
+            'run its browser specification',
+        },
+      ]
+}
 
 const unsweptRoute = (sweep: RouteSweep, route: DeclaredRoute): UnsweptRoute[] => {
   const driving: readonly SpecSource[] = sweep.specs.filter((spec: SpecSource): boolean => isDrivenBy(spec, route))
@@ -92,18 +111,19 @@ const unsweptRoute = (sweep: RouteSweep, route: DeclaredRoute): UnsweptRoute[] =
       },
     ]
   }
-  return driving.some((spec: SpecSource): boolean => reachesLayoutScan(spec, sweep.everyFile))
-    ? []
-    : [
-        {
-          file: route.file,
-          route: route.route,
-          rule: 'route-unmeasured',
-          reason:
-            `the sweep never reached "${route.route}". A specification scans it with axe but ` +
-            `nothing measures its layout, so this page has no layout coverage: ${REMEDIES}`,
-        },
-      ]
+  if (!driving.some((spec: SpecSource): boolean => reachesLayoutScan(spec, sweep.everyFile))) {
+    return [
+      {
+        file: route.file,
+        route: route.route,
+        rule: 'route-unmeasured',
+        reason:
+          `the sweep never reached "${route.route}". A specification scans it with axe but ` +
+          `nothing measures its layout, so this page has no layout coverage: ${REMEDIES}`,
+      },
+    ]
+  }
+  return executionFindings(sweep, route)
 }
 
 /**

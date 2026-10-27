@@ -63,6 +63,8 @@ export interface LayoutNode {
   readonly borders: LayoutBorders
   /** Whether the element itself carries `aria-hidden="true"`. */
   readonly isAriaHidden: boolean
+  /** An inert subtree is an inactive state, such as a carousel's other slides. */
+  readonly isInert?: boolean
   /** Whether a `clip` or `clip-path` is set, which is how a visually hidden element is drawn. */
   readonly isClipped: boolean
   readonly overflowX: string

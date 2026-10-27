@@ -11,6 +11,7 @@ export {
   classifyHitTarget,
   expectNoAxeDefects,
   expectNoLayoutDefects,
+  expectPerceivable,
   expectSweptPage,
   findDefiniteIncomplete,
   isSkippedSweepRoute,

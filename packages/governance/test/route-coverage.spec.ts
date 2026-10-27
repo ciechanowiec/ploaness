@@ -329,3 +329,28 @@ describe('overlapping route coverage', () => {
     ).toEqual(['/posts/[...parts]'])
   })
 })
+
+describe('completed project scans', () => {
+  it('rejects source-level scan evidence that never completed', () => {
+    expect(
+      rulesOf({
+        declaredRoutes: [routeOf('/profile')],
+        specs: [SCANNING_SPEC],
+        everyFile: [SCANNING_SPEC],
+        completedRoutes: [],
+      }),
+    ).toEqual(['route-unexecuted'])
+  })
+  it('accepts a completed scan even when its URL was assembled in a way static matching cannot follow', () => {
+    expect(rulesOf({ declaredRoutes: [routeOf('/profile')], completedRoutes: ['/profile'] })).toEqual([])
+  })
+  it('does not count another route or a static sibling as a dynamic member', () => {
+    expect(
+      routesOf({
+        declaredRoutes: [routeOf('/posts/[slug]', true), routeOf('/posts/new')],
+        completedRoutes: ['/posts/new'],
+      }),
+    ).toEqual(['/posts/[slug]'])
+    expect(routesOf({ declaredRoutes: [routeOf('/profile')], completedRoutes: ['/other'] })).toEqual(['/profile'])
+  })
+})

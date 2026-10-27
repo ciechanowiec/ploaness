@@ -166,7 +166,7 @@ const declared: ReturnType<typeof defineConfig> = defineConfig({
     ...remote,
   },
   projects: [
-    { name: 'chromium', testIgnore: SWEEP_SPEC, workers: 1, use: chromiumDevice },
+    { name: 'chromium', testIgnore: SWEEP_SPEC, workers: 1, use: chromiumDevice, dependencies: [SWEEP_DISCOVERY] },
     {
       name: SWEEP_DISCOVERY,
       testMatch: SWEEP_SPEC,

@@ -274,6 +274,7 @@ describe('focus and disclosures', () => {
 
   it('holds a popup and a modal dialog to Escape and focus return, and an accordion to neither', () => {
     const probe: DisclosureProbe = {
+      wasOpened: true,
       isPopup: true,
       closedOnEscape: true,
       focusReturned: true,
@@ -286,12 +287,14 @@ describe('focus and disclosures', () => {
       disclosureDefects({ ...probe, focusReturned: false }),
       disclosureDefects({ ...probe, isPopup: false, isModal: true }),
       disclosureDefects({ ...probe, isPopup: false, closedOnEscape: false }),
+      disclosureDefects({ ...probe, wasOpened: false }),
     ]).toEqual([
       [],
       ['Escape does not close it'],
       ['focus does not return to its control after Escape'],
       ['focus leaves the open modal dialog while tabbing'],
       [],
+      ['activation did not open the disclosure'],
     ])
   })
 })
@@ -304,6 +307,27 @@ const bannerPage = (top: number, extra: readonly LayoutNode[] = []): LayoutSnaps
   ])
 
 describe('stability', () => {
+  it('ignores cleanup of hidden streaming markers without masking visible changes', () => {
+    const marker: LayoutNode = nodeOf({ index: 1, parent: 0, label: 'template.pending', rects: [], textRects: [] })
+    const content: LayoutNode = nodeOf({ index: 2, parent: 0, label: 'p.content', rects: [rect(0, 10, 100, 30)] })
+    const before: LayoutSnapshot = snapshotOf([BODY, marker, content])
+    expect(instability(before, snapshotOf([BODY, { ...content, index: 1 }]))).toBeUndefined()
+    expect(instability(before, snapshotOf([BODY, { ...content, index: 1, rects: [rect(0, 20, 100, 40)] }]))).toBe(
+      'p.content moved between two measurements',
+    )
+  })
+
+  it('still detects content appearing and text without an element box', () => {
+    const hidden: LayoutNode = nodeOf({ index: 2, parent: 0, rects: [], textRects: [] })
+    const before: LayoutSnapshot = bannerPage(10, [hidden])
+    expect(instability(before, bannerPage(10, [{ ...hidden, rects: [rect(0, 70, 100, 90)] }]))).toBe(
+      'the element count changed from 2 to 3',
+    )
+    expect(instability(before, bannerPage(10, [{ ...hidden, textRects: [rect(0, 70, 100, 90)] }]))).toBe(
+      'the element count changed from 2 to 3',
+    )
+  })
+
   it('accepts geometry that moved by at most one pixel', () => {
     expect(instability(bannerPage(10), bannerPage(11))).toBeUndefined()
   })
@@ -311,7 +335,7 @@ describe('stability', () => {
   it('names what moved or what appeared', () => {
     expect([
       instability(bannerPage(10), bannerPage(12)),
-      instability(bannerPage(10), bannerPage(10, [nodeOf({ index: 2, parent: 0 })])),
+      instability(bannerPage(10), bannerPage(10, [nodeOf({ index: 2, parent: 0, rects: [rect(0, 70, 100, 90)] })])),
     ]).toEqual(['div.banner moved between two measurements', 'the element count changed from 2 to 3'])
   })
 })

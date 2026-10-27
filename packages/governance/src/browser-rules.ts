@@ -418,6 +418,8 @@ export const isFocusBackwards = (previous: FocusPosition, next: FocusPosition): 
 
 /** What driving one opened disclosure with the keyboard showed. */
 export interface DisclosureProbe {
+  /** Whether activation actually opened the disclosure. */
+  readonly wasOpened: boolean
   /** Whether the control declares a popup, which the keyboard pattern says `Escape` dismisses. */
   readonly isPopup: boolean
   /** Whether `Escape` closed it. */
@@ -448,10 +450,13 @@ const escapeDefects = (probe: DisclosureProbe): readonly string[] => {
  * @param probe what the keyboard showed.
  * @returns one message per defect.
  */
-export const disclosureDefects = (probe: DisclosureProbe): readonly string[] => [
-  ...escapeDefects(probe),
-  ...(probe.isModal && !probe.focusTrapped ? ['focus leaves the open modal dialog while tabbing'] : []),
-]
+export const disclosureDefects = (probe: DisclosureProbe): readonly string[] =>
+  probe.wasOpened
+    ? [
+        ...escapeDefects(probe),
+        ...(probe.isModal && !probe.focusTrapped ? ['focus leaves the open modal dialog while tabbing'] : []),
+      ]
+    : ['activation did not open the disclosure']
 
 const isSameRect = (left: LayoutRect, right: LayoutRect): boolean =>
   Math.abs(left.left - right.left) <= GEOMETRY_TOLERANCE &&
@@ -474,11 +479,16 @@ const isSameNode = (left: LayoutNode, right: LayoutNode): boolean =>
  * @returns what moved, or undefined when the geometry held within the tolerance.
  */
 export const instability = (first: LayoutSnapshot, second: LayoutSnapshot): string | undefined => {
-  if (first.nodes.length !== second.nodes.length) {
-    return `the element count changed from ${String(first.nodes.length)} to ${String(second.nodes.length)}`
+  // Streaming frameworks remove hidden transport containers and templates after revealing content.
+  // Their disappearance changes no layout; a node with a box or text still participates in the comparison.
+  const hasLayout = (node: LayoutNode): boolean => node.rects.length > 0 || node.textRects.length > 0
+  const before: readonly LayoutNode[] = first.nodes.filter((node: LayoutNode): boolean => hasLayout(node))
+  const after: readonly LayoutNode[] = second.nodes.filter((node: LayoutNode): boolean => hasLayout(node))
+  if (before.length !== after.length) {
+    return `the element count changed from ${String(before.length)} to ${String(after.length)}`
   }
-  const moved: LayoutNode | undefined = first.nodes.find((node: LayoutNode, index: number): boolean => {
-    const other: LayoutNode | undefined = second.nodes[index]
+  const moved: LayoutNode | undefined = before.find((node: LayoutNode, index: number): boolean => {
+    const other: LayoutNode | undefined = after[index]
     return other === undefined || !isSameNode(node, other)
   })
   return moved === undefined ? undefined : `${moved.label} moved between two measurements`

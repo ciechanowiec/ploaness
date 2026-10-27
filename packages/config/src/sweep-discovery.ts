@@ -26,10 +26,12 @@ import {
   storyUrl,
   templateSamples,
 } from '@ploaness/governance'
-import { declaredRoutes, isSkippedSweepRoute, MAX_SWEEP_ROUTES, unsweptRoutes } from './a11y.js'
+import { declaredRoutes, isSkippedSweepRoute, MAX_SWEEP_ROUTES } from './a11y.js'
 import { projectSettings } from './project-settings.js'
+import { clearCompletedScans } from './scan-evidence.js'
 import { engineOf } from './scanner.js'
 import { settleForScan } from './settle.js'
+import { discoverNotFound, type NotFoundDiscovery } from './sweep-not-found.js'
 import {
   armBudget,
   type Budget,
@@ -217,8 +219,8 @@ const crawl = async (page: Page, state: CrawlState): Promise<CrawlState> => {
   await settleForScan(page)
   const facts: PageFacts = await page.evaluate(pageFactsInPage, CONTROLS)
   const location: SweepLocation = {
-    location: queued.route,
-    url: `${origin}${queued.route}`,
+    location: new URL(page.url()).pathname,
+    url: page.url(),
     isStory: false,
     edges: breakpointEdges(facts.mediaTexts),
     hasDarkMedia: facts.hasDarkMedia,
@@ -364,7 +366,7 @@ const wasRecorded = (file: string, value: unknown): boolean => {
   }
 }
 
-const problemsOf = (crawled: CrawlState, routes: readonly string[]): readonly string[] => [
+const problemsOf = (crawled: CrawlState): readonly string[] => [
   ...(crawled.answered.has(SEED_ROUTE) ? [] : [`the crawl could not start: ${SEED_ROUTE} did not answer`]),
   ...(crawled.dropped.size === 0
     ? []
@@ -372,9 +374,6 @@ const problemsOf = (crawled: CrawlState, routes: readonly string[]): readonly st
         `the sweep reached the ${String(MAX_SWEEP_ROUTES)}-route cap; raise the harness limit only after ` +
           'measuring the resulting run time',
       ]),
-  ...unsweptRoutes(routes, [...crawled.answered]).map(
-    (unswept: string): string => `a page this project declares that nothing scans: ${unswept}`,
-  ),
 ]
 
 /** The scope a `delta` run named, or why it could not be read. */
@@ -451,6 +450,22 @@ const scopeRecordOf = (scope: SweepScope | undefined, finds: ScopedFinds): Scope
   }
 }
 
+const discoveryOf = async (page: Page, finds: ScopedFinds, declared: readonly DeclaredRoute[]): Promise<Discovery> => {
+  const routes: readonly string[] = finds.routes.map((route: Chosen<SweepLocation>): string => route.item.location)
+  const stories: readonly DiscoveredStory[] = finds.stories.map(
+    (story: Chosen<DiscoveredStory>): DiscoveredStory => story.item,
+  )
+  return {
+    routes,
+    stories,
+    locations: [
+      ...finds.routes.map((route: Chosen<SweepLocation>): SweepLocation => route.item),
+      ...(await storyLocations(page, stories)),
+    ],
+    samples: templateSamples(routes, declared),
+  }
+}
+
 /**
  * Discover every page the sweep scans, and record it with whatever made the discovery incomplete.
  *
@@ -464,45 +479,35 @@ const scopeRecordOf = (scope: SweepScope | undefined, finds: ScopedFinds): Scope
  * @param page the test's page.
  */
 export const expectDiscoveredSite = async (page: Page): Promise<void> => {
+  clearCompletedScans()
   const budget: Budget = armBudget(page, 'discovery', WHOLE_PASS, MAX_SWEEP_ROUTES)
   await preparePage(page)
   const { scope, problem }: NamedScope = namedScope()
   const declared: readonly DeclaredRoute[] = declaredRoutes()
   const fromSitemap: readonly string[] = await sitemapPages(page, [`${origin}/sitemap.xml`])
   const crawled: CrawlState = await crawl(page, crawlStart(fromSitemap))
+  const missing: NotFoundDiscovery = await discoverNotFound(
+    page,
+    crawled.reachable.map((location: SweepLocation): string => location.location),
+  )
   const everyStory: readonly DiscoveredStory[] = await storiesOf(page)
   const finds: ScopedFinds = {
-    routes: chosen(crawled.reachable, (location: SweepLocation): string | undefined =>
+    routes: chosen([...crawled.reachable, ...missing.locations], (location: SweepLocation): string | undefined =>
       scope === undefined ? '' : routeReason(scope, declared, location.location),
     ),
     stories: chosen(everyStory, (story: DiscoveredStory): string | undefined =>
       scope === undefined ? '' : storyReason(scope, storyFile(story)),
     ),
-    everyRoute: crawled.reachable.length,
+    everyRoute: crawled.reachable.length + missing.locations.length,
     everyStory: everyStory.length,
   }
-  const routes: readonly string[] = finds.routes.map((route: Chosen<SweepLocation>): string => route.item.location)
-  const stories: readonly DiscoveredStory[] = finds.stories.map(
-    (story: Chosen<DiscoveredStory>): DiscoveredStory => story.item,
-  )
-  const discovery: Discovery = {
-    routes,
-    stories,
-    locations: [
-      ...finds.routes.map((route: Chosen<SweepLocation>): SweepLocation => route.item),
-      ...(await storyLocations(page, stories)),
-    ],
-    samples: templateSamples(routes, declared),
-  }
+  const discovery: Discovery = await discoveryOf(page, finds, declared)
+  const stories: readonly DiscoveredStory[] = discovery.stories
   const report: DiscoveryReport = {
+    visitedRoutes: crawled.reachable.map((location: SweepLocation): string => location.location),
+    answeredRoutes: [...crawled.answered],
     findings: crawled.findings,
-    problems: [
-      ...problemsOf(
-        crawled,
-        crawled.reachable.map((location: SweepLocation): string => location.location),
-      ),
-      ...(problem === undefined ? [] : [problem]),
-    ],
+    problems: [...missing.problems, ...problemsOf(crawled), ...(problem === undefined ? [] : [problem])],
     places: crawled.answered.size + stories.length,
     locations: discovery.locations.map((location: SweepLocation): string => location.location),
     elapsedMs: Math.round(performance.now() - budget.startedAt),

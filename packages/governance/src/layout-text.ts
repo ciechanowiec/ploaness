@@ -1,5 +1,5 @@
 // Text that overlaps other text, text cut off by its own box, and a page wider than its viewport.
-import { intersectionOf, outerBoxOf, visibleRectsOf } from './layout-clip.js'
+import { intersectionOf, outerBoxOf, textClippingAncestor, visibleRectsOf } from './layout-clip.js'
 import {
   hasArea,
   isAncestorOf,
@@ -169,6 +169,8 @@ export const findOverlappingText = (snapshot: LayoutSnapshot): readonly TextFind
 /** An element whose own box cuts off part of its text. */
 export interface ClipFinding {
   readonly node: LayoutNode
+  /** The ancestor cutting off the text, absent for overflow of the text's own box. */
+  readonly clippedBy?: LayoutNode
   /** True when the element declares truncation but names its full text nowhere a reader can reach. */
   readonly isUnnamedTruncation: boolean
 }
@@ -188,8 +190,21 @@ const declaresTruncation = (node: LayoutNode): boolean =>
 const hasFullTextName = (node: LayoutNode): boolean =>
   node.text.length > 0 && [node.title, node.ariaLabel].some((name: string): boolean => name.includes(node.text))
 
+const isInactiveText = (snapshot: LayoutSnapshot, node: LayoutNode): boolean =>
+  [node, ...ancestorsOf(snapshot, node)].some(
+    (ancestor: LayoutNode): boolean => ancestor.isInert === true || HIDDEN_VISIBILITY.has(ancestor.visibility),
+  )
+
+const ancestorClip = (snapshot: LayoutSnapshot, node: LayoutNode): readonly ClipFinding[] => {
+  const ancestor: LayoutNode | undefined = textClippingAncestor(snapshot, node, lineBoxesOf(node))
+  if (ancestor === undefined || (declaresTruncation(ancestor) && hasFullTextName(ancestor))) {
+    return []
+  }
+  return [{ node, clippedBy: ancestor, isUnnamedTruncation: declaresTruncation(ancestor) }]
+}
+
 /**
- * Every element whose own text its box cuts off.
+ * Every element whose text its own box or an ancestor cuts off.
  *
  * Truncation declared with an ellipsis or a line clamp is intentional when the full text is in the
  * element's `title` or `aria-label`; declared without either, it is reported as unnamed.
@@ -202,9 +217,13 @@ export const findClippedText = (snapshot: LayoutSnapshot): readonly ClipFinding[
       (node: LayoutNode): boolean =>
         isReadableText(snapshot, node) &&
         !isVisuallyHiddenBox(node) &&
-        (hasHiddenOverflowX(node) || hasHiddenOverflowY(node)),
+        !isInactiveText(snapshot, node) &&
+        !isInTurn(snapshot, node),
     )
     .flatMap((node: LayoutNode): readonly ClipFinding[] => {
+      if (!(hasHiddenOverflowX(node) || hasHiddenOverflowY(node))) {
+        return ancestorClip(snapshot, node)
+      }
       if (!declaresTruncation(node)) {
         return [{ node, isUnnamedTruncation: false }]
       }

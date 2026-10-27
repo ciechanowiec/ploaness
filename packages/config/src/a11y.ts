@@ -23,6 +23,7 @@ export type {
 } from '@ploaness/governance'
 export { classifyHitTarget, findDefiniteIncomplete } from '@ploaness/governance'
 export { LAYOUT_SCAN_VIEWPORTS } from './layout.js'
+export { expectPerceivable } from './perceivable.js'
 export { expectNoLayoutDefects, layoutDefectsOf } from './scanner.js'
 export { type SettleOutcome, settleForScan } from './settle.js'
 
@@ -39,10 +40,13 @@ import {
   findingLine,
   findUnsweptRoutes,
   isSkippedRoute,
+  type NotFoundBoundary,
+  notFoundBoundaries,
   type SpecSource,
   type UnsweptRoute,
 } from '@ploaness/governance'
 import { projectSettings } from './project-settings.js'
+import { recordCompletedScan } from './scan-evidence.js'
 import { locationOf, scanPageInPlace } from './scanner.js'
 
 export const SKIPPED_ROUTE_PREFIXES: readonly string[] = projectSettings.accessibilitySkipRoutes
@@ -87,9 +91,12 @@ export const expectNoAxeDefects = (scan: AxeResults, label: string): void => {
  * @returns nothing; it fails the test with one line per defect.
  */
 export const expectSweptPage = async (page: Page): Promise<void> => {
+  const url: string = page.url()
   const scanned: readonly BrowserFinding[] = await scanPageInPlace(page, true)
   const findings: readonly string[] = scanned.map((finding: BrowserFinding): string => findingLine(finding))
   expect(findings, `defects on ${locationOf(page)}`).toEqual([])
+  expect(page.url(), 'the page changed address during its scan').toBe(url)
+  recordCompletedScan(url)
 }
 
 // What the sweep cannot work out from inside the browser: which pages this project declares.
@@ -155,6 +162,17 @@ export const declaredRoutes = (): readonly DeclaredRoute[] => {
   return appRoot === undefined ? [] : declaredRoutesOf(paths, appRoot)
 }
 
+/** Authored error boundaries that belong to the public browser sweep. */
+export const declaredNotFoundBoundaries = (): readonly NotFoundBoundary[] => {
+  const paths: readonly string[] = projectFiles(process.cwd())
+  const appRoot: string | undefined = appRootOf(paths)
+  return appRoot === undefined
+    ? []
+    : notFoundBoundaries(paths, appRoot).filter(
+        (boundary: NotFoundBoundary): boolean => !isSkippedSweepRoute(boundary.route),
+      )
+}
+
 /**
  * The pages this project declares that the sweep did not cover, each with what to do about it.
  *
@@ -167,6 +185,7 @@ export const declaredRoutes = (): readonly DeclaredRoute[] => {
 export const unsweptRoutes = (
   visitedRoutes: readonly string[],
   answeredRoutes: readonly string[],
+  completedRoutes?: readonly string[],
 ): readonly string[] => {
   const root: string = process.cwd()
   const paths: readonly string[] = projectFiles(root)
@@ -183,5 +202,6 @@ export const unsweptRoutes = (
     customSkippedPrefixes: projectSettings.accessibilityCustomSkipRoutes,
     specs,
     everyFile: specs,
+    completedRoutes,
   }).map((unswept: UnsweptRoute): string => `${unswept.file} [${unswept.rule}] ${unswept.reason}`)
 }

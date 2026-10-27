@@ -46,7 +46,8 @@ interface PageText {
 }
 
 interface PageRange {
-  readonly selectNodeContents: (node: PageText) => void
+  readonly setStart: (node: PageText, offset: number) => void
+  readonly setEnd: (node: PageText, offset: number) => void
   readonly getClientRects: () => ArrayLike<PageRect>
 }
 
@@ -209,8 +210,15 @@ const ownText = (element: PageElement, tools: LayoutTools): readonly PageText[] 
 const ownTextRects = (element: PageElement, tools: LayoutTools): readonly LayoutRect[] =>
   tools.ownText(element, tools).flatMap((text: PageText): readonly LayoutRect[] => {
     const range: PageRange = document.createRange()
-    range.selectNodeContents(text)
-    return tools.roundRects(range.getClientRects())
+    // Preserved spaces can hang outside a wrapped line without hiding a glyph. Measure words so a
+    // clipped blank space is not reported as lost text, including whitespace at soft line breaks.
+    return Array.from((text.textContent ?? '').matchAll(/\S+/gu)).flatMap(
+      (match: RegExpExecArray): readonly LayoutRect[] => {
+        range.setStart(text, match.index)
+        range.setEnd(text, match.index + match[0].length)
+        return tools.roundRects(range.getClientRects())
+      },
+    )
   })
 
 const bordersOf = (style: PageStyle): LayoutBorders => {
@@ -282,6 +290,7 @@ const describe = (element: PageElement, context: NodeContext, tools: LayoutTools
     boxShadow: read('box-shadow'),
     borders: tools.bordersOf(style),
     isAriaHidden: element.getAttribute('aria-hidden') === 'true',
+    isInert: element.getAttribute('inert') !== null,
     isClipped: read('clip-path') !== 'none' || !['auto', ''].includes(read('clip')),
     overflowX: read('overflow-x'),
     overflowY: read('overflow-y'),

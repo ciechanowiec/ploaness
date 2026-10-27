@@ -56,6 +56,9 @@ const boxMessage = (finding: BoxFinding): string => {
 
 const clipMessage = (finding: ClipFinding): string => {
   const node: LayoutNode = finding.node
+  if (finding.clippedBy !== undefined) {
+    return `text clipped by ${finding.clippedBy.label}: ${node.label}`
+  }
   const kind: string = finding.isUnnamedTruncation
     ? 'truncated text without its full text in title or aria-label'
     : `clipped text (content ${String(node.scrollWidth)}x${String(node.scrollHeight)}px in a ` +

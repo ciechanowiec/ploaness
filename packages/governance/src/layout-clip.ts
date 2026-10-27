@@ -98,3 +98,56 @@ export const visibleRectsOf = (
     )
     .filter((rect: LayoutRect): boolean => hasArea(rect))
 }
+
+interface TextClip {
+  readonly node: LayoutNode
+  readonly rects: readonly LayoutRect[]
+  readonly reach: ClipReach
+}
+
+const HIDDEN_OVERFLOW: ReadonlySet<string> = new Set<string>(['hidden', 'clip'])
+const CLIP_TOLERANCE: number = 1
+
+const isCuttingText = (node: LayoutNode, box: LayoutRect, text: LayoutRect): boolean =>
+  (HIDDEN_OVERFLOW.has(node.overflowX) &&
+    (text.left < box.left - CLIP_TOLERANCE || text.right > box.right + CLIP_TOLERANCE)) ||
+  (HIDDEN_OVERFLOW.has(node.overflowY) &&
+    (text.top < box.top - CLIP_TOLERANCE || text.bottom > box.bottom + CLIP_TOLERANCE))
+
+const intersectingRects = (rects: readonly LayoutRect[], clip: LayoutRect | undefined): readonly LayoutRect[] =>
+  clip === undefined
+    ? rects
+    : rects
+        .map((rect: LayoutRect): LayoutRect => intersectionOf(rect, clip))
+        .filter((rect: LayoutRect): boolean => hasArea(rect))
+
+const clippingAncestor = (snapshot: LayoutSnapshot, current: TextClip): LayoutNode | undefined => {
+  const parent: LayoutNode | undefined = snapshot.nodes[current.node.parent]
+  if (parent === undefined || current.reach === 'none' || current.rects.length === 0) {
+    return undefined
+  }
+  const clip: LayoutRect | undefined =
+    current.reach === 'all' || parent.position !== STATIC ? clipOf(parent) : undefined
+  if (clip !== undefined && current.rects.some((rect: LayoutRect): boolean => isCuttingText(parent, clip, rect))) {
+    return parent
+  }
+  return clippingAncestor(snapshot, {
+    node: parent,
+    reach: reachPast(parent, current.reach),
+    rects: intersectingRects(current.rects, clip),
+  })
+}
+
+/**
+ * Find the ancestor hiding text a reader cannot scroll into view. Scrollable ancestors first trim
+ * the comparison to their visible content, so their off-screen items are not mistaken for lost text.
+ * @param snapshot the measured page.
+ * @param node the text's element.
+ * @param rects its line boxes.
+ * @returns the first clipping ancestor, if any.
+ */
+export const textClippingAncestor = (
+  snapshot: LayoutSnapshot,
+  node: LayoutNode,
+  rects: readonly LayoutRect[],
+): LayoutNode | undefined => clippingAncestor(snapshot, { node, rects, reach: reachPast(node, 'all') })

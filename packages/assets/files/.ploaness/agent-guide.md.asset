@@ -484,12 +484,16 @@ Ploaness pins three executable sweeps into applications where they apply:
 - Access boundary asks Payload's `/api/access` what an anonymous caller may do and compares the result
   with the project's `publicAccess` declarations, including field-level grants.
 
+The browser sweep also visits missing addresses under authored `not-found` boundaries, using discovered
+URLs to resolve locale and dynamic prefixes. These error pages run through the real application layout;
+their document's expected 404 is allowed, while failed subresources remain findings.
+
 The browser sweep compares discovered route files with visited URLs and project test evidence.
 Unlinked, authenticated, and dynamic routes need reachable links, a sitemap entry, or explicit project
 scans of both kinds. A dynamic family requires a concrete member URL; its parent route is not a substitute.
 Intentional exclusions require a reason. Do not narrow coverage merely to fit the route budget.
 
-Some states no crawl reaches: signed-in and permission-restricted views, empty lists, error states, and
+Some states no crawl reaches: signed-in and permission-restricted views, empty lists, other error states, and
 date-dependent variants. They are the project's responsibility. Cover a presentation component's state
 with a Storybook story, and a real state with a project test that reaches it with seeded data and a real
 session, never a mock, then calls `expectSweptPage(page)` from `ploaness/a11y`. It runs axe at 390 and
@@ -510,12 +514,22 @@ scan. Both judge the page in the state the spec left it, resized rather than rel
 the state worth judging first. They do not fix the browser clock or block third-party requests; the
 sweep does.
 
+`expectPerceivable(control)` from `ploaness/a11y` asserts that a control becomes visible within 1.5 s,
+including ancestor opacity, clipping and inert state. It does not move focus or scroll on the test's
+behalf. Use it after time-sensitive keyboard actions in project browser regressions.
+
+Project specs depend on discovery so teardown waits for their scan evidence. For a focused diagnostic
+spec, use Playwright's `--no-deps`; that subset establishes no complete sweep verdict.
+
 Every Playwright test asserts. `expect`, the `ploaness/a11y` and `ploaness/sweep` helpers, and a project
 helper named `expect` followed by a capital letter count as assertions; name an asserting helper that way.
 
 Static route/test matching recognizes route literals, regular expressions, dynamic URL templates, and
-axe and layout evidence through one relative helper import. It does not prove the spec executes those
-scans. A route scanned with axe alone fails as `route-unmeasured`. Keep navigation and scans clear, run
+axe and layout evidence through one relative helper import. At teardown, a route delegated to project
+tests also needs a completed `expectSweptPage` scan of its concrete URL in this run. The helper records
+evidence only after every required viewport passes and the URL remains unchanged. Records live under
+`test-results/ploaness-project-scans`; discovery clears old records before dependent project tests run.
+An unexecuted scan fails as `route-unexecuted`. A route scanned with axe alone fails as `route-unmeasured`. Keep navigation and scans clear, run
 the full browser suite, and account for URL changes introduced by `basePath`, redirects, rewrites,
 proxy logic, or custom page extensions.
 
@@ -559,8 +573,8 @@ committed.
 | --- | --- | --- | --- |
 | Discovery | Chromium, once | desktop | every route and story |
 | Resting rules | Chromium | baseline and declared; for routes also both sides of every breakpoint that styles them | every route and story |
-| Interaction states | Chromium | routes at 390x844 and 1280x800, stories at 1280x800; hover at 1280 | every route and story |
-| Disclosures | Chromium | routes at 390x844 and 1280x800, stories at 1280x800 | every route and story |
+| Interaction states | Chromium | routes at 390x844 and 1280x800, stories at 1280x800; hover at 1280 with reduced motion | every route and story; keyboard with reduced and normal motion |
+| Disclosures | Chromium | routes at 390x844 and 1280x800, stories at 1280x800 | every route and story, pointer with reduced motion and keyboard with normal motion |
 | Text stress | Chromium | spacing at 390x844 and 1280x800; resize at 1280x800 | one route per template, one story per component |
 | Width sweep | Chromium | 320 to 1920 px in 32 px steps, bisected | one route per template, one story per component |
 | Dark scheme | Chromium | 390x844 and 1280x800 | pages whose stylesheets answer `prefers-color-scheme`; a `.dark` class alone is not followed |
@@ -573,7 +587,12 @@ the page's stylesheets, `px`, `rem` and `em`, legacy and range syntax. A templat
 resolves to, and a story's template is its component; sampling one route does not prove its siblings equivalent, and the resting pass still
 covers every route.
 
-Every page is loaded still: reduced motion, animations and transitions at zero duration, a hidden caret,
+Resting and reflow scans load pages still: reduced motion, animations and transitions at zero duration,
+a hidden caret. Interaction and disclosure passes also load each page with normal motion, preserving
+animations and transitions. Normal motion checks keyboard behavior and perceivable focus; pointer geometry and
+pixel-contrast measurements remain in the still passes, so an animated background is not mistaken for
+an unstable layout. The normal-motion disclosure pass focuses a trigger and presses Enter,
+then verifies opening, closing, the focus trap and perceivable return focus. Every pass uses
 locale `en-US`, timezone UTC, pixel ratio 1, the browser's `Date` fixed at `ploaness.clock` while its
 timers and animations keep running, and every request outside the application and auxiliary origins
 blocked. Each page is settled - fonts, every image decoded, a quiet element tree, finished animations,
@@ -587,14 +606,14 @@ cleared `aria-busy` regions, then every face its text uses loaded or failed - an
 | `page-not-stable` | the page does not settle within 10 s, a visible busy region never clears, or geometry moves more than 1 px between two measurements |
 | `overflow` | the document is wider than the viewport; names the outermost element past its edge |
 | `text-overlap` | two elements' own visible text shares more than one pixel row, unless one contains the other; text a clipping or scrolling ancestor hides, or a positioned layer of an opaque colour or opaque-stop gradient covers, is not visible; text in a rotated or skewed subtree is not compared |
-| `clipped-text` | `overflow: hidden` or `clip` cuts content; ellipsis or line clamp passes when `title` or `aria-label` holds the full text |
+| `clipped-text` | `overflow: hidden` or `clip` on the text or an ancestor cuts content a reader cannot scroll to; inactive subtrees are ignored; ellipsis or line clamp passes when `title` or `aria-label` holds the full text |
 | `attached` | boxed siblings are closer than the minimum gap, 4 CSS pixels by default, measured on what their clipping and scrolling ancestors leave visible; boxes in a rotated or skewed subtree are not compared |
 | `obscured` | something other than a control or its descendant sits at the control's centre; a hidden or inert control, or one with `pointer-events: none`, is offered to no pointer and is not judged |
 | `focus-obscured` | a keyboard-focused element is entirely hidden by fixed or sticky content |
 | `focus-visible` | nothing changes when an element takes keyboard focus, compared where focus can show: the element and each ancestor or descendant whose outline, shadow, border, background, text colour or decoration changes with it, as far as their outlines and shadows reach and at least 4 px around - so a card that rings itself for its stretched link is judged where it draws |
 | `focus-order` | tabbing moves focus to an element entirely above the previous one in the same landmark, and not to the head of a column further along the line; dialogs, fixed and sticky content and visually hidden elements are not compared |
 | `focus-contrast` | the focus change shows, but the pixels whose colour contrasts 3:1 with their unfocused colour cover less than a 1 px line along half the element's longer side (WCAG 1.4.11): a faint tint or glow, not an outline, ring, underline or strong fill |
-| `disclosure-keyboard` | `Escape` does not close a popup or modal dialog, focus does not return to its control within a second, or focus leaves an open modal dialog |
+| `disclosure-keyboard` | activation does not open the disclosure, `Escape` does not close a popup or modal dialog, focus does not return to its control within a second, or focus leaves an open modal dialog |
 | `text-spacing` | the WCAG 1.4.12 overrides cause a new overflow, overlap, or clip |
 | `text-resize` | doubling every text size causes a new overflow, overlap, or clip, or text does not grow |
 | `small-text` | rendered text is below 12 px |

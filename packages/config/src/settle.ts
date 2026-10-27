@@ -111,7 +111,7 @@ declare const setTimeout: (callback: () => void, delayMs: number) => unknown
 // own source text, so a reference to anything at module scope here would be a ReferenceError in the
 // page rather than a compile error in this file - the one mistake this shape cannot be checked for.
 // It is also why the animation wait below is written inline rather than as a helper of its own.
-const isSettledInPage = async (budgetMs: number): Promise<boolean> => {
+const isSettledInPage = async ([budgetMs, shouldWaitForMotion]: readonly [number, boolean]): Promise<boolean> => {
   const quietFrames: number = 2
   // Recursive rather than a loop over a counter, because there is no mutable binding to count with:
   // this repository bans `let` and in-place mutation in its own source as well as in a consumer's. Each
@@ -153,7 +153,7 @@ const isSettledInPage = async (budgetMs: number): Promise<boolean> => {
     // Settled rather than all fulfilled: a cancelled animation rejects rather than resolving. The
     // cancellation is a state change like any other and the count below is what notices it.
     await Promise.allSettled(
-      (document.getAnimations?.() ?? [])
+      (shouldWaitForMotion ? (document.getAnimations?.() ?? []) : [])
         .filter(
           (animation: PageAnimation): boolean =>
             animation.playState === 'running' &&
@@ -220,9 +220,9 @@ const busyInPage = async (budgetMs: number): Promise<BusyOutcome> => {
 // never rests costs two ceilings and is reported as before.
 const SETTLE_ATTEMPTS: number = 2
 
-const isSettledWithin = async (page: Page, attempts: number): Promise<boolean> =>
-  (await page.evaluate(isSettledInPage, SETTLE_BUDGET_MS)) ||
-  (attempts > 1 && (await isSettledWithin(page, attempts - 1)))
+const isSettledWithin = async (page: Page, attempts: number, shouldWaitForMotion: boolean): Promise<boolean> =>
+  (await page.evaluate(isSettledInPage, [SETTLE_BUDGET_MS, shouldWaitForMotion] as const)) ||
+  (attempts > 1 && (await isSettledWithin(page, attempts - 1, shouldWaitForMotion)))
 
 /** How a settle ended. */
 export type SettleOutcome = 'settled' | 'ceiling' | 'busy' | 'interrupted'
@@ -239,9 +239,9 @@ export type SettleOutcome = 'settled' | 'ceiling' | 'busy' | 'interrupted'
  * @returns `settled`, or what stopped it: the ceiling, a region that stayed busy, or a navigation that
  * destroyed the page while it waited. The sweep reports every outcome but `settled` as a finding.
  */
-export const settleForScan = async (page: Page): Promise<SettleOutcome> => {
+export const settleForScan = async (page: Page, shouldWaitForMotion: boolean = true): Promise<SettleOutcome> => {
   try {
-    if (!(await isSettledWithin(page, SETTLE_ATTEMPTS))) {
+    if (!(await isSettledWithin(page, SETTLE_ATTEMPTS, shouldWaitForMotion))) {
       return 'ceiling'
     }
     const busy: BusyOutcome = await page.evaluate(busyInPage, BUSY_BUDGET_MS)
@@ -249,7 +249,7 @@ export const settleForScan = async (page: Page): Promise<SettleOutcome> => {
       return 'busy'
     }
     // Revealing the content changes the tree, so a page that was busy is settled once more after it.
-    if (busy.wasBusy && !(await isSettledWithin(page, SETTLE_ATTEMPTS))) {
+    if (busy.wasBusy && !(await isSettledWithin(page, SETTLE_ATTEMPTS, shouldWaitForMotion))) {
       return 'ceiling'
     }
     const families: readonly string[] = await page.evaluate(usedFontFamiliesInPage)

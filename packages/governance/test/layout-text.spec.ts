@@ -1,55 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { findLayoutDefects, LAYOUT_MINIMUM_GAP } from '../src/layout-defects.js'
-import type { LayoutBorder, LayoutNode, LayoutRect, LayoutSnapshot } from '../src/layout-snapshot.js'
+import type { LayoutNode, LayoutSnapshot } from '../src/layout-snapshot.js'
+
+import { nodeOf as layoutNode, rect } from './layout-fixture.js'
 
 // Text that collides with other text, text its own box cuts off, and a page wider than its viewport,
 // each stated as the numbers the browser reports.
 
-const NO_BORDER: LayoutBorder = { width: 0, style: 'none', color: 'rgb(0, 0, 0)' }
-
-const rect = (left: number, top: number, right: number, bottom: number): LayoutRect => ({
-  left,
-  top,
-  right,
-  bottom,
-})
-
-const nodeOf = (fields: Partial<LayoutNode> & Pick<LayoutNode, 'index' | 'parent'>): LayoutNode => ({
-  label: `p#n${String(fields.index)}`,
-  tag: 'p',
-  rects: [],
-  textRects: [],
-  lineHeight: 0,
-  text: '',
-  display: 'block',
-  visibility: 'visible',
-  position: 'static',
-  zIndex: 'auto',
-  transform: 'none',
-  rotate: 'none',
-  backgroundColor: 'rgba(0, 0, 0, 0)',
-  backgroundImage: 'none',
-  boxShadow: 'none',
-  borders: { top: NO_BORDER, right: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER },
-  isAriaHidden: false,
-  isClipped: false,
-  overflowX: 'visible',
-  overflowY: 'visible',
-  textOverflow: 'clip',
-  lineClamp: 'none',
-  scrollWidth: 0,
-  clientWidth: 0,
-  scrollHeight: 0,
-  clientHeight: 0,
-  title: '',
-  ariaLabel: '',
-  exemption: undefined,
-  exemptionReason: '',
-  fontSize: 16,
-  fontFamily: 'sans-serif',
-  media: undefined,
-  ...fields,
-})
+const nodeOf = (fields: Partial<LayoutNode> & Pick<LayoutNode, 'index' | 'parent'>): LayoutNode =>
+  layoutNode({ tag: 'p', label: `p#n${String(fields.index)}`, ...fields })
 
 const BODY: LayoutNode = nodeOf({
   index: 0,

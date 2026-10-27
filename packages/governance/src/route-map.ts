@@ -36,7 +36,7 @@ const SEGMENT_SEPARATOR: string = '/'
  * nobody notices.
  * @param path the file, relative to the member root.
  * @param root the candidate app directory.
- * @returns true for the layout at the top of the app directory once route groups are ignored.
+ * @returns true for a root layout below route groups or dynamic root parameters.
  */
 export const isRootLayout = (path: string, root: string): boolean => {
   const prefix: string = `${root}${SEGMENT_SEPARATOR}`
@@ -45,7 +45,10 @@ export const isRootLayout = (path: string, root: string): boolean => {
   }
   const segments: readonly string[] = path.slice(prefix.length).split(SEGMENT_SEPARATOR)
   const addressed: readonly string[] = segments.filter((segment: string): boolean => !isRouteGroup(segment))
-  return addressed.length === 1 && ROOT_LAYOUTS.has(addressed[0] ?? '')
+  return (
+    ROOT_LAYOUTS.has(addressed.at(-1) ?? '') &&
+    addressed.slice(0, -1).every((segment: string): boolean => isDynamicSegment(segment))
+  )
 }
 
 /**
@@ -56,8 +59,23 @@ export const isRootLayout = (path: string, root: string): boolean => {
  * @param paths every file of the member, relative to its root, separated by forward slashes.
  * @returns the app directory, or nothing when the member declares no routes.
  */
+const hasLayoutAndPage = (paths: readonly string[], root: string): boolean =>
+  paths.some((file: string): boolean => {
+    if (!(file.startsWith(`${root}/`) && ROOT_LAYOUTS.has(file.split('/').at(-1) ?? ''))) {
+      return false
+    }
+    const directory: string = file.slice(0, file.lastIndexOf('/') + 1)
+    return paths.some(
+      (candidate: string): boolean =>
+        candidate.startsWith(directory) && declaredRouteOf(candidate.slice(root.length + 1)) !== undefined,
+    )
+  })
+
 export const appRootOf = (paths: readonly string[]): string | undefined =>
-  APP_ROOTS.find((root: string): boolean => paths.some((path: string): boolean => isRootLayout(path, root)))
+  APP_ROOTS.find(
+    (root: string): boolean =>
+      paths.some((path: string): boolean => isRootLayout(path, root)) || hasLayoutAndPage(paths, root),
+  )
 
 // A segment wholly inside parentheses is a route group: it organises the tree and contributes nothing
 // to the address. `(.)photo` is not one - it is an intercepting route, and it opens with a parenthesis
