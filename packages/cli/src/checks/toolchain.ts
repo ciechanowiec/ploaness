@@ -9,6 +9,7 @@ import {
   analysisBoundaries,
   asRecord,
   biomeSelection,
+  CLOUDFRONT_RUNTIME,
   eslintArguments,
   importGraphOf,
   isArray,
@@ -17,6 +18,7 @@ import {
   parseJsonc,
   pureLogicRule,
   requiredBiomeFiles,
+  rolesFor,
 } from '@ploaness/governance'
 import {
   type Context,
@@ -241,25 +243,41 @@ export const typeCoverage = (context: Context): GateResult =>
 const stringEntries = (value: unknown): readonly string[] =>
   isArray(value) ? value.filter((entry: unknown): entry is string => typeof entry === 'string') : []
 
+// The modules the CloudFront Functions runtime provides itself: a function reads its key value store
+// through `require('cloudfront')`, which no package supplies and no manifest can list.
+const CLOUDFRONT_MODULES: readonly string[] = ['cloudfront']
+
+// Only a project that holds a file declared for that runtime is spared them, so an ordinary import of a
+// package named `cloudfront` is still reported as unlisted everywhere else.
+const runtimeModules = (context: Member, files: readonly string[]): readonly string[] =>
+  allowedJavaScriptFiles(files, rolesFor(context.settings.javascriptRuntimes, CLOUDFRONT_RUNTIME), context.siblingPaths)
+    .length > 0
+    ? CLOUDFRONT_MODULES
+    : []
+
 // A generated artefact is ignored as ESLint ignores it: its generator owns it, so a file nothing imports,
 // such as the script a static export ships for a browser, is not dead code a project could remove.
 /**
  * The knip configuration of one run: the shipped file, or a copy that adds the member's boundaries, its
- * allowlisted JavaScript as entries, and its generated artefacts as ignored.
+ * allowlisted JavaScript as entries, its generated artefacts as ignored, and the modules a declared
+ * runtime provides as dependencies no manifest lists.
  * @param context the member being judged.
  * @returns the path of the configuration file.
  */
 export const knipConfig = (context: Member): string => {
   const boundaries: readonly string[] = analysisBoundaries(context.siblingPaths)
   const generated: readonly string[] = context.settings.generatedArtefacts
+  const files: readonly string[] = presentWorkingTreeFiles(context.root)
   const entries: readonly string[] = allowedJavaScriptFiles(
-    presentWorkingTreeFiles(context.root),
+    files,
     context.settings.javascriptAllowlist,
     context.siblingPaths,
   )
+  // A file declared for a runtime is an allowlisted entry, so a project with one never takes the shipped file.
   if (boundaries.length === 0 && entries.length === 0 && generated.length === 0) {
     return configFile('knip.json')
   }
+  const provided: readonly string[] = runtimeModules(context, files)
   const shipped: Record<string, unknown> = asRecord(readJson(configFile('knip.json')))
   const directory: string = mkdtempSync(path.join(tmpdir(), 'ploaness-knip-'))
   const rendered: string = path.join(directory, 'knip.json')
@@ -270,6 +288,7 @@ export const knipConfig = (context: Member): string => {
         ...shipped,
         entry: [...stringEntries(shipped['entry']), ...entries],
         ignore: [...stringEntries(shipped['ignore']), ...boundaries, ...generated],
+        ignoreDependencies: [...stringEntries(shipped['ignoreDependencies']), ...provided],
       },
       null,
       JSON_INDENT,
