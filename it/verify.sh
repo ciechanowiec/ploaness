@@ -915,7 +915,8 @@ bundle_directory_contracts() {
         expect_command "$name" PASS '\[PASS\] bundle' \
             env NODE_ENV=development "$scratch/$name/node_modules/.bin/ploaness" gate bundle
         expect_command "$name" PASS '26 passed' \
-            env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+            env PLOANESS_VERIFICATION=1 "PLOANESS_SWEEP_WORKERS=$fixture_sweep_workers" NODE_ENV=production \
+            pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
         mkdir -p "$scratch/$name/.next/static"
         printf 'console.log(1)\n' > "$scratch/$name/.next/static/stale.js"
         edit_json "$scratch/$name/package.json" ploaness.bundleBudgetBytes 1024
@@ -953,8 +954,8 @@ test('scans a dynamic post', async ({ page }) => {
 })
 EOF
     expect_command route-overlap PASS '27 passed' \
-        env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts \
-        tests/e2e/dynamic.e2e.spec.ts --reporter=line
+        env PLOANESS_VERIFICATION=1 "PLOANESS_SWEEP_WORKERS=$fixture_sweep_workers" NODE_ENV=production \
+        pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts tests/e2e/dynamic.e2e.spec.ts --reporter=line
 }
 
 route_boundary_contracts() {
@@ -968,7 +969,8 @@ route_boundary_contracts() {
     edit_json "$scratch/route-boundary/package.json" ploaness.accessibilitySkipRoutes \
         '[{"pattern":"/api","reason":"API-prefixed preview pages require a session"}]'
     expect_command route-boundary PASS '26 passed' \
-        env PLOANESS_VERIFICATION=1 NODE_ENV=production pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
+        env PLOANESS_VERIFICATION=1 "PLOANESS_SWEEP_WORKERS=$fixture_sweep_workers" NODE_ENV=production \
+        pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 }
 
 document_a11y_contracts() {
@@ -1444,6 +1446,7 @@ node "$lib/create-a11y-page.ts" "$scratch/pass-browser-names" valid
 commit_case pass-browser-names 'test(fixture): render accessible controls in Next' "$CONFORMING_BODY"
 expect pass-browser-names build PASS
 expect_command pass-browser-names PASS '26 passed' \
+    env "PLOANESS_SWEEP_WORKERS=$fixture_sweep_workers" \
     pnpm exec playwright test tests/e2e/a11y.e2e.spec.ts --reporter=line
 new_case fail-browser-headers
 node "$lib/create-a11y-page.ts" "$scratch/fail-browser-headers" valid
