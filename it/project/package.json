@@ -1,11 +1,11 @@
 {
   "name": "ploaness-it-consumer",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "private": true,
   "type": "module",
   "dependencies": {
     "@payloadcms/db-postgres": "3.91.0",
-    "@ploaness/runtime": "1.15.0",
+    "@ploaness/runtime": "1.16.0",
     "graphql": "16.14.2",
     "nanoid": "6.0.2",
     "next": "16.4.2",
@@ -22,7 +22,7 @@
     "@types/react-dom": "19.3.0",
     "@vitest/coverage-v8": "5.0.5",
     "pg": "8.23.1",
-    "ploaness": "1.15.0",
+    "ploaness": "1.16.0",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "vitest": "5.0.5"
