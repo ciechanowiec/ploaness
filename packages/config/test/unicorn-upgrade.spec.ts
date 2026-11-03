@@ -136,7 +136,7 @@ const examples: readonly Example[] = [
   },
   {
     rule: 'unicorn/prefer-escaped-irregular-whitespace',
-    invalid: 'const value = "first' + String.fromCodePoint(0xa0) + 'second";',
+    invalid: `const value = "first${String.fromCodePoint(0xa0)}second";`,
     valid: String.raw`const value = "first\u00A0second";`,
   },
   {
@@ -225,8 +225,8 @@ for (const [name, rules] of Object.entries(rulesByConfig)) {
     })
 
     it.each(examples)('honors a narrow source suppression for $rule', (example: Example) => {
-      const suppressed: string =
-        '// eslint-disable-next-line ' + example.rule + ' -- Exercises the narrow source exception.\n' + example.invalid
+      const directive: string = `// eslint-disable-next-line ${example.rule} -- Exercises the narrow source exception.`
+      const suppressed: string = `${directive}\n${example.invalid}`
       expect(messagesFor(suppressed, example.rule, rules)).toEqual([])
     })
   })

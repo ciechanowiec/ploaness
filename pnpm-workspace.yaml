@@ -21,3 +21,8 @@ overrides:
   # load-bearing half: written as a bare `>=4.3.2` floor this resolves to the newest release in
   # existence, which is a different package once the major moves.
   js-yaml: '>=4.3.2 <5'
+  # GHSA-g3hv-75wg-m249: below 11.0.1, minimatch can spend exponential time expanding globstar parts.
+  # ESLint, its config array, typescript-estree, sonarjs and type-coverage all declare ^10, and no 10.x
+  # carries the fix. Each calls only the Minimatch constructor, match() and minimatch() with options 11
+  # retains; 11 removed makeRe, regexp, AST and matchOne, which none of them reaches.
+  minimatch: '>=11.0.1 <12'

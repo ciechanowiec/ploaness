@@ -326,7 +326,8 @@ declaration, view, and framework roles remain excluded. Glob roles support comma
 such as `src/{read,write}.ts`. Each explicit exclusion must reach an eligible file.
 
 `ploaness format` formats SCSS with the harness's pinned Prettier settings. Stylelint owns SCSS rules;
-Biome owns formatting for its supported languages. `.cjs` is parsed as CommonJS and may initialize its
+Biome owns formatting for its supported languages except YAML and Markdown, which it neither formats
+nor lints. `.cjs` is parsed as CommonJS and may initialize its
 exports, while ordinary mutations remain prohibited in every directory.
 
 | Setting | Default | Input and effect |

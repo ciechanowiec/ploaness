@@ -177,8 +177,8 @@ const advisoryRow = (entry: ReportAdvisory, mitigated: readonly ReportAdvisory[]
 
 const plan = (entry: ReportAdvisory, index: number): string => {
   const addedOn: string = escapeHtml(entry.mitigation?.addedOn ?? '')
-  const recorded: string =
-    `<span class="mono">${nowrap(addedOn)}</span>` + (entry.isHarnessMitigation ? ' by the build harness' : '')
+  const recordedBy: string = entry.isHarnessMitigation ? ' by the build harness' : ''
+  const recorded: string = `<span class="mono">${nowrap(addedOn)}</span>${recordedBy}`
   return (
     `<div class="plan" id="${planId(index)}"><p class="title">${severityChip(entry.advisory.severity)} ` +
     `${nowrap(code(entry.advisory.id))} in ${escapeHtml(entry.advisory.packageName)}</p>` +

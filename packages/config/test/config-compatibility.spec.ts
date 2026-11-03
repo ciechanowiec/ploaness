@@ -45,21 +45,23 @@ describe('nullish input normalization', () => {
   })
 })
 
-describe('Payload configuration evaluation', () => {
-  const source: string = 'import { buildConfig } from "payload"; export default buildConfig({ collections: [] });'
+// The rule reports writes to shared global state, not calls it cannot see into, so Payload's eagerly
+// built configuration needs no exemption and its entry module is held to the same write rule.
+describe('module evaluation side effects', () => {
+  const placements: readonly (readonly [string, string])[] = [
+    ['application', 'src/payload.config.ts'],
+    ['application', 'src/lib/example.ts'],
+    ['library', 'src/payload.config.ts'],
+  ]
+  const factory: string = 'import { buildConfig } from "payload"; export default buildConfig({ collections: [] });'
+  const globalWrite: string = 'globalThis.payloadReady = true; export const ready = true;'
 
-  it('accepts the framework configuration factory in the application configuration entry', async () => {
-    expect(await messagesFor(source, SIDE_EFFECT_RULE, 'application', 'src/payload.config.ts')).toEqual([])
+  it.each(placements)('accepts a configuration factory in %s %s', async (config: string, filePath: string) => {
+    expect(await messagesFor(factory, SIDE_EFFECT_RULE, config, filePath)).toEqual([])
   })
 
-  it('keeps eager side effects forbidden in ordinary application modules', async () => {
-    expect(await messagesFor(source, SIDE_EFFECT_RULE, 'application', 'src/lib/example.ts')).toEqual([
-      expect.objectContaining({ ruleId: SIDE_EFFECT_RULE, severity: 2 }),
-    ])
-  })
-
-  it('does not grant a Payload configuration exception to a library', async () => {
-    expect(await messagesFor(source, SIDE_EFFECT_RULE, 'library', 'src/payload.config.ts')).toEqual([
+  it.each(placements)('rejects a global write in %s %s', async (config: string, filePath: string) => {
+    expect(await messagesFor(globalWrite, SIDE_EFFECT_RULE, config, filePath)).toEqual([
       expect.objectContaining({ ruleId: SIDE_EFFECT_RULE, severity: 2 }),
     ])
   })

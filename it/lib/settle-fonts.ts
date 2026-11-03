@@ -7,8 +7,6 @@
 import { settleForScan } from '../../packages/config/dist/settle.js'
 import { type Browser, type Page, type PinnedServer, startPinnedServer } from './pinned-server.ts'
 
-type Route = Parameters<Parameters<Page['route']>[1]>[0]
-
 // The one browser call the page function below makes; the lint project compiles without the DOM lib.
 declare const document: {
   readonly fonts: Iterable<{ readonly family: string; readonly status: string }> | undefined
@@ -39,6 +37,7 @@ const server: PinnedServer = await startPinnedServer('settle-fonts')
 const shortfallOf = async (engine: string): Promise<readonly string[]> => {
   const browser: Browser = await server.connect(engine)
   try {
+    type Route = Parameters<Parameters<Page['route']>[1]>[0]
     const page: Page = await browser.newPage()
     await page.route(`${ORIGIN}/**`, async (route: Route): Promise<void> => {
       if (route.request().url().endsWith('.woff2')) {
