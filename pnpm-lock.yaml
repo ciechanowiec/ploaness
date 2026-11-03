@@ -211,7 +211,7 @@ importers:
   packages/assets:
     devDependencies:
       '@ploaness/governance':
-        specifier: 1.18.0
+        specifier: 1.19.0
         version: link:../governance
 
   packages/cli:
@@ -229,13 +229,13 @@ importers:
         specifier: 5.3.1
         version: 5.3.1
       '@ploaness/assets':
-        specifier: 1.18.0
+        specifier: 1.19.0
         version: link:../assets
       '@ploaness/config':
-        specifier: 1.18.0
+        specifier: 1.19.0
         version: link:../config
       '@ploaness/governance':
-        specifier: 1.18.0
+        specifier: 1.19.0
         version: link:../governance
       '@vitest/coverage-v8':
         specifier: 5.0.5
@@ -296,7 +296,7 @@ importers:
         specifier: 1.64.1
         version: 1.64.1
       '@ploaness/governance':
-        specifier: 1.18.0
+        specifier: 1.19.0
         version: link:../governance
       '@testing-library/jest-dom':
         specifier: 7.0.1
@@ -400,19 +400,19 @@ importers:
   packages/ploaness:
     dependencies:
       '@ploaness/assets':
-        specifier: 1.18.0
+        specifier: 1.19.0
         version: link:../assets
       '@ploaness/cli':
-        specifier: 1.18.0
+        specifier: 1.19.0
         version: link:../cli
       '@ploaness/config':
-        specifier: 1.18.0
+        specifier: 1.19.0
         version: link:../config
       '@ploaness/governance':
-        specifier: 1.18.0
+        specifier: 1.19.0
         version: link:../governance
       '@ploaness/runtime':
-        specifier: 1.18.0
+        specifier: 1.19.0
         version: link:../runtime
     devDependencies:
       '@types/node':
