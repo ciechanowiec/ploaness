@@ -89,9 +89,11 @@ manual repair before synchronization. Generated application files change through
 5. Review the diff and commit. A commit changing more than two files or more than 50 added/deleted
    lines needs a body explaining why. Check a new message with
    `pnpm exec ploaness commit-message --range HEAD~1..HEAD`; the complete policy is in the guideline.
-6. Run `pnpm run verify:delta` on the resulting commit before finishing; it is the run that accepts the
-   change, and its history gates check the new commit. It adds history, production build, bundle, and
-   the browser suite, with the browser sweep scoped to the routes and stories the change reaches; it
+6. Finish local work with a passing `pnpm run verify` and focused tests of the changed behavior and
+   related regressions. A local `pnpm run verify:delta` run is not required before handoff; run it
+   locally only when explicitly requested or needed to diagnose a failure. Delta remains the run that
+   accepts the change, and its history gates check the resulting commit. It adds history, production
+   build, bundle, and the browser suite, with the browser sweep scoped to the routes and stories the change reaches; it
    writes the dependency inventory and the compliance report, and must reach the final tree check
    without a failure. A change to the lockfile, a package manifest or a global stylesheet reaches every
    route and story, so its delta sweep covers everything in Chromium and can take as long as an hour;
