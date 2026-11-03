@@ -282,6 +282,8 @@ const OWNED_BIOME_SECTIONS: readonly string[] = [
   'grit',
   'html',
   'json',
+  'yaml',
+  'markdown',
   'assist',
   'plugins',
   'overrides',

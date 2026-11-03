@@ -110,6 +110,8 @@ describe('config tampering', () => {
     { json: { linter: { enabled: false } } },
     { graphql: { linter: { enabled: false } } },
     { grit: { linter: { enabled: false } } },
+    { yaml: { formatter: { enabled: true } } },
+    { markdown: { linter: { enabled: true } } },
     { vcs: { root: '../unrelated', enabled: true, clientKind: 'git', useIgnoreFile: true } },
   ])('rejects local rule scope changes: %j', (local: Record<string, unknown>) => {
     const biomeConfig: string = JSON.stringify({ extends: ['ploaness/biome'], files: BIOME_FILES, ...local })
